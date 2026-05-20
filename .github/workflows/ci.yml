@@ -29,5 +29,15 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Locked release build
         run: cargo build --release --locked
+      - name: Install hardening tools
+        run: cargo install cargo-audit cargo-cyclonedx --locked
+      - name: Dependency audit
+        run: cargo audit
+      - name: Generate CycloneDX SBOM
+        run: |
+          cargo cyclonedx --format json --spec-version 1.5 --license-accept-named UNLICENSED --override-filename arbyclaw.cdx
+          test -s crates/arb-core/arbyclaw.cdx.json
+          test -s crates/arb-agent/arbyclaw.cdx.json
+          rm crates/arb-core/arbyclaw.cdx.json crates/arb-agent/arbyclaw.cdx.json
       - name: Repository structure validation
         run: python3 scripts/validate_structure.py
