@@ -17,12 +17,16 @@ The project is in Phase 18 agentic-handoff-package-complete status for ChatGPT P
 
 ## Latest CI Validation Attempt
 
-2026-05-20 ArbyClaw CI validation attempt:
+2026-05-20 ArbyClaw GitHub Actions CI validation:
 
-- `.github/workflows/ci.yml` was inspected locally and contains the same Rust validation commands under GitHub Actions `push`/`pull_request` triggers.
-- CI could not be run from this workspace because `C:\dev\arbyclaw` is not a Git checkout, no Git remote is configured, and GitHub repository lookups for `dominator509/ArbyClaw` and `dominator509/arbyclaw` did not resolve to a repository.
-- The visible local workflow does not include a manual `workflow_dispatch` trigger, so there was no standalone workflow dispatch target available from the GitHub CLI.
-- This is a CI-execution blocker only. It does not change local validation results, production readiness, live-funds status, or any live execution boundary.
+- Repository: `dominator509/arbyclaw`
+- Branch: `main`
+- Initial pushed commit: `dcab5735400376622f66a49faa23ad6071a0ff86`
+- Workflow run: `https://github.com/dominator509/arbyclaw/actions/runs/26142498369`
+- Result: passed.
+- Completed CI steps: checkout, Rust stable toolchain install with rustfmt and clippy, `cargo fmt --check`, `cargo check --workspace`, `cargo test --workspace`, `cargo clippy --workspace --all-targets -- -D warnings`, and `python3 scripts/validate_structure.py`.
+- Annotation: GitHub Actions reported a Node.js 20 deprecation warning for `actions/checkout@v4`; this is a future workflow-maintenance warning, not a validation failure.
+- This validates the pushed repository structure, formatting, compilation, tests, and linting in GitHub Actions only. It does not validate production deployment, live funds, live exchange/RPC integrations, signing, broadcasts, containers, systemd, ARM, penetration testing, load testing, rollback drills, incident drills, external hardening, or production readiness.
 
 ## Current Production Readiness %
 
@@ -1420,19 +1424,19 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Completion criteria: Met on 2026-05-20 for the requested local validation sequence.
 - Rollback considerations: If a future validation run fails, keep live execution disabled, patch only the failing source-level issue, and update this tracker with the new failure evidence.
 
-## GAP-0074 - 2026-05-20 CI Validation Blocked By Missing Repository Target
+## GAP-0074 - 2026-05-20 CI Validation Repository Target Resolved
 
 - Unique ID: GAP-0074
 - Phase association: Phase 18 / post-handoff CI validation
 - Subsystem association: CI/CD / GitHub Actions / repository publishing
-- Description: The requested CI validation sequence was attempted for ArbyClaw on 2026-05-20. The local workflow file exists and includes the Rust validation commands, but CI could not be triggered because the workspace is not a Git checkout, has no Git remote, and no visible GitHub repository named `dominator509/ArbyClaw` or `dominator509/arbyclaw` could be resolved.
-- Why incomplete: CI requires a published GitHub repository, a branch or pull request containing the current workspace state, and an actionable workflow trigger.
-- Why blocked in ChatGPT/Codex environment: The current folder lacks `.git` metadata and remote repository identity; GitHub CLI authentication is available, but there is no confirmed repository target for this project.
-- Risk level: Medium for CI evidence; high production and live-funds risks remain tracked in the other gap entries.
-- Dependency requirements: Publish or connect this workspace to the correct Git repository, push the current ArbyClaw state to a branch, and ensure the GitHub Actions workflow can run on `push`, `pull_request`, or an approved manual trigger.
-- Exact future validation required: Run the GitHub Actions CI workflow containing `cargo fmt --check`, `cargo check --workspace`, `cargo test --workspace`, `cargo clippy --workspace --all-targets -- -D warnings`, and `python3 scripts/validate_structure.py`; record the non-secret run URL and pass/fail result.
+- Description: The requested CI validation sequence was initially blocked because no repository target was visible. On 2026-05-20 the new GitHub repository `dominator509/arbyclaw` was connected, the ArbyClaw checkpoint was pushed to `main`, and GitHub Actions CI run `26142498369` passed for commit `dcab5735400376622f66a49faa23ad6071a0ff86`.
+- Why incomplete: No longer incomplete for initial GitHub Actions CI execution. Production hardening, deployment, live integration, security, load, rollback, incident, and external validation gaps remain tracked separately.
+- Why blocked in ChatGPT/Codex environment: No longer blocked for initial GitHub Actions CI execution after the repository target was created and connected.
+- Risk level: Low for initial CI compile/test/lint evidence; high production and live-funds risks remain tracked in the other gap entries.
+- Dependency requirements: Keep `dominator509/arbyclaw` connected to this workspace, keep GitHub Actions enabled, and keep Rust stable, Cargo, rustfmt, clippy, and Python 3 available in CI.
+- Exact future validation required: Re-run the GitHub Actions CI workflow containing `cargo fmt --check`, `cargo check --workspace`, `cargo test --workspace`, `cargo clippy --workspace --all-targets -- -D warnings`, and `python3 scripts/validate_structure.py` after future changes; record non-secret run URLs and pass/fail results when they are material to release gating.
 - Exact future tooling/environment required: Git checkout, configured remote, GitHub repository with Actions enabled, branch or pull request, workflow runner, Rust stable toolchain, Cargo, rustfmt, clippy, and Python 3.
 - Recommended future agent type: DevSecOps Orchestrator + Release Engineering Authority
-- Estimated production impact: Blocks external CI evidence, but does not by itself change local validation confidence or approve production use.
-- Completion criteria: A GitHub Actions run executes against the current ArbyClaw repository state and all validation steps pass, with non-secret evidence recorded.
-- Rollback considerations: If CI setup changes are unsafe or point at the wrong repository, disable the incorrect workflow/branch, preserve local validation evidence, and reconnect the workspace to the correct repository before retrying.
+- Estimated production impact: External CI confidence is improved, but this does not prove production readiness or live-funds readiness.
+- Completion criteria: Met on 2026-05-20 for initial GitHub Actions CI execution on `main`.
+- Rollback considerations: If future CI setup changes are unsafe or point at the wrong repository, disable the incorrect workflow/branch, preserve local and CI validation evidence, and reconnect the workspace to the correct repository before retrying.
