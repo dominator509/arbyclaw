@@ -8,6 +8,9 @@ on:
 permissions:
   contents: read
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   rust:
     name: rust-validation
@@ -27,5 +30,7 @@ jobs:
         run: cargo test --workspace
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Locked release build
+        run: cargo build --release --locked
       - name: Repository structure validation
         run: python3 scripts/validate_structure.py
