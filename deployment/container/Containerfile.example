@@ -1,0 +1,14 @@
+# Example-only container recipe for future external validation.
+# This file is not a claim that a container image has been built or tested.
+
+FROM rust:1.78-slim AS builder
+WORKDIR /workspace
+COPY . .
+RUN cargo build --release --locked
+
+FROM debian:bookworm-slim AS runtime
+RUN useradd --system --home /nonexistent --shell /usr/sbin/nologin arbagent
+COPY --from=builder /workspace/target/release/arb-agent /usr/local/bin/arb-agent
+USER arbagent
+ENTRYPOINT ["/usr/local/bin/arb-agent"]
+CMD ["--help"]

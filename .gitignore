@@ -1,0 +1,29 @@
+# Rust build outputs
+/target/
+**/*.rs.bk
+
+# Local secrets and environment files
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.wallet
+*.keystore
+secrets/
+
+# Local runtime state
+*.sqlite
+*.sqlite3
+*.db
+*.db-wal
+*.db-shm
+runtime-state/
+logs/
+
+# Editor and OS files
+.DS_Store
+.idea/
+.vscode/
+*.swp

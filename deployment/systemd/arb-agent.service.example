@@ -1,0 +1,29 @@
+# Example-only systemd unit for future external validation.
+# Do not install this unit until Rust, config, filesystem, rollback, and security gates pass externally.
+
+[Unit]
+Description=Fully Autonomous Crypto Arbitrage Agent - observe mode only
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=arbagent
+Group=arbagent
+ExecStart=/usr/local/bin/arb-agent --config /etc/arb-agent/config.toml
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/arb-agent /var/log/arb-agent
+CapabilityBoundingSet=
+AmbientCapabilities=
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictRealtime=true
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

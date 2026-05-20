@@ -1,0 +1,34 @@
+# Non-secret example configuration for the Fully Autonomous Crypto Arbitrage Agent.
+# Do not place API keys, wallet keys, seed phrases, mnemonics, bearer tokens, or raw secrets in this file.
+
+[runtime]
+mode = "observe"
+live_execution_enabled = false
+allow_withdrawals = false
+kill_switch_enabled = true
+
+[risk]
+max_single_trade_quote = 10.0
+max_daily_loss_quote = 2.0
+max_open_exposure_quote = 20.0
+slippage_bps = 50
+gas_fee_cap_quote = 1.0
+
+[venues]
+cex_allowlist = ["coinbase", "kraken"]
+dex_allowlist = []
+chain_allowlist = []
+asset_allowlist = ["BTC", "ETH", "USDC"]
+
+[secrets]
+backend = "disabled"
+exchange_credentials = { source = "disabled" }
+wallet_signer = { source = "disabled" }
+
+[communication]
+cli_enabled = true
+notify_channels = []
+
+[audit]
+enabled = true
+redact_secrets = true

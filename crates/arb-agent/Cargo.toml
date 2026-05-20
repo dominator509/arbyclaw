@@ -1,0 +1,15 @@
+[package]
+name = "arb-agent"
+description = "Single-binary runtime entrypoint for the Fully Autonomous Crypto Arbitrage Agent."
+edition.workspace = true
+version.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+arb-core = { path = "../arb-core" }
+
+[lints]
+workspace = true
