@@ -9,7 +9,7 @@ Note: this manifest intentionally excludes `STRUCTURE_MANIFEST.md` itself to avo
 | Path | Bytes | SHA-256 |
 |---|---:|---|
 | `.env.example` | 394 | `6218acde9448522686a636404ea23487152eb2dcba981d8f73e3556c89aac8d4` |
-| `.github/workflows/ci.yml` | 1752 | `b68083a29c1df557c73471ca4e7aff2de1cc78fd8d4d9617113865c0dda1245f` |
+| `.github/workflows/ci.yml` | 2026 | `47bf50cf2753c1d692a98bfbddbbd574c6a607cff20e9efd90aee39b3250bfa8` |
 | `.gitignore` | 294 | `ee583fbe54052a43b616c044c5c902de3324eb1b0f67ea82147745e8547a9973` |
 | `AGENTS.md` | 12255 | `9903bb4eeaeb9b4bcb25846e2ef252a34ae157fbf931d6b610f9eceb9e051c21` |
 | `ARCHITECTURE.md` | 40021 | `d6711c0e2ceeb9eb9e315627c39b5e9de5cce9a8e416686011d28054aa08b314` |
