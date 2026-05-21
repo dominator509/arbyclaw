@@ -21,8 +21,8 @@ The project is in Phase 18 agentic-handoff-package-complete status for ChatGPT P
 
 - Repository: `dominator509/arbyclaw`
 - Branch: `main`
-- Latest validated commit: `44712c8495b05882e9f1e611e59b00b07d2066ac`
-- Workflow run: `https://github.com/dominator509/arbyclaw/actions/runs/26199430741`
+- Latest validated commit: `baac592a81cde5c080bdb84fe7885252959025a2`
+- Workflow run: `https://github.com/dominator509/arbyclaw/actions/runs/26199777968`
 - Result: passed.
 - Completed CI steps: checkout via `actions/checkout@v6`, Rust stable toolchain install with rustfmt and clippy, `cargo fmt --check`, `cargo check --workspace`, `cargo test --workspace`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo build --release --locked`, hardening tool installation, `cargo audit`, CycloneDX SBOM generation with non-empty file checks, CodeQL Rust SAST analysis with local SARIF generation and non-empty SARIF verification, and `python3 scripts/validate_structure.py`.
 - Node.js 24 migration status: the workflow now uses `actions/checkout@v6`; no Node.js 20 deprecation annotation appeared in the final validated run.
@@ -35,8 +35,10 @@ The project is in Phase 18 agentic-handoff-package-complete status for ChatGPT P
 - Local `cargo build --release --locked` passed.
 - Local `cargo audit` passed after fetching the RustSec advisory database and scanning `Cargo.lock`.
 - Local CycloneDX SBOM generation passed with non-empty SBOM files for `arb-core` and `arb-agent`; generated SBOM files were removed from the working tree and not committed.
-- GitHub Actions `cargo build --release --locked`, `cargo audit`, CycloneDX SBOM generation, and CodeQL Rust SAST local-SARIF analysis passed in run `https://github.com/dominator509/arbyclaw/actions/runs/26199430741` for commit `44712c8495b05882e9f1e611e59b00b07d2066ac`.
+- GitHub Actions `cargo build --release --locked`, `cargo audit`, CycloneDX SBOM generation, and CodeQL Rust SAST local-SARIF analysis passed in run `https://github.com/dominator509/arbyclaw/actions/runs/26199777968` for commit `baac592a81cde5c080bdb84fe7885252959025a2`.
 - The initial upload-based CodeQL attempt in run `https://github.com/dominator509/arbyclaw/actions/runs/26199105621` failed because GitHub code scanning is not enabled for this repository. The workflow was narrowed to generate and verify local SARIF in CI without uploading to the GitHub Security tab.
+- A 2026-05-21 attempt to enable CodeQL default setup through the GitHub API failed with `Code scanning is not enabled for this repository`, confirming that GitHub Security-tab upload processing remains blocked by repository security settings or plan/support constraints rather than by local source code.
+- The CI workflow now keeps local-SARIF SAST evidence available as a short-retention Actions artifact while GitHub code scanning upload remains disabled.
 - This is release-build, dependency-audit, SBOM-generation, and local-SARIF SAST evidence only. It does not validate SBOM review, GitHub code scanning upload processing, container build or image scan, systemd hardening, ARM validation, staging deployment, load testing, penetration testing, rollback drills, incident drills, live exchange/RPC sandbox validation, custody review, compliance review, or production readiness.
 
 ## Current Production Readiness %
@@ -1440,13 +1442,13 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Unique ID: GAP-0074
 - Phase association: Phase 18 / post-handoff CI validation
 - Subsystem association: CI/CD / GitHub Actions / repository publishing
-- Description: The requested CI validation sequence was initially blocked because no repository target was visible. On 2026-05-20 the new GitHub repository `dominator509/arbyclaw` was connected, the ArbyClaw checkpoint was pushed to `main`, and GitHub Actions CI passed. The latest validated run is `26199430741` for commit `44712c8495b05882e9f1e611e59b00b07d2066ac`, including checkout via `actions/checkout@v6`, the original validation sequence, `cargo build --release --locked`, `cargo audit`, CycloneDX SBOM generation with non-empty file checks, and CodeQL Rust SAST local-SARIF generation with non-empty SARIF verification.
+- Description: The requested CI validation sequence was initially blocked because no repository target was visible. On 2026-05-20 the new GitHub repository `dominator509/arbyclaw` was connected, the ArbyClaw checkpoint was pushed to `main`, and GitHub Actions CI passed. The latest recorded validated run is `26199777968` for commit `baac592a81cde5c080bdb84fe7885252959025a2`, including checkout via `actions/checkout@v6`, the original validation sequence, `cargo build --release --locked`, `cargo audit`, CycloneDX SBOM generation with non-empty file checks, and CodeQL Rust SAST local-SARIF generation with non-empty SARIF verification.
 - Why incomplete: No longer incomplete for initial GitHub Actions CI execution. Production hardening, deployment, live integration, security, load, rollback, incident, and external validation gaps remain tracked separately.
 - Why blocked in ChatGPT/Codex environment: No longer blocked for initial GitHub Actions CI execution after the repository target was created and connected.
 - Risk level: Low for initial CI compile/test/lint evidence; high production and live-funds risks remain tracked in the other gap entries.
 - Dependency requirements: Keep `dominator509/arbyclaw` connected to this workspace, keep GitHub Actions enabled, and keep Rust stable, Cargo, rustfmt, clippy, and Python 3 available in CI.
-- Exact future validation required: Re-run the GitHub Actions CI workflow containing `cargo fmt --check`, `cargo check --workspace`, `cargo test --workspace`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo build --release --locked`, `cargo audit`, CycloneDX SBOM generation, CodeQL Rust SAST local-SARIF generation, and `python3 scripts/validate_structure.py` after future changes; record non-secret run URLs and pass/fail results when they are material to release gating.
-- Exact future tooling/environment required: Git checkout, configured remote, GitHub repository with Actions enabled, branch or pull request, workflow runner, Rust stable toolchain, Cargo, rustfmt, clippy, cargo-audit, cargo-cyclonedx, CodeQL Action availability, and Python 3.
+- Exact future validation required: Re-run the GitHub Actions CI workflow containing `cargo fmt --check`, `cargo check --workspace`, `cargo test --workspace`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo build --release --locked`, `cargo audit`, CycloneDX SBOM generation, CodeQL Rust SAST local-SARIF generation, short-retention SARIF artifact retention, and `python3 scripts/validate_structure.py` after future changes; record non-secret run URLs and pass/fail results when they are material to release gating.
+- Exact future tooling/environment required: Git checkout, configured remote, GitHub repository with Actions enabled, branch or pull request, workflow runner, Rust stable toolchain, Cargo, rustfmt, clippy, cargo-audit, cargo-cyclonedx, CodeQL Action availability, `actions/upload-artifact`, and Python 3.
 - Recommended future agent type: DevSecOps Orchestrator + Release Engineering Authority
 - Estimated production impact: External CI confidence is improved, but this does not prove production readiness or live-funds readiness.
 - Completion criteria: Met on 2026-05-20 for initial GitHub Actions CI execution on `main`.
@@ -1457,14 +1459,14 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Unique ID: GAP-0075
 - Phase association: Phase 17 / Phase 18 / post-handoff hardening evidence
 - Subsystem association: SAST / GitHub Actions / GitHub code scanning
-- Description: CodeQL Rust SAST now runs in GitHub Actions and verifies non-empty local SARIF output. An earlier upload-based CodeQL run failed because GitHub code scanning is not enabled for the repository, so SARIF upload to the GitHub Security tab is not currently validated.
-- Why incomplete: The repository-level code scanning feature is disabled or unavailable, so CodeQL evidence is limited to local SARIF generation inside CI rather than GitHub code scanning alert processing.
-- Why blocked in ChatGPT/Codex environment: Enabling repository code scanning is an external GitHub repository setting and may require owner action or plan/support constraints outside local code changes.
+- Description: CodeQL Rust SAST now runs in GitHub Actions, verifies non-empty local SARIF output, and keeps that SARIF available as a short-retention Actions artifact. An earlier upload-based CodeQL run failed because GitHub code scanning is not enabled for the repository, and a later GitHub API default-setup enablement attempt returned the same code-scanning-disabled response, so SARIF upload to the GitHub Security tab is not currently validated.
+- Why incomplete: The repository-level code scanning feature is disabled or unavailable, so CodeQL evidence is limited to local SARIF generation and artifact retention inside CI rather than GitHub code scanning alert processing.
+- Why blocked in ChatGPT/Codex environment: Enabling repository code scanning may require an external repository settings change, plan/support entitlement, or explicit owner decision outside safe local source-code changes.
 - Risk level: Medium
-- Dependency requirements: Repository owner review of GitHub code scanning availability, repository settings access, and a successful upload-capable CodeQL run after the feature is enabled.
+- Dependency requirements: Repository owner review of GitHub code scanning availability, repository settings access, any required GitHub security entitlement, and a successful upload-capable CodeQL run after the feature is enabled.
 - Exact future validation required: Enable GitHub code scanning if appropriate, remove or revise `upload: never`, run CodeQL with SARIF upload enabled, and confirm the GitHub Security/code-scanning alert processing completes without secret leakage or production-readiness claims.
 - Exact future tooling/environment required: GitHub repository settings access, GitHub Actions, CodeQL Action, code scanning feature availability, and a non-secret evidence reference.
 - Recommended future agent type: DevSecOps Orchestrator + AppSec Lead
-- Estimated production impact: Local SAST evidence is improved, but centralized GitHub code scanning alert processing and review evidence remain incomplete.
+- Estimated production impact: Local SAST evidence and evidence retention are improved, but centralized GitHub code scanning alert processing and review evidence remain incomplete.
 - Completion criteria: CodeQL results are uploaded to and processed by GitHub code scanning, or a documented governance decision accepts local SARIF-only evidence for this repository.
 - Rollback considerations: Keep local SARIF-only SAST gate if upload remains unavailable; if upload is enabled and later fails, revert to the last passing local-SARIF gate and record the failure evidence.

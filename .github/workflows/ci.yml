@@ -65,4 +65,13 @@ jobs:
       - name: Verify CodeQL SARIF
         run: |
           test -n "$(find codeql-results -name '*.sarif' -type f -size +0 -print -quit)"
+      - name: Upload CodeQL SARIF evidence
+        uses: actions/upload-artifact@v7
+        with:
+          name: codeql-sarif-evidence
+          path: codeql-results/**/*.sarif
+          if-no-files-found: error
+          retention-days: 14
+      - name: Remove CodeQL SARIF evidence
+        run: |
           rm -rf codeql-results
