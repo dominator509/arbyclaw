@@ -6,9 +6,7 @@ WORKDIR /workspace
 COPY . .
 RUN cargo build --release --locked
 
-FROM debian:bookworm-slim AS runtime
-RUN useradd --system --home /nonexistent --shell /usr/sbin/nologin arbagent
+FROM gcr.io/distroless/cc-debian12:nonroot AS runtime
 COPY --from=builder /workspace/target/release/arb-agent /usr/local/bin/arb-agent
-USER arbagent
 ENTRYPOINT ["/usr/local/bin/arb-agent"]
 CMD ["--help"]

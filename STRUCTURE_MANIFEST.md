@@ -35,7 +35,7 @@ Note: this manifest intentionally excludes `STRUCTURE_MANIFEST.md` itself to avo
 | `PHASE_7_SUBROADMAP.md` | 4617 | `48f8cd5cbe2f6496a7eee06d13f712552536c6056cb864b2d18d4f7ec841bf91` |
 | `PHASE_8_SUBROADMAP.md` | 5420 | `1d1e98707a894f2e71bf40d3effeddc93aeeb014f91b59d11b8b793cff5bb7a4` |
 | `PHASE_9_SUBROADMAP.md` | 4704 | `531ca3f4677d179472d600d9e42d9052f7bbc70cb7e286f8a0a8d7029ca74d8a` |
-| `PRODUCTION_GAP_TRACKER.md` | 143512 | `464656ff6b63a99943dd3083f2b49fe7c83f261142a5e3bd23f79be93f94cb14` |
+| `PRODUCTION_GAP_TRACKER.md` | 144234 | `c901f4bfa5f8ca4b55a4ced02c4f2c6c9cd1bbb5c933419d8876c3c93eb016a0` |
 | `README.md` | 10608 | `e958ed44728715f68110bf993c13c9563f33b7a50250534024d24a0ab5c80915` |
 | `ROADMAP.md` | 48431 | `fabf79ea194047069b4e74818a8e23f0d48f40d17615fc94c5a7a08f4a2ebb65` |
 | `SECURITY.md` | 12837 | `5ccb45483dfe9ef2965ddc15c3d73917ee8674c01032899a9ac1d4a12f5de676` |
@@ -66,7 +66,7 @@ Note: this manifest intentionally excludes `STRUCTURE_MANIFEST.md` itself to avo
 | `crates/arb-core/src/testing.rs` | 41706 | `2a252b35e6b70d385c3e86eb245d1b1e322cb44619186079bd8f8cb36e09adcd` |
 | `deployment/README.md` | 1409 | `11c8ed4fe658b9d431833bbea6c447b4212097292f25daef3c8b8fcd59575a0e` |
 | `deployment/arm/BUILD_PROFILES.md` | 592 | `a5fae8c288efa9f804a5a72bb977c3cf48c463240a5a1903cf82e4a75478547b` |
-| `deployment/container/Containerfile.example` | 499 | `9b78f2bba8f87ee7764a8d3518fd12044a6969c6735d6fb7d7045e98ef21adf6` |
+| `deployment/container/Containerfile.example` | 426 | `f2a376cf529e908274342bf0b159cf9d1f487d7f8e302cdeac78ac3f6055b559` |
 | `deployment/systemd/arb-agent.service.example` | 769 | `0a14cf64ea60d2d78995749101fef25a1bb80400a140e2efa15f21ad54d3ff1a` |
 | `handoff/AGENTIC_HANDOFF_PACKAGE.md` | 3391 | `c1a6e58a8de2c81b6ba8ca9c63b3912e5f12b907993ed85eabefcb6d10239f41` |
 | `handoff/EXTERNAL_VALIDATION_CHECKLIST.md` | 2124 | `3c258ad7b7bb5a058db5277bd29346a1798bf733764bd3598af28ee6729d1460` |
