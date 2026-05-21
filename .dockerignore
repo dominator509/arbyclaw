@@ -1,0 +1,12 @@
+.git
+.github
+target
+**/target
+.cache
+**/.cache
+.env
+.env.*
+!.env.example
+*.cdx.json
+codeql-results
+trivy-*.txt

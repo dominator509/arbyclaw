@@ -9,7 +9,8 @@ Note: this manifest intentionally excludes `STRUCTURE_MANIFEST.md` itself to avo
 | Path | Bytes | SHA-256 |
 |---|---:|---|
 | `.env.example` | 394 | `6218acde9448522686a636404ea23487152eb2dcba981d8f73e3556c89aac8d4` |
-| `.github/workflows/ci.yml` | 2326 | `3188d60db763cff2795889656f97b2163ab4db3383d861694736c68e93025cdb` |
+| `.dockerignore` | 111 | `a2c84c8891716d8656e0bb6a1035e67d600635097713fd7d84d850e75b13a446` |
+| `.github/workflows/ci.yml` | 3729 | `38613d533957ef53b39aae808c6e6b4678224d9792df245bc11af820bd6ad375` |
 | `.gitignore` | 294 | `ee583fbe54052a43b616c044c5c902de3324eb1b0f67ea82147745e8547a9973` |
 | `AGENTS.md` | 12255 | `9903bb4eeaeb9b4bcb25846e2ef252a34ae157fbf931d6b610f9eceb9e051c21` |
 | `ARCHITECTURE.md` | 40021 | `d6711c0e2ceeb9eb9e315627c39b5e9de5cce9a8e416686011d28054aa08b314` |
@@ -34,7 +35,7 @@ Note: this manifest intentionally excludes `STRUCTURE_MANIFEST.md` itself to avo
 | `PHASE_7_SUBROADMAP.md` | 4617 | `48f8cd5cbe2f6496a7eee06d13f712552536c6056cb864b2d18d4f7ec841bf91` |
 | `PHASE_8_SUBROADMAP.md` | 5420 | `1d1e98707a894f2e71bf40d3effeddc93aeeb014f91b59d11b8b793cff5bb7a4` |
 | `PHASE_9_SUBROADMAP.md` | 4704 | `531ca3f4677d179472d600d9e42d9052f7bbc70cb7e286f8a0a8d7029ca74d8a` |
-| `PRODUCTION_GAP_TRACKER.md` | 142443 | `5b881f6fb37476f16b236c829c3c37c508600a217bb6ce87301860ac5568e85b` |
+| `PRODUCTION_GAP_TRACKER.md` | 143512 | `464656ff6b63a99943dd3083f2b49fe7c83f261142a5e3bd23f79be93f94cb14` |
 | `README.md` | 10608 | `e958ed44728715f68110bf993c13c9563f33b7a50250534024d24a0ab5c80915` |
 | `ROADMAP.md` | 48431 | `fabf79ea194047069b4e74818a8e23f0d48f40d17615fc94c5a7a08f4a2ebb65` |
 | `SECURITY.md` | 12837 | `5ccb45483dfe9ef2965ddc15c3d73917ee8674c01032899a9ac1d4a12f5de676` |

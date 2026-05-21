@@ -75,3 +75,48 @@ jobs:
       - name: Remove CodeQL SARIF evidence
         run: |
           rm -rf codeql-results
+
+  container:
+    name: example-container-image-scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Build example container image
+        uses: docker/build-push-action@v7.1.0
+        with:
+          context: .
+          file: deployment/container/Containerfile.example
+          tags: arbyclaw-example:ci
+          load: true
+          push: false
+      - name: Generate Trivy image scan evidence
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: arbyclaw-example:ci
+          format: table
+          output: trivy-image-scan.txt
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: 0
+      - name: Enforce no fixable critical image vulnerabilities
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: arbyclaw-example:ci
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: 1
+      - name: Upload Trivy image scan evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: trivy-image-scan-evidence
+          path: trivy-image-scan.txt
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Remove Trivy image scan evidence
+        if: always()
+        run: |
+          rm -f trivy-image-scan.txt

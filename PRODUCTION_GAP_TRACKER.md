@@ -21,25 +21,27 @@ The project is in Phase 18 agentic-handoff-package-complete status for ChatGPT P
 
 - Repository: `dominator509/arbyclaw`
 - Branch: `main`
-- Latest validated commit: `baac592a81cde5c080bdb84fe7885252959025a2`
-- Workflow run: `https://github.com/dominator509/arbyclaw/actions/runs/26199777968`
+- Latest validated commit: `c903ae53f6a430286a48e1f5fefcb8c42dc9a072`
+- Workflow run: `https://github.com/dominator509/arbyclaw/actions/runs/26200823112`
 - Result: passed.
-- Completed CI steps: checkout via `actions/checkout@v6`, Rust stable toolchain install with rustfmt and clippy, `cargo fmt --check`, `cargo check --workspace`, `cargo test --workspace`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo build --release --locked`, hardening tool installation, `cargo audit`, CycloneDX SBOM generation with non-empty file checks, CodeQL Rust SAST analysis with local SARIF generation and non-empty SARIF verification, and `python3 scripts/validate_structure.py`.
+- Completed CI steps: checkout via `actions/checkout@v6`, Rust stable toolchain install with rustfmt and clippy, `cargo fmt --check`, `cargo check --workspace`, `cargo test --workspace`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo build --release --locked`, hardening tool installation, `cargo audit`, CycloneDX SBOM generation with non-empty file checks, CodeQL Rust SAST analysis with local SARIF generation, non-empty SARIF verification, short-retention SARIF artifact upload, and `python3 scripts/validate_structure.py`.
 - Node.js 24 migration status: the workflow now uses `actions/checkout@v6`; no Node.js 20 deprecation annotation appeared in the final validated run.
-- This validates the pushed repository structure, formatting, compilation, tests, linting, locked release build, dependency audit, SBOM generation gate, and local-SARIF CodeQL SAST gate in GitHub Actions only. It does not validate production deployment, live funds, live exchange/RPC integrations, signing, broadcasts, containers, systemd, ARM, penetration testing, load testing, rollback drills, incident drills, SBOM review, GitHub code scanning upload processing, broader external hardening, or production readiness.
+- This validates the pushed repository structure, formatting, compilation, tests, linting, locked release build, dependency audit, SBOM generation gate, local-SARIF CodeQL SAST gate, and short-retention SAST artifact retention in GitHub Actions only. It does not validate production deployment, live funds, live exchange/RPC integrations, signing, broadcasts, containers, systemd, ARM, penetration testing, load testing, rollback drills, incident drills, SBOM review, GitHub code scanning upload processing, broader external hardening, or production readiness.
 
 ## Latest External Hardening Evidence Attempt
 
-2026-05-21 ArbyClaw release-build, dependency-audit, SBOM-generation, and SAST hardening evidence:
+2026-05-21 ArbyClaw release-build, dependency-audit, SBOM-generation, SAST, and example-container hardening evidence:
 
 - Local `cargo build --release --locked` passed.
 - Local `cargo audit` passed after fetching the RustSec advisory database and scanning `Cargo.lock`.
 - Local CycloneDX SBOM generation passed with non-empty SBOM files for `arb-core` and `arb-agent`; generated SBOM files were removed from the working tree and not committed.
-- GitHub Actions `cargo build --release --locked`, `cargo audit`, CycloneDX SBOM generation, and CodeQL Rust SAST local-SARIF analysis passed in run `https://github.com/dominator509/arbyclaw/actions/runs/26199777968` for commit `baac592a81cde5c080bdb84fe7885252959025a2`.
+- GitHub Actions `cargo build --release --locked`, `cargo audit`, CycloneDX SBOM generation, and CodeQL Rust SAST local-SARIF analysis passed in run `https://github.com/dominator509/arbyclaw/actions/runs/26200823112` for commit `c903ae53f6a430286a48e1f5fefcb8c42dc9a072`.
 - The initial upload-based CodeQL attempt in run `https://github.com/dominator509/arbyclaw/actions/runs/26199105621` failed because GitHub code scanning is not enabled for this repository. The workflow was narrowed to generate and verify local SARIF in CI without uploading to the GitHub Security tab.
 - A 2026-05-21 attempt to enable CodeQL default setup through the GitHub API failed with `Code scanning is not enabled for this repository`, confirming that GitHub Security-tab upload processing remains blocked by repository security settings or plan/support constraints rather than by local source code.
 - The CI workflow now keeps local-SARIF SAST evidence available as a short-retention Actions artifact while GitHub code scanning upload remains disabled.
-- This is release-build, dependency-audit, SBOM-generation, and local-SARIF SAST evidence only. It does not validate SBOM review, GitHub code scanning upload processing, container build or image scan, systemd hardening, ARM validation, staging deployment, load testing, penetration testing, rollback drills, incident drills, live exchange/RPC sandbox validation, custody review, compliance review, or production readiness.
+- A local example-only container image build using `deployment/container/Containerfile.example` passed after adding `.dockerignore` to keep local build outputs and secret-like environment files out of the Docker build context. This does not validate a production image, deployment, runtime service, or rollout.
+- The CI workflow now includes an example-container build and Trivy image scan evidence job. The next pushed CI run must validate this new job before it can be recorded as passed external image-scan evidence.
+- This is release-build, dependency-audit, SBOM-generation, local-SARIF SAST, and local example-container build evidence only. It does not validate SBOM review, GitHub code scanning upload processing, completed CI image scan evidence, production container image readiness, systemd hardening, ARM validation, staging deployment, load testing, penetration testing, rollback drills, incident drills, live exchange/RPC sandbox validation, custody review, compliance review, or production readiness.
 
 ## Current Production Readiness %
 
@@ -1338,15 +1340,15 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Unique ID: GAP-0068
 - Phase association: Phase 16 / Phase 17
 - Subsystem association: Packaging / deployment / release engineering / operations
-- Description: Phase 16 package and deployment records are deterministic local models only. No release artifact was built, no container image was created, no systemd unit was installed, no ARM binary was produced, no runtime deployment occurred, no rollback drill was executed, and no production release was validated.
+- Description: Phase 16 package and deployment records are deterministic local models only. A local example-only container image build has been executed for the template image, but no production release artifact was built, no production container image was validated, no systemd unit was installed, no ARM binary was produced, no runtime deployment occurred, no rollback drill was executed, and no production release was validated.
 - Why incomplete: Phase 16 intentionally avoids external side effects, service installation, public exposure, embedded secrets, live trading enablement, and production claims.
 - Why blocked in ChatGPT Project Mode: Real deployment validation requires Rust tooling, container/systemd/ARM infrastructure, target hosts, filesystem controls, release artifact storage, rollback environment, security tooling, and operator credentials handled outside the repo.
 - Risk level: High
 - Dependency requirements: Rust validation, release build, SBOM/dependency audit, container runtime or packaging target, systemd/Linux validation host, ARM validation target, signed release workflow, rollback procedure, observability integration, and incident runbooks.
-- Exact future validation required: release build, container build, image scan, SBOM generation, dependency audit, service hardening validation, non-root runtime test, read-only filesystem test, health check test, config loading test, log/audit redaction test, rollback drill, incident drill, startup/shutdown soak test, and production readiness review.
+- Exact future validation required: production release build, production container build, image scan review, SBOM generation and review, dependency audit, service hardening validation, non-root runtime test, read-only filesystem test, health check test, config loading test, log/audit redaction test, rollback drill, incident drill, startup/shutdown soak test, and production readiness review.
 - Exact future tooling/environment required: Rust/Cargo, CI runner, container runtime, Linux systemd host, ARM target or verified cross target, SAST/dependency tools, artifact repository, staging environment, and human operator review.
 - Recommended future agent type: DevSecOps Orchestrator + Release Engineering Authority + AppSec Lead
-- Estimated production impact: Blocks deployable, operable, rollback-safe production release.
+- Estimated production impact: Example container build confidence improved, but deployable, operable, rollback-safe production release remains blocked.
 - Completion criteria: Release artifacts are built, scanned, deployed to a staging target, validated under hardened runtime settings, rolled back successfully, and documented without secret leakage or live-funds exposure.
 - Rollback considerations: Remove generated artifacts, disable services, restore previous configuration and binary, preserve logs/audit evidence, revoke any accidentally exposed credentials, and keep live execution disabled.
 
@@ -1374,15 +1376,15 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Unique ID: GAP-0070
 - Phase association: Phase 17 / Phase 18
 - Subsystem association: External hardening / AppSec / release engineering / operations / compliance
-- Description: Phase 17 added deterministic evidence models, release blockers, review records, and operator checklists. Initial GitHub Actions CI, locked release-build validation, dependency audit, CycloneDX SBOM generation, and local-SARIF CodeQL SAST passed by 2026-05-21, but SBOM review, GitHub code scanning upload processing, container image scan, systemd hardening validation, ARM validation, staging deployment, load test, penetration test, rollback drill, incident-response drill, live exchange/RPC validation, and production readiness review have not been executed.
-- Why incomplete: Initial CI, release-build, dependency-audit, SBOM-generation, and local-SARIF SAST evidence exists, but Phase 17 intentionally avoids credentials, public exposure, live funds, production claims, live exchange/RPC calls, signing, broadcasts, and deployment execution; the broader external hardening checklist remains incomplete.
+- Description: Phase 17 added deterministic evidence models, release blockers, review records, and operator checklists. Initial GitHub Actions CI, locked release-build validation, dependency audit, CycloneDX SBOM generation, local-SARIF CodeQL SAST, and a local example-only container build passed by 2026-05-21, but completed CI image-scan evidence, SBOM review, GitHub code scanning upload processing, production container validation, systemd hardening validation, ARM validation, staging deployment, load test, penetration test, rollback drill, incident-response drill, live exchange/RPC validation, and production readiness review have not been executed.
+- Why incomplete: Initial CI, release-build, dependency-audit, SBOM-generation, local-SARIF SAST, and local example-container build evidence exists, but Phase 17 intentionally avoids credentials, public exposure, live funds, production claims, live exchange/RPC calls, signing, broadcasts, and deployment execution; the broader external hardening checklist remains incomplete.
 - Why blocked in ChatGPT Project Mode: Real production hardening requires external CI, runtime infrastructure, staging hosts, security tooling, target devices, controlled credentials outside the repo, human review, and accountable operator approval.
 - Risk level: Critical
 - Dependency requirements: Dependency audit, SBOM process, container scanning, staging environment, observability runtime, incident runbooks, rollback procedure, AppSec review, exchange/RPC sandbox environments, custody/signer design, and compliance review.
 - Exact future validation required: CI validation, release build, SBOM generation, dependency audit, SAST, image scan, service hardening test, read-only filesystem test, config loading test, log/audit redaction test, staging deployment, startup/shutdown/restart tests, load and soak tests, penetration test, rollback drill, incident-response drill, exchange sandbox validation, DEX/RPC sandbox validation without broadcasts, key custody review, and production readiness review.
 - Exact future tooling/environment required: Rust/Cargo, CI runner, SAST/dependency tools, SBOM generator, container runtime/scanner, Linux/systemd host, ARM target or cross-build runner, staging host, observability stack, load-test tooling, security testing workflow, sandbox exchange/RPC accounts, and human operator review.
 - Recommended future agent type: DevSecOps Orchestrator + Release Engineering Authority + AppSec Lead + Audit and Observability Agent + Compliance Reviewer
-- Estimated production impact: CI, locked release-build, dependency-audit, SBOM-generation, and local-SARIF SAST confidence improved, but the remaining missing hardening evidence still blocks any credible production-readiness, public-service, live-funds, or autonomous-execution claim.
+- Estimated production impact: CI, locked release-build, dependency-audit, SBOM-generation, local-SARIF SAST, SAST artifact retention, and local example-container build confidence improved, but the remaining missing hardening evidence still blocks any credible production-readiness, public-service, live-funds, or autonomous-execution claim.
 - Completion criteria: External hardening evidence is generated, reviewed, non-secret, linked from an external evidence store, and confirms all required production gates pass without enabling live funds prematurely.
 - Rollback considerations: Preserve evidence, disable candidate services, restore prior artifact/configuration, revoke any exposed credentials, keep Observe/Paper modes only, and return to a known validated checkpoint.
 
