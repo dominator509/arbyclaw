@@ -17,6 +17,16 @@ This runbook is a checklist for external operators or future coding agents. It i
 11. Execute rollback and incident-response drills.
 12. Preserve non-secret evidence references in an external evidence store.
 
+## CI Evidence Lookup
+
+Recent CI hardening evidence is easiest to find from the GitHub Actions run page:
+
+- Open the latest `ci` workflow run for `main`.
+- Review the `hardening-evidence-index` job summary for the run URL, commit, producing job results, artifact names, and explicit non-claims.
+- Download short-retention artifacts from the run page when needed: `hardening-evidence-index`, `codeql-sarif-evidence`, `trivy-image-scan-evidence`, `gitleaks-secret-scan-evidence`, and any Docker Buildx build record artifact.
+- Treat these artifacts as CI evidence only. They do not prove production deployment, live-funds readiness, public exposure readiness, SBOM review, GitHub code-scanning upload processing, penetration testing, load testing, rollback drills, incident drills, custody review, compliance review, or production readiness.
+- If evidence must be retained beyond the GitHub Actions retention window, store only non-secret references or sanitized artifacts in an approved external evidence store.
+
 ## Hard Stop Conditions
 
 - Any secret appears in repository files, logs, telemetry, prompts, tickets, or evidence.
