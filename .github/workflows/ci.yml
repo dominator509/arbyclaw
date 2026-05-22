@@ -199,6 +199,42 @@ jobs:
           This does not validate production deployment, live funds, signing, broadcasts, withdrawals, bridges, live exchange/RPC calls, production container readiness, systemd or ARM deployment, load testing, penetration testing, rollback drills, incident drills, custody review, compliance review, or production readiness.
           EOF
           test -s hardening-evidence-index.md
+      - name: Write hardening evidence job summary
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          # ArbyClaw CI hardening evidence
+
+          This summary points to non-secret CI evidence outputs for this workflow run. It is a navigation aid only and is not a production-readiness claim.
+
+          - Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          - Commit: `${{ github.sha }}`
+          - Ref: `${{ github.ref_name }}`
+
+          ## Producing Job Results
+
+          | Job | Result |
+          |---|---|
+          | `rust-validation` | `${{ needs.rust.result }}` |
+          | `codeql-sast` | `${{ needs.codeql.result }}` |
+          | `example-container-image-scan` | `${{ needs.container.result }}` |
+          | `secret-pattern-scan` | `${{ needs.secrets.result }}` |
+
+          ## Evidence Artifacts And Gates
+
+          | Evidence | Producing job | Scope |
+          |---|---|---|
+          | `hardening-evidence-index` | `hardening-evidence-index` | Downloadable copy of this evidence navigation index. |
+          | `codeql-sarif-evidence` | `codeql-sast` | Local-SARIF CodeQL SAST output; GitHub code-scanning upload remains disabled/unvalidated. |
+          | `trivy-image-scan-evidence` | `example-container-image-scan` | Example container image scan evidence only; not production image readiness. |
+          | `gitleaks-secret-scan-evidence` | `secret-pattern-scan` | Redacted repository secret-pattern scan evidence. |
+          | Docker build record artifact | `example-container-image-scan` | Docker Buildx build record for the example image when emitted by the action. |
+          | CycloneDX SBOM gate | `rust-validation` | Non-empty per-crate SBOM generation check; SBOM files are removed from the runner and not retained as artifacts. |
+          | Dependency audit gate | `rust-validation` | `cargo audit` gate over `Cargo.lock`; no separate artifact retained. |
+
+          ## Explicit Non-Claims
+
+          This does not validate production deployment, live funds, signing, broadcasts, withdrawals, bridges, live exchange/RPC calls, production container readiness, systemd or ARM deployment, load testing, penetration testing, rollback drills, incident drills, custody review, compliance review, or production readiness.
+          EOF
       - name: Upload hardening evidence index
         uses: actions/upload-artifact@v7
         with:
