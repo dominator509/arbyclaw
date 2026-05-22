@@ -22,6 +22,9 @@ secrets/
 runtime-state/
 logs/
 
+# Local hardening evidence
+gitleaks-secret-scan.json
+
 # Editor and OS files
 .DS_Store
 .idea/
