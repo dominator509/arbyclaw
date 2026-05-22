@@ -24,6 +24,7 @@ logs/
 
 # Local hardening evidence
 gitleaks-secret-scan.json
+hardening-evidence-index.md
 
 # Editor and OS files
 .DS_Store
