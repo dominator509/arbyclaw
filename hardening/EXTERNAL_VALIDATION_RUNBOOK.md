@@ -97,7 +97,7 @@ When evidence is rejected or marked incomplete, record only non-secret reason ca
 5. Unresolved blocker: open gaps still require production image validation, systemd or ARM validation, staging, load, penetration, rollback, incident, custody, compliance, or production-readiness review.
 6. Review-process issue: reviewer identity, review date, retention decision, refresh reason, or unresolved-gap list is missing or inconsistent.
 
-Record follow-up as a non-secret action item. Do not copy raw logs, SARIF/SBOM contents, vulnerability tables, secret-scan details, screenshots, credentials, private URLs, wallet material, or sensitive environment details into repository files.
+Record follow-up as a non-secret action item with a non-secret owner or approved handle and target review date when assignment is needed. Assignment records are routing metadata only; they must not imply evidence acceptance, production readiness, live-funds approval, public exposure approval, deployment readiness, custody readiness, or compliance approval. Do not copy raw logs, SARIF/SBOM contents, vulnerability tables, secret-scan details, screenshots, credentials, private URLs, wallet material, or sensitive environment details into repository files.
 
 ## Retained Artifact Review Checklist
 
