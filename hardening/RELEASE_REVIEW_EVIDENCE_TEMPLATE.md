@@ -12,6 +12,7 @@ This template is for recording non-secret release-review evidence references. It
 - Commit:
 - Workflow run URL:
 - Review outcome:
+- Evidence status:
 - Evidence reviewer sign-off:
 - Evidence sign-off scope:
 - Evidence sign-off unresolved gaps:
@@ -48,6 +49,7 @@ Record only non-secret references or sanitized artifact names.
 | Operator CI artifact review |  |  |
 | Evidence expiration or refresh review |  |  |
 | Release evidence reviewer sign-off |  |  |
+| Evidence status legend review |  |  |
 | Evidence rejection reason review |  |  |
 | Evidence rejection follow-up assignment |  |  |
 
@@ -60,6 +62,7 @@ Record only non-secret references or sanitized artifact names.
 - Confirm retained artifacts were reviewed against `hardening/EXTERNAL_VALIDATION_RUNBOOK.md` before external storage.
 - Confirm the operator CI artifact review checklist in `hardening/EXTERNAL_VALIDATION_RUNBOOK.md` was used when recording artifact names, reviewer, outcome, and unresolved gaps.
 - Confirm evidence expiration and refresh triggers in `hardening/EXTERNAL_VALIDATION_RUNBOOK.md` were checked before relying on retained CI evidence.
+- Confirm evidence status uses only the release evidence status legend from `hardening/EXTERNAL_VALIDATION_RUNBOOK.md`.
 - Confirm release evidence reviewer sign-off records evidence acceptance, rejection, or follow-up only and does not claim production readiness, live-funds approval, public exposure approval, deployment readiness, custody readiness, or compliance approval.
 - Confirm rejected or incomplete evidence uses only non-secret rejection reason categories and required follow-up from `hardening/EXTERNAL_VALIDATION_RUNBOOK.md`.
 - Confirm rejected or incomplete evidence follow-up owner and target review date are non-secret routing metadata only and do not imply evidence acceptance, production readiness, live-funds approval, public exposure approval, deployment readiness, custody readiness, or compliance approval.

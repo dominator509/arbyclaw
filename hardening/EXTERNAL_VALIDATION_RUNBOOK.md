@@ -86,6 +86,16 @@ Use reviewer sign-off only to record whether the non-secret evidence package is 
 3. If evidence is rejected or incomplete, record the non-secret reason and required follow-up without copying logs, artifact contents, credentials, private URLs, wallet material, screenshots, or sensitive environment details.
 4. Require a fresh sign-off whenever evidence is refreshed, the reviewed commit changes, or release-relevant gaps change.
 
+## Release Evidence Status Legend
+
+Use only these non-secret status values in release evidence records:
+
+1. Accepted: evidence reference is in scope for the review, but this does not claim production readiness, live-funds approval, public exposure approval, deployment readiness, custody readiness, or compliance approval.
+2. Rejected: evidence is out of scope, failed, unsafe to retain, or otherwise unusable; record a non-secret reason category and follow-up.
+3. Follow-up required: evidence may become usable after a non-secret action item is completed and reviewed.
+4. Expired: artifact, run, retention window, or review window is no longer valid for the release under review.
+5. Deferred: evidence requires external settings, infrastructure, reviewer approval, or validation that has not occurred.
+
 ## Release Evidence Rejection Reasons
 
 When evidence is rejected or marked incomplete, record only non-secret reason categories and required follow-up:
