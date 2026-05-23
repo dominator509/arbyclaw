@@ -53,6 +53,18 @@ Before using CI evidence in any future release review:
 6. Record only non-secret artifact names, run URLs, commit hashes, reviewer identity, and review outcome in release documentation.
 7. Keep unresolved gaps open for missing SBOM review, GitHub code-scanning upload processing, production image validation, systemd or ARM validation, staging, load, penetration, rollback, incident, custody, compliance, and production-readiness review.
 
+## Operator CI Artifact Review Checklist
+
+Operators can use this lightweight checklist when reviewing retained CI artifacts without changing runtime behavior:
+
+1. Record the repository, branch, commit, workflow run URL, reviewer, review date, and review outcome.
+2. Record the artifact names exactly as shown by the workflow run: `hardening-evidence-index`, `codeql-sarif-evidence`, `trivy-image-scan-evidence`, `gitleaks-secret-scan-evidence`, and any Docker Buildx build record artifact.
+3. Confirm each artifact was produced by the expected successful job and is non-empty.
+4. Confirm the review used the artifact contents only in the approved external evidence workflow.
+5. Record unresolved gaps by identifier or short name, including SBOM review, GitHub code-scanning upload processing, production image validation, systemd or ARM validation, staging, load, penetration, rollback, incident, custody, compliance, and production-readiness review.
+6. Do not copy SARIF contents, SBOM contents, vulnerability tables, secret-scan details, raw logs, private URLs, credentials, tokens, wallet material, screenshots, or sensitive environment details into repository Markdown, prompts, tickets, or release notes.
+7. Treat the checklist as review routing evidence only; it does not prove production readiness, live-funds readiness, public exposure readiness, or deployment readiness.
+
 ## Retained Artifact Review Checklist
 
 Before retaining CI artifacts outside GitHub Actions:
