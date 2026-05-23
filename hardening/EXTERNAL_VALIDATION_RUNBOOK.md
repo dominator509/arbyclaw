@@ -53,6 +53,19 @@ Before using CI evidence in any future release review:
 6. Record only non-secret artifact names, run URLs, commit hashes, reviewer identity, and review outcome in release documentation.
 7. Keep unresolved gaps open for missing SBOM review, GitHub code-scanning upload processing, production image validation, systemd or ARM validation, staging, load, penetration, rollback, incident, custody, compliance, and production-readiness review.
 
+## Retained Artifact Review Checklist
+
+Before retaining CI artifacts outside GitHub Actions:
+
+1. Confirm the artifact came from the expected repository, branch, workflow run URL, and commit.
+2. Confirm the artifact name matches the run summary and release-review evidence record.
+3. Confirm the artifact is non-empty and was produced by a successful job.
+4. Confirm the artifact does not contain credentials, wallet material, private URLs, raw sensitive logs, unredacted SARIF excerpts, or secret-bearing screenshots.
+5. Store only sanitized artifacts or non-secret references in the approved external evidence store.
+6. Record the retention location as a non-secret reference, not as embedded evidence content.
+7. Record the reviewer, review date, retention decision, expiration or review-by date, and unresolved gaps.
+8. Delete any secret-bearing or wrongly scoped artifact from the retention path and record the issue without copying the sensitive content.
+
 ## Hard Stop Conditions
 
 - Any secret appears in repository files, logs, telemetry, prompts, tickets, or evidence.

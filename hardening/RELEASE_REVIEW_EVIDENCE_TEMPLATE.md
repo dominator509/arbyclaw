@@ -12,6 +12,9 @@ This template is for recording non-secret release-review evidence references. It
 - Commit:
 - Workflow run URL:
 - Review outcome:
+- External evidence store reference:
+- Artifact retention decision:
+- Artifact review-by or expiration date:
 
 ## Evidence References
 
@@ -29,6 +32,7 @@ Record only non-secret references or sanitized artifact names.
 | SBOM generation gate |  |  |
 | GitHub code-scanning settings review |  |  |
 | GitHub code-scanning processing result or local-SARIF-only decision |  |  |
+| Retained artifact review |  |  |
 
 ## Required Checks
 
@@ -36,6 +40,7 @@ Record only non-secret references or sanitized artifact names.
 - Confirm all CI jobs required for the review completed with the expected result.
 - Confirm downloaded evidence artifacts are non-empty.
 - Confirm retained evidence is limited to non-secret CI outputs.
+- Confirm retained artifacts were reviewed against `hardening/EXTERNAL_VALIDATION_RUNBOOK.md` before external storage.
 - Confirm GitHub code-scanning upload processing is either validated through repository settings, workflow run URL, and Security-tab processing result, or explicitly recorded as unavailable/deferred with GAP-0075 still open.
 - Confirm no credentials, wallet material, private URLs, raw sensitive logs, or secret-bearing screenshots are copied into this record.
 - Confirm unresolved gaps remain listed below and are not treated as complete.
