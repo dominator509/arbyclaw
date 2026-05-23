@@ -4,6 +4,7 @@ This checklist is intentionally fail-closed. An unchecked item is a blocker.
 
 ## Build and Supply Chain
 
+- [ ] Release-review evidence is recorded using `hardening/RELEASE_REVIEW_EVIDENCE_TEMPLATE.md` with non-secret references only.
 - [ ] Cargo formatting, check, test, and clippy pass externally.
 - [ ] Release build succeeds with locked dependencies.
 - [ ] Dependency audit is reviewed.
