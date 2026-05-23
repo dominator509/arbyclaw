@@ -1,0 +1,60 @@
+# Release Review Evidence Template
+
+This template is for recording non-secret release-review evidence references. It is not proof of production readiness by itself.
+
+## Review Metadata
+
+- Review date:
+- Reviewer:
+- Review scope:
+- Repository:
+- Branch:
+- Commit:
+- Workflow run URL:
+- Review outcome:
+
+## Evidence References
+
+Record only non-secret references or sanitized artifact names.
+
+| Evidence item | Reference | Review note |
+|---|---|---|
+| CI workflow run |  |  |
+| `hardening-evidence-index` artifact |  |  |
+| `codeql-sarif-evidence` artifact |  |  |
+| `trivy-image-scan-evidence` artifact |  |  |
+| `gitleaks-secret-scan-evidence` artifact |  |  |
+| Docker Buildx build record artifact |  |  |
+| Dependency audit gate |  |  |
+| SBOM generation gate |  |  |
+
+## Required Checks
+
+- Confirm the workflow run belongs to the expected repository, branch, and commit.
+- Confirm all CI jobs required for the review completed with the expected result.
+- Confirm downloaded evidence artifacts are non-empty.
+- Confirm retained evidence is limited to non-secret CI outputs.
+- Confirm no credentials, wallet material, private URLs, raw sensitive logs, or secret-bearing screenshots are copied into this record.
+- Confirm unresolved gaps remain listed below and are not treated as complete.
+
+## Unresolved Gaps
+
+List every release-relevant gap that remains open.
+
+| Gap | Status | Required follow-up |
+|---|---|---|
+| SBOM review |  |  |
+| GitHub code-scanning upload processing |  |  |
+| Production container validation |  |  |
+| Systemd or ARM validation |  |  |
+| Staging validation |  |  |
+| Load or soak testing |  |  |
+| Penetration testing |  |  |
+| Rollback or incident drill |  |  |
+| Custody or signer review |  |  |
+| Compliance review |  |  |
+| Production readiness review |  |  |
+
+## Explicit Non-Claims
+
+This record does not validate production deployment, live funds, public exposure, signing, broadcasts, withdrawals, bridges, live exchange/RPC calls, custody readiness, compliance approval, or production readiness unless those validations were actually completed and referenced through non-secret evidence.

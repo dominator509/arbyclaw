@@ -46,6 +46,7 @@ The project is in Phase 18 agentic-handoff-package-complete status for ChatGPT P
 - The same run wrote a GitHub Step Summary from the `hardening-evidence-index` job with non-secret artifact pointers, producing job results, run URL, commit, and explicit non-claims for easier lookup from the workflow page.
 - `hardening/EXTERNAL_VALIDATION_RUNBOOK.md` now includes a CI evidence lookup note for finding the Step Summary and short-retention artifacts without changing CI or runtime behavior.
 - `hardening/EXTERNAL_VALIDATION_RUNBOOK.md` now includes a manual evidence review checklist for confirming run identity, job outcomes, non-empty non-secret artifacts, and remaining release-review gaps before future release use.
+- `hardening/RELEASE_REVIEW_EVIDENCE_TEMPLATE.md` now provides a short non-secret release-review record template for run URLs, artifact names, reviewer, outcome, and unresolved gaps without changing CI or runtime behavior.
 - This is release-build, dependency-audit, SBOM-generation, local-SARIF SAST, example-container image-scan, and secret-pattern scan evidence only. It does not validate SBOM review, GitHub code scanning upload processing, production container image readiness, systemd hardening, ARM validation, staging deployment, load testing, penetration testing, rollback drills, incident drills, live exchange/RPC sandbox validation, custody review, compliance review, or production readiness.
 
 ## Current Production Readiness %

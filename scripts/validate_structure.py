@@ -71,6 +71,7 @@ REQUIRED_FILES = [
     "deployment/systemd/arb-agent.service.example",
     "deployment/arm/BUILD_PROFILES.md",
     "hardening/EXTERNAL_VALIDATION_RUNBOOK.md",
+    "hardening/RELEASE_REVIEW_EVIDENCE_TEMPLATE.md",
     "hardening/PRODUCTION_READINESS_CHECKLIST.md",
     "hardening/INCIDENT_RESPONSE_DRILL_TEMPLATE.md",
     "handoff/AGENTIC_HANDOFF_PACKAGE.md",
