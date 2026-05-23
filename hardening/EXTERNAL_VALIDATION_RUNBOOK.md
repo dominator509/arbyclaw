@@ -118,9 +118,11 @@ Before retaining CI artifacts outside GitHub Actions:
 3. Confirm the artifact is non-empty and was produced by a successful job.
 4. Confirm the artifact does not contain credentials, wallet material, private URLs, raw sensitive logs, unredacted SARIF excerpts, or secret-bearing screenshots.
 5. Store only sanitized artifacts or non-secret references in the approved external evidence store.
-6. Record the retention location as a non-secret reference, not as embedded evidence content.
+6. Record the retention location as a non-secret reference and classify it as `Actions artifact`, `approved external evidence store`, `unavailable`, or `deferred`, not as embedded evidence content.
 7. Record the reviewer, review date, retention decision, expiration or review-by date, and unresolved gaps.
 8. Delete any secret-bearing or wrongly scoped artifact from the retention path and record the issue without copying the sensitive content.
+
+Retention location classification is routing metadata only. `Actions artifact` means the evidence remains in GitHub Actions short-retention artifacts, `approved external evidence store` means a sanitized external evidence reference exists, `unavailable` means no retained non-secret evidence is currently available, and `deferred` means retention requires later external approval or infrastructure.
 
 ## SBOM Review Checklist
 

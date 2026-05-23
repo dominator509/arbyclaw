@@ -22,6 +22,7 @@ This template is for recording non-secret release-review evidence references. It
 - Evidence rejection follow-up target review date:
 - External evidence store reference:
 - Artifact retention decision:
+- Evidence retention location classification:
 - Artifact review-by or expiration date:
 - Evidence refresh required:
 - Evidence refresh reason:
@@ -48,6 +49,7 @@ Record only non-secret references or sanitized artifact names.
 | Retained artifact review |  |  |
 | Operator CI artifact review |  |  |
 | Evidence expiration or refresh review |  |  |
+| Evidence retention location classification |  |  |
 | Release evidence reviewer sign-off |  |  |
 | Evidence status legend review |  |  |
 | Evidence rejection reason review |  |  |
@@ -60,6 +62,7 @@ Record only non-secret references or sanitized artifact names.
 - Confirm downloaded evidence artifacts are non-empty.
 - Confirm retained evidence is limited to non-secret CI outputs.
 - Confirm retained artifacts were reviewed against `hardening/EXTERNAL_VALIDATION_RUNBOOK.md` before external storage.
+- Confirm evidence retention location classification is limited to `Actions artifact`, `approved external evidence store`, `unavailable`, or `deferred`.
 - Confirm the operator CI artifact review checklist in `hardening/EXTERNAL_VALIDATION_RUNBOOK.md` was used when recording artifact names, reviewer, outcome, and unresolved gaps.
 - Confirm evidence expiration and refresh triggers in `hardening/EXTERNAL_VALIDATION_RUNBOOK.md` were checked before relying on retained CI evidence.
 - Confirm evidence status uses only the release evidence status legend from `hardening/EXTERNAL_VALIDATION_RUNBOOK.md`.
