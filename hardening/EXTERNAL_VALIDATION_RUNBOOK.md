@@ -86,6 +86,19 @@ Use reviewer sign-off only to record whether the non-secret evidence package is 
 3. If evidence is rejected or incomplete, record the non-secret reason and required follow-up without copying logs, artifact contents, credentials, private URLs, wallet material, screenshots, or sensitive environment details.
 4. Require a fresh sign-off whenever evidence is refreshed, the reviewed commit changes, or release-relevant gaps change.
 
+## Release Evidence Rejection Reasons
+
+When evidence is rejected or marked incomplete, record only non-secret reason categories and required follow-up:
+
+1. Scope mismatch: repository, branch, commit, workflow run, artifact, or reviewer scope does not match the release under review.
+2. Missing or expired evidence: expected job result, artifact, retention record, SBOM review, code-scanning setting review, or sign-off is unavailable.
+3. Failed gate: CI job, dependency audit, SBOM generation, SAST, image scan, secret scan, or structure validation failed.
+4. Secret-handling concern: evidence may contain credentials, private URLs, wallet material, raw sensitive logs, screenshots, or unredacted findings.
+5. Unresolved blocker: open gaps still require production image validation, systemd or ARM validation, staging, load, penetration, rollback, incident, custody, compliance, or production-readiness review.
+6. Review-process issue: reviewer identity, review date, retention decision, refresh reason, or unresolved-gap list is missing or inconsistent.
+
+Record follow-up as a non-secret action item. Do not copy raw logs, SARIF/SBOM contents, vulnerability tables, secret-scan details, screenshots, credentials, private URLs, wallet material, or sensitive environment details into repository files.
+
 ## Retained Artifact Review Checklist
 
 Before retaining CI artifacts outside GitHub Actions:
