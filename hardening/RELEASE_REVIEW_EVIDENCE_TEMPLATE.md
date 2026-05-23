@@ -27,6 +27,8 @@ Record only non-secret references or sanitized artifact names.
 | Docker Buildx build record artifact |  |  |
 | Dependency audit gate |  |  |
 | SBOM generation gate |  |  |
+| GitHub code-scanning settings review |  |  |
+| GitHub code-scanning processing result or local-SARIF-only decision |  |  |
 
 ## Required Checks
 
@@ -34,6 +36,7 @@ Record only non-secret references or sanitized artifact names.
 - Confirm all CI jobs required for the review completed with the expected result.
 - Confirm downloaded evidence artifacts are non-empty.
 - Confirm retained evidence is limited to non-secret CI outputs.
+- Confirm GitHub code-scanning upload processing is either validated through repository settings, workflow run URL, and Security-tab processing result, or explicitly recorded as unavailable/deferred with GAP-0075 still open.
 - Confirm no credentials, wallet material, private URLs, raw sensitive logs, or secret-bearing screenshots are copied into this record.
 - Confirm unresolved gaps remain listed below and are not treated as complete.
 

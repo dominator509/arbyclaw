@@ -27,6 +27,20 @@ Recent CI hardening evidence is easiest to find from the GitHub Actions run page
 - Treat these artifacts as CI evidence only. They do not prove production deployment, live-funds readiness, public exposure readiness, SBOM review, GitHub code-scanning upload processing, penetration testing, load testing, rollback drills, incident drills, custody review, compliance review, or production readiness.
 - If evidence must be retained beyond the GitHub Actions retention window, store only non-secret references or sanitized artifacts in an approved external evidence store.
 
+## GitHub Code Scanning Evidence Path
+
+GitHub code-scanning upload processing is an external repository setting and must be reviewed outside source-code changes:
+
+1. Open the repository settings for `dominator509/arbyclaw`.
+2. Review `Settings` -> `Code security and analysis` -> `Code scanning`.
+3. If code scanning is available and approved, enable CodeQL/code-scanning support for the repository.
+4. Update the CI CodeQL step in a reviewed follow-up so SARIF upload is enabled, then run the `ci` workflow on the expected branch and commit.
+5. Confirm the CodeQL job completes and the GitHub `Security` -> `Code scanning` page processes the uploaded results for the same commit.
+6. Record only non-secret evidence: repository, branch, commit, workflow run URL, CodeQL job result, code-scanning page URL or settings-review note, reviewer, outcome, and unresolved gaps.
+7. If code scanning is unavailable, blocked by repository settings, or not approved, record that decision in release-review evidence and keep GAP-0075 open while relying on local SARIF artifact evidence only.
+
+Do not copy SARIF contents, source findings with sensitive context, private repository settings screenshots, credentials, tokens, or secret-bearing logs into Markdown, tickets, prompts, or release notes.
+
 ## Manual Evidence Review Checklist
 
 Before using CI evidence in any future release review:

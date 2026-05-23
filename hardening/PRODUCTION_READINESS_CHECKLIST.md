@@ -9,6 +9,7 @@ This checklist is intentionally fail-closed. An unchecked item is a blocker.
 - [ ] Release build succeeds with locked dependencies.
 - [ ] Dependency audit is reviewed.
 - [ ] SBOM is generated and reviewed.
+- [ ] GitHub code-scanning upload processing is enabled and validated, or a reviewed local-SARIF-only decision is recorded.
 - [ ] Release artifact provenance is documented.
 
 ## Runtime and Deployment
