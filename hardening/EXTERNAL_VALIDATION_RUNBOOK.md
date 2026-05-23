@@ -77,6 +77,15 @@ Before any release review, refresh CI evidence references when any of these are 
 
 To refresh, rerun the `ci` workflow on the exact commit under review, confirm the expected jobs and artifacts, and record only non-secret run URLs, artifact names, reviewer, outcome, review date, refresh reason, and unresolved gaps. Do not copy artifact contents, logs, credentials, private URLs, wallet material, or screenshots into repository files.
 
+## Release Evidence Reviewer Sign-Off
+
+Use reviewer sign-off only to record whether the non-secret evidence package is accepted, rejected, or needs follow-up:
+
+1. Record reviewer name or approved handle, review date, evidence scope, outcome, and unresolved gaps.
+2. Record approval as evidence acceptance only; it must not claim production readiness, live-funds approval, public exposure approval, deployment readiness, compliance approval, custody readiness, signing readiness, bridge readiness, broadcast readiness, or exchange/RPC readiness.
+3. If evidence is rejected or incomplete, record the non-secret reason and required follow-up without copying logs, artifact contents, credentials, private URLs, wallet material, screenshots, or sensitive environment details.
+4. Require a fresh sign-off whenever evidence is refreshed, the reviewed commit changes, or release-relevant gaps change.
+
 ## Retained Artifact Review Checklist
 
 Before retaining CI artifacts outside GitHub Actions:
