@@ -65,6 +65,18 @@ Operators can use this lightweight checklist when reviewing retained CI artifact
 6. Do not copy SARIF contents, SBOM contents, vulnerability tables, secret-scan details, raw logs, private URLs, credentials, tokens, wallet material, screenshots, or sensitive environment details into repository Markdown, prompts, tickets, or release notes.
 7. Treat the checklist as review routing evidence only; it does not prove production readiness, live-funds readiness, public exposure readiness, or deployment readiness.
 
+## Evidence Expiration and Refresh
+
+Before any release review, refresh CI evidence references when any of these are true:
+
+1. The referenced workflow run no longer matches the commit, branch, or repository under review.
+2. The referenced GitHub Actions artifacts have expired or are no longer downloadable from the run page.
+3. The source tree, workflow file, dependency lockfile, container example, hardening runbook, release template, or security policy changed after the referenced run.
+4. The reviewer cannot verify the artifact names, job outcomes, retention decision, or unresolved gaps from non-secret references.
+5. The release review is using evidence older than the operator-approved review window.
+
+To refresh, rerun the `ci` workflow on the exact commit under review, confirm the expected jobs and artifacts, and record only non-secret run URLs, artifact names, reviewer, outcome, review date, refresh reason, and unresolved gaps. Do not copy artifact contents, logs, credentials, private URLs, wallet material, or screenshots into repository files.
+
 ## Retained Artifact Review Checklist
 
 Before retaining CI artifacts outside GitHub Actions:
