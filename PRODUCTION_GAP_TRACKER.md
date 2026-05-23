@@ -28,6 +28,17 @@ The project is in Phase 18 agentic-handoff-package-complete status for ChatGPT P
 - Node.js 24 migration status: the workflow now uses `actions/checkout@v6`; no Node.js 20 deprecation annotation appeared in the final validated run.
 - This validates the pushed repository structure, formatting, compilation, tests, linting, locked release build, dependency audit, SBOM generation gate, local-SARIF CodeQL SAST gate, short-retention SAST artifact retention, example container image build, example Trivy image-scan gate, and Gitleaks secret-pattern scan gate in GitHub Actions only. It does not validate production deployment, live funds, live exchange/RPC integrations, signing, broadcasts, production containers, systemd, ARM, penetration testing, load testing, rollback drills, incident drills, SBOM review, GitHub code scanning upload processing, broader external hardening, or production readiness.
 
+## Latest Gap Tracker Audit
+
+2026-05-23 ArbyClaw production gap tracker audit:
+
+- Local validation rerun passed: `python3 scripts/validate_structure.py`, `cargo fmt --check`, `cargo check --workspace`, `cargo test --workspace` with 71 tests across 3 suites, and `cargo clippy --workspace --all-targets -- -D warnings`.
+- Latest referenced GitHub Actions validation remained passed on `main` in run `https://github.com/dominator509/arbyclaw/actions/runs/26322940064` for commit `050b3ef423622aa3acf4d45f76ed032622180103`.
+- The Rust/Cargo validation class of gaps is now locally and CI-covered for the current workspace state: GAP-0001, GAP-0029, GAP-0031, GAP-0033, GAP-0036, GAP-0040, GAP-0043, GAP-0046, GAP-0050, GAP-0053, GAP-0055, GAP-0057, GAP-0059, GAP-0061, GAP-0063, GAP-0065, GAP-0067, GAP-0069, and GAP-0071.
+- These validation updates do not prove production readiness, deployment readiness, live-funds readiness, public exposure readiness, code-scanning upload processing, SBOM review, penetration testing, load testing, rollback drills, incident drills, custody readiness, or live exchange/RPC readiness.
+- The safest fillable next gaps are documentation and evidence-review gates: SBOM review checklist, external artifact review, release-review evidence, code-scanning settings evidence, and operator review records.
+- The non-fillable-in-repo gaps remain open where they require credentials, wallet custody, signer design, live exchange/RPC validation, production infrastructure, public exposure review, penetration testing, load testing, rollback drills, incident drills, legal/compliance review, or accountable human approval.
+
 ## Latest External Hardening Evidence Attempt
 
 2026-05-21 ArbyClaw release-build, dependency-audit, SBOM-generation, SAST, and example-container hardening evidence:
@@ -50,6 +61,7 @@ The project is in Phase 18 agentic-handoff-package-complete status for ChatGPT P
 - `hardening/PRODUCTION_READINESS_CHECKLIST.md` now points release reviewers to `hardening/RELEASE_REVIEW_EVIDENCE_TEMPLATE.md` for non-secret evidence records before any future readiness review.
 - `hardening/EXTERNAL_VALIDATION_RUNBOOK.md`, `hardening/RELEASE_REVIEW_EVIDENCE_TEMPLATE.md`, and `hardening/PRODUCTION_READINESS_CHECKLIST.md` now document the non-secret GitHub code-scanning settings evidence path for GAP-0075 without changing CI upload behavior, runtime behavior, or repository secrets handling.
 - `hardening/EXTERNAL_VALIDATION_RUNBOOK.md` and `hardening/RELEASE_REVIEW_EVIDENCE_TEMPLATE.md` now include a retained-artifact review checklist and non-secret retention fields so operators can preserve CI evidence references without copying secret-bearing content into repository files.
+- `hardening/EXTERNAL_VALIDATION_RUNBOOK.md` and `hardening/RELEASE_REVIEW_EVIDENCE_TEMPLATE.md` now include a non-secret SBOM review checklist and SBOM review evidence fields so operators can review generated SBOM artifacts without storing dependency graphs or sensitive environment details in repository files.
 - This is release-build, dependency-audit, SBOM-generation, local-SARIF SAST, example-container image-scan, and secret-pattern scan evidence only. It does not validate SBOM review, GitHub code scanning upload processing, production container image readiness, systemd hardening, ARM validation, staging deployment, load testing, penetration testing, rollback drills, incident drills, live exchange/RPC sandbox validation, custody review, compliance review, or production readiness.
 
 ## Current Production Readiness %

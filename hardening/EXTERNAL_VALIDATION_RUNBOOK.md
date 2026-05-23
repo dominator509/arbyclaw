@@ -66,6 +66,19 @@ Before retaining CI artifacts outside GitHub Actions:
 7. Record the reviewer, review date, retention decision, expiration or review-by date, and unresolved gaps.
 8. Delete any secret-bearing or wrongly scoped artifact from the retention path and record the issue without copying the sensitive content.
 
+## SBOM Review Checklist
+
+Before treating generated SBOM evidence as release-review input:
+
+1. Confirm the SBOM artifact came from the expected repository, branch, workflow run URL, and commit.
+2. Confirm the SBOM generation job completed successfully and produced non-empty SBOM output.
+3. Confirm the SBOM artifact is reviewed in an approved external evidence workflow rather than copied into repository Markdown.
+4. Confirm dependency names, versions, licenses, and package URLs are reviewed for unexpected packages, unsupported licenses, and stale or risky dependencies.
+5. Confirm any vulnerability findings are correlated with the dependency-audit result and recorded as non-secret references only.
+6. Confirm no environment variables, private registry URLs with credentials, internal hostnames, tokens, wallet material, or raw sensitive logs appear in retained SBOM evidence.
+7. Record only the run URL, artifact name, reviewer, review date, outcome, and unresolved follow-up gaps in release-review documentation.
+8. Keep production-readiness, deployment-readiness, and live-funds claims blocked until SBOM review is combined with the rest of the external hardening gates.
+
 ## Hard Stop Conditions
 
 - Any secret appears in repository files, logs, telemetry, prompts, tickets, or evidence.

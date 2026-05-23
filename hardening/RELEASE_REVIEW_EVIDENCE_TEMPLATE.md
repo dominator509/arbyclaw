@@ -15,6 +15,7 @@ This template is for recording non-secret release-review evidence references. It
 - External evidence store reference:
 - Artifact retention decision:
 - Artifact review-by or expiration date:
+- SBOM review outcome:
 
 ## Evidence References
 
@@ -30,6 +31,7 @@ Record only non-secret references or sanitized artifact names.
 | Docker Buildx build record artifact |  |  |
 | Dependency audit gate |  |  |
 | SBOM generation gate |  |  |
+| SBOM review |  |  |
 | GitHub code-scanning settings review |  |  |
 | GitHub code-scanning processing result or local-SARIF-only decision |  |  |
 | Retained artifact review |  |  |
@@ -41,6 +43,7 @@ Record only non-secret references or sanitized artifact names.
 - Confirm downloaded evidence artifacts are non-empty.
 - Confirm retained evidence is limited to non-secret CI outputs.
 - Confirm retained artifacts were reviewed against `hardening/EXTERNAL_VALIDATION_RUNBOOK.md` before external storage.
+- Confirm SBOM evidence was reviewed against `hardening/EXTERNAL_VALIDATION_RUNBOOK.md` and only non-secret references are recorded here.
 - Confirm GitHub code-scanning upload processing is either validated through repository settings, workflow run URL, and Security-tab processing result, or explicitly recorded as unavailable/deferred with GAP-0075 still open.
 - Confirm no credentials, wallet material, private URLs, raw sensitive logs, or secret-bearing screenshots are copied into this record.
 - Confirm unresolved gaps remain listed below and are not treated as complete.
