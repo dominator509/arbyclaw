@@ -209,6 +209,7 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 ## GAP-0001 — Rust Workspace Validation Deferred
 
 - Unique ID: GAP-0001
+- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-23; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
 - Phase association: Phase 1 / Phase 2
 - Subsystem association: Repository scaffold / build system / config subsystem
 - Description: A minimal Rust workspace scaffold and Phase 2 config modules now exist, but Cargo-based validation has not been executed.
@@ -685,6 +686,7 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 ## GAP-0029 — Local Cargo Validation Not Executed
 
 - Unique ID: GAP-0029
+- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-23; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
 - Phase association: Phase 1
 - Subsystem association: Build validation
 - Description: Local Rust formatting, compilation, tests, and clippy validation were not executed.
@@ -720,6 +722,7 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 ## GAP-0031 — Phase 2 Rust Validation Not Executed
 
 - Unique ID: GAP-0031
+- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-23; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
 - Phase association: Phase 2
 - Subsystem association: Config / secrets / mode gates
 - Description: Phase 2 Rust modules and tests were authored but not compiled, formatted, clippy-checked, or executed in this environment.
@@ -754,6 +757,7 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 ## GAP-0033 — Phase 3 Rust Validation Not Executed
 
 - Unique ID: GAP-0033
+- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-23; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
 - Phase association: Phase 3
 - Subsystem association: Policy engine / build system
 - Description: Phase 3 policy code and tests were drafted, but Rust formatting, compilation, unit tests, and clippy were not executed.
@@ -805,6 +809,7 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 ## GAP-0036 — Phase 4 Rust Validation Not Executed
 
 - Unique ID: GAP-0036
+- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-23; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
 - Phase association: Phase 4
 - Subsystem association: Audit journal / state store / build system
 - Description: Phase 4 audit and state code plus tests were drafted but not compiled, formatted, clippy-checked, or executed.
@@ -875,6 +880,7 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 ## GAP-0040 — Phase 5 Rust Validation Not Executed
 
 - Unique ID: GAP-0040
+- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-23; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
 - Phase association: Phase 5
 - Subsystem association: Market data / fee model / build system
 - Description: Phase 5 market-data and fee-model code plus tests were drafted but not compiled, formatted, clippy-checked, or executed.
@@ -927,6 +933,7 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 ## GAP-0043 — Phase 6 Rust Validation Not Executed
 
 - Unique ID: GAP-0043
+- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-23; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
 - Phase association: Phase 6
 - Subsystem association: Paper connectors / build system
 - Description: Phase 6 paper connector code plus tests were drafted but not compiled, formatted, clippy-checked, or executed.
@@ -979,6 +986,7 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 ## GAP-0046 — Phase 7 Rust Validation Not Executed
 
 - Unique ID: GAP-0046
+- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-23; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
 - Phase association: Phase 7
 - Subsystem association: CEX connector framework / build system
 - Description: Phase 7 CEX framework code and tests were drafted but not compiled, formatted, clippy-checked, or executed.
@@ -1047,6 +1055,7 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 ## GAP-0050 — Phase 8 Rust Validation Not Executed
 
 - Unique ID: GAP-0050
+- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-23; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
 - Phase association: Phase 8
 - Subsystem association: DEX/Web3 connector framework / build system
 - Description: Phase 8 DEX/Web3 framework code and tests were drafted but not compiled, formatted, clippy-checked, or executed.
@@ -1100,6 +1109,7 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 ## GAP-0053 — Phase 9 Rust Validation Not Executed
 
 - Unique ID: GAP-0053
+- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-23; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
 - Phase association: Phase 9
 - Subsystem association: Opportunity engine / build system
 - Description: Phase 9 opportunity-engine code and tests were drafted but not compiled, formatted, clippy-checked, or executed.
@@ -1134,6 +1144,7 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 ## GAP-0055 — Phase 10 Rust Validation Not Executed
 
 - Unique ID: GAP-0055
+- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-23; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
 - Phase association: Phase 10
 - Subsystem association: Execution planner / build system
 - Description: Phase 10 execution-planner code and tests were drafted but not compiled, formatted, clippy-checked, or executed.
@@ -1168,6 +1179,7 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 ## GAP-0057 — Phase 11 Rust Validation Not Executed
 
 - Unique ID: GAP-0057
+- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-23; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
 - Phase association: Phase 11
 - Subsystem association: Execution adapter framework / build system
 - Description: Phase 11 execution-adapter framework code and tests were drafted but not compiled, formatted, clippy-checked, or executed.
@@ -1202,6 +1214,7 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 ## GAP-0059 — Phase 12 Rust Validation Not Executed
 
 - Unique ID: GAP-0059
+- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-23; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
 - Phase association: Phase 12
 - Subsystem association: Communications and CLI / build system
 - Description: Phase 12 communications/CLI code and tests were drafted but not compiled, formatted, clippy-checked, or executed.
@@ -1238,6 +1251,7 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 ## GAP-0061 — Phase 13 Rust Validation Not Executed
 
 - Unique ID: GAP-0061
+- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-23; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
 - Phase association: Phase 13
 - Subsystem association: Embedded dashboard / build system
 - Description: Phase 13 embedded-dashboard code and tests were drafted but not compiled, formatted, clippy-checked, or executed.
@@ -1273,6 +1287,7 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 ## GAP-0063 — Phase 14 Rust Validation Not Executed
 
 - Unique ID: GAP-0063
+- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-23; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
 - Phase association: Phase 14
 - Subsystem association: Observability and runbooks / build system
 - Description: Phase 14 observability/runbook code and tests were drafted but not compiled, formatted, clippy-checked, or executed.
@@ -1308,6 +1323,7 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 ## GAP-0065 — Phase 15 Rust Validation Not Executed
 
 - Unique ID: GAP-0065
+- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-23; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
 - Phase association: Phase 15
 - Subsystem association: Testing, fuzzing, and backtesting / build system
 - Description: Phase 15 testing/fuzzing/backtesting boundary code and tests were drafted but not compiled, formatted, clippy-checked, or executed.
@@ -1342,6 +1358,7 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 ## GAP-0067 — Phase 16 Rust Validation Not Executed
 
 - Unique ID: GAP-0067
+- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-23; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
 - Phase association: Phase 16
 - Subsystem association: Packaging/deployment / build system
 - Description: Phase 16 packaging/deployment boundary code and tests were drafted but not compiled, formatted, clippy-checked, or executed.
@@ -1378,6 +1395,7 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 ## GAP-0069 — Phase 17 Rust Validation Not Executed
 
 - Unique ID: GAP-0069
+- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-23; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
 - Phase association: Phase 17
 - Subsystem association: External hardening evidence boundary / build system
 - Description: Phase 17 external hardening boundary code and tests were drafted but not compiled, formatted, clippy-checked, or executed.
@@ -1412,6 +1430,7 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 ## GAP-0071 — Phase 18 Rust Validation Not Executed
 
 - Unique ID: GAP-0071
+- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-23; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
 - Phase association: Phase 18
 - Subsystem association: Agentic handoff package boundary / build system
 - Description: Phase 18 handoff boundary code and tests were drafted but not compiled, formatted, clippy-checked, or executed.
