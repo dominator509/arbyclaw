@@ -157,6 +157,18 @@ Before treating generated SBOM evidence as release-review input:
 9. Do not copy dependency graphs, package inventories, vulnerability tables, SBOM contents, private registry URLs, internal hostnames, credentials, wallet material, or raw sensitive logs into repository files.
 10. Keep production-readiness, deployment-readiness, and live-funds claims blocked until SBOM review is combined with the rest of the external hardening gates.
 
+## Image Scan Review Checklist
+
+Before treating Trivy image-scan evidence as release-review input:
+
+1. Confirm the image-scan artifact came from the expected repository, branch, workflow run URL, commit, and `example-container-image-scan` job.
+2. Confirm the Trivy evidence artifact is named `trivy-image-scan-evidence` and was produced by the expected example image-scan gate.
+3. Confirm the fixable critical vulnerability enforcement gate completed successfully or record the failed gate as non-secret reference metadata only.
+4. Record only the run URL, job name, gate name, artifact name, commit hash, reviewer, review date, outcome, and unresolved follow-up gaps in release-review documentation.
+5. Record the image-scan review decision as non-secret reference metadata only: `accepted`, `rejected`, `follow-up required`, `deferred`, or `not applicable`.
+6. Do not copy vulnerability tables, image layer details, package inventories, CVE text, base-image metadata beyond sanitized artifact references, private registry URLs, internal hostnames, credentials, wallet material, screenshots, or raw sensitive logs into repository files.
+7. Keep production container readiness, deployment readiness, production readiness, and live-funds claims blocked until image-scan review is combined with the rest of the external hardening gates.
+
 ## Hard Stop Conditions
 
 - Any secret appears in repository files, logs, telemetry, prompts, tickets, or evidence.
