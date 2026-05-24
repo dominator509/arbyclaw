@@ -124,6 +124,8 @@ When evidence is rejected or marked incomplete, record only non-secret reason ca
 
 Record follow-up as a non-secret action item with a non-secret owner or approved handle and target review date when assignment is needed. Assignment records are routing metadata only; they must not imply evidence acceptance, production readiness, live-funds approval, public exposure approval, deployment readiness, custody readiness, or compliance approval. Do not copy raw logs, SARIF/SBOM contents, vulnerability tables, secret-scan details, screenshots, credentials, private URLs, wallet material, or sensitive environment details into repository files.
 
+When recording reviewer follow-up status, use only these non-secret values: `open`, `assigned`, `resolved`, `deferred`, or `not applicable`. Follow-up status is routing metadata only and must not embed artifact contents, logs, SARIF/SBOM contents, vulnerability tables, secret-scan findings, screenshots, credentials, private URLs, wallet material, or sensitive environment details.
+
 ## Retained Artifact Review Checklist
 
 Before retaining CI artifacts outside GitHub Actions:

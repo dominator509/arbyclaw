@@ -26,6 +26,7 @@ This template is for recording non-secret release-review evidence references. It
 - Evidence rejection required follow-up:
 - Evidence rejection follow-up owner:
 - Evidence rejection follow-up target review date:
+- Evidence reviewer follow-up status:
 - External evidence store reference:
 - Artifact retention decision:
 - Evidence retention location classification:
@@ -94,6 +95,7 @@ Record only non-secret references or sanitized artifact names.
 | Evidence status legend review |  |  |
 | Evidence rejection reason review |  |  |
 | Evidence rejection follow-up assignment |  |  |
+| Evidence reviewer follow-up status |  |  |
 
 ## Required Checks
 
@@ -116,6 +118,7 @@ Record only non-secret references or sanitized artifact names.
 - Confirm release evidence reviewer sign-off records evidence acceptance, rejection, or follow-up only and does not claim production readiness, live-funds approval, public exposure approval, deployment readiness, custody readiness, or compliance approval.
 - Confirm rejected or incomplete evidence uses only non-secret rejection reason categories and required follow-up from `hardening/EXTERNAL_VALIDATION_RUNBOOK.md`.
 - Confirm rejected or incomplete evidence follow-up owner and target review date are non-secret routing metadata only and do not imply evidence acceptance, production readiness, live-funds approval, public exposure approval, deployment readiness, custody readiness, or compliance approval.
+- Confirm evidence reviewer follow-up status is limited to `open`, `assigned`, `resolved`, `deferred`, or `not applicable`; do not embed artifact contents, logs, SARIF/SBOM contents, vulnerability tables, secret-scan findings, screenshots, credentials, private URLs, wallet material, or sensitive environment details.
 - Confirm dependency audit gate reference is limited to non-secret run URLs, job names, gate names, commit hashes, reviewer, review date, outcome, and unresolved gaps; do not copy advisory tables, dependency details, vulnerable package lists, CVE text, private registry URLs, internal hostnames, credentials, wallet material, or raw sensitive logs into this record.
 - Confirm dependency audit review decision is limited to `accepted`, `rejected`, `follow-up required`, `deferred`, or `not applicable` and does not imply production readiness, live-funds readiness, public exposure readiness, deployment readiness, custody readiness, or compliance approval.
 - Confirm SBOM evidence was reviewed against `hardening/EXTERNAL_VALIDATION_RUNBOOK.md` and only non-secret references are recorded here.
