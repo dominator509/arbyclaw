@@ -131,6 +131,17 @@ Before retaining CI artifacts outside GitHub Actions:
 
 Retention location classification is routing metadata only. `Actions artifact` means the evidence remains in GitHub Actions short-retention artifacts, `approved external evidence store` means a sanitized external evidence reference exists, `unavailable` means no retained non-secret evidence is currently available, and `deferred` means retention requires later external approval or infrastructure.
 
+## Dependency Audit Review Checklist
+
+Before treating `cargo audit` evidence as release-review input:
+
+1. Confirm the dependency audit gate came from the expected repository, branch, workflow run URL, commit, and `rust-validation` job.
+2. Confirm the `cargo audit` CI step completed successfully or record the failed gate as non-secret reference metadata only.
+3. Record only the run URL, job name, gate name, commit hash, reviewer, review date, outcome, and unresolved follow-up gaps in release-review documentation.
+4. Record the dependency-audit review decision as non-secret reference metadata only: `accepted`, `rejected`, `follow-up required`, `deferred`, or `not applicable`.
+5. Do not copy advisory tables, dependency details, vulnerable package lists, CVE text, private registry URLs, internal hostnames, credentials, wallet material, or raw sensitive logs into repository files.
+6. Keep production-readiness, deployment-readiness, and live-funds claims blocked until dependency-audit review is combined with the rest of the external hardening gates.
+
 ## SBOM Review Checklist
 
 Before treating generated SBOM evidence as release-review input:

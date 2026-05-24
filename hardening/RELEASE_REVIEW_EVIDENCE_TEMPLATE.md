@@ -33,6 +33,8 @@ This template is for recording non-secret release-review evidence references. It
 - Evidence refresh required:
 - Evidence refresh reason:
 - Operator CI artifact review outcome:
+- Dependency audit gate reference:
+- Dependency audit review decision:
 - SBOM generation artifact reference:
 - SBOM review decision:
 - SBOM review outcome:
@@ -50,6 +52,8 @@ Record only non-secret references or sanitized artifact names.
 | `gitleaks-secret-scan-evidence` artifact |  |  |
 | Docker Buildx build record artifact |  |  |
 | Dependency audit gate |  |  |
+| Dependency audit gate reference |  |  |
+| Dependency audit review decision |  |  |
 | SBOM generation gate |  |  |
 | SBOM generation artifact reference |  |  |
 | SBOM review |  |  |
@@ -90,6 +94,8 @@ Record only non-secret references or sanitized artifact names.
 - Confirm release evidence reviewer sign-off records evidence acceptance, rejection, or follow-up only and does not claim production readiness, live-funds approval, public exposure approval, deployment readiness, custody readiness, or compliance approval.
 - Confirm rejected or incomplete evidence uses only non-secret rejection reason categories and required follow-up from `hardening/EXTERNAL_VALIDATION_RUNBOOK.md`.
 - Confirm rejected or incomplete evidence follow-up owner and target review date are non-secret routing metadata only and do not imply evidence acceptance, production readiness, live-funds approval, public exposure approval, deployment readiness, custody readiness, or compliance approval.
+- Confirm dependency audit gate reference is limited to non-secret run URLs, job names, gate names, commit hashes, reviewer, review date, outcome, and unresolved gaps; do not copy advisory tables, dependency details, vulnerable package lists, CVE text, private registry URLs, internal hostnames, credentials, wallet material, or raw sensitive logs into this record.
+- Confirm dependency audit review decision is limited to `accepted`, `rejected`, `follow-up required`, `deferred`, or `not applicable` and does not imply production readiness, live-funds readiness, public exposure readiness, deployment readiness, custody readiness, or compliance approval.
 - Confirm SBOM evidence was reviewed against `hardening/EXTERNAL_VALIDATION_RUNBOOK.md` and only non-secret references are recorded here.
 - Confirm SBOM generation artifact reference is limited to non-secret run URLs, job names, artifact names, commit hashes, reviewer, review date, outcome, and unresolved gaps; do not copy dependency graphs, package inventories, vulnerability tables, SBOM contents, private registry URLs, internal hostnames, credentials, wallet material, or raw sensitive logs into this record.
 - Confirm SBOM review decision is limited to `accepted`, `rejected`, `follow-up required`, `deferred`, or `not applicable` and does not imply production readiness, live-funds readiness, public exposure readiness, deployment readiness, custody readiness, or compliance approval.
