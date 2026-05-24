@@ -169,6 +169,18 @@ Before treating Trivy image-scan evidence as release-review input:
 6. Do not copy vulnerability tables, image layer details, package inventories, CVE text, base-image metadata beyond sanitized artifact references, private registry URLs, internal hostnames, credentials, wallet material, screenshots, or raw sensitive logs into repository files.
 7. Keep production container readiness, deployment readiness, production readiness, and live-funds claims blocked until image-scan review is combined with the rest of the external hardening gates.
 
+## Secret Scan Review Checklist
+
+Before treating Gitleaks secret-scan evidence as release-review input:
+
+1. Confirm the secret-scan artifact came from the expected repository, branch, workflow run URL, commit, and `secret-pattern-scan` job.
+2. Confirm the Gitleaks evidence artifact is named `gitleaks-secret-scan-evidence` and was produced by the expected redacted secret-pattern scan gate.
+3. Confirm the secret-pattern scan gate completed successfully or record the failed gate as non-secret reference metadata only.
+4. Record only the run URL, job name, gate name, artifact name, commit hash, reviewer, review date, outcome, and unresolved follow-up gaps in release-review documentation.
+5. Record the secret-scan review decision as non-secret reference metadata only: `accepted`, `rejected`, `follow-up required`, `deferred`, or `not applicable`.
+6. Do not copy secret-scan findings, secret-like snippets, match strings, file excerpts, private URLs, credentials, tokens, wallet material, screenshots, raw logs, or sensitive environment details into repository files.
+7. Keep secret-handling approval, deployment readiness, production readiness, and live-funds claims blocked until secret-scan review is combined with the rest of the external hardening gates.
+
 ## Hard Stop Conditions
 
 - Any secret appears in repository files, logs, telemetry, prompts, tickets, or evidence.

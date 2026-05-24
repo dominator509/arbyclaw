@@ -40,6 +40,8 @@ This template is for recording non-secret release-review evidence references. It
 - SBOM review outcome:
 - Image scan artifact reference:
 - Image scan review decision:
+- Secret scan artifact reference:
+- Secret scan review decision:
 
 ## Evidence References
 
@@ -62,6 +64,8 @@ Record only non-secret references or sanitized artifact names.
 | SBOM review decision |  |  |
 | Image scan artifact reference |  |  |
 | Image scan review decision |  |  |
+| Secret scan artifact reference |  |  |
+| Secret scan review decision |  |  |
 | GitHub code-scanning settings review |  |  |
 | GitHub code-scanning processing result or local-SARIF-only decision |  |  |
 | Local SARIF-only operator decision review |  |  |
@@ -106,6 +110,9 @@ Record only non-secret references or sanitized artifact names.
 - Confirm Trivy image-scan evidence was reviewed against `hardening/EXTERNAL_VALIDATION_RUNBOOK.md` and only non-secret references are recorded here.
 - Confirm image scan artifact reference is limited to non-secret run URLs, job names, gate names, artifact names, commit hashes, reviewer, review date, outcome, and unresolved gaps; do not copy vulnerability tables, image layer details, package inventories, CVE text, base-image metadata beyond sanitized artifact references, private registry URLs, internal hostnames, credentials, wallet material, screenshots, or raw sensitive logs into this record.
 - Confirm image scan review decision is limited to `accepted`, `rejected`, `follow-up required`, `deferred`, or `not applicable` and does not imply production container readiness, production readiness, live-funds readiness, public exposure readiness, deployment readiness, custody readiness, or compliance approval.
+- Confirm Gitleaks secret-scan evidence was reviewed against `hardening/EXTERNAL_VALIDATION_RUNBOOK.md` and only non-secret references are recorded here.
+- Confirm secret scan artifact reference is limited to non-secret run URLs, job names, gate names, artifact names, commit hashes, reviewer, review date, outcome, and unresolved gaps; do not copy secret-scan findings, secret-like snippets, match strings, file excerpts, private URLs, credentials, tokens, wallet material, screenshots, raw logs, or sensitive environment details into this record.
+- Confirm secret scan review decision is limited to `accepted`, `rejected`, `follow-up required`, `deferred`, or `not applicable` and does not imply secret-handling approval, production readiness, live-funds readiness, public exposure readiness, deployment readiness, custody readiness, or compliance approval.
 - Confirm GitHub code-scanning upload processing is either validated through repository settings, workflow run URL, and Security-tab processing result, or explicitly recorded as unavailable/deferred with GAP-0075 still open.
 - Confirm any local SARIF-only operator decision preserves repository privacy, relies only on the `codeql-sarif-evidence` Actions artifact as non-secret SAST evidence, keeps GAP-0075 open/deferred for GitHub Security-tab upload processing, and does not imply production readiness, live-funds readiness, public exposure readiness, deployment readiness, custody readiness, or compliance approval.
 - Confirm no credentials, wallet material, private URLs, raw sensitive logs, or secret-bearing screenshots are copied into this record.
