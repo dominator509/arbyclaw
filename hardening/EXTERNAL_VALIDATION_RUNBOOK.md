@@ -79,6 +79,8 @@ Before any release review, refresh CI evidence references when any of these are 
 
 To refresh, rerun the `ci` workflow on the exact commit under review, confirm the expected jobs and artifacts, and record only non-secret run URLs, artifact names, reviewer, outcome, review date, refresh reason, and unresolved gaps. Do not copy artifact contents, logs, credentials, private URLs, wallet material, or screenshots into repository files.
 
+When recording a release evidence refresh trigger outcome, use only these non-secret values: `commit changed`, `artifact expired`, `workflow changed`, `reviewer unable to verify`, or `deferred`. The refresh trigger outcome is routing metadata only and must not embed artifact contents, logs, SARIF/SBOM contents, vulnerability tables, secret-scan findings, screenshots, credentials, private URLs, wallet material, or sensitive environment details.
+
 ## Per-Artifact Expiration Outcomes
 
 When reviewing retained CI evidence by artifact type, record only one of these non-secret expiration outcomes: `current`, `expired`, `unavailable`, or `refreshed`.

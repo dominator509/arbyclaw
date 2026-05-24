@@ -32,6 +32,7 @@ This template is for recording non-secret release-review evidence references. It
 - Artifact review-by or expiration date:
 - Evidence refresh required:
 - Evidence refresh reason:
+- Evidence refresh trigger outcome:
 - `hardening-evidence-index` expiration outcome:
 - `codeql-sarif-evidence` expiration outcome:
 - `trivy-image-scan-evidence` expiration outcome:
@@ -77,6 +78,7 @@ Record only non-secret references or sanitized artifact names.
 | Retained artifact review |  |  |
 | Operator CI artifact review |  |  |
 | Evidence expiration or refresh review |  |  |
+| Evidence refresh trigger outcome |  |  |
 | Evidence retention location classification |  |  |
 | `hardening-evidence-index` expiration outcome |  |  |
 | `codeql-sarif-evidence` expiration outcome |  |  |
@@ -103,6 +105,7 @@ Record only non-secret references or sanitized artifact names.
 - Confirm evidence retention location classification is limited to `Actions artifact`, `approved external evidence store`, `unavailable`, or `deferred`.
 - Confirm the operator CI artifact review checklist in `hardening/EXTERNAL_VALIDATION_RUNBOOK.md` was used when recording artifact names, reviewer, outcome, and unresolved gaps.
 - Confirm evidence expiration and refresh triggers in `hardening/EXTERNAL_VALIDATION_RUNBOOK.md` were checked before relying on retained CI evidence.
+- Confirm evidence refresh trigger outcome is limited to `commit changed`, `artifact expired`, `workflow changed`, `reviewer unable to verify`, or `deferred`; do not embed artifact contents, logs, SARIF/SBOM contents, vulnerability tables, secret-scan findings, screenshots, credentials, private URLs, wallet material, or sensitive environment details.
 - Confirm each retained artifact expiration outcome is recorded per artifact type and limited to `current`, `expired`, `unavailable`, or `refreshed`; do not embed artifact contents, logs, SARIF/SBOM contents, vulnerability tables, secret-scan findings, screenshots, credentials, private URLs, wallet material, or sensitive environment details.
 - Confirm evidence status uses only the release evidence status legend from `hardening/EXTERNAL_VALIDATION_RUNBOOK.md`.
 - Confirm the reviewer attests that evidence records contain references only and no embedded artifact contents, logs, SARIF/SBOM contents, vulnerability tables, screenshots, credentials, private URLs, wallet material, or sensitive environment details.
