@@ -79,6 +79,12 @@ Before any release review, refresh CI evidence references when any of these are 
 
 To refresh, rerun the `ci` workflow on the exact commit under review, confirm the expected jobs and artifacts, and record only non-secret run URLs, artifact names, reviewer, outcome, review date, refresh reason, and unresolved gaps. Do not copy artifact contents, logs, credentials, private URLs, wallet material, or screenshots into repository files.
 
+## Per-Artifact Expiration Outcomes
+
+When reviewing retained CI evidence by artifact type, record only one of these non-secret expiration outcomes: `current`, `expired`, `unavailable`, or `refreshed`.
+
+Apply the outcome separately to `hardening-evidence-index`, `codeql-sarif-evidence`, `trivy-image-scan-evidence`, `gitleaks-secret-scan-evidence`, and any Docker Buildx build record artifact. These outcome fields are routing metadata only; they must not embed artifact contents, logs, SARIF/SBOM contents, vulnerability tables, secret-scan findings, screenshots, credentials, private URLs, wallet material, or sensitive environment details.
+
 ## Release Evidence Reviewer Sign-Off
 
 Use reviewer sign-off only to record whether the non-secret evidence package is accepted, rejected, or needs follow-up:
