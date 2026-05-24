@@ -33,6 +33,8 @@ This template is for recording non-secret release-review evidence references. It
 - Evidence refresh required:
 - Evidence refresh reason:
 - Operator CI artifact review outcome:
+- SBOM generation artifact reference:
+- SBOM review decision:
 - SBOM review outcome:
 
 ## Evidence References
@@ -49,7 +51,9 @@ Record only non-secret references or sanitized artifact names.
 | Docker Buildx build record artifact |  |  |
 | Dependency audit gate |  |  |
 | SBOM generation gate |  |  |
+| SBOM generation artifact reference |  |  |
 | SBOM review |  |  |
+| SBOM review decision |  |  |
 | GitHub code-scanning settings review |  |  |
 | GitHub code-scanning processing result or local-SARIF-only decision |  |  |
 | Local SARIF-only operator decision review |  |  |
@@ -87,6 +91,8 @@ Record only non-secret references or sanitized artifact names.
 - Confirm rejected or incomplete evidence uses only non-secret rejection reason categories and required follow-up from `hardening/EXTERNAL_VALIDATION_RUNBOOK.md`.
 - Confirm rejected or incomplete evidence follow-up owner and target review date are non-secret routing metadata only and do not imply evidence acceptance, production readiness, live-funds approval, public exposure approval, deployment readiness, custody readiness, or compliance approval.
 - Confirm SBOM evidence was reviewed against `hardening/EXTERNAL_VALIDATION_RUNBOOK.md` and only non-secret references are recorded here.
+- Confirm SBOM generation artifact reference is limited to non-secret run URLs, job names, artifact names, commit hashes, reviewer, review date, outcome, and unresolved gaps; do not copy dependency graphs, package inventories, vulnerability tables, SBOM contents, private registry URLs, internal hostnames, credentials, wallet material, or raw sensitive logs into this record.
+- Confirm SBOM review decision is limited to `accepted`, `rejected`, `follow-up required`, `deferred`, or `not applicable` and does not imply production readiness, live-funds readiness, public exposure readiness, deployment readiness, custody readiness, or compliance approval.
 - Confirm GitHub code-scanning upload processing is either validated through repository settings, workflow run URL, and Security-tab processing result, or explicitly recorded as unavailable/deferred with GAP-0075 still open.
 - Confirm any local SARIF-only operator decision preserves repository privacy, relies only on the `codeql-sarif-evidence` Actions artifact as non-secret SAST evidence, keeps GAP-0075 open/deferred for GitHub Security-tab upload processing, and does not imply production readiness, live-funds readiness, public exposure readiness, deployment readiness, custody readiness, or compliance approval.
 - Confirm no credentials, wallet material, private URLs, raw sensitive logs, or secret-bearing screenshots are copied into this record.

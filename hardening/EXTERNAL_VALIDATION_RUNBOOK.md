@@ -142,7 +142,9 @@ Before treating generated SBOM evidence as release-review input:
 5. Confirm any vulnerability findings are correlated with the dependency-audit result and recorded as non-secret references only.
 6. Confirm no environment variables, private registry URLs with credentials, internal hostnames, tokens, wallet material, or raw sensitive logs appear in retained SBOM evidence.
 7. Record only the run URL, artifact name, reviewer, review date, outcome, and unresolved follow-up gaps in release-review documentation.
-8. Keep production-readiness, deployment-readiness, and live-funds claims blocked until SBOM review is combined with the rest of the external hardening gates.
+8. Record the SBOM review decision as non-secret reference metadata only: `accepted`, `rejected`, `follow-up required`, `deferred`, or `not applicable`.
+9. Do not copy dependency graphs, package inventories, vulnerability tables, SBOM contents, private registry URLs, internal hostnames, credentials, wallet material, or raw sensitive logs into repository files.
+10. Keep production-readiness, deployment-readiness, and live-funds claims blocked until SBOM review is combined with the rest of the external hardening gates.
 
 ## Hard Stop Conditions
 
