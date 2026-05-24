@@ -81,13 +81,14 @@ To refresh, rerun the `ci` workflow on the exact commit under review, confirm th
 
 Use reviewer sign-off only to record whether the non-secret evidence package is accepted, rejected, or needs follow-up:
 
-1. Record reviewer name or approved handle, reviewer role, reviewer independence/conflict note, review date, evidence scope, outcome, and unresolved gaps.
+1. Record reviewer name or approved handle, reviewer role, reviewer independence/conflict note, review date, release evidence review window, evidence scope, outcome, and unresolved gaps.
 2. Record approval as evidence acceptance only; it must not claim production readiness, live-funds approval, public exposure approval, deployment readiness, compliance approval, custody readiness, signing readiness, bridge readiness, broadcast readiness, or exchange/RPC readiness.
 3. If evidence is rejected or incomplete, record the non-secret reason and required follow-up without copying logs, artifact contents, credentials, private URLs, wallet material, screenshots, or sensitive environment details.
 4. Attest that release evidence records contain non-secret references only, not embedded artifact contents, logs, SARIF/SBOM contents, vulnerability tables, screenshots, credentials, private URLs, wallet material, or sensitive environment details.
 5. Use only these non-secret reviewer role values when a role is recorded: `operator`, `release reviewer`, `AppSec reviewer`, `DevSecOps reviewer`, or `deferred`.
 6. Use only these non-secret reviewer independence/conflict note values when recorded: `independent`, `same operator`, `deferred`, or `not applicable`.
-7. Require a fresh sign-off whenever evidence is refreshed, the reviewed commit changes, or release-relevant gaps change.
+7. Use only these non-secret release evidence review-window values when recorded: `current`, `expired`, `deferred`, or `not applicable`.
+8. Require a fresh sign-off whenever evidence is refreshed, the reviewed commit changes, or release-relevant gaps change.
 
 ## Release Evidence Status Legend
 

@@ -8,6 +8,7 @@ This template is for recording non-secret release-review evidence references. It
 - Reviewer:
 - Reviewer role:
 - Reviewer independence/conflict note:
+- Release evidence review window:
 - Review scope:
 - Repository:
 - Branch:
@@ -57,6 +58,7 @@ Record only non-secret references or sanitized artifact names.
 | Release evidence reviewer sign-off |  |  |
 | Evidence reviewer role review |  |  |
 | Evidence reviewer independence/conflict note review |  |  |
+| Release evidence review-window review |  |  |
 | Evidence status legend review |  |  |
 | Evidence rejection reason review |  |  |
 | Evidence rejection follow-up assignment |  |  |
@@ -75,6 +77,7 @@ Record only non-secret references or sanitized artifact names.
 - Confirm the reviewer attests that evidence records contain references only and no embedded artifact contents, logs, SARIF/SBOM contents, vulnerability tables, screenshots, credentials, private URLs, wallet material, or sensitive environment details.
 - Confirm reviewer role is limited to `operator`, `release reviewer`, `AppSec reviewer`, `DevSecOps reviewer`, or `deferred`.
 - Confirm reviewer independence/conflict note is limited to `independent`, `same operator`, `deferred`, or `not applicable` and does not imply production readiness, live-funds approval, public exposure approval, deployment readiness, custody readiness, or compliance approval.
+- Confirm release evidence review window is limited to `current`, `expired`, `deferred`, or `not applicable` and does not imply production readiness, live-funds approval, public exposure approval, deployment readiness, custody readiness, or compliance approval.
 - Confirm release evidence reviewer sign-off records evidence acceptance, rejection, or follow-up only and does not claim production readiness, live-funds approval, public exposure approval, deployment readiness, custody readiness, or compliance approval.
 - Confirm rejected or incomplete evidence uses only non-secret rejection reason categories and required follow-up from `hardening/EXTERNAL_VALIDATION_RUNBOOK.md`.
 - Confirm rejected or incomplete evidence follow-up owner and target review date are non-secret routing metadata only and do not imply evidence acceptance, production readiness, live-funds approval, public exposure approval, deployment readiness, custody readiness, or compliance approval.
