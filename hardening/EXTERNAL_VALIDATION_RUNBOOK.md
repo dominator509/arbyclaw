@@ -84,7 +84,8 @@ Use reviewer sign-off only to record whether the non-secret evidence package is 
 1. Record reviewer name or approved handle, review date, evidence scope, outcome, and unresolved gaps.
 2. Record approval as evidence acceptance only; it must not claim production readiness, live-funds approval, public exposure approval, deployment readiness, compliance approval, custody readiness, signing readiness, bridge readiness, broadcast readiness, or exchange/RPC readiness.
 3. If evidence is rejected or incomplete, record the non-secret reason and required follow-up without copying logs, artifact contents, credentials, private URLs, wallet material, screenshots, or sensitive environment details.
-4. Require a fresh sign-off whenever evidence is refreshed, the reviewed commit changes, or release-relevant gaps change.
+4. Attest that release evidence records contain non-secret references only, not embedded artifact contents, logs, SARIF/SBOM contents, vulnerability tables, screenshots, credentials, private URLs, wallet material, or sensitive environment details.
+5. Require a fresh sign-off whenever evidence is refreshed, the reviewed commit changes, or release-relevant gaps change.
 
 ## Release Evidence Status Legend
 
