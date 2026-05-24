@@ -39,6 +39,8 @@ GitHub code-scanning upload processing is an external repository setting and mus
 6. Record only non-secret evidence: repository, branch, commit, workflow run URL, CodeQL job result, code-scanning page URL or settings-review note, reviewer, outcome, and unresolved gaps.
 7. If code scanning is unavailable, blocked by repository settings, or not approved, record that decision in release-review evidence and keep GAP-0075 open while relying on local SARIF artifact evidence only.
 
+Current operator decision: keep `dominator509/arbyclaw` private and use the CI `codeql-sarif-evidence` artifact as the non-secret SAST evidence path for now. This decision preserves repository privacy and does not validate GitHub Security-tab code-scanning upload processing, production readiness, live-funds readiness, public exposure readiness, deployment readiness, custody readiness, or compliance approval.
+
 Do not copy SARIF contents, source findings with sensitive context, private repository settings screenshots, credentials, tokens, or secret-bearing logs into Markdown, tickets, prompts, or release notes.
 
 ## Manual Evidence Review Checklist

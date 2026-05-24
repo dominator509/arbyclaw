@@ -15,6 +15,7 @@ This template is for recording non-secret release-review evidence references. It
 - Branch:
 - Commit:
 - Workflow run URL:
+- Local SARIF-only operator decision:
 - Review outcome:
 - Evidence status:
 - Evidence references-only attestation:
@@ -51,6 +52,7 @@ Record only non-secret references or sanitized artifact names.
 | SBOM review |  |  |
 | GitHub code-scanning settings review |  |  |
 | GitHub code-scanning processing result or local-SARIF-only decision |  |  |
+| Local SARIF-only operator decision review |  |  |
 | Retained artifact review |  |  |
 | Operator CI artifact review |  |  |
 | Evidence expiration or refresh review |  |  |
@@ -86,6 +88,7 @@ Record only non-secret references or sanitized artifact names.
 - Confirm rejected or incomplete evidence follow-up owner and target review date are non-secret routing metadata only and do not imply evidence acceptance, production readiness, live-funds approval, public exposure approval, deployment readiness, custody readiness, or compliance approval.
 - Confirm SBOM evidence was reviewed against `hardening/EXTERNAL_VALIDATION_RUNBOOK.md` and only non-secret references are recorded here.
 - Confirm GitHub code-scanning upload processing is either validated through repository settings, workflow run URL, and Security-tab processing result, or explicitly recorded as unavailable/deferred with GAP-0075 still open.
+- Confirm any local SARIF-only operator decision preserves repository privacy, relies only on the `codeql-sarif-evidence` Actions artifact as non-secret SAST evidence, keeps GAP-0075 open/deferred for GitHub Security-tab upload processing, and does not imply production readiness, live-funds readiness, public exposure readiness, deployment readiness, custody readiness, or compliance approval.
 - Confirm no credentials, wallet material, private URLs, raw sensitive logs, or secret-bearing screenshots are copied into this record.
 - Confirm unresolved gaps remain listed below and are not treated as complete.
 
