@@ -126,6 +126,8 @@ Record follow-up as a non-secret action item with a non-secret owner or approved
 
 When recording reviewer follow-up status, use only these non-secret values: `open`, `assigned`, `resolved`, `deferred`, or `not applicable`. Follow-up status is routing metadata only and must not embed artifact contents, logs, SARIF/SBOM contents, vulnerability tables, secret-scan findings, screenshots, credentials, private URLs, wallet material, or sensitive environment details.
 
+When recording reviewer follow-up closure reason, use only these non-secret values: `evidence refreshed`, `gap accepted for deferral`, `superseded by newer run`, `unable to verify`, or `not applicable`. Follow-up closure reason is routing metadata only and must not embed artifact contents, logs, SARIF/SBOM contents, vulnerability tables, secret-scan findings, screenshots, credentials, private URLs, wallet material, or sensitive environment details.
+
 ## Retained Artifact Review Checklist
 
 Before retaining CI artifacts outside GitHub Actions:
