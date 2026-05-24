@@ -128,6 +128,8 @@ When recording reviewer follow-up status, use only these non-secret values: `ope
 
 When recording reviewer follow-up closure reason, use only these non-secret values: `evidence refreshed`, `gap accepted for deferral`, `superseded by newer run`, `unable to verify`, or `not applicable`. Follow-up closure reason is routing metadata only and must not embed artifact contents, logs, SARIF/SBOM contents, vulnerability tables, secret-scan findings, screenshots, credentials, private URLs, wallet material, or sensitive environment details.
 
+When recording reviewer follow-up verification method, use only these non-secret values: `CI run review`, `artifact reference review`, `external evidence store review`, `not verified`, or `not applicable`. Follow-up verification method is routing metadata only and must not embed artifact contents, logs, SARIF/SBOM contents, vulnerability tables, secret-scan findings, screenshots, credentials, private URLs, wallet material, or sensitive environment details.
+
 ## Retained Artifact Review Checklist
 
 Before retaining CI artifacts outside GitHub Actions:
