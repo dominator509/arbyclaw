@@ -140,6 +140,8 @@ When recording reviewer follow-up locator availability, use only these non-secre
 
 When recording reviewer follow-up locator access note, use only short sanitized notes such as `artifact retained`, `artifact expired`, `permissions unavailable`, `external reference reviewed`, or `not applicable`. Locator access notes are routing metadata only and must not embed artifact contents, logs, SARIF/SBOM contents, vulnerability tables, secret-scan findings, screenshots, credentials, private URLs, wallet material, or sensitive environment details.
 
+When recording reviewer follow-up locator recheck date, record only the non-secret date or date/time when the locator should be reviewed again, preferably in UTC ISO 8601 format. Locator recheck dates are routing metadata only and must not embed artifact contents, logs, SARIF/SBOM contents, vulnerability tables, secret-scan findings, screenshots, credentials, private URLs, wallet material, or sensitive environment details.
+
 ## Retained Artifact Review Checklist
 
 Before retaining CI artifacts outside GitHub Actions:
