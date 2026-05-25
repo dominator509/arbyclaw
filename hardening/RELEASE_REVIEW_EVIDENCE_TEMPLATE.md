@@ -32,6 +32,7 @@ This template is for recording non-secret release-review evidence references. It
 - Evidence reviewer follow-up verification timestamp:
 - Evidence reviewer follow-up evidence source:
 - Evidence reviewer follow-up evidence source locator:
+- Evidence reviewer follow-up locator availability:
 - External evidence store reference:
 - Artifact retention decision:
 - Evidence retention location classification:
@@ -106,6 +107,7 @@ Record only non-secret references or sanitized artifact names.
 | Evidence reviewer follow-up verification timestamp |  |  |
 | Evidence reviewer follow-up evidence source |  |  |
 | Evidence reviewer follow-up evidence source locator |  |  |
+| Evidence reviewer follow-up locator availability |  |  |
 
 ## Required Checks
 
@@ -134,6 +136,7 @@ Record only non-secret references or sanitized artifact names.
 - Confirm evidence reviewer follow-up verification timestamp records only a non-secret review date/time, preferably in UTC ISO 8601 format; do not embed artifact contents, logs, SARIF/SBOM contents, vulnerability tables, secret-scan findings, screenshots, credentials, private URLs, wallet material, or sensitive environment details.
 - Confirm evidence reviewer follow-up evidence source is limited to `GitHub Actions`, `external evidence store`, `local operator record`, `not available`, or `not applicable`; do not embed artifact contents, logs, SARIF/SBOM contents, vulnerability tables, secret-scan findings, screenshots, credentials, private URLs, wallet material, or sensitive environment details.
 - Confirm evidence reviewer follow-up evidence source locator records only a non-secret run URL, artifact name, or approved external reference; do not embed artifact contents, logs, SARIF/SBOM contents, vulnerability tables, secret-scan findings, screenshots, credentials, private URLs, wallet material, or sensitive environment details.
+- Confirm evidence reviewer follow-up locator availability is limited to `available`, `expired`, `inaccessible`, `deferred`, or `not applicable`; do not embed artifact contents, logs, SARIF/SBOM contents, vulnerability tables, secret-scan findings, screenshots, credentials, private URLs, wallet material, or sensitive environment details.
 - Confirm dependency audit gate reference is limited to non-secret run URLs, job names, gate names, commit hashes, reviewer, review date, outcome, and unresolved gaps; do not copy advisory tables, dependency details, vulnerable package lists, CVE text, private registry URLs, internal hostnames, credentials, wallet material, or raw sensitive logs into this record.
 - Confirm dependency audit review decision is limited to `accepted`, `rejected`, `follow-up required`, `deferred`, or `not applicable` and does not imply production readiness, live-funds readiness, public exposure readiness, deployment readiness, custody readiness, or compliance approval.
 - Confirm SBOM evidence was reviewed against `hardening/EXTERNAL_VALIDATION_RUNBOOK.md` and only non-secret references are recorded here.
