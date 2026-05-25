@@ -132,6 +132,8 @@ When recording reviewer follow-up verification method, use only these non-secret
 
 When recording reviewer follow-up verification timestamp, record only the non-secret review date/time, preferably in UTC ISO 8601 format. The timestamp is routing metadata only and must not embed artifact contents, logs, SARIF/SBOM contents, vulnerability tables, secret-scan findings, screenshots, credentials, private URLs, wallet material, or sensitive environment details.
 
+When recording reviewer follow-up evidence source, use only these non-secret values: `GitHub Actions`, `external evidence store`, `local operator record`, `not available`, or `not applicable`. Follow-up evidence source is routing metadata only and must not embed artifact contents, logs, SARIF/SBOM contents, vulnerability tables, secret-scan findings, screenshots, credentials, private URLs, wallet material, or sensitive environment details.
+
 ## Retained Artifact Review Checklist
 
 Before retaining CI artifacts outside GitHub Actions:
