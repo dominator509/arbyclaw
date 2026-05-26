@@ -357,13 +357,13 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Completion criteria: Every intent, policy decision, execution, signer request, connector result, failure, and reconciliation event is durably journaled without secrets; journal replay detects tampering; crash/concurrency tests pass.
 - Rollback considerations: Disable live execution, revert audit/state modules, remove audit dependencies, and force Observe/Paper modes if validation fails.
 
-## GAP-0008 — Market Data Core Missing
+## GAP-0008 — Market Data Core Boundary Implemented; Live Providers Missing
 
 - Unique ID: GAP-0008
 - Phase association: Phase 5
 - Subsystem association: Market data
-- Description: No normalized market-data model or freshness logic exists.
-- Why incomplete: No code exists yet.
+- Description: Phase 5 normalized market-data models, freshness classification, fee models, and provider trait boundaries exist with current local and GitHub Actions validation evidence. No live REST/WebSocket CEX provider, DEX quote provider, paid data-provider adapter, reconnect logic, or rate-limit logic exists.
+- Why incomplete: The deterministic boundary exists, but live provider implementation and external provider validation remain incomplete.
 - Why blocked in ChatGPT Project Mode: Implementation possible; live provider validation requires external network and credentials.
 - Risk level: High
 - Dependency requirements: Rust workspace and config subsystem.
@@ -374,13 +374,13 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Completion criteria: Market data is normalized, provenance-tracked, and freshness-checked.
 - Rollback considerations: Revert market-data crate changes.
 
-## GAP-0009 — Simulated/Paper Connectors Missing
+## GAP-0009 — Simulated/Paper Connector Boundary Implemented; Production Realism Missing
 
 - Unique ID: GAP-0009
 - Phase association: Phase 6
 - Subsystem association: Simulation / paper trading
-- Description: No deterministic simulation or paper execution environment exists.
-- Why incomplete: No code exists yet.
+- Description: Phase 6 deterministic in-memory paper market data, static paper fee schedules, and policy-gated paper execution reports exist with current local and GitHub Actions validation evidence. Production-realistic fill modeling, balance constraints, durable audit/state integration, and richer replay validation remain incomplete.
+- Why incomplete: The deterministic paper boundary exists, but production-realistic paper simulation and lifecycle integration remain incomplete.
 - Why blocked in ChatGPT Project Mode: Not blocked.
 - Risk level: High
 - Dependency requirements: Market-data core, execution intent model, audit journal.
@@ -391,13 +391,13 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Completion criteria: Strategies can run without live funds and produce reproducible results.
 - Rollback considerations: Disable simulation feature flag or revert crate changes.
 
-## GAP-0010 — CEX Connectors Missing
+## GAP-0010 — CEX Framework Implemented; Exchange-Specific Adapters Missing
 
 - Unique ID: GAP-0010
 - Phase association: Phase 7
 - Subsystem association: CEX connectors
-- Description: No centralized exchange connectors exist.
-- Why incomplete: No code exists yet.
+- Description: Phase 7 CEX framework types, venue profiles, capability registry, order request models, policy gates, and connector traits exist with current local and GitHub Actions validation evidence. No exchange-specific REST, WebSocket, sandbox, balance, order, cancel, fee, or rate-limit adapters exist.
+- Why incomplete: The CEX framework boundary exists, but exchange-specific adapters and external validation remain incomplete.
 - Why blocked in ChatGPT Project Mode: Live credentialed testing, sandbox testing, and rate-limit behavior require external network and accounts.
 - Risk level: High
 - Dependency requirements: Market data core, secret manager, config, policy, audit.
@@ -527,14 +527,14 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Completion criteria: Runtime emits redacted logs, metrics, health status, and critical alerts through authenticated, audited, fail-closed channels without exposing secrets.
 - Rollback considerations: Disable exporters and alerts while preserving local records.
 
-## GAP-0018 — CI/CD Execution Missing
+## GAP-0018 — CI/CD Execution Covered for Current Workspace; Production CI Gates Still Limited
 
 - Unique ID: GAP-0018
 - Phase association: Phase 16 / Phase 17
 - Subsystem association: CI/CD
-- Description: A GitHub Actions CI workflow skeleton exists, but it has not run on a hosted repository.
-- Why incomplete: The repository has not been pushed to a CI-enabled remote, and ChatGPT Project Mode cannot execute hosted CI.
-- Why blocked in ChatGPT Project Mode: External CI execution requires repository hosting and CI provider access.
+- Description: GitHub Actions now runs on `dominator509/arbyclaw` and covers structure validation, formatting, workspace compilation, tests, clippy, locked release build, dependency audit, SBOM generation, local-SARIF SAST evidence, example image scan, secret-pattern scan, and hardening evidence indexing for pushed commits.
+- Why incomplete: Current CI evidence exists, but production deployment gates, staging gates, release approval gates, rollback-drill gates, and live-integration gates remain incomplete.
+- Why blocked in ChatGPT Project Mode: No longer blocked for hosted CI execution on the current repository; production-class CI gates require future infrastructure and operator-approved release workflows.
 - Risk level: High
 - Dependency requirements: Rust workspace, tests, and hosted repository.
 - Exact future validation required: CI run passes formatting, check, tests, clippy, dependency audit, and secret scan.
@@ -646,14 +646,14 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Completion criteria: Rollback procedures are tested and documented.
 - Rollback considerations: This gap itself is about validating rollback; until complete, live releases must remain guarded.
 
-## GAP-0025 — Handoff Package Missing
+## GAP-0025 — Handoff Package Implemented; External Handoff Execution Missing
 
 - Unique ID: GAP-0025
 - Phase association: Phase 18
 - Subsystem association: Agentic handoff
-- Description: No final handoff package, continuation prompts, repository map, or external coding-agent instructions exist.
-- Why incomplete: Project has just been initialized.
-- Why blocked in ChatGPT Project Mode: Not blocked, but should occur after more implementation exists.
+- Description: Phase 18 deterministic handoff package records, continuation prompts, repository maps, external validation checklists, and future-agent instructions exist. No external coding agent, AppSec reviewer, DevSecOps reviewer, compliance reviewer, or human production reviewer has executed the handoff package and recorded non-secret evidence.
+- Why incomplete: The handoff package boundary exists, but external handoff execution and evidence review remain incomplete.
+- Why blocked in ChatGPT Project Mode: External handoff execution requires a real external agent or human reviewer workflow outside this local model boundary.
 - Risk level: Medium
 - Dependency requirements: Stable repo structure and current gap inventory.
 - Exact future validation required: Handoff docs align with current architecture, roadmap, tests, gaps, and build commands.
@@ -714,15 +714,15 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Completion criteria: Strategy profiles are typed, validated, documented, and policy constrained.
 - Rollback considerations: Revert strategy schema or disable unsafe profile fields.
 
-## GAP-0029 — Local Cargo Validation Not Executed
+## GAP-0029 — Local Cargo Validation Covered for Current Workspace
 
 - Unique ID: GAP-0029
 - Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-25; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
 - Phase association: Phase 1
 - Subsystem association: Build validation
-- Description: Local Rust formatting, compilation, tests, and clippy validation were not executed.
-- Why incomplete: Rust/Cargo is not installed in the ChatGPT Project Mode execution environment.
-- Why blocked in ChatGPT Project Mode: Toolchain unavailable and cannot be assumed.
+- Description: Local Rust formatting, workspace compilation, tests, and clippy validation have current evidence for the present workspace state.
+- Why incomplete: No longer incomplete for the current workspace Rust/Cargo validation aspect. Production, deployment, live-funds, and broader external validation gaps remain tracked separately.
+- Why blocked in ChatGPT Project Mode: No longer blocked for local Rust/Cargo validation in the current workspace.
 - Risk level: High
 - Dependency requirements: Rust stable toolchain with rustfmt and clippy.
 - Exact future validation required: Run `cargo fmt --check`, `cargo check --workspace`, `cargo test --workspace`, and `cargo clippy --workspace --all-targets -- -D warnings`.
@@ -732,14 +732,14 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Completion criteria: All listed commands pass with no warnings or errors.
 - Rollback considerations: Revert or patch Phase 1 scaffold files if validation fails.
 
-## GAP-0030 — Dependency and Supply-Chain Audit Not Executed
+## GAP-0030 — Dependency Audit Covered; Broader Supply-Chain Review Missing
 
 - Unique ID: GAP-0030
 - Phase association: Phase 1 / Phase 16 / Phase 17
 - Subsystem association: Supply-chain security
-- Description: No dependency vulnerability, license, or supply-chain audit has been executed after Phase 2 introduced `serde` and `toml` and Phase 4 introduced `serde_json` and `sha2`.
-- Why incomplete: Phase 2 added third-party Rust dependencies, but audit tooling has not run.
-- Why blocked in ChatGPT Project Mode: Requires Rust/Cargo ecosystem tooling and preferably hosted CI.
+- Description: `cargo audit` now runs locally/through GitHub Actions for the current workspace, and CycloneDX SBOM generation is gated in CI. Broader supply-chain review, license review, SBOM reviewer sign-off, provenance review, and release artifact attestation remain incomplete.
+- Why incomplete: Dependency audit and SBOM generation evidence exists, but broader supply-chain governance and human/operator review remain incomplete.
+- Why blocked in ChatGPT Project Mode: No longer blocked for the current `cargo audit`/SBOM generation gates; broader supply-chain review requires future operator review and release evidence workflow.
 - Risk level: Medium
 - Dependency requirements: Cargo, cargo-deny or equivalent, repository dependency manifest, dependency lockfile after external Cargo resolution.
 - Exact future validation required: Run dependency audit and license policy checks for `serde`, `toml`, `serde_json`, `sha2`, and transitive dependencies after external Cargo resolution.
@@ -756,7 +756,7 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-25; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
 - Phase association: Phase 2
 - Subsystem association: Config / secrets / mode gates
-- Description: Phase 2 Rust modules and tests were authored but not compiled, formatted, clippy-checked, or executed in this environment.
+- Description: Phase 2 Rust modules and tests have current local and GitHub Actions format, compile, test, and clippy validation evidence for the present workspace state.
 - Why incomplete: No longer incomplete for the current workspace Rust/Cargo validation aspect. Production, deployment, live-funds, public exposure, and broader external validation gaps remain tracked separately.
 - Why blocked in ChatGPT Project Mode: No longer blocked for local Rust/Cargo validation in the current workspace.
 - Risk level: High
@@ -791,7 +791,7 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-25; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
 - Phase association: Phase 3
 - Subsystem association: Policy engine / build system
-- Description: Phase 3 policy code and tests were drafted, but Rust formatting, compilation, unit tests, and clippy were not executed.
+- Description: Phase 3 policy code and tests have current local and GitHub Actions format, compile, test, and clippy validation evidence for the present workspace state.
 - Why incomplete: No longer incomplete for the current workspace Rust/Cargo validation aspect. Production, deployment, live-funds, public exposure, and broader external validation gaps remain tracked separately.
 - Why blocked in ChatGPT Project Mode: No longer blocked for local Rust/Cargo validation in the current workspace.
 - Risk level: High
@@ -843,7 +843,7 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-25; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
 - Phase association: Phase 4
 - Subsystem association: Audit journal / state store / build system
-- Description: Phase 4 audit and state code plus tests were drafted but not compiled, formatted, clippy-checked, or executed.
+- Description: Phase 4 audit and state code plus tests have current local and GitHub Actions format, compile, test, and clippy validation evidence for the present workspace state.
 - Why incomplete: No longer incomplete for the current workspace Rust/Cargo validation aspect. Production, deployment, live-funds, public exposure, and broader external validation gaps remain tracked separately.
 - Why blocked in ChatGPT Project Mode: No longer blocked for local Rust/Cargo validation in the current workspace.
 - Risk level: High
@@ -914,7 +914,7 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-25; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
 - Phase association: Phase 5
 - Subsystem association: Market data / fee model / build system
-- Description: Phase 5 market-data and fee-model code plus tests were drafted but not compiled, formatted, clippy-checked, or executed.
+- Description: Phase 5 market-data and fee-model code plus tests have current local and GitHub Actions format, compile, test, and clippy validation evidence for the present workspace state.
 - Why incomplete: No longer incomplete for the current workspace Rust/Cargo validation aspect. Production, deployment, live-funds, public exposure, and broader external validation gaps remain tracked separately.
 - Why blocked in ChatGPT Project Mode: No longer blocked for local Rust/Cargo validation in the current workspace.
 - Risk level: High
@@ -967,7 +967,7 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-25; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
 - Phase association: Phase 6
 - Subsystem association: Paper connectors / build system
-- Description: Phase 6 paper connector code plus tests were drafted but not compiled, formatted, clippy-checked, or executed.
+- Description: Phase 6 paper connector code plus tests have current local and GitHub Actions format, compile, test, and clippy validation evidence for the present workspace state.
 - Why incomplete: No longer incomplete for the current workspace Rust/Cargo validation aspect. Production, deployment, live-funds, public exposure, and broader external validation gaps remain tracked separately.
 - Why blocked in ChatGPT Project Mode: No longer blocked for local Rust/Cargo validation in the current workspace.
 - Risk level: High
@@ -1020,7 +1020,7 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-25; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
 - Phase association: Phase 7
 - Subsystem association: CEX connector framework / build system
-- Description: Phase 7 CEX framework code and tests were drafted but not compiled, formatted, clippy-checked, or executed.
+- Description: Phase 7 CEX framework code and tests have current local and GitHub Actions format, compile, test, and clippy validation evidence for the present workspace state.
 - Why incomplete: No longer incomplete for the current workspace Rust/Cargo validation aspect. Production, deployment, live-funds, public exposure, and broader external validation gaps remain tracked separately.
 - Why blocked in ChatGPT Project Mode: No longer blocked for local Rust/Cargo validation in the current workspace.
 - Risk level: High
@@ -1089,7 +1089,7 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-25; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
 - Phase association: Phase 8
 - Subsystem association: DEX/Web3 connector framework / build system
-- Description: Phase 8 DEX/Web3 framework code and tests were drafted but not compiled, formatted, clippy-checked, or executed.
+- Description: Phase 8 DEX/Web3 framework code and tests have current local and GitHub Actions format, compile, test, and clippy validation evidence for the present workspace state.
 - Why incomplete: No longer incomplete for the current workspace Rust/Cargo validation aspect. Production, deployment, live-funds, public exposure, and broader external validation gaps remain tracked separately.
 - Why blocked in ChatGPT Project Mode: No longer blocked for local Rust/Cargo validation in the current workspace.
 - Risk level: High
@@ -1143,7 +1143,7 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-25; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
 - Phase association: Phase 9
 - Subsystem association: Opportunity engine / build system
-- Description: Phase 9 opportunity-engine code and tests were drafted but not compiled, formatted, clippy-checked, or executed.
+- Description: Phase 9 opportunity-engine code and tests have current local and GitHub Actions format, compile, test, and clippy validation evidence for the present workspace state.
 - Why incomplete: No longer incomplete for the current workspace Rust/Cargo validation aspect. Production, deployment, live-funds, public exposure, and broader external validation gaps remain tracked separately.
 - Why blocked in ChatGPT Project Mode: No longer blocked for local Rust/Cargo validation in the current workspace.
 - Risk level: High
@@ -1178,7 +1178,7 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-25; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
 - Phase association: Phase 10
 - Subsystem association: Execution planner / build system
-- Description: Phase 10 execution-planner code and tests were drafted but not compiled, formatted, clippy-checked, or executed.
+- Description: Phase 10 execution-planner code and tests have current local and GitHub Actions format, compile, test, and clippy validation evidence for the present workspace state.
 - Why incomplete: No longer incomplete for the current workspace Rust/Cargo validation aspect. Production, deployment, live-funds, public exposure, and broader external validation gaps remain tracked separately.
 - Why blocked in ChatGPT Project Mode: No longer blocked for local Rust/Cargo validation in the current workspace.
 - Risk level: High
@@ -1213,7 +1213,7 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-25; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
 - Phase association: Phase 11
 - Subsystem association: Execution adapter framework / build system
-- Description: Phase 11 execution-adapter framework code and tests were drafted but not compiled, formatted, clippy-checked, or executed.
+- Description: Phase 11 execution-adapter framework code and tests have current local and GitHub Actions format, compile, test, and clippy validation evidence for the present workspace state.
 - Why incomplete: No longer incomplete for the current workspace Rust/Cargo validation aspect. Production, deployment, live-funds, public exposure, and broader external validation gaps remain tracked separately.
 - Why blocked in ChatGPT Project Mode: No longer blocked for local Rust/Cargo validation in the current workspace.
 - Risk level: High
@@ -1248,7 +1248,7 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-25; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
 - Phase association: Phase 12
 - Subsystem association: Communications and CLI / build system
-- Description: Phase 12 communications/CLI code and tests were drafted but not compiled, formatted, clippy-checked, or executed.
+- Description: Phase 12 communications/CLI code and tests have current local and GitHub Actions format, compile, test, and clippy validation evidence for the present workspace state.
 - Why incomplete: No longer incomplete for the current workspace Rust/Cargo validation aspect. Production, deployment, live-funds, public exposure, and broader external validation gaps remain tracked separately.
 - Why blocked in ChatGPT Project Mode: No longer blocked for local Rust/Cargo validation in the current workspace.
 - Risk level: High
@@ -1285,7 +1285,7 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-25; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
 - Phase association: Phase 13
 - Subsystem association: Embedded dashboard / build system
-- Description: Phase 13 embedded-dashboard code and tests were drafted but not compiled, formatted, clippy-checked, or executed.
+- Description: Phase 13 embedded-dashboard code and tests have current local and GitHub Actions format, compile, test, and clippy validation evidence for the present workspace state.
 - Why incomplete: No longer incomplete for the current workspace Rust/Cargo validation aspect. Production, deployment, live-funds, public exposure, and broader external validation gaps remain tracked separately.
 - Why blocked in ChatGPT Project Mode: No longer blocked for local Rust/Cargo validation in the current workspace.
 - Risk level: High
@@ -1321,7 +1321,7 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-25; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
 - Phase association: Phase 14
 - Subsystem association: Observability and runbooks / build system
-- Description: Phase 14 observability/runbook code and tests were drafted but not compiled, formatted, clippy-checked, or executed.
+- Description: Phase 14 observability/runbook code and tests have current local and GitHub Actions format, compile, test, and clippy validation evidence for the present workspace state.
 - Why incomplete: No longer incomplete for the current workspace Rust/Cargo validation aspect. Production, deployment, live-funds, public exposure, and broader external validation gaps remain tracked separately.
 - Why blocked in ChatGPT Project Mode: No longer blocked for local Rust/Cargo validation in the current workspace.
 - Risk level: High
@@ -1357,7 +1357,7 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-25; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
 - Phase association: Phase 15
 - Subsystem association: Testing, fuzzing, and backtesting / build system
-- Description: Phase 15 testing/fuzzing/backtesting boundary code and tests were drafted but not compiled, formatted, clippy-checked, or executed.
+- Description: Phase 15 testing/fuzzing/backtesting boundary code and tests have current local and GitHub Actions format, compile, test, and clippy validation evidence for the present workspace state.
 - Why incomplete: No longer incomplete for the current workspace Rust/Cargo validation aspect. Production, deployment, live-funds, public exposure, and broader external validation gaps remain tracked separately.
 - Why blocked in ChatGPT Project Mode: No longer blocked for local Rust/Cargo validation in the current workspace.
 - Risk level: High
@@ -1392,7 +1392,7 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-25; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
 - Phase association: Phase 16
 - Subsystem association: Packaging/deployment / build system
-- Description: Phase 16 packaging/deployment boundary code and tests were drafted but not compiled, formatted, clippy-checked, or executed.
+- Description: Phase 16 packaging/deployment boundary code and tests have current local and GitHub Actions format, compile, test, and clippy validation evidence for the present workspace state.
 - Why incomplete: No longer incomplete for the current workspace Rust/Cargo validation aspect. Production, deployment, live-funds, public exposure, and broader external validation gaps remain tracked separately.
 - Why blocked in ChatGPT Project Mode: No longer blocked for local Rust/Cargo validation in the current workspace.
 - Risk level: High
@@ -1464,7 +1464,7 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-25; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
 - Phase association: Phase 18
 - Subsystem association: Agentic handoff package boundary / build system
-- Description: Phase 18 handoff boundary code and tests were drafted but not compiled, formatted, clippy-checked, or executed.
+- Description: Phase 18 handoff boundary code and tests have current local and GitHub Actions format, compile, test, and clippy validation evidence for the present workspace state.
 - Why incomplete: No longer incomplete for the current workspace Rust/Cargo validation aspect. Production, deployment, live-funds, public exposure, and broader external validation gaps remain tracked separately.
 - Why blocked in ChatGPT Project Mode: No longer blocked for local Rust/Cargo validation in the current workspace.
 - Risk level: High
