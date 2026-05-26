@@ -142,6 +142,8 @@ When recording reviewer follow-up locator access note, use only short sanitized 
 
 When recording reviewer follow-up locator recheck date, record only the non-secret date or date/time when the locator should be reviewed again, preferably in UTC ISO 8601 format. Locator recheck dates are routing metadata only and must not embed artifact contents, logs, SARIF/SBOM contents, vulnerability tables, secret-scan findings, screenshots, credentials, private URLs, wallet material, or sensitive environment details.
 
+The release evidence reviewer follow-up metadata set is intentionally considered complete enough for the current Phase 17 / Phase 18 roadmap boundary. Do not add more reviewer micro-fields unless a concrete operator review workflow identifies missing non-secret routing metadata; prefer returning to roadmap-aligned production-gap audit and external validation closure work.
+
 ## Retained Artifact Review Checklist
 
 Before retaining CI artifacts outside GitHub Actions:

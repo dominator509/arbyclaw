@@ -2,58 +2,60 @@
 
 ## Executive Status Summary
 
-The project is in Phase 18 agentic-handoff-package-complete status for ChatGPT Project Mode. Architecture, roadmap, agent governance, phase sub-roadmaps, gap tracking, a minimal Rust workspace scaffold, typed non-secret config, reference-only secret abstractions, redacted secret material, initial live-mode validation, an isolated deny-by-default policy engine, append-only audit journal primitives, a state-store trait boundary, normalized market-data models, freshness classification, fee models, provider trait boundaries, deterministic paper connectors, CEX framework types/traits, DEX/Web3 framework types/traits, deterministic opportunity-engine types/traits, draft-only execution-planner types/traits, execution-adapter boundary records/traits, communications/CLI command and notification boundary records/traits, embedded-dashboard local render records/traits, observability/runbook local health/log/metric/runbook records/traits, deterministic validation plan/fixture/fuzz/backtest records/traits, deterministic packaging/deployment plan records/traits plus example deployment templates, deterministic external hardening evidence/review records/traits plus hardening checklists, and deterministic agentic handoff package records/traits plus future-agent prompts and checklists exist. The 2026-05-20 ArbyClaw local validation sequence completed for repository structure, formatting, workspace compilation, tests, and clippy; this is local validation evidence only. The project is not ready for live funds, live exchange credentials, wallet keys, production deployment, transaction signing, broadcasts, live adapter submission, real outbound communications, real dashboard hosting, real observability/exporter/alert runtime, real fuzzing engine execution, real backtest execution, real build/container/systemd/ARM validation, real external hardening execution, external agent execution validation, rollback drills, cloud deployment, production release, live-funds approval, or autonomous execution.
+The project is in Phase 18 agentic-handoff-package-complete status for ChatGPT Project Mode. Architecture, roadmap, agent governance, phase sub-roadmaps, gap tracking, a minimal Rust workspace scaffold, typed non-secret config, reference-only secret abstractions, redacted secret material, initial live-mode validation, an isolated deny-by-default policy engine, append-only audit journal primitives, a state-store trait boundary, normalized market-data models, freshness classification, fee models, provider trait boundaries, deterministic paper connectors, CEX framework types/traits, DEX/Web3 framework types/traits, deterministic opportunity-engine types/traits, draft-only execution-planner types/traits, execution-adapter boundary records/traits, communications/CLI command and notification boundary records/traits, embedded-dashboard local render records/traits, observability/runbook local health/log/metric/runbook records/traits, deterministic validation plan/fixture/fuzz/backtest records/traits, deterministic packaging/deployment plan records/traits plus example deployment templates, deterministic external hardening evidence/review records/traits plus hardening checklists, and deterministic agentic handoff package records/traits plus future-agent prompts and checklists exist. The 2026-05-25 ArbyClaw local validation sequence completed for repository structure, formatting, workspace compilation, tests, and clippy; this is local validation evidence only. GitHub Actions CI also runs structure, Rust validation, locked release build, dependency audit, SBOM generation, local-SARIF SAST, example image scan, secret-pattern scan, and hardening evidence indexing for pushed commits. The project is not ready for live funds, live exchange credentials, wallet keys, production deployment, transaction signing, broadcasts, live adapter submission, real outbound communications, real dashboard hosting, real observability/exporter/alert runtime, real fuzzing engine execution, real backtest execution, production container/systemd/ARM validation, broader external hardening execution, external agent execution validation, rollback drills, cloud deployment, production release, live-funds approval, or autonomous execution.
 
 ## Latest Local Validation Attempt
 
-2026-05-20 ArbyClaw local validation attempt:
+2026-05-25 ArbyClaw local validation attempt:
 
 - `python3 scripts/validate_structure.py` passed.
-- `cargo fmt --check` passed after applying formatting-only changes.
+- `cargo fmt --check` passed.
 - `cargo check --workspace` passed.
 - `cargo test --workspace` passed with 71 tests across 3 suites.
-- `cargo clippy --workspace --all-targets -- -D warnings` passed after narrowing model-boundary style lint allowances and one CLI pattern cleanup.
+- `cargo clippy --workspace --all-targets -- -D warnings` passed.
 - This validates local structure, formatting, compilation, tests, and linting only. It does not validate production deployment, live funds, live exchange/RPC integrations, signing, broadcasts, containers, systemd, ARM, CI, penetration testing, load testing, rollback drills, incident drills, external hardening, or production readiness.
 
 ## Latest CI Validation Attempt
 
-2026-05-20 ArbyClaw GitHub Actions CI validation:
+2026-05-25 ArbyClaw GitHub Actions CI validation snapshot:
 
 - Repository: `dominator509/arbyclaw`
 - Branch: `main`
-- Latest validated commit: `34d1f87b7fba27b7256710d6b0c55ed8a666c116`
-- Workflow run: `https://github.com/dominator509/arbyclaw/actions/runs/26292492203`
+- Latest validated commit: `c76e789364f6316c7d4ccb8f74412a6e77e9bd01`
+- Workflow run: `https://github.com/dominator509/arbyclaw/actions/runs/26408760963`
 - Result: passed.
 - Completed CI steps: checkout via `actions/checkout@v6`, Rust stable toolchain install with rustfmt and clippy, `cargo fmt --check`, `cargo check --workspace`, `cargo test --workspace`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo build --release --locked`, hardening tool installation, `cargo audit`, CycloneDX SBOM generation with non-empty file checks, CodeQL Rust SAST analysis with local SARIF generation, non-empty SARIF verification, short-retention SARIF artifact upload, example container image build, Trivy image scan evidence artifact upload, fixable critical image-vulnerability enforcement, Gitleaks redacted secret-pattern scan artifact upload, lightweight hardening evidence index artifact upload, GitHub Step Summary hardening evidence pointer generation, and `python3 scripts/validate_structure.py`.
-- Node.js 24 migration status: the workflow now uses `actions/checkout@v6`; no Node.js 20 deprecation annotation appeared in the final validated run.
+- Artifact references from that run: `hardening-evidence-index` `7201340895`, `codeql-sarif-evidence` `7201272085`, `trivy-image-scan-evidence` `7201244242`, `gitleaks-secret-scan-evidence` `7201225956`, and Docker Buildx build record `7201244580`.
+- Node.js 24 migration status: the workflow uses `actions/checkout@v6`.
 - This validates the pushed repository structure, formatting, compilation, tests, linting, locked release build, dependency audit, SBOM generation gate, local-SARIF CodeQL SAST gate, short-retention SAST artifact retention, example container image build, example Trivy image-scan gate, and Gitleaks secret-pattern scan gate in GitHub Actions only. It does not validate production deployment, live funds, live exchange/RPC integrations, signing, broadcasts, production containers, systemd, ARM, penetration testing, load testing, rollback drills, incident drills, SBOM review, GitHub code scanning upload processing, broader external hardening, or production readiness.
 
 ## Latest Gap Tracker Audit
 
-2026-05-23 ArbyClaw production gap tracker audit:
+2026-05-25 ArbyClaw roadmap-anchored production gap tracker audit:
 
 - Local validation rerun passed: `python3 scripts/validate_structure.py`, `cargo fmt --check`, `cargo check --workspace`, `cargo test --workspace` with 71 tests across 3 suites, and `cargo clippy --workspace --all-targets -- -D warnings`.
-- Latest referenced GitHub Actions validation remained passed on `main` in run `https://github.com/dominator509/arbyclaw/actions/runs/26322940064` for commit `050b3ef423622aa3acf4d45f76ed032622180103`.
+- Latest referenced GitHub Actions validation remained passed on `main` in run `https://github.com/dominator509/arbyclaw/actions/runs/26408760963` for commit `c76e789364f6316c7d4ccb8f74412a6e77e9bd01`.
 - The Rust/Cargo validation class of gaps is now locally and CI-covered for the current workspace state: GAP-0001, GAP-0029, GAP-0031, GAP-0033, GAP-0036, GAP-0040, GAP-0043, GAP-0046, GAP-0050, GAP-0053, GAP-0055, GAP-0057, GAP-0059, GAP-0061, GAP-0063, GAP-0065, GAP-0067, GAP-0069, and GAP-0071.
 - These validation updates do not prove production readiness, deployment readiness, live-funds readiness, public exposure readiness, code-scanning upload processing, SBOM review, penetration testing, load testing, rollback drills, incident drills, custody readiness, or live exchange/RPC readiness.
-- The safest fillable next gaps are documentation and evidence-review gates: SBOM review checklist, external artifact review, release-review evidence, code-scanning settings evidence, and operator review records.
+- Release evidence reviewer follow-up metadata is now considered complete enough for the current Phase 17 / Phase 18 roadmap boundary; additional reviewer micro-fields should not be added unless a concrete operator workflow identifies missing non-secret routing metadata.
+- The safest fillable next gaps are roadmap-aligned tracker corrections and external validation closure records: stale CI/local validation statements, SBOM review evidence, external artifact review, code-scanning settings evidence, and operator review records.
 - The non-fillable-in-repo gaps remain open where they require credentials, wallet custody, signer design, live exchange/RPC validation, production infrastructure, public exposure review, penetration testing, load testing, rollback drills, incident drills, legal/compliance review, or accountable human approval.
 
 ## Latest External Hardening Evidence Attempt
 
-2026-05-21 ArbyClaw release-build, dependency-audit, SBOM-generation, SAST, and example-container hardening evidence:
+2026-05-25 ArbyClaw release-build, dependency-audit, SBOM-generation, SAST, and example-container hardening evidence refresh:
 
 - Local `cargo build --release --locked` passed.
 - Local `cargo audit` passed after fetching the RustSec advisory database and scanning `Cargo.lock`.
 - Local CycloneDX SBOM generation passed with non-empty SBOM files for `arb-core` and `arb-agent`; generated SBOM files were removed from the working tree and not committed.
-- GitHub Actions `cargo build --release --locked`, `cargo audit`, CycloneDX SBOM generation, CodeQL Rust SAST local-SARIF analysis, example container image build, Trivy image-scan gate, Gitleaks secret-pattern scan gate, lightweight hardening evidence index artifact upload, and GitHub Step Summary hardening evidence pointer generation passed in run `https://github.com/dominator509/arbyclaw/actions/runs/26292492203` for commit `34d1f87b7fba27b7256710d6b0c55ed8a666c116`.
+- GitHub Actions `cargo build --release --locked`, `cargo audit`, CycloneDX SBOM generation, CodeQL Rust SAST local-SARIF analysis, example container image build, Trivy image-scan gate, Gitleaks secret-pattern scan gate, lightweight hardening evidence index artifact upload, and GitHub Step Summary hardening evidence pointer generation passed in the latest referenced run `https://github.com/dominator509/arbyclaw/actions/runs/26408760963` for commit `c76e789364f6316c7d4ccb8f74412a6e77e9bd01`.
 - The initial upload-based CodeQL attempt in run `https://github.com/dominator509/arbyclaw/actions/runs/26199105621` failed because GitHub code scanning is not enabled for this repository. The workflow was narrowed to generate and verify local SARIF in CI without uploading to the GitHub Security tab.
 - A 2026-05-21 attempt to enable CodeQL default setup through the GitHub API failed with `Code scanning is not enabled for this repository`, confirming that GitHub Security-tab upload processing remains blocked by repository security settings or plan/support constraints rather than by local source code.
 - The CI workflow now keeps local-SARIF SAST evidence available as a short-retention Actions artifact while GitHub code scanning upload remains disabled.
 - A local example-only container image build using `deployment/container/Containerfile.example` passed after adding `.dockerignore` to keep local build outputs and secret-like environment files out of the Docker build context. This does not validate a production image, deployment, runtime service, or rollout.
 - GitHub Actions run `https://github.com/dominator509/arbyclaw/actions/runs/26209401284` built the example container image and uploaded Trivy evidence, then failed the critical-vulnerability gate because the Debian slim runtime included fixable `libgnutls30` critical findings (`CVE-2026-33845` and `CVE-2026-42010`). The runtime base was changed to a nonroot distroless Debian 12 image, locally rebuilt successfully, and validated by the passing example image-scan gate in run `https://github.com/dominator509/arbyclaw/actions/runs/26210031540`.
 - Local Gitleaks `v8.30.1` secret-pattern scanning via the pinned container image passed with no leaks found; the redacted JSON evidence file was removed from the working tree. The CI Gitleaks secret-pattern scan gate also passed and uploaded a short-retention redacted evidence artifact in run `https://github.com/dominator509/arbyclaw/actions/runs/26271152507`.
-- GitHub Actions run `https://github.com/dominator509/arbyclaw/actions/runs/26292492203` uploaded the lightweight `hardening-evidence-index` artifact, plus `codeql-sarif-evidence`, `trivy-image-scan-evidence`, `gitleaks-secret-scan-evidence`, and the Docker Buildx build record artifact, making non-secret hardening evidence easier to locate without changing runtime behavior.
+- GitHub Actions run `https://github.com/dominator509/arbyclaw/actions/runs/26408760963` uploaded the lightweight `hardening-evidence-index` artifact, plus `codeql-sarif-evidence`, `trivy-image-scan-evidence`, `gitleaks-secret-scan-evidence`, and the Docker Buildx build record artifact, making non-secret hardening evidence easier to locate without changing runtime behavior.
 - The same run wrote a GitHub Step Summary from the `hardening-evidence-index` job with non-secret artifact pointers, producing job results, run URL, commit, and explicit non-claims for easier lookup from the workflow page.
 - `hardening/EXTERNAL_VALIDATION_RUNBOOK.md` now includes a CI evidence lookup note for finding the Step Summary and short-retention artifacts without changing CI or runtime behavior.
 - `hardening/EXTERNAL_VALIDATION_RUNBOOK.md` now includes a manual evidence review checklist for confirming run identity, job outcomes, non-empty non-secret artifacts, and remaining release-review gaps before future release use.
@@ -90,6 +92,7 @@ The project is in Phase 18 agentic-handoff-package-complete status for ChatGPT P
 - `hardening/EXTERNAL_VALIDATION_RUNBOOK.md` and `hardening/RELEASE_REVIEW_EVIDENCE_TEMPLATE.md` now include a non-secret release evidence reviewer follow-up locator availability field so reviewers can mark locators as `available`, `expired`, `inaccessible`, `deferred`, or `not applicable` without embedding artifact contents, logs, SARIF/SBOM contents, vulnerability tables, secret-scan findings, screenshots, credentials, private URLs, wallet material, or sensitive environment details into repository files.
 - `hardening/EXTERNAL_VALIDATION_RUNBOOK.md` and `hardening/RELEASE_REVIEW_EVIDENCE_TEMPLATE.md` now include a non-secret release evidence reviewer follow-up locator access note field so reviewers can record short sanitized notes such as `artifact retained`, `artifact expired`, `permissions unavailable`, `external reference reviewed`, or `not applicable` without embedding artifact contents, logs, SARIF/SBOM contents, vulnerability tables, secret-scan findings, screenshots, credentials, private URLs, wallet material, or sensitive environment details into repository files.
 - `hardening/EXTERNAL_VALIDATION_RUNBOOK.md` and `hardening/RELEASE_REVIEW_EVIDENCE_TEMPLATE.md` now include a non-secret release evidence reviewer follow-up locator recheck date field so reviewers can record when the locator should be reviewed again without embedding artifact contents, logs, SARIF/SBOM contents, vulnerability tables, secret-scan findings, screenshots, credentials, private URLs, wallet material, or sensitive environment details into repository files.
+- The release evidence reviewer follow-up metadata set is now considered complete enough for the current Phase 17 / Phase 18 roadmap boundary; future safe tasks should return to roadmap-aligned production-gap audit and external validation closure work unless an operator identifies a concrete missing non-secret routing field.
 - This is release-build, dependency-audit, SBOM-generation, local-SARIF SAST, example-container image-scan, and secret-pattern scan evidence only. It does not validate SBOM review, GitHub code scanning upload processing, production container image readiness, systemd hardening, ARM validation, staging deployment, load testing, penetration testing, rollback drills, incident drills, live exchange/RPC sandbox validation, custody review, compliance review, or production readiness.
 
 ## Current Production Readiness %
@@ -237,7 +240,7 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 ## GAP-0001 — Rust Workspace Validation Deferred
 
 - Unique ID: GAP-0001
-- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-23; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
+- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-25; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
 - Phase association: Phase 1 / Phase 2
 - Subsystem association: Repository scaffold / build system / config subsystem
 - Description: A minimal Rust workspace scaffold and Phase 2 config modules now exist, but Cargo-based validation has not been executed.
@@ -714,7 +717,7 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 ## GAP-0029 — Local Cargo Validation Not Executed
 
 - Unique ID: GAP-0029
-- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-23; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
+- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-25; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
 - Phase association: Phase 1
 - Subsystem association: Build validation
 - Description: Local Rust formatting, compilation, tests, and clippy validation were not executed.
@@ -747,15 +750,15 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Rollback considerations: Remove or pin problematic dependencies and rerun validation.
 
 
-## GAP-0031 — Phase 2 Rust Validation Not Executed
+## GAP-0031 — Phase 2 Rust Validation Covered for Current Workspace
 
 - Unique ID: GAP-0031
-- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-23; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
+- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-25; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
 - Phase association: Phase 2
 - Subsystem association: Config / secrets / mode gates
 - Description: Phase 2 Rust modules and tests were authored but not compiled, formatted, clippy-checked, or executed in this environment.
-- Why incomplete: Rust/Cargo is unavailable in ChatGPT Project Mode.
-- Why blocked in ChatGPT Project Mode: The local execution environment lacks the Rust toolchain.
+- Why incomplete: No longer incomplete for the current workspace Rust/Cargo validation aspect. Production, deployment, live-funds, public exposure, and broader external validation gaps remain tracked separately.
+- Why blocked in ChatGPT Project Mode: No longer blocked for local Rust/Cargo validation in the current workspace.
 - Risk level: High
 - Dependency requirements: Rust stable toolchain, Cargo, rustfmt, clippy, dependency download access.
 - Exact future validation required: `cargo fmt --check`, `cargo check --workspace`, `cargo test --workspace`, `cargo clippy --workspace --all-targets -- -D warnings`.
@@ -782,15 +785,15 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Completion criteria: Secret material is minimized, redacted, zeroized on drop, scoped to constrained call sites, and covered by tests.
 - Rollback considerations: Disable live modes and remove secret-loading paths if hardening cannot be validated.
 
-## GAP-0033 — Phase 3 Rust Validation Not Executed
+## GAP-0033 — Phase 3 Rust Validation Covered for Current Workspace
 
 - Unique ID: GAP-0033
-- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-23; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
+- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-25; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
 - Phase association: Phase 3
 - Subsystem association: Policy engine / build system
 - Description: Phase 3 policy code and tests were drafted, but Rust formatting, compilation, unit tests, and clippy were not executed.
-- Why incomplete: Rust/Cargo is unavailable in ChatGPT Project Mode.
-- Why blocked in ChatGPT Project Mode: The environment lacks Rust, Cargo, rustfmt, and clippy.
+- Why incomplete: No longer incomplete for the current workspace Rust/Cargo validation aspect. Production, deployment, live-funds, public exposure, and broader external validation gaps remain tracked separately.
+- Why blocked in ChatGPT Project Mode: No longer blocked for local Rust/Cargo validation in the current workspace.
 - Risk level: High
 - Dependency requirements: Rust stable toolchain and repository checkout.
 - Exact future validation required: `cargo fmt --check`, `cargo check --workspace`, `cargo test --workspace`, `cargo clippy --workspace --all-targets -- -D warnings`.
@@ -834,15 +837,15 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Completion criteria: External destinations can only be added through an auditable non-LLM-controlled workflow and are enforced by policy before signing or transfer.
 - Rollback considerations: Clear destination allowlist, disable transfers/withdrawals, revoke any signer permissions.
 
-## GAP-0036 — Phase 4 Rust Validation Not Executed
+## GAP-0036 — Phase 4 Rust Validation Covered for Current Workspace
 
 - Unique ID: GAP-0036
-- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-23; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
+- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-25; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
 - Phase association: Phase 4
 - Subsystem association: Audit journal / state store / build system
 - Description: Phase 4 audit and state code plus tests were drafted but not compiled, formatted, clippy-checked, or executed.
-- Why incomplete: Rust/Cargo is unavailable in ChatGPT Project Mode.
-- Why blocked in ChatGPT Project Mode: The environment lacks Rust, Cargo, rustfmt, and clippy.
+- Why incomplete: No longer incomplete for the current workspace Rust/Cargo validation aspect. Production, deployment, live-funds, public exposure, and broader external validation gaps remain tracked separately.
+- Why blocked in ChatGPT Project Mode: No longer blocked for local Rust/Cargo validation in the current workspace.
 - Risk level: High
 - Dependency requirements: Rust stable toolchain and repository checkout.
 - Exact future validation required: `cargo fmt --check`, `cargo check --workspace`, `cargo test --workspace`, `cargo clippy --workspace --all-targets -- -D warnings`.
@@ -905,15 +908,15 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 
 
 
-## GAP-0040 — Phase 5 Rust Validation Not Executed
+## GAP-0040 — Phase 5 Rust Validation Covered for Current Workspace
 
 - Unique ID: GAP-0040
-- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-23; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
+- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-25; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
 - Phase association: Phase 5
 - Subsystem association: Market data / fee model / build system
 - Description: Phase 5 market-data and fee-model code plus tests were drafted but not compiled, formatted, clippy-checked, or executed.
-- Why incomplete: Rust/Cargo is unavailable in ChatGPT Project Mode.
-- Why blocked in ChatGPT Project Mode: The environment lacks Rust, Cargo, rustfmt, and clippy.
+- Why incomplete: No longer incomplete for the current workspace Rust/Cargo validation aspect. Production, deployment, live-funds, public exposure, and broader external validation gaps remain tracked separately.
+- Why blocked in ChatGPT Project Mode: No longer blocked for local Rust/Cargo validation in the current workspace.
 - Risk level: High
 - Dependency requirements: Rust stable toolchain and repository checkout.
 - Exact future validation required: `cargo fmt --check`, `cargo check --workspace`, `cargo test --workspace`, `cargo clippy --workspace --all-targets -- -D warnings`.
@@ -958,15 +961,15 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Rollback considerations: Treat all fee schedules as unverified, disable live opportunities using them, and revert provider-specific fee integration if discrepancies are found.
 
 
-## GAP-0043 — Phase 6 Rust Validation Not Executed
+## GAP-0043 — Phase 6 Rust Validation Covered for Current Workspace
 
 - Unique ID: GAP-0043
-- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-23; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
+- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-25; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
 - Phase association: Phase 6
 - Subsystem association: Paper connectors / build system
 - Description: Phase 6 paper connector code plus tests were drafted but not compiled, formatted, clippy-checked, or executed.
-- Why incomplete: Rust/Cargo is unavailable in ChatGPT Project Mode.
-- Why blocked in ChatGPT Project Mode: The environment lacks Rust, Cargo, rustfmt, and clippy.
+- Why incomplete: No longer incomplete for the current workspace Rust/Cargo validation aspect. Production, deployment, live-funds, public exposure, and broader external validation gaps remain tracked separately.
+- Why blocked in ChatGPT Project Mode: No longer blocked for local Rust/Cargo validation in the current workspace.
 - Risk level: High
 - Dependency requirements: Rust stable toolchain and repository checkout.
 - Exact future validation required: `cargo fmt --check`, `cargo check --workspace`, `cargo test --workspace`, `cargo clippy --workspace --all-targets -- -D warnings`.
@@ -1011,15 +1014,15 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Rollback considerations: Disable paper execution adapter use in strategy promotion and revert to read-only market-data simulation until audit/state integration is proven.
 
 
-## GAP-0046 — Phase 7 Rust Validation Not Executed
+## GAP-0046 — Phase 7 Rust Validation Covered for Current Workspace
 
 - Unique ID: GAP-0046
-- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-23; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
+- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-25; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
 - Phase association: Phase 7
 - Subsystem association: CEX connector framework / build system
 - Description: Phase 7 CEX framework code and tests were drafted but not compiled, formatted, clippy-checked, or executed.
-- Why incomplete: Rust/Cargo is unavailable in ChatGPT Project Mode.
-- Why blocked in ChatGPT Project Mode: The environment lacks Rust, Cargo, rustfmt, and clippy.
+- Why incomplete: No longer incomplete for the current workspace Rust/Cargo validation aspect. Production, deployment, live-funds, public exposure, and broader external validation gaps remain tracked separately.
+- Why blocked in ChatGPT Project Mode: No longer blocked for local Rust/Cargo validation in the current workspace.
 - Risk level: High
 - Dependency requirements: Rust stable toolchain and repository checkout.
 - Exact future validation required: `cargo fmt --check`, `cargo check --workspace`, `cargo test --workspace`, `cargo clippy --workspace --all-targets -- -D warnings`.
@@ -1080,15 +1083,15 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Completion criteria: Every CEX order lifecycle event is journaled, state transitions are durable and replayable, execution fails closed when audit/state writes fail, and restart recovery preserves idempotency.
 - Rollback considerations: Disable CEX order submission, preserve existing audit files, roll back connector registration, and force Observe/Paper modes.
 
-## GAP-0050 — Phase 8 Rust Validation Not Executed
+## GAP-0050 — Phase 8 Rust Validation Covered for Current Workspace
 
 - Unique ID: GAP-0050
-- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-23; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
+- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-25; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
 - Phase association: Phase 8
 - Subsystem association: DEX/Web3 connector framework / build system
 - Description: Phase 8 DEX/Web3 framework code and tests were drafted but not compiled, formatted, clippy-checked, or executed.
-- Why incomplete: Rust/Cargo is unavailable in ChatGPT Project Mode.
-- Why blocked in ChatGPT Project Mode: The environment lacks Rust, Cargo, rustfmt, and clippy.
+- Why incomplete: No longer incomplete for the current workspace Rust/Cargo validation aspect. Production, deployment, live-funds, public exposure, and broader external validation gaps remain tracked separately.
+- Why blocked in ChatGPT Project Mode: No longer blocked for local Rust/Cargo validation in the current workspace.
 - Risk level: High
 - Dependency requirements: Rust stable toolchain and repository checkout.
 - Exact future validation required: `cargo fmt --check`, `cargo check --workspace`, `cargo test --workspace`, `cargo clippy --workspace --all-targets -- -D warnings`.
@@ -1134,15 +1137,15 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 
 
 
-## GAP-0053 — Phase 9 Rust Validation Not Executed
+## GAP-0053 — Phase 9 Rust Validation Covered for Current Workspace
 
 - Unique ID: GAP-0053
-- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-23; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
+- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-25; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
 - Phase association: Phase 9
 - Subsystem association: Opportunity engine / build system
 - Description: Phase 9 opportunity-engine code and tests were drafted but not compiled, formatted, clippy-checked, or executed.
-- Why incomplete: Rust/Cargo is unavailable in ChatGPT Project Mode.
-- Why blocked in ChatGPT Project Mode: The environment lacks Rust, Cargo, rustfmt, and clippy.
+- Why incomplete: No longer incomplete for the current workspace Rust/Cargo validation aspect. Production, deployment, live-funds, public exposure, and broader external validation gaps remain tracked separately.
+- Why blocked in ChatGPT Project Mode: No longer blocked for local Rust/Cargo validation in the current workspace.
 - Risk level: High
 - Dependency requirements: Rust stable toolchain and repository checkout.
 - Exact future validation required: `cargo fmt --check`, `cargo check --workspace`, `cargo test --workspace`, `cargo clippy --workspace --all-targets -- -D warnings`.
@@ -1169,15 +1172,15 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Completion criteria: Every discovered candidate is journaled without secrets, replayable, deduplicated, state-checkpointed, and consumed by the planner only after durable validation.
 - Rollback considerations: Disable opportunity-engine runtime integration, preserve audit files, revert planner handoff wiring, and force Observe/Paper modes.
 
-## GAP-0055 — Phase 10 Rust Validation Not Executed
+## GAP-0055 — Phase 10 Rust Validation Covered for Current Workspace
 
 - Unique ID: GAP-0055
-- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-23; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
+- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-25; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
 - Phase association: Phase 10
 - Subsystem association: Execution planner / build system
 - Description: Phase 10 execution-planner code and tests were drafted but not compiled, formatted, clippy-checked, or executed.
-- Why incomplete: Rust/Cargo is unavailable in ChatGPT Project Mode.
-- Why blocked in ChatGPT Project Mode: The environment lacks Rust, Cargo, rustfmt, and clippy.
+- Why incomplete: No longer incomplete for the current workspace Rust/Cargo validation aspect. Production, deployment, live-funds, public exposure, and broader external validation gaps remain tracked separately.
+- Why blocked in ChatGPT Project Mode: No longer blocked for local Rust/Cargo validation in the current workspace.
 - Risk level: High
 - Dependency requirements: Rust stable toolchain and repository checkout.
 - Exact future validation required: `cargo fmt --check`, `cargo check --workspace`, `cargo test --workspace`, `cargo clippy --workspace --all-targets -- -D warnings`.
@@ -1204,15 +1207,15 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Completion criteria: Every plan and policy outcome is journaled without secrets, replayable, state-checkpointed, and adapters reject plans unless audit/state preconditions pass.
 - Rollback considerations: Disable planner-to-adapter handoff, preserve audit files, revert adapter wiring, and force Observe/Paper modes.
 
-## GAP-0057 — Phase 11 Rust Validation Not Executed
+## GAP-0057 — Phase 11 Rust Validation Covered for Current Workspace
 
 - Unique ID: GAP-0057
-- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-23; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
+- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-25; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
 - Phase association: Phase 11
 - Subsystem association: Execution adapter framework / build system
 - Description: Phase 11 execution-adapter framework code and tests were drafted but not compiled, formatted, clippy-checked, or executed.
-- Why incomplete: Rust/Cargo is unavailable in ChatGPT Project Mode.
-- Why blocked in ChatGPT Project Mode: The environment lacks Rust, Cargo, rustfmt, and clippy.
+- Why incomplete: No longer incomplete for the current workspace Rust/Cargo validation aspect. Production, deployment, live-funds, public exposure, and broader external validation gaps remain tracked separately.
+- Why blocked in ChatGPT Project Mode: No longer blocked for local Rust/Cargo validation in the current workspace.
 - Risk level: High
 - Dependency requirements: Rust stable toolchain and repository checkout.
 - Exact future validation required: `cargo fmt --check`, `cargo check --workspace`, `cargo test --workspace`, `cargo clippy --workspace --all-targets -- -D warnings`.
@@ -1239,15 +1242,15 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Completion criteria: Every adapter run is durably journaled and state-checkpointed before any external submission, can be replayed/reconciled after restart, and live adapters cannot submit without policy, audit, state, and kill-switch approval.
 - Rollback considerations: Disable planner-to-adapter handoff, preserve audit files, revoke credentials, remove live adapter registrations, and force Observe/Paper modes.
 
-## GAP-0059 — Phase 12 Rust Validation Not Executed
+## GAP-0059 — Phase 12 Rust Validation Covered for Current Workspace
 
 - Unique ID: GAP-0059
-- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-23; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
+- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-25; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
 - Phase association: Phase 12
 - Subsystem association: Communications and CLI / build system
 - Description: Phase 12 communications/CLI code and tests were drafted but not compiled, formatted, clippy-checked, or executed.
-- Why incomplete: Rust/Cargo is unavailable in ChatGPT Project Mode.
-- Why blocked in ChatGPT Project Mode: The environment lacks Rust, Cargo, rustfmt, and clippy.
+- Why incomplete: No longer incomplete for the current workspace Rust/Cargo validation aspect. Production, deployment, live-funds, public exposure, and broader external validation gaps remain tracked separately.
+- Why blocked in ChatGPT Project Mode: No longer blocked for local Rust/Cargo validation in the current workspace.
 - Risk level: High
 - Dependency requirements: Rust stable toolchain and repository checkout.
 - Exact future validation required: `cargo fmt --check`, `cargo check --workspace`, `cargo test --workspace`, `cargo clippy --workspace --all-targets -- -D warnings`.
@@ -1276,15 +1279,15 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 
 
 
-## GAP-0061 — Phase 13 Rust Validation Not Executed
+## GAP-0061 — Phase 13 Rust Validation Covered for Current Workspace
 
 - Unique ID: GAP-0061
-- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-23; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
+- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-25; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
 - Phase association: Phase 13
 - Subsystem association: Embedded dashboard / build system
 - Description: Phase 13 embedded-dashboard code and tests were drafted but not compiled, formatted, clippy-checked, or executed.
-- Why incomplete: Rust/Cargo is unavailable in ChatGPT Project Mode.
-- Why blocked in ChatGPT Project Mode: The environment lacks Rust, Cargo, rustfmt, and clippy.
+- Why incomplete: No longer incomplete for the current workspace Rust/Cargo validation aspect. Production, deployment, live-funds, public exposure, and broader external validation gaps remain tracked separately.
+- Why blocked in ChatGPT Project Mode: No longer blocked for local Rust/Cargo validation in the current workspace.
 - Risk level: High
 - Dependency requirements: Rust stable toolchain and repository checkout.
 - Exact future validation required: `cargo fmt --check`, `cargo check --workspace`, `cargo test --workspace`, `cargo clippy --workspace --all-targets -- -D warnings`.
@@ -1312,15 +1315,15 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Rollback considerations: Disable dashboard hosting, preserve audit records, remove dashboard route registration, and fall back to CLI status-only operation.
 
 
-## GAP-0063 — Phase 14 Rust Validation Not Executed
+## GAP-0063 — Phase 14 Rust Validation Covered for Current Workspace
 
 - Unique ID: GAP-0063
-- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-23; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
+- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-25; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
 - Phase association: Phase 14
 - Subsystem association: Observability and runbooks / build system
 - Description: Phase 14 observability/runbook code and tests were drafted but not compiled, formatted, clippy-checked, or executed.
-- Why incomplete: Rust/Cargo is unavailable in ChatGPT Project Mode.
-- Why blocked in ChatGPT Project Mode: The environment lacks Rust, Cargo, rustfmt, and clippy.
+- Why incomplete: No longer incomplete for the current workspace Rust/Cargo validation aspect. Production, deployment, live-funds, public exposure, and broader external validation gaps remain tracked separately.
+- Why blocked in ChatGPT Project Mode: No longer blocked for local Rust/Cargo validation in the current workspace.
 - Risk level: High
 - Dependency requirements: Rust stable toolchain and repository checkout.
 - Exact future validation required: `cargo fmt --check`, `cargo check --workspace`, `cargo test --workspace`, `cargo clippy --workspace --all-targets -- -D warnings`.
@@ -1348,15 +1351,15 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Rollback considerations: Disable metrics endpoints, exporters, log shipping, and alert adapters; preserve local records and audit evidence; fall back to CLI/dashboard local status only.
 
 
-## GAP-0065 — Phase 15 Rust Validation Not Executed
+## GAP-0065 — Phase 15 Rust Validation Covered for Current Workspace
 
 - Unique ID: GAP-0065
-- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-23; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
+- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-25; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
 - Phase association: Phase 15
 - Subsystem association: Testing, fuzzing, and backtesting / build system
 - Description: Phase 15 testing/fuzzing/backtesting boundary code and tests were drafted but not compiled, formatted, clippy-checked, or executed.
-- Why incomplete: Rust/Cargo is unavailable in ChatGPT Project Mode.
-- Why blocked in ChatGPT Project Mode: The environment lacks Rust, Cargo, rustfmt, and clippy.
+- Why incomplete: No longer incomplete for the current workspace Rust/Cargo validation aspect. Production, deployment, live-funds, public exposure, and broader external validation gaps remain tracked separately.
+- Why blocked in ChatGPT Project Mode: No longer blocked for local Rust/Cargo validation in the current workspace.
 - Risk level: High
 - Dependency requirements: Rust stable toolchain and repository checkout.
 - Exact future validation required: `cargo fmt --check`, `cargo check --workspace`, `cargo test --workspace`, `cargo clippy --workspace --all-targets -- -D warnings`.
@@ -1383,15 +1386,15 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Completion criteria: Validation plans execute in CI/local environments with deterministic fixture corpora, fuzz/property test coverage, replay/backtest records, load/security validation evidence, and no secret leakage or live side effects.
 - Rollback considerations: Disable advanced runners, preserve fixtures and audit evidence, revert failing harness integrations, and keep Observe/Paper modes only until validation is restored.
 
-## GAP-0067 — Phase 16 Rust Validation Not Executed
+## GAP-0067 — Phase 16 Rust Validation Covered for Current Workspace
 
 - Unique ID: GAP-0067
-- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-23; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
+- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-25; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
 - Phase association: Phase 16
 - Subsystem association: Packaging/deployment / build system
 - Description: Phase 16 packaging/deployment boundary code and tests were drafted but not compiled, formatted, clippy-checked, or executed.
-- Why incomplete: Rust/Cargo is unavailable in ChatGPT Project Mode.
-- Why blocked in ChatGPT Project Mode: The environment lacks Rust, Cargo, rustfmt, and clippy.
+- Why incomplete: No longer incomplete for the current workspace Rust/Cargo validation aspect. Production, deployment, live-funds, public exposure, and broader external validation gaps remain tracked separately.
+- Why blocked in ChatGPT Project Mode: No longer blocked for local Rust/Cargo validation in the current workspace.
 - Risk level: High
 - Dependency requirements: Rust stable toolchain and repository checkout.
 - Exact future validation required: `cargo fmt --check`, `cargo check --workspace`, `cargo test --workspace`, `cargo clippy --workspace --all-targets -- -D warnings`.
@@ -1420,22 +1423,22 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 
 
 
-## GAP-0069 — Phase 17 Rust Validation Not Executed
+## GAP-0069 — Phase 17 Rust Validation Covered for Current Workspace
 
 - Unique ID: GAP-0069
-- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-23; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
+- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-25; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
 - Phase association: Phase 17
 - Subsystem association: External hardening evidence boundary / build system
-- Description: Phase 17 external hardening boundary code and tests were drafted but not compiled, formatted, clippy-checked, or executed.
-- Why incomplete: Rust/Cargo is unavailable in ChatGPT Project Mode.
-- Why blocked in ChatGPT Project Mode: The environment lacks Rust, Cargo, rustfmt, and clippy.
-- Risk level: High
-- Dependency requirements: Rust stable toolchain and repository checkout.
-- Exact future validation required: `cargo fmt --check`, `cargo check --workspace`, `cargo test --workspace`, `cargo clippy --workspace --all-targets -- -D warnings`.
+- Description: Phase 17 external hardening boundary Rust/Cargo validation was previously unexecuted, but the current workspace has since passed local and GitHub Actions format, check, test, and clippy validation.
+- Why incomplete: No longer incomplete for the current workspace Rust/Cargo validation aspect. Production, deployment, live-funds, public exposure, and broader external hardening gaps remain tracked separately.
+- Why blocked in ChatGPT Project Mode: No longer blocked for local Rust/Cargo validation in the current workspace.
+- Risk level: Low for the current Rust/Cargo validation aspect; high production and live-funds risks remain tracked in other gap entries.
+- Dependency requirements: Keep Rust stable toolchain, Cargo, rustfmt, clippy, CI runner, and repository checkout available for future validation runs.
+- Exact future validation required: Re-run `cargo fmt --check`, `cargo check --workspace`, `cargo test --workspace`, and `cargo clippy --workspace --all-targets -- -D warnings` after future changes.
 - Exact future tooling/environment required: Rust stable toolchain, Cargo, rustfmt, clippy, CI runner.
 - Recommended future agent type: Rust Implementation Agent + DevSecOps Orchestrator + AppSec Lead
-- Estimated production impact: Blocks confirmed compile/build/test confidence for the hardening evidence boundary.
-- Completion criteria: All Cargo validation commands pass without warnings or errors and Phase 17 unit tests execute successfully.
+- Estimated production impact: Compile/test/lint confidence for the hardening evidence boundary is improved, but this does not prove production readiness or live-funds readiness.
+- Completion criteria: Met for the current workspace Rust/Cargo validation aspect; future changes must rerun the validation commands.
 - Rollback considerations: Revert `crates/arb-core/src/hardening.rs`, remove exports, remove CLI status text, remove hardening docs, and return roadmap/gap tracker to Phase 16 state if validation exposes unrecoverable defects.
 
 ## GAP-0070 — External Production Hardening Execution Missing
@@ -1443,8 +1446,8 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Unique ID: GAP-0070
 - Phase association: Phase 17 / Phase 18
 - Subsystem association: External hardening / AppSec / release engineering / operations / compliance
-- Description: Phase 17 added deterministic evidence models, release blockers, review records, and operator checklists. Initial GitHub Actions CI, locked release-build validation, dependency audit, CycloneDX SBOM generation, local-SARIF CodeQL SAST, local example-only container build, CI Trivy example image-scan evidence, and Gitleaks secret-pattern scan evidence passed by 2026-05-21. The first CI Trivy image-scan gate correctly failed on fixable critical Debian slim runtime findings and preserved non-secret evidence; a distroless runtime repair then passed follow-up CI validation. SBOM review, GitHub code scanning upload processing, production container validation, systemd hardening validation, ARM validation, staging deployment, load test, penetration test, rollback drill, incident-response drill, live exchange/RPC validation, and production readiness review have not been executed.
-- Why incomplete: Initial CI, release-build, dependency-audit, SBOM-generation, local-SARIF SAST, local example-container build, failed image-scan evidence, repaired image-scan evidence, and secret-pattern scan evidence exist. Phase 17 intentionally avoids credentials, public exposure, live funds, production claims, live exchange/RPC calls, signing, broadcasts, and deployment execution; the broader external hardening checklist remains incomplete.
+- Description: Phase 17 added deterministic evidence models, release blockers, review records, and operator checklists. GitHub Actions CI, locked release-build validation, dependency audit, CycloneDX SBOM generation, local-SARIF CodeQL SAST, local example-only container build, CI Trivy example image-scan evidence, Gitleaks secret-pattern scan evidence, and hardening evidence indexing are passing as of the 2026-05-25 run `https://github.com/dominator509/arbyclaw/actions/runs/26408760963`. The first CI Trivy image-scan gate correctly failed on fixable critical Debian slim runtime findings and preserved non-secret evidence; a distroless runtime repair then passed follow-up CI validation. SBOM review, GitHub code scanning upload processing, production container validation, systemd hardening validation, ARM validation, staging deployment, load test, penetration test, rollback drill, incident-response drill, live exchange/RPC validation, and production readiness review have not been executed.
+- Why incomplete: CI, release-build, dependency-audit, SBOM-generation, local-SARIF SAST, local example-container build, failed image-scan evidence, repaired image-scan evidence, hardening evidence index, and secret-pattern scan evidence exist. Phase 17 intentionally avoids credentials, public exposure, live funds, production claims, live exchange/RPC calls, signing, broadcasts, and deployment execution; the broader external hardening checklist remains incomplete.
 - Why blocked in ChatGPT Project Mode: Real production hardening requires external CI, runtime infrastructure, staging hosts, security tooling, target devices, controlled credentials outside the repo, human review, and accountable operator approval.
 - Risk level: Critical
 - Dependency requirements: Dependency audit, SBOM process, container scanning, staging environment, observability runtime, incident runbooks, rollback procedure, AppSec review, exchange/RPC sandbox environments, custody/signer design, and compliance review.
@@ -1455,15 +1458,15 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Completion criteria: External hardening evidence is generated, reviewed, non-secret, linked from an external evidence store, and confirms all required production gates pass without enabling live funds prematurely.
 - Rollback considerations: Preserve evidence, disable candidate services, restore prior artifact/configuration, revoke any exposed credentials, keep Observe/Paper modes only, and return to a known validated checkpoint.
 
-## GAP-0071 — Phase 18 Rust Validation Not Executed
+## GAP-0071 — Phase 18 Rust Validation Covered for Current Workspace
 
 - Unique ID: GAP-0071
-- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-23; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
+- Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-25; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
 - Phase association: Phase 18
 - Subsystem association: Agentic handoff package boundary / build system
 - Description: Phase 18 handoff boundary code and tests were drafted but not compiled, formatted, clippy-checked, or executed.
-- Why incomplete: Rust/Cargo is unavailable in ChatGPT Project Mode.
-- Why blocked in ChatGPT Project Mode: The environment lacks Rust, Cargo, rustfmt, and clippy.
+- Why incomplete: No longer incomplete for the current workspace Rust/Cargo validation aspect. Production, deployment, live-funds, public exposure, and broader external validation gaps remain tracked separately.
+- Why blocked in ChatGPT Project Mode: No longer blocked for local Rust/Cargo validation in the current workspace.
 - Risk level: High
 - Dependency requirements: Rust stable toolchain and repository checkout.
 - Exact future validation required: `cargo fmt --check`, `cargo check --workspace`, `cargo test --workspace`, `cargo clippy --workspace --all-targets -- -D warnings`.
@@ -1512,7 +1515,7 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Unique ID: GAP-0074
 - Phase association: Phase 18 / post-handoff CI validation
 - Subsystem association: CI/CD / GitHub Actions / repository publishing
-- Description: The requested CI validation sequence was initially blocked because no repository target was visible. On 2026-05-20 the new GitHub repository `dominator509/arbyclaw` was connected, the ArbyClaw checkpoint was pushed to `main`, and GitHub Actions CI passed. The latest recorded validated run is `26199777968` for commit `baac592a81cde5c080bdb84fe7885252959025a2`, including checkout via `actions/checkout@v6`, the original validation sequence, `cargo build --release --locked`, `cargo audit`, CycloneDX SBOM generation with non-empty file checks, and CodeQL Rust SAST local-SARIF generation with non-empty SARIF verification.
+- Description: The requested CI validation sequence was initially blocked because no repository target was visible. On 2026-05-20 the new GitHub repository `dominator509/arbyclaw` was connected, the ArbyClaw checkpoint was pushed to `main`, and GitHub Actions CI passed. The latest recorded validated run is `26408760963` for commit `c76e789364f6316c7d4ccb8f74412a6e77e9bd01`, including checkout via `actions/checkout@v6`, the original validation sequence, `cargo build --release --locked`, `cargo audit`, CycloneDX SBOM generation with non-empty file checks, CodeQL Rust SAST local-SARIF generation with non-empty SARIF verification, example image scan, secret-pattern scan, and hardening evidence index generation.
 - Why incomplete: No longer incomplete for initial GitHub Actions CI execution. Production hardening, deployment, live integration, security, load, rollback, incident, and external validation gaps remain tracked separately.
 - Why blocked in ChatGPT/Codex environment: No longer blocked for initial GitHub Actions CI execution after the repository target was created and connected.
 - Risk level: Low for initial CI compile/test/lint evidence; high production and live-funds risks remain tracked in the other gap entries.
