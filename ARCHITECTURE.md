@@ -6,9 +6,9 @@ Fully Autonomous Crypto Arbitrage Agent
 
 ## Architecture Status
 
-- Status: Phase 18 agentic handoff package boundary implemented; Rust toolchain, external agent execution, and real external hardening validation deferred.
+- Status: Phase 18 agentic handoff package boundary implemented; current workspace Rust/CI validation evidence exists, while external agent execution and real production hardening validation remain deferred.
 - Production readiness: 87% unchanged; Phase 18 adds handoff governance but no externally executed validation or production approval.
-- Implementation status: Minimal Rust workspace, typed config, redacted secret-reference abstractions, CLI config loading, isolated policy engine, append-only audit journal primitives, state-store trait boundary, normalized market-data models, freshness classification, fee models, provider trait boundaries, deterministic paper connectors, CEX connector framework types/traits, DEX/Web3 framework types/traits, deterministic opportunity-engine types/traits, draft-only execution-planner types/traits, execution-adapter boundary records/traits, communications/CLI command and notification boundaries, embedded-dashboard local render boundaries, observability/runbook local record boundaries, testing/fuzzing/backtesting validation-plan boundaries, packaging/deployment plan boundaries, external hardening evidence/checklist boundaries, and agentic handoff package boundaries exist; no real builds, container validation, service installation, ARM cross-build validation, runtime deployment, validation runner execution, external fuzzing engine, backtest corpus execution, observability runtime, real dashboard hosting, outbound messaging integrations, external adapter submission, exchange-specific live adapters, live RPC adapters, wallet signer, transaction broadcasts, bridges, or live trading adapters yet.
+- Implementation status: Minimal Rust workspace, typed config, redacted secret-reference abstractions, CLI config loading, isolated policy engine, append-only audit journal primitives, state-store trait boundary, normalized market-data models, freshness classification, fee models, provider trait boundaries, deterministic paper connectors, CEX connector framework types/traits, DEX/Web3 framework types/traits, deterministic opportunity-engine types/traits, draft-only execution-planner types/traits, execution-adapter boundary records/traits, communications/CLI command and notification boundaries, embedded-dashboard local render boundaries, observability/runbook local record boundaries, testing/fuzzing/backtesting validation-plan boundaries, packaging/deployment plan boundaries, external hardening evidence/checklist boundaries, and agentic handoff package boundaries exist; current local and GitHub Actions validation covers structure, formatting, workspace compilation, tests, clippy, locked release build, dependency audit, SBOM generation, local-SARIF SAST evidence, example image scan, secret-pattern scan, and hardening evidence indexing. Production container validation, service installation, ARM cross-build validation, runtime deployment, validation runner execution, external fuzzing engine, backtest corpus execution, observability runtime, real dashboard hosting, outbound messaging integrations, external adapter submission, exchange-specific live adapters, live RPC adapters, wallet signer, transaction broadcasts, bridges, and live trading adapters remain unimplemented or unvalidated.
 - Safety posture: Design-time controls, Phase 2 mode gates, Phase 3 policy checks, Phase 4 redacted audit/hash-chain primitives, Phase 5 read-only market-data/fee boundaries, Phase 6 paper-only simulation boundaries, Phase 7 CEX framework live-order denial, Phase 8 DEX/Web3 framework live-swap/RPC/broadcast denial, Phase 9 opportunity discovery, Phase 10 draft-only execution planning with policy preflight outcomes, Phase 11 execution-adapter boundary records with policy revalidation, Phase 12 command/notification boundaries with outbound-network denial, Phase 13 dashboard render records with server/public-exposure/live-control denial, Phase 14 observability records with metrics-endpoint/outbound-alert denial, Phase 15 validation plans with external-fuzzer/live-network/live-execution denial, Phase 16 packaging records with build/deployment/public-exposure/production-claim denial, Phase 17 hardening records with external-action/production-claim/live-funds/public-exposure denial, and Phase 18 handoff records with external-agent-execution/external-validation-claim/production-claim/live-funds/public-exposure denial exist; signer boundary, live connector integrations, live execution controls, SQLite WAL persistence, external adapter submission, real communication delivery, real dashboard hosting/authentication, real metrics/exporter/alert runtime, actual property/fuzz/backtest execution, actual container/systemd/ARM deployment validation, actual Phase 17 hardening evidence execution, future-agent execution validation, and external validation are not yet implemented or externally validated.
 - Current mode: Config/policy/audit/market-data/paper/CEX-framework/DEX-Web3-framework/opportunity-engine/execution-planner/execution-adapter-framework/communications-CLI/dashboard/observability/testing/packaging/hardening/handoff-ready greenfield construction with live trading disabled until later custody, exchange-specific live connector, DEX RPC adapter, signer, live adapter submission, execution hardening, real communications adapters, dashboard hosting hardening, observability runtime hardening, validation runner execution, packaging/deployment validation, executed external hardening evidence, and external validation phases are complete.
 
@@ -689,7 +689,7 @@ Phase 15 implementation status:
 
 Default future approach:
 
-- `cargo test` for unit/integration tests after Rust toolchain availability
+- `cargo test` for unit/integration tests after each workspace change
 - property tests after explicit dependency and corpus design
 - fuzzing with reviewed local harnesses after explicit future scope
 - deterministic fixture replay and backtesting against curated local corpora
@@ -726,7 +726,7 @@ Phase 16 implementation status:
 
 Default future approach:
 
-- release builds after Rust/Cargo availability
+- release builds through local or CI validation before release review
 - container builds after approved local or CI runtime validation
 - systemd service validation on Linux targets
 - ARM cross-build validation on actual target class or verified emulator
@@ -929,7 +929,7 @@ Every phase must preserve rollback safety by:
 
 ## Current Hard Blockers to Production
 
-- Rust/Cargo validation has not been executed in this environment
+- Rust/Cargo validation must be rerun for every changed workspace state and does not imply production readiness
 - No encrypted secret manager or custody backend
 - No wallet signer boundary
 - No exchange-specific live CEX adapters
@@ -939,16 +939,15 @@ Every phase must preserve rollback safety by:
 - Audit journal is not crash/concurrency/filesystem validated
 - CEX framework is not connected to real REST/WebSocket APIs or sandboxes
 - DEX/Web3 framework is not connected to real RPC, router, aggregator, signer, simulation, or broadcast adapters
-- Opportunity engine is not Rust/Cargo validated and does not yet model inventory, transfer latency, full triangular path discovery, or depth-aware slippage
-- Execution planner and execution-adapter framework are not Rust/Cargo validated and do not provide durable audit/state lifecycle integration
+- Opportunity engine has current workspace Rust validation evidence but does not yet model inventory, transfer latency, full triangular path discovery, or depth-aware slippage
+- Execution planner and execution-adapter framework have current workspace Rust validation evidence but do not provide durable audit/state lifecycle integration
 - No runtime deployment validation
 - No container, systemd, ARM, or rollback-drill validation
-- No CI/CD execution validation
+- CI/CD execution validation exists for structure, Rust validation, locked release build, dependency audit, SBOM generation, local-SARIF SAST evidence, example image scan, secret-pattern scan, and hardening evidence indexing only
 - No external security review
 - No live exchange API keys
 - No production deployment environment
 
 ## Phase 18 Agentic Handoff Boundary
 
-The agentic handoff subsystem provides deterministic package records, continuation prompts, governance checklists, external validation checklists, and future-agent instructions only. It does not execute external agents, call coding-agent APIs, run CI, run Rust validation, deploy infrastructure, approve production readiness, approve public exposure, approve live funds, or store credentials. Handoff records preserve unresolved gaps and live-funds blockers so future agents cannot silently erase deferred validation work.
-
+The agentic handoff subsystem provides deterministic package records, continuation prompts, governance checklists, external validation checklists, and future-agent instructions only. It does not execute external agents, call coding-agent APIs, deploy infrastructure, approve production readiness, approve public exposure, approve live funds, or store credentials. Handoff records may reference current local/CI validation evidence, but they preserve unresolved gaps and live-funds blockers so future agents cannot silently erase deferred validation work.

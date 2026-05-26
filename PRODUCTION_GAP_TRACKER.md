@@ -110,22 +110,22 @@ Reasoning:
 ## Current Completed Phases
 
 - Phase 0 — Governance Initialization
-- Phase 1 — Rust Workspace Scaffold (scaffold created; Rust toolchain validation deferred)
-- Phase 2 — Config, Secrets, and Mode Gates (implemented; Rust toolchain validation deferred)
-- Phase 3 — Policy Engine and Trust Contract (implemented; Rust toolchain validation deferred)
-- Phase 4 — Audit Journal and State Store (implemented as boundary; Rust toolchain validation and SQLite WAL deferred)
-- Phase 5 — Market Data Core (implemented as boundary; Rust toolchain validation and live provider validation deferred)
-- Phase 6 — Simulated/Paper Connectors (implemented as deterministic boundary; Rust toolchain validation and paper-model limitations deferred)
-- Phase 7 — CEX Connector Framework (implemented as typed framework boundary; Rust toolchain validation and live exchange validation deferred)
-- Phase 8 — DEX/Web3 Connector Framework (implemented as typed framework boundary; Rust toolchain validation, live RPC validation, signer validation, and broadcast validation deferred)
-- Phase 9 — Opportunity Engine (implemented as deterministic discovery/ranking boundary; Rust toolchain validation, advanced route modeling, and live-data validation deferred)
-- Phase 10 — Execution Planner (implemented as draft-only planning boundary; Rust toolchain validation, audit/state lifecycle, adapter handoff, and live execution validation deferred)
-- Phase 11 — Execution Adapters (implemented as deterministic model/trait boundary; Rust toolchain validation, durable audit/state lifecycle, and live submission validation deferred)
-- Phase 12 — Communications and CLI (implemented as deterministic model/trait boundary; Rust toolchain validation, real outbound integrations, and audit/state lifecycle deferred)
-- Phase 13 — Embedded Dashboard (implemented as deterministic model/trait boundary; Rust toolchain validation, real hosting, auth, and audit/state lifecycle deferred)
-- Phase 14 — Observability and Runbooks (implemented as deterministic model/trait boundary; Rust toolchain validation, real telemetry runtime, exporters, alerts, and audit/state lifecycle deferred)
-- Phase 15 — Testing, Fuzzing, and Backtesting (implemented as deterministic model/trait boundary; Rust toolchain validation, real property/fuzz/backtest execution, load testing, and penetration testing deferred)
-- Phase 16 — Packaging and Deployment (implemented as deterministic model/docs boundary; Rust/container/systemd/ARM validation, runtime deployment, and rollback drills deferred)
+- Phase 1 — Rust Workspace Scaffold (scaffold created; current workspace Rust/CI validation covered)
+- Phase 2 — Config, Secrets, and Mode Gates (implemented; current workspace Rust/CI validation covered)
+- Phase 3 — Policy Engine and Trust Contract (implemented; current workspace Rust/CI validation covered)
+- Phase 4 — Audit Journal and State Store (implemented as boundary; current workspace Rust/CI validation covered; SQLite WAL deferred)
+- Phase 5 — Market Data Core (implemented as boundary; current workspace Rust/CI validation covered; live provider validation deferred)
+- Phase 6 — Simulated/Paper Connectors (implemented as deterministic boundary; current workspace Rust/CI validation covered; paper-model limitations deferred)
+- Phase 7 — CEX Connector Framework (implemented as typed framework boundary; current workspace Rust/CI validation covered; live exchange validation deferred)
+- Phase 8 — DEX/Web3 Connector Framework (implemented as typed framework boundary; current workspace Rust/CI validation covered; live RPC validation, signer validation, and broadcast validation deferred)
+- Phase 9 — Opportunity Engine (implemented as deterministic discovery/ranking boundary; current workspace Rust/CI validation covered; advanced route modeling and live-data validation deferred)
+- Phase 10 — Execution Planner (implemented as draft-only planning boundary; current workspace Rust/CI validation covered; audit/state lifecycle, adapter handoff, and live execution validation deferred)
+- Phase 11 — Execution Adapters (implemented as deterministic model/trait boundary; current workspace Rust/CI validation covered; durable audit/state lifecycle and live submission validation deferred)
+- Phase 12 — Communications and CLI (implemented as deterministic model/trait boundary; current workspace Rust/CI validation covered; real outbound integrations and audit/state lifecycle deferred)
+- Phase 13 — Embedded Dashboard (implemented as deterministic model/trait boundary; current workspace Rust/CI validation covered; real hosting, auth, and audit/state lifecycle deferred)
+- Phase 14 — Observability and Runbooks (implemented as deterministic model/trait boundary; current workspace Rust/CI validation covered; real telemetry runtime, exporters, alerts, and audit/state lifecycle deferred)
+- Phase 15 — Testing, Fuzzing, and Backtesting (implemented as deterministic model/trait boundary; current workspace Rust/CI validation covered; real property/fuzz/backtest execution, load testing, and penetration testing deferred)
+- Phase 16 — Packaging and Deployment (implemented as deterministic model/docs boundary; current release-build CI gate covered; production container/systemd/ARM validation, runtime deployment, and rollback drills deferred)
 - Phase 17 — External Production Hardening (implemented as deterministic evidence/checklist boundary; real external hardening execution deferred)
 - Phase 18 — Agentic Handoff Package (implemented as deterministic model/docs boundary; external agent execution and production validation deferred)
 
@@ -243,9 +243,9 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Latest audit status: Locally and CI-covered for the current workspace state as of 2026-05-25; this resolves only the Rust/Cargo validation aspect and does not close production, deployment, live-funds, or external hardening gaps.
 - Phase association: Phase 1 / Phase 2
 - Subsystem association: Repository scaffold / build system / config subsystem
-- Description: A minimal Rust workspace scaffold and Phase 2 config modules now exist, but Cargo-based validation has not been executed.
-- Why incomplete: Rust/Cargo is unavailable in the ChatGPT Project Mode execution environment.
-- Why blocked in ChatGPT Project Mode: The local environment lacks the Rust toolchain.
+- Description: A minimal Rust workspace scaffold and Phase 2 config modules now exist, and Cargo-based validation has current local and GitHub Actions evidence for the present workspace state.
+- Why incomplete: No longer incomplete for the current workspace Rust/Cargo validation aspect. Production, deployment, live-funds, and broader external validation gaps remain tracked separately.
+- Why blocked in ChatGPT Project Mode: No longer blocked for local Rust/Cargo validation in the current workspace.
 - Risk level: High
 - Dependency requirements: Rust stable toolchain and Cargo on a local machine or CI runner.
 - Exact future validation required: `cargo fmt --check`, `cargo check --workspace`, `cargo test --workspace`, `cargo clippy --workspace --all-targets -- -D warnings`.
@@ -311,9 +311,9 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Unique ID: GAP-0005
 - Phase association: Phase 3 / Phase 11 / Phase 15
 - Subsystem association: Policy and trust contract
-- Description: Deny-by-default policy engine and trust-contract enforcement now exist in `crates/arb-core/src/policy.rs`, but Rust/Cargo validation and integration with audit/execution adapters are still incomplete.
-- Why incomplete: Code was created in ChatGPT Project Mode, but Rust/Cargo is unavailable and no execution adapters exist yet to call policy.
-- Why blocked in ChatGPT Project Mode: Rust toolchain, property-test runners, fuzzers, and real runtime integration are not available in this environment.
+- Description: Deny-by-default policy engine and trust-contract enforcement now exist in `crates/arb-core/src/policy.rs`, with current local and GitHub Actions Rust/Cargo validation evidence. Deeper property/fuzz validation and durable runtime integration remain incomplete.
+- Why incomplete: Current workspace Rust/Cargo validation is covered, but property-test runners, fuzzers, durable audit integration, and real runtime integration remain incomplete.
+- Why blocked in ChatGPT Project Mode: Not blocked for local Rust/Cargo validation in the current workspace; deeper property/fuzz/runtime validations require future tooling and scope.
 - Risk level: High
 - Dependency requirements: Rust workspace validation, Phase 4 audit journal, future execution adapters, property/fuzz test framework.
 - Exact future validation required: `cargo test --workspace`, property tests, fuzz tests, denial-path tests, mode-gate tests, unknown-destination tests, stale-data tests, kill-switch tests, live-runtime-denial tests, connector integration tests.
@@ -808,8 +808,8 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Unique ID: GAP-0034
 - Phase association: Phase 3 / Phase 11
 - Subsystem association: Policy engine / execution adapters
-- Description: Policy engine exists, but no execution adapters exist yet, so there is no runtime path proving all orders, swaps, transfers, withdrawals, and signing requests must pass policy before execution.
-- Why incomplete: Execution adapters are scheduled for later phases.
+- Description: Policy engine and deterministic execution-adapter boundaries exist, but there is still no live runtime path proving real orders, swaps, transfers, withdrawals, and signing requests pass policy before external execution.
+- Why incomplete: Execution adapters are model/trait boundaries only; live connectors, signer/custody, durable audit/state lifecycle, and external submission remain unavailable.
 - Why blocked in ChatGPT Project Mode: Not blocked for future code, but real adapter behavior and live connector validation require external environments.
 - Risk level: Critical
 - Dependency requirements: Phase 4 audit journal, connector frameworks, execution planner, execution adapters.
@@ -1515,7 +1515,7 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Unique ID: GAP-0074
 - Phase association: Phase 18 / post-handoff CI validation
 - Subsystem association: CI/CD / GitHub Actions / repository publishing
-- Description: The requested CI validation sequence was initially blocked because no repository target was visible. On 2026-05-20 the new GitHub repository `dominator509/arbyclaw` was connected, the ArbyClaw checkpoint was pushed to `main`, and GitHub Actions CI passed. The latest recorded validated run is `26408760963` for commit `c76e789364f6316c7d4ccb8f74412a6e77e9bd01`, including checkout via `actions/checkout@v6`, the original validation sequence, `cargo build --release --locked`, `cargo audit`, CycloneDX SBOM generation with non-empty file checks, CodeQL Rust SAST local-SARIF generation with non-empty SARIF verification, example image scan, secret-pattern scan, and hardening evidence index generation.
+- Description: The requested CI validation sequence was initially blocked because no repository target was visible. On 2026-05-20 the new GitHub repository `dominator509/arbyclaw` was connected, the ArbyClaw checkpoint was pushed to `main`, and GitHub Actions CI passed. The latest recorded validated run is `26424981057` for commit `9f0499814289ebdb751284da20bc9630f0c39acc`, including checkout via `actions/checkout@v6`, the original validation sequence, `cargo build --release --locked`, `cargo audit`, CycloneDX SBOM generation with non-empty file checks, CodeQL Rust SAST local-SARIF generation with non-empty SARIF verification, example image scan, secret-pattern scan, and hardening evidence index generation.
 - Why incomplete: No longer incomplete for initial GitHub Actions CI execution. Production hardening, deployment, live integration, security, load, rollback, incident, and external validation gaps remain tracked separately.
 - Why blocked in ChatGPT/Codex environment: No longer blocked for initial GitHub Actions CI execution after the repository target was created and connected.
 - Risk level: Low for initial CI compile/test/lint evidence; high production and live-funds risks remain tracked in the other gap entries.

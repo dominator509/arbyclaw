@@ -6,11 +6,11 @@ Fully Autonomous Crypto Arbitrage Agent
 
 ## Current Roadmap Position
 
-- Active phase: Phase 18 — Agentic Handoff Package implemented; next required work is external Rust validation and production hardening evidence generation
+- Active phase: Phase 18 — Agentic Handoff Package implemented; next required work is production hardening evidence review and external validation closure beyond current Rust/CI gates
 - Active sub-roadmap: `PHASE_18_SUBROADMAP.md`
 - Current production readiness: 87%
-- Current implementation status: Minimal Rust workspace, typed config, reference-only secret boundary, mode-gate validation, deny-by-default policy engine, append-only audit journal primitives, state-store trait boundary, normalized market-data models, fee models, freshness classification, provider trait boundaries, deterministic paper connectors, CEX connector framework types/traits, DEX/Web3 connector framework types/traits, deterministic opportunity-engine types/traits, draft-only execution-planner types/traits, execution-adapter boundary records/traits, communications/CLI command and notification boundaries, embedded-dashboard local render boundaries, observability/runbook local record boundaries, deterministic testing/fuzzing/backtesting plan boundaries, deterministic packaging/deployment plan boundaries, deterministic external-hardening evidence/checklist boundaries, and deterministic agentic handoff package boundaries exist; live trading, real build/container/systemd/ARM deployment validation, real validation runner execution, real fuzzing engines, real backtest corpus execution, real observability runtime, real dashboard hosting, outbound messaging integrations, external adapter submission, exchange-specific live connectors, DEX RPC adapters, wallet signer, transaction broadcasts, custody backend, durable SQLite state, and production execution logic are not implemented.
-- Current risk posture: High, because live-funds architecture is policy-, audit-, market-data-, paper-simulation-, CEX-framework-, DEX/Web3-framework-, opportunity-engine-, planner-, adapter-, communication-, dashboard-, observability-, and validation-boundary-gated but lacks custody isolation, exchange-specific live connectors, live DEX/RPC adapters, signer boundary, live adapter submission, real communications adapters, real dashboard hosting/authentication, real metrics/exporter/alert runtime, actual Rust/property/fuzz/backtest execution, real package/deployment validation, executed external hardening evidence, future-agent execution validation, durable database validation, and external validation.
+- Current implementation status: Minimal Rust workspace, typed config, reference-only secret boundary, mode-gate validation, deny-by-default policy engine, append-only audit journal primitives, state-store trait boundary, normalized market-data models, fee models, freshness classification, provider trait boundaries, deterministic paper connectors, CEX connector framework types/traits, DEX/Web3 connector framework types/traits, deterministic opportunity-engine types/traits, draft-only execution-planner types/traits, execution-adapter boundary records/traits, communications/CLI command and notification boundaries, embedded-dashboard local render boundaries, observability/runbook local record boundaries, deterministic testing/fuzzing/backtesting plan boundaries, deterministic packaging/deployment plan boundaries, deterministic external-hardening evidence/checklist boundaries, and deterministic agentic handoff package boundaries exist; local and GitHub Actions evidence covers current structure, formatting, workspace compilation, tests, clippy, locked release build, dependency audit, SBOM generation, local-SARIF SAST, example image scan, secret-pattern scan, and hardening evidence indexing. Live trading, production container/systemd/ARM deployment validation, real validation runner execution beyond Cargo tests, real fuzzing engines, real backtest corpus execution, real observability runtime, real dashboard hosting, outbound messaging integrations, external adapter submission, exchange-specific live connectors, DEX RPC adapters, wallet signer, transaction broadcasts, custody backend, durable SQLite state, and production execution logic are not implemented.
+- Current risk posture: High, because live-funds architecture is policy-, audit-, market-data-, paper-simulation-, CEX-framework-, DEX/Web3-framework-, opportunity-engine-, planner-, adapter-, communication-, dashboard-, observability-, and validation-boundary-gated but lacks custody isolation, exchange-specific live connectors, live DEX/RPC adapters, signer boundary, live adapter submission, real communications adapters, real dashboard hosting/authentication, real metrics/exporter/alert runtime, property/fuzz/backtest execution beyond current Cargo tests, real package/deployment validation, broad external hardening validation, future-agent execution validation, durable database validation, and external validation.
 
 ## Roadmap Governance Rules
 
@@ -28,22 +28,22 @@ Fully Autonomous Crypto Arbitrage Agent
 | Phase | Name | Status | Production Readiness Contribution | Notes |
 |---|---|---:|---:|---|
 | 0 | Governance Initialization | Complete | 2% | Mandatory governance files established. |
-| 1 | Rust Workspace Scaffold | Scaffold complete; Rust validation deferred | +2% realized / +1% deferred | Minimal workspace, CI skeleton, safety docs, and structure validator created. Cargo validation requires Rust toolchain. |
-| 2 | Config, Secrets, and Mode Gates | Implemented; Rust validation deferred | +5% realized / +1% deferred | Typed config, environment secret references, keystore interface boundary, and live mode-gate validation added. |
-| 3 | Policy Engine and Trust Contract | Implemented; Rust validation deferred | +7% realized / +3% deferred | Deny-by-default policy checks, intent model, trust-contract denials, and CLI policy initialization added. |
-| 4 | Audit Journal and State Store | Implemented; Rust validation deferred; SQLite WAL deferred | +4% realized / +2% deferred | Append-only hash-chained JSONL audit primitives, redaction checks, and state-store trait added; SQLite WAL persistence remains future work. |
-| 5 | Market Data Core | Implemented; Rust validation and live provider validation deferred | +5% realized / +2% deferred | Normalized quotes/order books, freshness windows, fee models, and provider traits added; no live network providers. |
-| 6 | Simulated/Paper Connectors | Implemented; Rust validation and paper-model limitations deferred | +6% realized / +1% deferred | Deterministic in-memory paper market data, static fee provider, and policy-gated paper execution adapter added; no live venues or balances. |
-| 7 | CEX Connector Framework | Implemented as framework boundary; Rust validation and live exchange validation deferred | +6% realized / +2% deferred | CEX venue profiles, capability registry, order request model, policy gate, and connector traits added; no exchange-specific adapters or live orders. |
-| 8 | DEX/Web3 Connector Framework | Implemented as framework boundary; Rust validation, live RPC, signing, and broadcast validation deferred | +8% realized / +0% deferred in ChatGPT | Chain/router/token profiles, router capabilities, swap quote models, local transaction simulation boundary, policy gate, and connector traits added; no live RPC, signing, bridges, or broadcasts. |
-| 9 | Opportunity Engine | Implemented as deterministic discovery/ranking boundary; Rust validation and advanced route validation deferred | +8% realized / +0% deferred in ChatGPT | Cross-venue top-of-book discovery, CEX/CEX, DEX/DEX, CEX/DEX, triangular model boundary, freshness checks, and fee-aware scoring added; no execution intents or order placement. |
-| 10 | Execution Planner | Implemented as draft-only model boundary; Rust validation and adapter integration deferred | +7% realized / +0% deferred in ChatGPT | Deterministic plan drafts, per-leg intent generation, policy preflight outcomes, sequencing, and failure-mode boundaries added; no adapter submission or live execution. |
-| 11 | Execution Adapters | Implemented as deterministic boundary framework; Rust validation and live submission deferred | +7% realized / +0% deferred in ChatGPT | Consumes planner drafts, revalidates policy, models attempts/fills/reconciliation, and blocks all external submission. |
-| 12 | Communications and CLI | Implemented as deterministic model/trait boundary; Rust validation and real outbound integrations deferred | +6% realized / +0% deferred in ChatGPT | Typed local command parsing/routing, notification models, redaction checks, and local dispatch records added; no platform tokens or outbound network delivery. |
-| 13 | Embedded Dashboard | Implemented as deterministic model/trait boundary; Rust validation and real hosting deferred | +3% realized / +0% deferred in ChatGPT | Local snapshot/panel/render records, fail-closed server binding, secret redaction, and live-control denial added; no web server or public exposure. |
-| 14 | Observability and Runbooks | Implemented as deterministic model/trait boundary; Rust validation and real observability runtime deferred | +5% realized / +0% deferred in ChatGPT | Local health, structured-log, metric, and runbook records added; metrics endpoints and outbound alerts denied. |
-| 15 | Testing, Fuzzing, and Backtesting | Implemented as deterministic model/trait boundary; Rust validation and real fuzz/backtest execution deferred | +4% realized / +2% deferred | Validation harness config, test case metadata, fixture records, fuzz corpus definitions, backtest scenario definitions, and local plan records added; no external fuzzer invocation or live network tests. |
-| 16 | Packaging and Deployment | Implemented as deterministic model/docs boundary; Rust/container/systemd/ARM validation deferred | +2% realized / +0% deferred in ChatGPT | Package/deployment plan records, release gates, rollback steps, Docker/systemd/ARM docs; no build/install/deploy claim. |
+| 1 | Rust Workspace Scaffold | Scaffold complete; current workspace Rust/CI validation covered | +2% realized / +1% deferred | Minimal workspace, CI skeleton, safety docs, and structure validator created. Future changes must rerun Cargo validation. |
+| 2 | Config, Secrets, and Mode Gates | Implemented; current workspace Rust/CI validation covered | +5% realized / +1% deferred | Typed config, environment secret references, keystore interface boundary, and live mode-gate validation added. |
+| 3 | Policy Engine and Trust Contract | Implemented; current workspace Rust/CI validation covered | +7% realized / +3% deferred | Deny-by-default policy checks, intent model, trust-contract denials, and CLI policy initialization added. |
+| 4 | Audit Journal and State Store | Implemented; current workspace Rust/CI validation covered; SQLite WAL deferred | +4% realized / +2% deferred | Append-only hash-chained JSONL audit primitives, redaction checks, and state-store trait added; SQLite WAL persistence remains future work. |
+| 5 | Market Data Core | Implemented; current workspace Rust/CI validation covered; live provider validation deferred | +5% realized / +2% deferred | Normalized quotes/order books, freshness windows, fee models, and provider traits added; no live network providers. |
+| 6 | Simulated/Paper Connectors | Implemented; current workspace Rust/CI validation covered; paper-model limitations deferred | +6% realized / +1% deferred | Deterministic in-memory paper market data, static fee provider, and policy-gated paper execution adapter added; no live venues or balances. |
+| 7 | CEX Connector Framework | Implemented as framework boundary; current workspace Rust/CI validation covered; live exchange validation deferred | +6% realized / +2% deferred | CEX venue profiles, capability registry, order request model, policy gate, and connector traits added; no exchange-specific adapters or live orders. |
+| 8 | DEX/Web3 Connector Framework | Implemented as framework boundary; current workspace Rust/CI validation covered; live RPC, signing, and broadcast validation deferred | +8% realized / +0% deferred in ChatGPT | Chain/router/token profiles, router capabilities, swap quote models, local transaction simulation boundary, policy gate, and connector traits added; no live RPC, signing, bridges, or broadcasts. |
+| 9 | Opportunity Engine | Implemented as deterministic discovery/ranking boundary; current workspace Rust/CI validation covered; advanced route validation deferred | +8% realized / +0% deferred in ChatGPT | Cross-venue top-of-book discovery, CEX/CEX, DEX/DEX, CEX/DEX, triangular model boundary, freshness checks, and fee-aware scoring added; no execution intents or order placement. |
+| 10 | Execution Planner | Implemented as draft-only model boundary; current workspace Rust/CI validation covered; adapter integration deferred | +7% realized / +0% deferred in ChatGPT | Deterministic plan drafts, per-leg intent generation, policy preflight outcomes, sequencing, and failure-mode boundaries added; no adapter submission or live execution. |
+| 11 | Execution Adapters | Implemented as deterministic boundary framework; current workspace Rust/CI validation covered; live submission deferred | +7% realized / +0% deferred in ChatGPT | Consumes planner drafts, revalidates policy, models attempts/fills/reconciliation, and blocks all external submission. |
+| 12 | Communications and CLI | Implemented as deterministic model/trait boundary; current workspace Rust/CI validation covered; real outbound integrations deferred | +6% realized / +0% deferred in ChatGPT | Typed local command parsing/routing, notification models, redaction checks, and local dispatch records added; no platform tokens or outbound network delivery. |
+| 13 | Embedded Dashboard | Implemented as deterministic model/trait boundary; current workspace Rust/CI validation covered; real hosting deferred | +3% realized / +0% deferred in ChatGPT | Local snapshot/panel/render records, fail-closed server binding, secret redaction, and live-control denial added; no web server or public exposure. |
+| 14 | Observability and Runbooks | Implemented as deterministic model/trait boundary; current workspace Rust/CI validation covered; real observability runtime deferred | +5% realized / +0% deferred in ChatGPT | Local health, structured-log, metric, and runbook records added; metrics endpoints and outbound alerts denied. |
+| 15 | Testing, Fuzzing, and Backtesting | Implemented as deterministic model/trait boundary; current workspace Rust/CI validation covered; real fuzz/backtest execution deferred | +4% realized / +2% deferred | Validation harness config, test case metadata, fixture records, fuzz corpus definitions, backtest scenario definitions, and local plan records added; no external fuzzer invocation or live network tests. |
+| 16 | Packaging and Deployment | Implemented as deterministic model/docs boundary; current release-build CI gate covered; production container/systemd/ARM validation deferred | +2% realized / +0% deferred in ChatGPT | Package/deployment plan records, release gates, rollback steps, Docker/systemd/ARM docs; no production build/install/deploy claim. |
 | 17 | External Production Hardening | Implemented as deterministic evidence/checklist boundary; real external validation deferred | +0% in ChatGPT | Evidence records, release blockers, and hardening checklists added; no pen test, cloud deployment, live exchange validation, or load test executed. |
 | 18 | Agentic Handoff Package | Implemented as deterministic model/docs boundary; external agent execution not performed | +0% direct | Codex/Cursor/Jules/Claude/human handoff package records, prompts, and checklists added; no external agents executed. |
 
@@ -84,7 +84,7 @@ Met for governance initialization only.
 
 ### Status
 
-Scaffold complete; Rust toolchain validation deferred because Rust/Cargo is unavailable in the ChatGPT execution environment.
+Scaffold complete; current workspace Rust validation now has local and GitHub Actions evidence. Future changes must rerun validation for their exact workspace state.
 
 ### Goal
 
@@ -119,7 +119,7 @@ Create the smallest safe Rust repository scaffold that future phases can extend 
 
 ### Validation Deferred
 
-The following commands were not run because Rust/Cargo is unavailable in this environment:
+The following commands now have current local and GitHub Actions evidence for the present workspace state:
 
 ```bash
 cargo fmt --check
@@ -131,7 +131,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 ### Known Limitations
 
 - No compiled binary has been produced in ChatGPT Project Mode.
-- Hosted CI has not run.
+- Hosted CI now runs for pushed commits on `dominator509/arbyclaw`.
 - No runtime execution validation was performed.
 - No trading behavior exists.
 
@@ -143,7 +143,7 @@ Met for scaffold creation. Full Phase 1 build validation remains tracked as envi
 
 ### Status
 
-Implemented in ChatGPT Project Mode; Rust toolchain validation deferred because Rust/Cargo is unavailable in the execution environment.
+Implemented in ChatGPT Project Mode; current workspace Rust/CI validation evidence exists and must be refreshed after changes.
 
 ### Goal
 
@@ -181,13 +181,13 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 ### Exit Criteria
 
-Met for ChatGPT Project Mode scaffold/config implementation only. External Rust validation remains required before merge to a protected branch or any downstream phase relying on compiled behavior.
+Met for ChatGPT Project Mode scaffold/config implementation with current workspace Rust/CI validation evidence. Future changes still require rerunning validation before protected-branch or downstream reliance.
 
 ## Phase 3 — Policy Engine and Trust Contract
 
 ### Status
 
-Implemented in ChatGPT Project Mode; Rust toolchain validation deferred because Rust/Cargo is unavailable in the execution environment.
+Implemented in ChatGPT Project Mode; current workspace Rust/CI validation evidence exists and must be refreshed after changes.
 
 ### Goal
 
@@ -241,7 +241,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 ### Exit Criteria
 
-Met for ChatGPT Project Mode policy implementation only. External Rust validation, property tests, audit integration, and execution-adapter integration remain required.
+Met for ChatGPT Project Mode policy implementation with current workspace Rust/CI validation evidence. Property tests, audit integration, and execution-adapter integration remain required.
 
 ## Phase 4 — Audit Journal and State Store
 
@@ -316,7 +316,7 @@ Additional Phase 4 validations deferred:
 
 ### Exit Criteria
 
-Met for ChatGPT Project Mode audit/state boundary implementation only. External Rust validation and durable database implementation remain required before any live execution path may depend on audit persistence.
+Met for ChatGPT Project Mode audit/state boundary implementation with current workspace Rust/CI validation evidence. Durable database implementation remains required before any live execution path may depend on audit persistence.
 
 ## Phase 5 — Market Data Core
 
@@ -365,7 +365,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 ### Exit Criteria
 
-Met for ChatGPT Project Mode market-data/fee-model boundary implementation only. External Rust validation and live provider validation remain required before market data may be used for production decisions.
+Met for ChatGPT Project Mode market-data/fee-model boundary implementation with current workspace Rust/CI validation evidence. Live provider validation remains required before market data may be used for production decisions.
 
 ## Phase 6 — Simulated/Paper Connectors
 
@@ -416,13 +416,13 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 ### Exit Criteria
 
-Met for ChatGPT Project Mode deterministic paper connector boundary implementation only. External Rust validation and richer paper-simulation validation remain required before Phase 6 can be treated as tested runtime behavior.
+Met for ChatGPT Project Mode deterministic paper connector boundary implementation with current workspace Rust/CI validation evidence. Richer paper-simulation validation remains required before Phase 6 can be treated as tested production-like runtime behavior.
 
 ## Phase 7 — CEX Connector Framework
 
 ### Status
 
-Implemented as typed framework boundary; Rust validation and live exchange validation deferred.
+Implemented as typed framework boundary; current workspace Rust/CI validation covered and live exchange validation deferred.
 
 ### Goal
 
@@ -468,7 +468,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 ### Exit Criteria
 
-Met for ChatGPT Project Mode CEX framework boundary implementation only. External Rust validation, exchange-specific adapter work, sandbox testing, credential-scope checks, rate-limit validation, and terms/jurisdiction review remain required before any live CEX use.
+Met for ChatGPT Project Mode CEX framework boundary implementation with current workspace Rust/CI validation evidence. Exchange-specific adapter work, sandbox testing, credential-scope checks, rate-limit validation, and terms/jurisdiction review remain required before any live CEX use.
 
 ## Phase 8 — DEX/Web3 Connector Framework
 
@@ -522,13 +522,13 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 ### Exit Criteria
 
-Met for ChatGPT Project Mode DEX/Web3 framework boundary implementation only. External Rust validation, RPC/simulation adapters, signer/custody work, transaction broadcast controls, protocol review, and live/on-chain validation remain required before any DEX/Web3 use with real funds.
+Met for ChatGPT Project Mode DEX/Web3 framework boundary implementation with current workspace Rust/CI validation evidence. RPC/simulation adapters, signer/custody work, transaction broadcast controls, protocol review, and live/on-chain validation remain required before any DEX/Web3 use with real funds.
 
 ## Phase 9 — Opportunity Engine
 
 ### Status
 
-Implemented as deterministic discovery/ranking boundary; Rust toolchain validation deferred because Rust/Cargo is unavailable in the ChatGPT execution environment.
+Implemented as deterministic discovery/ranking boundary; current workspace Rust/CI validation evidence exists and must be refreshed after changes.
 
 ### Goal
 
@@ -566,7 +566,7 @@ Implement fee-aware arbitrage discovery and ranking.
 - Depth-aware slippage beyond top-of-book quantity limits.
 - Cross-venue transfer latency and settlement-risk modeling.
 - Durable planner/audit/state lifecycle integration.
-- External Rust validation.
+- Keep Rust validation current after each workspace change.
 
 ### Validation
 
@@ -588,13 +588,13 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 ### Exit Criteria
 
-Met for ChatGPT Project Mode opportunity-engine model/ranking boundary implementation only. External Rust validation, advanced route modeling, planner integration, execution-adapter integration, live connector validation, and production runtime validation remain required before any use with real funds.
+Met for ChatGPT Project Mode opportunity-engine model/ranking boundary implementation with current workspace Rust/CI validation evidence. Advanced route modeling, planner integration, execution-adapter integration, live connector validation, and production runtime validation remain required before any use with real funds.
 
 ## Phase 10 — Execution Planner
 
 ### Status
 
-Implemented as draft-only execution-planner model boundary; Rust toolchain validation deferred because Rust/Cargo is unavailable in the ChatGPT execution environment.
+Implemented as draft-only execution-planner model boundary; current workspace Rust/CI validation evidence exists and must be refreshed after changes.
 
 ### Goal
 
@@ -632,7 +632,7 @@ Generate deterministic execution-plan drafts and per-leg execution intents from 
 - Durable state lifecycle/checkpointing for plan drafts.
 - Execution adapter handoff in Phase 11.
 - Partial-fill, timeout, cancellation, and hedge sequencing validation.
-- External Rust validation.
+- Keep Rust validation current after each workspace change.
 
 ### Validation
 
@@ -654,7 +654,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 ### Exit Criteria
 
-Met for ChatGPT Project Mode execution-planner model boundary implementation only. External Rust validation, durable audit/state integration, execution-adapter integration, signer/custody integration, live connector validation, and production runtime validation remain required before any use with real funds.
+Met for ChatGPT Project Mode execution-planner model boundary implementation with current workspace Rust/CI validation evidence. Durable audit/state integration, execution-adapter integration, signer/custody integration, live connector validation, and production runtime validation remain required before any use with real funds.
 
 ## Phase 11 — Execution Adapters
 
@@ -716,7 +716,7 @@ python3 scripts/validate_structure.py
 python3 -m py_compile scripts/validate_structure.py
 ```
 
-Attempted but blocked because Cargo is unavailable in this environment:
+Current workspace validation now passes locally and in GitHub Actions:
 
 ```bash
 cargo fmt --check
@@ -727,7 +727,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 ### Exit Criteria
 
-Met for ChatGPT Project Mode execution-adapter model/trait boundary implementation only. External Rust validation, durable audit/state integration, exchange-specific live connectors, signer/custody integration, live submission controls, and production runtime validation remain required before any use with real funds.
+Met for ChatGPT Project Mode execution-adapter model/trait boundary implementation with current workspace Rust/CI validation evidence. Durable audit/state integration, exchange-specific live connectors, signer/custody integration, live submission controls, and production runtime validation remain required before any use with real funds.
 
 ## Phase 12 — Communications and CLI
 
@@ -790,7 +790,7 @@ python3 scripts/validate_structure.py
 python3 -m py_compile scripts/validate_structure.py
 ```
 
-Attempted but blocked because Cargo is unavailable in this environment:
+Current workspace validation now passes locally and in GitHub Actions:
 
 ```bash
 cargo fmt --check
@@ -801,7 +801,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 ### Exit Criteria
 
-Met for ChatGPT Project Mode communications and CLI model/trait boundary implementation only. External Rust validation, real messaging adapters, authentication, platform-token storage, notification audit/state integration, and production runtime operator UX validation remain required before production use.
+Met for ChatGPT Project Mode communications and CLI model/trait boundary implementation with current workspace Rust/CI validation evidence. Real messaging adapters, authentication, platform-token storage, notification audit/state integration, and production runtime operator UX validation remain required before production use.
 
 ## Phase 13 — Embedded Dashboard
 
@@ -851,7 +851,7 @@ python3 scripts/validate_structure.py
 python3 -m py_compile scripts/validate_structure.py
 ```
 
-Attempted but blocked because Cargo is unavailable in this environment:
+Current workspace validation now passes locally and in GitHub Actions:
 
 ```bash
 cargo fmt --check
@@ -862,7 +862,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 ### Exit Criteria
 
-Met for ChatGPT Project Mode embedded-dashboard model/trait boundary implementation only. External Rust validation, real dashboard hosting, authentication/session design, CSRF protection, secure headers, rate limiting, audit/state integration, UX validation, and penetration testing remain required before production dashboard use.
+Met for ChatGPT Project Mode embedded-dashboard model/trait boundary implementation with current workspace Rust/CI validation evidence. Real dashboard hosting, authentication/session design, CSRF protection, secure headers, rate limiting, audit/state integration, UX validation, and penetration testing remain required before production dashboard use.
 
 ## Phase 14 — Observability and Runbooks
 
@@ -917,7 +917,7 @@ python3 scripts/validate_structure.py
 python3 -m py_compile scripts/validate_structure.py
 ```
 
-Attempted but blocked because Cargo is unavailable in this environment:
+Current workspace validation now passes locally and in GitHub Actions:
 
 ```bash
 cargo fmt --check
@@ -928,7 +928,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 ### Exit Criteria
 
-Met for ChatGPT Project Mode observability and runbook model/trait boundary implementation only. External Rust validation, real tracing/logging subscriber integration, Prometheus/OpenTelemetry exporters, authenticated metrics endpoint design, alert routing, log retention/rotation policies, audit/state integration, incident drills, and production runtime validation remain required before production observability use.
+Met for ChatGPT Project Mode observability and runbook model/trait boundary implementation with current workspace Rust/CI validation evidence. Real tracing/logging subscriber integration, Prometheus/OpenTelemetry exporters, authenticated metrics endpoint design, alert routing, log retention/rotation policies, audit/state integration, incident drills, and production runtime validation remain required before production observability use.
 
 ## Phase 15 — Testing, Fuzzing, and Backtesting
 
@@ -979,7 +979,7 @@ python3 scripts/validate_structure.py
 python3 -m py_compile scripts/validate_structure.py
 ```
 
-Deferred because Rust/Cargo is unavailable in this environment:
+Current workspace validation now passes locally and in GitHub Actions:
 
 ```bash
 cargo fmt --check
@@ -990,7 +990,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 ### Exit Criteria
 
-Met for ChatGPT Project Mode testing, fuzzing, fixture, and backtesting boundary implementation only. External Rust validation, property-test execution, fuzzing engine execution, fixture corpus expansion, replay/backtest execution, load testing, penetration testing, CI validation, and production runtime validation remain required before production claims.
+Met for ChatGPT Project Mode testing, fuzzing, fixture, and backtesting boundary implementation with current workspace Rust/CI validation evidence. Property-test execution, fuzzing engine execution, fixture corpus expansion, replay/backtest execution, load testing, penetration testing, and production runtime validation remain required before production claims.
 
 ## Phase 16 — Packaging and Deployment
 
@@ -1038,7 +1038,7 @@ python3 scripts/validate_structure.py
 python3 -m py_compile scripts/validate_structure.py
 ```
 
-Attempted but blocked because Rust/Cargo is unavailable in this environment:
+Current workspace validation now passes locally and in GitHub Actions:
 
 ```bash
 cargo fmt --check
@@ -1144,8 +1144,8 @@ Create final handoff instructions, prompts, and checklists for external coding a
 ### Deferred Tasks
 
 - External agents were not executed.
-- Rust/Cargo validation remains external because the ChatGPT environment lacks Rust tooling.
-- CI, release build, dependency audit, SBOM, image scan, staging deployment, load testing, penetration testing, rollback drills, incident drills, exchange/RPC sandbox validation, custody review, compliance review, and production readiness review remain external.
+- Rust/Cargo validation has current local and GitHub Actions evidence for the present workspace state.
+- CI, release build, dependency audit, SBOM generation, local-SARIF SAST evidence, example image scan, secret-pattern scan, and hardening evidence indexing now run in GitHub Actions. Staging deployment, load testing, penetration testing, rollback drills, incident drills, exchange/RPC sandbox validation, custody review, compliance review, and production readiness review remain external.
 
 ### Acceptance Criteria
 
@@ -1153,5 +1153,4 @@ Met for deterministic handoff package records and documentation only. This phase
 
 ### Next Required Action
 
-Run external Rust validation and production-hardening evidence generation in a capable environment before any production, live-funds, public-service, or external-validation claim.
-
+Keep Rust/CI validation current and continue production-hardening evidence review plus external validation closure before any production, live-funds, public-service, or production-readiness claim.

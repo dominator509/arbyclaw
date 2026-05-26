@@ -103,21 +103,29 @@ Current `arb-core` modules:
 
 ## Current Validation Reality
 
-Validated in ChatGPT environment:
+Current local validation evidence exists for the ArbyClaw workspace:
 
 ```bash
 python3 scripts/validate_structure.py
-python3 -m py_compile scripts/validate_structure.py
-```
-
-Deferred because Rust/Cargo is unavailable in this environment:
-
-```bash
 cargo fmt --check
 cargo check --workspace
 cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 ```
+
+Current GitHub Actions evidence exists for pushed commits on `dominator509/arbyclaw`:
+
+- structure validation
+- Rust formatting, workspace check, tests, and clippy
+- locked release build
+- dependency audit
+- CycloneDX SBOM generation
+- local-SARIF CodeQL SAST evidence
+- example image scan
+- Gitleaks secret-pattern scan
+- hardening evidence artifact index
+
+This is compile/test/lint and non-secret CI evidence only. It does not validate production deployment, live funds, real exchange/RPC integrations, signing, broadcasts, production containers, systemd, ARM, load testing, penetration testing, rollback drills, incident drills, external agent execution, or production readiness.
 
 ## Mandatory Governance Files To Reread Before Any New Work
 
@@ -135,8 +143,8 @@ External validation and production hardening evidence generation in a capable en
 
 Scope should remain evidence-focused:
 
-- run Rust/Cargo validation externally before claiming compile/test confidence
-- generate non-secret evidence for CI, release build, dependency audit, SBOM, image scan, service hardening, ARM validation, staging deployment, load test, penetration test, rollback drill, incident drill, exchange sandbox validation, DEX/RPC sandbox validation without broadcasts, custody review, compliance review, and production readiness review
+- keep Rust/Cargo validation current after each change before claiming compile/test confidence for that exact workspace state
+- generate or refresh non-secret evidence for service hardening, ARM validation, staging deployment, load test, penetration test, rollback drill, incident drill, exchange sandbox validation, DEX/RPC sandbox validation without broadcasts, custody review, compliance review, and production readiness review
 - preserve all external validation gaps and live-funds blockers until evidence exists
 - no live exchange/RPC calls without approved sandbox scope and credentials handled outside the repo
 - no real credentials or secrets in chat, Markdown, TOML, logs, images, containers, service units, handoff prompts, or artifacts
@@ -161,15 +169,14 @@ You are continuing the Fully Autonomous Crypto Arbitrage Agent project. Unpack a
 - Keep each phase patch small and reversible.
 - Do not add live network calls until explicit connector phases and validations exist.
 - Do not add secrets or secret examples with real-looking values.
-- Do not claim Rust validation passed unless Cargo commands actually ran.
+- Do not claim Rust validation passed for a new change unless Cargo commands actually ran for that workspace state.
 - Do not increase production readiness unless governance, code, and gap tracker are updated consistently.
 
 ## Known High-Risk Deferred Areas
 
-- Rust/Cargo validation unavailable in ChatGPT environment.
 - Phase 15 validation plans exist only as local model/trait boundaries; no actual property-test runner, fuzzing engine, curated corpus execution, CI gate execution, load test, penetration test, or production validation run exists.
 - Phase 16 packaging/deployment plans exist only as local model/documentation boundaries; no container image build, systemd install, ARM build, runtime deployment, rollback drill, incident drill, or production release validation exists.
-- Phase 17 hardening records exist only as local evidence/checklist boundaries; no CI, release build, dependency audit, SBOM, image scan, staging deployment, load test, penetration test, rollback drill, incident drill, live exchange/RPC validation, or production readiness review was executed.
+- Phase 17 hardening records and CI evidence paths now cover current workspace Rust validation, locked release build, dependency audit, SBOM generation, local-SARIF SAST evidence, example image scan, secret-pattern scan, and hardening artifact indexing; no staging deployment, load test, penetration test, rollback drill, incident drill, live exchange/RPC validation, or production readiness review was executed.
 - Phase 18 handoff records exist only as local prompts/checklists/package models; no external agents were executed and no validation was performed by the handoff boundary.
 - No encrypted keystore backend.
 - No signer boundary.
