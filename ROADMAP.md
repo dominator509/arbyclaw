@@ -1021,13 +1021,13 @@ Package for local, VPS, and ARM-capable environments without claiming builds, se
 ### Explicitly Not Implemented
 
 - Live trading.
-- Container image building.
+- Production container image building or deployment validation.
 - systemd service installation or startup.
 - ARM cross-build execution.
 - Public dashboard, metrics, command, or control exposure.
 - Real deployment, cloud provisioning, or production rollout.
 - Real credentials, secrets, or credential-bearing artifacts.
-- Release signing, SBOM generation, dependency audit, load testing, penetration testing, rollback drills, or incident drills.
+- Release signing, SBOM review, dependency-audit review, production image-scan review, load testing, penetration testing, rollback drills, or incident drills.
 
 ### Validation
 
@@ -1038,20 +1038,25 @@ python3 scripts/validate_structure.py
 python3 -m py_compile scripts/validate_structure.py
 ```
 
-Current workspace validation now passes locally and in GitHub Actions:
+Current workspace validation, locked release build, dependency-audit gate, SBOM-generation gate, local-SARIF SAST gate, example-only container image build/scan gate, secret-pattern scan, and hardening evidence indexing now pass locally or in GitHub Actions where applicable:
 
 ```bash
 cargo fmt --check
+cargo check --workspace
+cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
+cargo build --release --locked
+cargo audit
+CycloneDX SBOM generation
+CodeQL local-SARIF generation
+example container build and Trivy image scan
+Gitleaks secret-pattern scan
 ```
 
 Still required externally:
 
 ```bash
-cargo check --workspace
-cargo test --workspace
-cargo clippy --workspace --all-targets -- -D warnings
-cargo build --release --locked
-container build validation in an approved runtime
+production container build validation in an approved runtime
 systemd unit validation on Linux
 ARM target build validation
 rollback drill validation
@@ -1059,7 +1064,7 @@ rollback drill validation
 
 ### Exit Criteria
 
-Met for ChatGPT Project Mode packaging and deployment boundary implementation only. External Rust, container, systemd, ARM, CI, runtime, rollback, load, penetration, and production deployment validation remain required before production claims.
+Met for ChatGPT Project Mode packaging and deployment boundary implementation only. Current Rust/CI/release-build/example-image evidence does not prove production deployment readiness; production container, systemd, ARM, runtime, rollback, load, penetration, and production deployment validation remain required before production claims.
 
 ## Phase 17 — External Production Hardening
 
@@ -1095,14 +1100,11 @@ Make environment-limited production validation explicit, evidence-based, and fai
 The following remain external and were not run in ChatGPT Project Mode:
 
 ```bash
-cargo fmt --check
-cargo check --workspace
-cargo test --workspace
-cargo clippy --workspace --all-targets -- -D warnings
-cargo build --release --locked
-dependency audit
-SBOM generation and review
-container build and image scan
+candidate-commit CI evidence refresh
+SBOM review
+dependency-audit review
+production container build and image-scan review
+GitHub code scanning upload processing or accepted deferral review
 systemd hardening validation
 ARM target validation
 staging deployment validation

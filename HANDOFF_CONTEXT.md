@@ -57,7 +57,7 @@ The project is not ready for:
 - production deployment
 - production release claims
 - external agent execution claims
-- container image build claims
+- production container image readiness claims
 - systemd service install claims
 - ARM build validation claims
 
@@ -174,8 +174,8 @@ You are continuing the Fully Autonomous Crypto Arbitrage Agent project. Unpack a
 
 ## Known High-Risk Deferred Areas
 
-- Phase 15 validation plans exist only as local model/trait boundaries; no actual property-test runner, fuzzing engine, curated corpus execution, CI gate execution, load test, penetration test, or production validation run exists.
-- Phase 16 packaging/deployment plans exist only as local model/documentation boundaries; no container image build, systemd install, ARM build, runtime deployment, rollback drill, incident drill, or production release validation exists.
+- Phase 15 validation plans exist only as local model/trait boundaries; no actual property-test runner, fuzzing engine, curated corpus execution, property/fuzz/backtest CI runner execution, load test, penetration test, or production validation run exists.
+- Phase 16 packaging/deployment plans exist only as local model/documentation boundaries; current CI evidence includes release-build and example-only container/image-scan gates, but no production container image validation, systemd install, ARM build, runtime deployment, rollback drill, incident drill, or production release validation exists.
 - Phase 17 hardening records and CI evidence paths now cover current workspace Rust validation, locked release build, dependency audit, SBOM generation, local-SARIF SAST evidence, example image scan, secret-pattern scan, and hardening artifact indexing; no staging deployment, load test, penetration test, rollback drill, incident drill, live exchange/RPC validation, or production readiness review was executed.
 - Phase 18 handoff records exist only as local prompts/checklists/package models; no external agents were executed and no validation was performed by the handoff boundary.
 - No encrypted keystore backend.
@@ -189,4 +189,4 @@ You are continuing the Fully Autonomous Crypto Arbitrage Agent project. Unpack a
 - No real dashboard hosting/authentication.
 - Observability runtime exists only as local model/trait boundaries; no exporters, metrics endpoint, log shipping, or alert delivery exist.
 - Testing/backtesting runtime exists only as local plan/fixture model boundaries; no actual property/fuzz/backtest runner execution exists.
-- No penetration, load, rollback, incident-drill, container, systemd, ARM, cloud, or deployment validation.
+- No penetration, load, rollback, incident-drill, production container, systemd, ARM, cloud, or deployment validation.
