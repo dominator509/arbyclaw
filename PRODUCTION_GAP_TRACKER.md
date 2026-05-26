@@ -6,7 +6,7 @@ The project is in Phase 18 agentic-handoff-package-complete status for ChatGPT P
 
 ## Latest Local Validation Attempt
 
-2026-05-25 ArbyClaw local validation attempt:
+2026-05-26 ArbyClaw local validation attempt:
 
 - `python3 scripts/validate_structure.py` passed.
 - `cargo fmt --check` passed.
@@ -17,24 +17,24 @@ The project is in Phase 18 agentic-handoff-package-complete status for ChatGPT P
 
 ## Latest CI Validation Attempt
 
-2026-05-25 ArbyClaw GitHub Actions CI validation snapshot:
+2026-05-26 ArbyClaw GitHub Actions CI validation snapshot:
 
 - Repository: `dominator509/arbyclaw`
 - Branch: `main`
-- Latest validated commit: `a7a64fbdf2196d3d0066a7f23c381a6ef9adda47`
-- Workflow run: `https://github.com/dominator509/arbyclaw/actions/runs/26440212136`
+- Latest validated commit: `11ca41455751609dd0e910651cf7a366633a341a`
+- Workflow run: `https://github.com/dominator509/arbyclaw/actions/runs/26441029392`
 - Result: passed.
 - Completed CI steps: checkout via `actions/checkout@v6`, Rust stable toolchain install with rustfmt and clippy, `cargo fmt --check`, `cargo check --workspace`, `cargo test --workspace`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo build --release --locked`, hardening tool installation, `cargo audit`, CycloneDX SBOM generation with non-empty file checks, CodeQL Rust SAST analysis with local SARIF generation, non-empty SARIF verification, short-retention SARIF artifact upload, example container image build, Trivy image scan evidence artifact upload, fixable critical image-vulnerability enforcement, Gitleaks redacted secret-pattern scan artifact upload, lightweight hardening evidence index artifact upload, GitHub Step Summary hardening evidence pointer generation, and `python3 scripts/validate_structure.py`.
-- Artifact references from that run: `hardening-evidence-index` `7212024612`, `codeql-sarif-evidence` `7211932763`, `trivy-image-scan-evidence` `7211900729`, `gitleaks-secret-scan-evidence` `7211872903`, and Docker Buildx build record `7211901187`.
+- Artifact references from that run: `hardening-evidence-index` `7212380927`, `codeql-sarif-evidence` `7212277083`, `trivy-image-scan-evidence` `7212240620`, `gitleaks-secret-scan-evidence` `7212213691`, and Docker Buildx build record `7212241083`.
 - Node.js 24 migration status: the workflow uses `actions/checkout@v6`.
 - This validates the pushed repository structure, formatting, compilation, tests, linting, locked release build, dependency audit, SBOM generation gate, local-SARIF CodeQL SAST gate, short-retention SAST artifact retention, example container image build, example Trivy image-scan gate, and Gitleaks secret-pattern scan gate in GitHub Actions only. It does not validate production deployment, live funds, live exchange/RPC integrations, signing, broadcasts, production containers, systemd, ARM, penetration testing, load testing, rollback drills, incident drills, SBOM review, GitHub code scanning upload processing, broader external hardening, or production readiness.
 
 ## Latest Gap Tracker Audit
 
-2026-05-25 ArbyClaw roadmap-anchored production gap tracker audit:
+2026-05-26 ArbyClaw roadmap-anchored production gap tracker audit:
 
 - Local validation rerun passed: `python3 scripts/validate_structure.py`, `cargo fmt --check`, `cargo check --workspace`, `cargo test --workspace` with 71 tests across 3 suites, and `cargo clippy --workspace --all-targets -- -D warnings`.
-- Latest referenced GitHub Actions validation passed on `main` in run `https://github.com/dominator509/arbyclaw/actions/runs/26440212136` for commit `a7a64fbdf2196d3d0066a7f23c381a6ef9adda47`.
+- Latest referenced GitHub Actions validation passed on `main` in run `https://github.com/dominator509/arbyclaw/actions/runs/26441029392` for commit `11ca41455751609dd0e910651cf7a366633a341a`.
 - The Rust/Cargo validation class of gaps is now locally and CI-covered for the current workspace state: GAP-0001, GAP-0029, GAP-0031, GAP-0033, GAP-0036, GAP-0040, GAP-0043, GAP-0046, GAP-0050, GAP-0053, GAP-0055, GAP-0057, GAP-0059, GAP-0061, GAP-0063, GAP-0065, GAP-0067, GAP-0069, and GAP-0071.
 - These validation updates do not prove production readiness, deployment readiness, live-funds readiness, public exposure readiness, code-scanning upload processing, SBOM review, penetration testing, load testing, rollback drills, incident drills, custody readiness, or live exchange/RPC readiness.
 - Release evidence reviewer follow-up metadata is now considered complete enough for the current Phase 17 / Phase 18 roadmap boundary; additional reviewer micro-fields should not be added unless a concrete operator workflow identifies missing non-secret routing metadata.
@@ -43,19 +43,19 @@ The project is in Phase 18 agentic-handoff-package-complete status for ChatGPT P
 
 ## Latest External Hardening Evidence Attempt
 
-2026-05-25 ArbyClaw release-build, dependency-audit, SBOM-generation, SAST, and example-container hardening evidence refresh:
+2026-05-26 ArbyClaw release-build, dependency-audit, SBOM-generation, SAST, and example-container hardening evidence refresh:
 
 - Local `cargo build --release --locked` passed.
 - Local `cargo audit` passed after fetching the RustSec advisory database and scanning `Cargo.lock`.
 - Local CycloneDX SBOM generation passed with non-empty SBOM files for `arb-core` and `arb-agent`; generated SBOM files were removed from the working tree and not committed.
-- GitHub Actions `cargo build --release --locked`, `cargo audit`, CycloneDX SBOM generation, CodeQL Rust SAST local-SARIF analysis, example container image build, Trivy image-scan gate, Gitleaks secret-pattern scan gate, lightweight hardening evidence index artifact upload, and GitHub Step Summary hardening evidence pointer generation passed in the latest referenced run `https://github.com/dominator509/arbyclaw/actions/runs/26440212136` for commit `a7a64fbdf2196d3d0066a7f23c381a6ef9adda47`.
+- GitHub Actions `cargo build --release --locked`, `cargo audit`, CycloneDX SBOM generation, CodeQL Rust SAST local-SARIF analysis, example container image build, Trivy image-scan gate, Gitleaks secret-pattern scan gate, lightweight hardening evidence index artifact upload, and GitHub Step Summary hardening evidence pointer generation passed in the latest referenced run `https://github.com/dominator509/arbyclaw/actions/runs/26441029392` for commit `11ca41455751609dd0e910651cf7a366633a341a`.
 - The initial upload-based CodeQL attempt in run `https://github.com/dominator509/arbyclaw/actions/runs/26199105621` failed because GitHub code scanning is not enabled for this repository. The workflow was narrowed to generate and verify local SARIF in CI without uploading to the GitHub Security tab.
 - A 2026-05-21 attempt to enable CodeQL default setup through the GitHub API failed with `Code scanning is not enabled for this repository`, confirming that GitHub Security-tab upload processing remains blocked by repository security settings or plan/support constraints rather than by local source code.
 - The CI workflow now keeps local-SARIF SAST evidence available as a short-retention Actions artifact while GitHub code scanning upload remains disabled.
 - A local example-only container image build using `deployment/container/Containerfile.example` passed after adding `.dockerignore` to keep local build outputs and secret-like environment files out of the Docker build context. This does not validate a production image, deployment, runtime service, or rollout.
 - GitHub Actions run `https://github.com/dominator509/arbyclaw/actions/runs/26209401284` built the example container image and uploaded Trivy evidence, then failed the critical-vulnerability gate because the Debian slim runtime included fixable `libgnutls30` critical findings (`CVE-2026-33845` and `CVE-2026-42010`). The runtime base was changed to a nonroot distroless Debian 12 image, locally rebuilt successfully, and validated by the passing example image-scan gate in run `https://github.com/dominator509/arbyclaw/actions/runs/26210031540`.
 - Local Gitleaks `v8.30.1` secret-pattern scanning via the pinned container image passed with no leaks found; the redacted JSON evidence file was removed from the working tree. The CI Gitleaks secret-pattern scan gate also passed and uploaded a short-retention redacted evidence artifact in run `https://github.com/dominator509/arbyclaw/actions/runs/26271152507`.
-- GitHub Actions run `https://github.com/dominator509/arbyclaw/actions/runs/26440212136` uploaded the lightweight `hardening-evidence-index` artifact, plus `codeql-sarif-evidence`, `trivy-image-scan-evidence`, `gitleaks-secret-scan-evidence`, and the Docker Buildx build record artifact, making non-secret hardening evidence easier to locate without changing runtime behavior.
+- GitHub Actions run `https://github.com/dominator509/arbyclaw/actions/runs/26441029392` uploaded the lightweight `hardening-evidence-index` artifact, plus `codeql-sarif-evidence`, `trivy-image-scan-evidence`, `gitleaks-secret-scan-evidence`, and the Docker Buildx build record artifact, making non-secret hardening evidence easier to locate without changing runtime behavior.
 - The same run wrote a GitHub Step Summary from the `hardening-evidence-index` job with non-secret artifact pointers, producing job results, run URL, commit, and explicit non-claims for easier lookup from the workflow page.
 - `hardening/EXTERNAL_VALIDATION_RUNBOOK.md` now includes a CI evidence lookup note for finding the Step Summary and short-retention artifacts without changing CI or runtime behavior.
 - `hardening/EXTERNAL_VALIDATION_RUNBOOK.md` now includes a manual evidence review checklist for confirming run identity, job outcomes, non-empty non-secret artifacts, and remaining release-review gaps before future release use.
@@ -1446,8 +1446,8 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Unique ID: GAP-0070
 - Phase association: Phase 17 / Phase 18
 - Subsystem association: External hardening / AppSec / release engineering / operations / compliance
-- Description: Phase 17 added deterministic evidence models, release blockers, review records, and operator checklists. GitHub Actions CI, locked release-build validation, dependency audit, CycloneDX SBOM generation, local-SARIF CodeQL SAST, local example-only container build, CI Trivy example image-scan evidence, Gitleaks secret-pattern scan evidence, and hardening evidence indexing are passing as of the 2026-05-26 run `https://github.com/dominator509/arbyclaw/actions/runs/26440212136`. The first CI Trivy image-scan gate correctly failed on fixable critical Debian slim runtime findings and preserved non-secret evidence; a distroless runtime repair then passed follow-up CI validation. Production validation is still missing: SBOM review, GitHub code scanning upload processing, production container validation, systemd hardening validation, ARM validation, staging deployment, load test, penetration test, rollback drill, incident-response drill, live exchange/RPC validation, and production readiness review have not been executed.
-- Why incomplete: CI, release-build, dependency-audit, SBOM-generation, local-SARIF SAST, local example-container build, failed image-scan evidence, repaired image-scan evidence, hardening evidence index, and secret-pattern scan evidence exist. Phase 17 intentionally avoids credentials, public exposure, live funds, production claims, live exchange/RPC calls, signing, broadcasts, and deployment execution; the broader external hardening checklist remains incomplete.
+- Description: Phase 17 added deterministic evidence models, release blockers, review records, and operator checklists. GitHub Actions CI, locked release-build validation, dependency audit, CycloneDX SBOM generation, local-SARIF CodeQL SAST, local example-only container build, CI Trivy example image-scan evidence, Gitleaks secret-pattern scan evidence, and hardening evidence indexing are passing as of the 2026-05-26 run `https://github.com/dominator509/arbyclaw/actions/runs/26441029392`. The first CI Trivy image-scan gate correctly failed on fixable critical Debian slim runtime findings and preserved non-secret evidence; a distroless runtime repair then passed follow-up CI validation. Production validation is still missing: SBOM review, GitHub code scanning upload processing, production container validation, systemd hardening validation, ARM validation, staging deployment, load test, penetration test, rollback drill, incident-response drill, live exchange/RPC validation, and production readiness review have not been executed.
+- Why incomplete: Current CI evidence exists for release-build, dependency-audit, SBOM-generation, local-SARIF SAST, local example-container build, image-scan, secret-scan, and hardening-index gates. Phase 17 intentionally avoids credentials, public exposure, live funds, production claims, live exchange/RPC calls, signing, broadcasts, and deployment execution; the broader external hardening checklist remains incomplete until production-context reviews and drills are performed.
 - Why blocked in ChatGPT Project Mode: Real production hardening requires external CI, runtime infrastructure, staging hosts, security tooling, target devices, controlled credentials outside the repo, human review, and accountable operator approval.
 - Risk level: Critical
 - Dependency requirements: Keep current CI, release-build, dependency-audit, SBOM-generation, local-SARIF SAST, example image-scan, secret-scan, and hardening-index evidence refreshable; add SBOM reviewer workflow, GitHub code scanning upload processing or accepted deferral, staging environment, observability runtime, incident runbooks, rollback procedure, AppSec review, exchange/RPC sandbox environments, custody/signer design, and compliance review.
@@ -1515,7 +1515,7 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Unique ID: GAP-0074
 - Phase association: Phase 18 / post-handoff CI validation
 - Subsystem association: CI/CD / GitHub Actions / repository publishing
-- Description: The requested CI validation sequence was initially blocked because no repository target was visible. On 2026-05-20 the new GitHub repository `dominator509/arbyclaw` was connected, the ArbyClaw checkpoint was pushed to `main`, and GitHub Actions CI passed. The latest recorded validated run is `26440212136` for commit `a7a64fbdf2196d3d0066a7f23c381a6ef9adda47`, including checkout via `actions/checkout@v6`, the original validation sequence, `cargo build --release --locked`, `cargo audit`, CycloneDX SBOM generation with non-empty file checks, CodeQL Rust SAST local-SARIF generation with non-empty SARIF verification, short-retention SARIF artifact upload, example image scan, secret-pattern scan, hardening evidence index generation, and GitHub Step Summary evidence pointers.
+- Description: The requested CI validation sequence was initially blocked because no repository target was visible. On 2026-05-20 the new GitHub repository `dominator509/arbyclaw` was connected, the ArbyClaw checkpoint was pushed to `main`, and GitHub Actions CI passed. The latest recorded validated run is `26441029392` for commit `11ca41455751609dd0e910651cf7a366633a341a`, including checkout via `actions/checkout@v6`, the original validation sequence, `cargo build --release --locked`, `cargo audit`, CycloneDX SBOM generation with non-empty file checks, CodeQL Rust SAST local-SARIF generation with non-empty SARIF verification, short-retention SARIF artifact upload, example image scan, secret-pattern scan, hardening evidence index generation, and GitHub Step Summary evidence pointers.
 - Why incomplete: No longer incomplete for initial GitHub Actions CI execution. Production hardening, deployment, live integration, security, load, rollback, incident, and external validation gaps remain tracked separately.
 - Why blocked in ChatGPT/Codex environment: No longer blocked for initial GitHub Actions CI execution after the repository target was created and connected.
 - Risk level: Low for initial CI compile/test/lint evidence; high production and live-funds risks remain tracked in the other gap entries.
