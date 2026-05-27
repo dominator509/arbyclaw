@@ -5,13 +5,19 @@ use crate::{
     ExecutionIntent, ExecutionScope, FeeAdjustedEdge, FeeModelError, FeeProvider, FeeSchedule,
     LiquidityRole, MarketDataCapabilities, MarketDataError, MarketDataProvider, MarketDataRequest,
     MarketPair, NormalizedQuote, OrderBookSnapshot, PolicyDecision, PolicyEngine, PolicyViolation,
-    VenueRef,
+    StateCheckpoint, StateStore, StateStoreError, VenueRef,
 };
 use serde::{Deserialize, Serialize};
 use std::{error::Error, fmt};
 
 /// Stable paper connector version for audit and future replay surfaces.
 pub const PAPER_CONNECTOR_VERSION: &str = "phase-6-paper-connector-v1";
+
+/// State-store subsystem name for paper execution checkpoints.
+pub const PAPER_EXECUTION_STATE_SUBSYSTEM: &str = "paper-execution";
+
+/// State-store key for the latest deterministic paper execution report.
+pub const PAPER_EXECUTION_LAST_REPORT_CHECKPOINT_KEY: &str = "paper-execution:last-report";
 
 /// Deterministic in-memory market-data provider for paper and simulation mode.
 ///
@@ -329,6 +335,28 @@ pub struct PaperExecutionReport {
     pub liquidity_role: LiquidityRole,
 }
 
+/// Persist the latest deterministic paper execution report as a non-secret checkpoint.
+///
+/// This helper only writes through the typed local `StateStore` boundary. It
+/// does not submit orders, mutate balances, call exchanges, sign payloads, or
+/// broadcast transactions.
+pub fn persist_paper_execution_report_checkpoint(
+    store: &mut impl StateStore,
+    report: &PaperExecutionReport,
+    updated_at_unix_ms: u64,
+) -> Result<StateCheckpoint, StateStoreError> {
+    let checkpoint = StateCheckpoint {
+        key: PAPER_EXECUTION_LAST_REPORT_CHECKPOINT_KEY.to_owned(),
+        subsystem: PAPER_EXECUTION_STATE_SUBSYSTEM.to_owned(),
+        value: serde_json::to_string(report).map_err(|error| StateStoreError::BackendFailed {
+            reason: format!("failed to serialize paper execution report checkpoint: {error}"),
+        })?,
+        updated_at_unix_ms,
+    };
+    store.put_checkpoint(checkpoint.clone())?;
+    Ok(checkpoint)
+}
+
 /// Errors from deterministic paper connector scaffolds.
 #[derive(Debug, Clone, PartialEq)]
 pub enum PaperConnectorError {
@@ -416,12 +444,20 @@ fn schedule_matches(schedule: &FeeSchedule, venue: &VenueRef, pair: Option<&Mark
 #[cfg(test)]
 mod tests {
     use super::{
-        PaperExecutionAdapter, PaperExecutionStatus, PaperFeeProvider, PaperMarketDataProvider,
+        persist_paper_execution_report_checkpoint, PaperExecutionAdapter, PaperExecutionStatus,
+        PaperFeeProvider, PaperMarketDataProvider, PAPER_EXECUTION_LAST_REPORT_CHECKPOINT_KEY,
+        PAPER_EXECUTION_STATE_SUBSYSTEM,
     };
     use crate::{
         AgentConfig, DestinationPolicy, ExecutionIntent, ExecutionIntentKind, ExecutionScope,
         FeeProvider, FeeSchedule, LiquidityRole, MarketDataProvider, MarketDataRequest, MarketPair,
-        OrderBookSnapshot, PolicyEngine, PriceLevel, VenueKind, VenueRef,
+        OrderBookSnapshot, PolicyEngine, PriceLevel, SqliteWalStateStore, StateStore, VenueKind,
+        VenueRef,
+    };
+    use std::{
+        env, fs,
+        path::{Path, PathBuf},
+        process,
     };
 
     const PAPER_CONFIG: &str = r#"
@@ -563,5 +599,80 @@ redact_secrets = true
             error,
             super::PaperConnectorError::NonPaperScope { .. }
         ));
+    }
+
+    #[test]
+    fn paper_execution_report_persists_as_state_checkpoint() {
+        let config = AgentConfig::from_toml_str(PAPER_CONFIG).expect("config should validate");
+        let adapter = PaperExecutionAdapter::new("paper-exec", PolicyEngine::from_config(config))
+            .expect("adapter should validate");
+        let report = adapter.submit(&intent()).expect("paper intent should fill");
+        let mut store = crate::InMemoryStateStore::new();
+
+        let checkpoint =
+            persist_paper_execution_report_checkpoint(&mut store, &report, 1_700_000_000_000)
+                .expect("paper report checkpoint should persist");
+
+        assert_eq!(checkpoint.key, PAPER_EXECUTION_LAST_REPORT_CHECKPOINT_KEY);
+        assert_eq!(checkpoint.subsystem, PAPER_EXECUTION_STATE_SUBSYSTEM);
+        assert_eq!(checkpoint.updated_at_unix_ms, 1_700_000_000_000);
+        let restored: super::PaperExecutionReport =
+            serde_json::from_str(&checkpoint.value).expect("checkpoint json should parse");
+        assert_eq!(restored, report);
+        assert_eq!(
+            store
+                .get_checkpoint(PAPER_EXECUTION_LAST_REPORT_CHECKPOINT_KEY)
+                .expect("checkpoint should read"),
+            Some(checkpoint)
+        );
+    }
+
+    #[test]
+    fn paper_execution_report_persists_through_sqlite_wal_store() {
+        let path = unique_state_path("paper-report");
+        let config = AgentConfig::from_toml_str(PAPER_CONFIG).expect("config should validate");
+        let adapter = PaperExecutionAdapter::new("paper-exec", PolicyEngine::from_config(config))
+            .expect("adapter should validate");
+        let report = adapter.submit(&intent()).expect("paper intent should fill");
+
+        {
+            let mut store = SqliteWalStateStore::open(&path).expect("sqlite store opens");
+            persist_paper_execution_report_checkpoint(&mut store, &report, 1_700_000_000_001)
+                .expect("paper report checkpoint should persist");
+        }
+
+        {
+            let store = SqliteWalStateStore::open(&path).expect("sqlite store reopens");
+            let checkpoint = store
+                .get_checkpoint(PAPER_EXECUTION_LAST_REPORT_CHECKPOINT_KEY)
+                .expect("checkpoint should read")
+                .expect("checkpoint should exist");
+            let restored: super::PaperExecutionReport =
+                serde_json::from_str(&checkpoint.value).expect("checkpoint json should parse");
+            assert_eq!(checkpoint.subsystem, PAPER_EXECUTION_STATE_SUBSYSTEM);
+            assert_eq!(checkpoint.updated_at_unix_ms, 1_700_000_000_001);
+            assert_eq!(restored, report);
+        }
+
+        cleanup_state_files(&path);
+    }
+
+    fn unique_state_path(label: &str) -> PathBuf {
+        let mut path = env::temp_dir();
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system clock should be after unix epoch")
+            .as_nanos();
+        path.push(format!(
+            "arbyclaw-paper-{label}-{}-{nanos}.sqlite3",
+            process::id()
+        ));
+        path
+    }
+
+    fn cleanup_state_files(path: &Path) {
+        for suffix in ["", "-wal", "-shm"] {
+            let _ = fs::remove_file(PathBuf::from(format!("{}{suffix}", path.display())));
+        }
     }
 }

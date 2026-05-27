@@ -163,7 +163,7 @@ Current local and GitHub Actions Rust/Cargo validation exists for this workspace
 ## Expected Future Continuation Tasks
 
 - Run Cargo validation externally.
-- Wire SQLite WAL-backed state store into runtime lifecycle checkpoints.
+- Continue wiring SQLite WAL-backed state store into runtime lifecycle checkpoints beyond the current local paper-report checkpoint helper.
 - Add audit integration to execution planner and adapters.
 - Add audit retention and compaction strategy.
 - Add tamper-evident export verification tool.

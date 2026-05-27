@@ -6,12 +6,12 @@ The project is in Phase 18 agentic-handoff-package-complete status for ChatGPT P
 
 ## Latest Local Validation Attempt
 
-2026-05-26 ArbyClaw local validation attempt:
+2026-05-27 ArbyClaw local validation attempt:
 
 - `python3 scripts/validate_structure.py` passed.
 - `cargo fmt --check` passed.
 - `cargo check --workspace` passed.
-- `cargo test --workspace` passed with 74 tests across 3 suites.
+- `cargo test --workspace` passed with 76 tests across 3 suites.
 - `cargo clippy --workspace --all-targets -- -D warnings` passed.
 - This validates local structure, formatting, compilation, tests, and linting only. It does not validate production deployment, live funds, live exchange/RPC integrations, signing, broadcasts, containers, systemd, ARM, CI, penetration testing, load testing, rollback drills, incident drills, external hardening, or production readiness.
 
@@ -33,7 +33,7 @@ The project is in Phase 18 agentic-handoff-package-complete status for ChatGPT P
 
 2026-05-26 ArbyClaw roadmap-anchored production gap tracker audit:
 
-- Local validation rerun passed: `python3 scripts/validate_structure.py`, `cargo fmt --check`, `cargo check --workspace`, `cargo test --workspace` with 74 tests across 3 suites, and `cargo clippy --workspace --all-targets -- -D warnings`.
+- Local validation rerun passed: `python3 scripts/validate_structure.py`, `cargo fmt --check`, `cargo check --workspace`, `cargo test --workspace` with 76 tests across 3 suites, and `cargo clippy --workspace --all-targets -- -D warnings`.
 - Latest referenced GitHub Actions validation passed on `main` in run `https://github.com/dominator509/arbyclaw/actions/runs/26443625602` for commit `0b98a9a31d3701704d950779ad989daefcf1193b`.
 - The Rust/Cargo validation class of gaps is now locally and CI-covered for the current workspace state: GAP-0001, GAP-0029, GAP-0031, GAP-0033, GAP-0036, GAP-0040, GAP-0043, GAP-0046, GAP-0050, GAP-0053, GAP-0055, GAP-0057, GAP-0059, GAP-0061, GAP-0063, GAP-0065, GAP-0067, GAP-0069, and GAP-0071.
 - These validation updates do not prove production readiness, deployment readiness, live-funds readiness, public exposure readiness, code-scanning upload processing, SBOM review, penetration testing, load testing, rollback drills, incident drills, custody readiness, or live exchange/RPC readiness.
@@ -120,8 +120,8 @@ Reasoning:
 
 - Governance and architecture foundation exist.
 - Minimal Rust workspace scaffold, CI skeleton, safety docs, and structure validation script exist.
-- Typed config, environment secret-reference handling, encrypted-keystore interface boundary, redacted secret material, initial mode gates, deny-by-default policy checks, append-only audit/state primitives, normalized market-data models, freshness classification, fee models, deterministic paper market-data, static paper fees, policy-gated paper execution reports, CEX framework models/traits, DEX/Web3 framework models/traits, opportunity-engine models/traits, execution-planner draft models/traits, execution-adapter boundary records/traits, communications/CLI command and notification boundaries, embedded-dashboard local render boundaries, observability/runbook local record boundaries, deterministic testing/fuzzing/backtesting validation boundaries, deterministic packaging/deployment planning boundaries, deterministic external hardening evidence/checklist boundaries, and deterministic agentic handoff boundaries exist.
-- Encrypted-keystore backend, SQLite WAL production durability validation, audit crash/concurrency validation, live market-data providers, exchange-specific CEX adapters, live DEX/RPC adapters, signer/custody backends, transaction broadcast controls, external adapter submission, real outbound communications adapters, real dashboard hosting/authentication, real observability/exporter/alert runtime, real property/fuzz/backtest runner execution, durable planner/adapter/communications/dashboard/observability/testing audit-state lifecycle, container/systemd/ARM validation, runtime deployment, broad external hardening execution, external agent execution validation, rollback drills, incident drills, and production validations are still incomplete.
+- Typed config, environment secret-reference handling, encrypted-keystore interface boundary, redacted secret material, initial mode gates, deny-by-default policy checks, append-only audit/state primitives, SQLite WAL local checkpoints, normalized market-data models, freshness classification, fee models, deterministic paper market-data, static paper fees, policy-gated paper execution reports, local paper-report checkpoint helper, CEX framework models/traits, DEX/Web3 framework models/traits, opportunity-engine models/traits, execution-planner draft models/traits, execution-adapter boundary records/traits, communications/CLI command and notification boundaries, embedded-dashboard local render boundaries, observability/runbook local record boundaries, deterministic testing/fuzzing/backtesting validation boundaries, deterministic packaging/deployment planning boundaries, deterministic external hardening evidence/checklist boundaries, and deterministic agentic handoff boundaries exist.
+- Encrypted-keystore backend, SQLite WAL production durability validation, audit crash/concurrency validation, live market-data providers, exchange-specific CEX adapters, live DEX/RPC adapters, signer/custody backends, transaction broadcast controls, external adapter submission, real outbound communications adapters, real dashboard hosting/authentication, real observability/exporter/alert runtime, real property/fuzz/backtest runner execution, durable planner/adapter/communications/dashboard/observability/testing audit-state lifecycle beyond the local paper-report checkpoint helper, container/systemd/ARM validation, runtime deployment, broad external hardening execution, external agent execution validation, rollback drills, incident drills, and production validations are still incomplete.
 - Live-funds risk remains high.
 
 ## Current Completed Phases
@@ -1018,12 +1018,12 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Unique ID: GAP-0045
 - Phase association: Phase 6 / Phase 4 / Phase 10 / Phase 11
 - Subsystem association: Paper execution / audit journal / state store
-- Description: Phase 6 paper execution calls policy before producing a report, but it does not append audit records, update durable state, reconcile balances, or persist reports.
-- Why incomplete: Audit/state integration was intentionally deferred to keep the Phase 6 patch small and reversible.
-- Why blocked in ChatGPT Project Mode: Current Rust/Cargo validation exists for the paper connector boundary, but filesystem durability validation and runtime lifecycle wiring remain unavailable or scheduled for later implementation.
+- Description: Phase 6 paper execution calls policy before producing a report, and the latest deterministic paper report can now be persisted through a typed local `StateStore` checkpoint helper with SQLite WAL reopen coverage. Paper execution still does not append audit records, reconcile balances, or fail closed through a complete runtime lifecycle.
+- Why incomplete: Local checkpoint persistence exists for the latest report, but mandatory audit-before-action, audit-after-action, balance reconciliation, restart replay, and fail-closed runtime orchestration remain deferred.
+- Why blocked in ChatGPT Project Mode: Current Rust/Cargo validation exists for the paper connector and local checkpoint boundary, but filesystem durability validation, audit replay validation, and full runtime lifecycle wiring remain incomplete.
 - Risk level: High
-- Dependency requirements: Phase 4 audit/state validation, future durable SQLite state store, Phase 10 planner, Phase 11 adapter lifecycle, and current Rust validation baseline.
-- Exact future validation required: paper intent audit-before-action test, paper report audit-after-action test, audit-fail-closed test, state checkpoint update test, restart/replay consistency test, and durable persistence test.
+- Dependency requirements: Phase 4 audit/state validation, SQLite WAL state store, Phase 10 planner, Phase 11 adapter lifecycle, and current Rust validation baseline.
+- Exact future validation required: paper intent audit-before-action test, paper report audit-after-action test, audit-fail-closed test, runtime state checkpoint orchestration test, restart/replay consistency test, and production durability persistence test.
 - Exact future tooling/environment required: Rust test runner, temporary filesystem, SQLite WAL backend, CI runner, audit replay harness.
 - Recommended future agent type: Audit and Observability Agent + Execution Adapter Agent + Rust Implementation Agent
 - Estimated production impact: Blocks using paper execution as auditable evidence for promotion toward live strategy controls.

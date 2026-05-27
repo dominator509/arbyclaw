@@ -132,8 +132,10 @@ pub use opportunity::{
 };
 
 pub use paper::{
-    PaperConnectorError, PaperExecutionAdapter, PaperExecutionReport, PaperExecutionStatus,
-    PaperFeeProvider, PaperMarketDataProvider, PAPER_CONNECTOR_VERSION,
+    persist_paper_execution_report_checkpoint, PaperConnectorError, PaperExecutionAdapter,
+    PaperExecutionReport, PaperExecutionStatus, PaperFeeProvider, PaperMarketDataProvider,
+    PAPER_CONNECTOR_VERSION, PAPER_EXECUTION_LAST_REPORT_CHECKPOINT_KEY,
+    PAPER_EXECUTION_STATE_SUBSYSTEM,
 };
 
 pub use testing::{

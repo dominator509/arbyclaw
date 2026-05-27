@@ -178,7 +178,7 @@ You are continuing the Fully Autonomous Crypto Arbitrage Agent project. Unpack a
 - Phase 16 packaging/deployment plans exist only as local model/documentation boundaries; current CI evidence includes release-build and example-only container/image-scan gates, but no production container image validation, systemd install, ARM build, runtime deployment, rollback drill, incident drill, or production release validation exists.
 - Phase 17 hardening records and CI evidence paths now cover current workspace Rust validation, locked release build, dependency audit, SBOM generation, local-SARIF SAST evidence, example image scan, secret-pattern scan, and hardening artifact indexing; no staging deployment, load test, penetration test, rollback drill, incident drill, live exchange/RPC validation, or production readiness review was executed.
 - Phase 18 handoff records exist only as local prompts/checklists/package models; no external agents were executed and no validation was performed by the handoff boundary.
-- SQLite WAL-backed checkpoint state store exists for local non-secret state, but production durability validation and runtime lifecycle wiring remain incomplete.
+- SQLite WAL-backed checkpoint state store exists for local non-secret state, and paper execution reports can now be persisted through a typed local checkpoint helper; production durability validation and broader runtime lifecycle wiring remain incomplete.
 - No encrypted keystore backend.
 - No signer boundary.
 - No exchange-specific CEX adapters.
