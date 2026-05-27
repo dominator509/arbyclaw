@@ -61,14 +61,15 @@ Phase 4 must ensure future execution paths have a deterministic place to record:
 - Append-only local audit journal primitives
 - Hash-chain integrity checks for local JSONL records
 - Secret redaction checks before audit append
-- State-store abstraction for future SQLite WAL persistence
-- In-memory test state store only
+- State-store abstraction
+- In-memory test state store
+- SQLite WAL checkpoint state store
 
 ### Out of Scope
 
-- SQLite WAL implementation
 - SQLCipher or encrypted database implementation
 - production retention policy
+- production durability claims
 - log shipping
 - OpenTelemetry integration
 - market data persistence
@@ -141,18 +142,18 @@ No secrets, wallets, exchange accounts, infrastructure, or live trading state sh
 - Do not add DEX/Web3 connectors.
 - Do not add wallet signing.
 - Do not create secret storage beyond redaction checks.
-- Do not claim database durability beyond implemented JSONL append.
+- Do not claim database production durability beyond implemented local SQLite WAL checkpoint persistence.
 - Do not claim Rust validation until Cargo commands actually run.
 - Do not permit audit events to contain raw secrets.
 
 ## Environment Limitations
 
-ChatGPT Project Mode lacks Rust/Cargo in this environment. All Rust compile/test/fmt/clippy validation must be executed later in a Rust-enabled local or CI environment.
+Current local and GitHub Actions Rust/Cargo validation exists for this workspace. Future state-store changes must rerun structure, format, compile, test, and clippy validation for the exact changed state.
 
 ## Expected Unresolved Gaps
 
 - Rust validation deferred.
-- SQLite WAL state store not implemented.
+- SQLite WAL state store production durability not externally validated.
 - audit durability not crash-tested.
 - audit file permissions not validated.
 - concurrent append safety not validated.
@@ -162,7 +163,7 @@ ChatGPT Project Mode lacks Rust/Cargo in this environment. All Rust compile/test
 ## Expected Future Continuation Tasks
 
 - Run Cargo validation externally.
-- Add SQLite WAL-backed state store.
+- Wire SQLite WAL-backed state store into runtime lifecycle checkpoints.
 - Add audit integration to execution planner and adapters.
 - Add audit retention and compaction strategy.
 - Add tamper-evident export verification tool.
@@ -178,7 +179,8 @@ Status: Implemented in ChatGPT Project Mode as an audit/state boundary patch.
 - Created `crates/arb-core/src/audit.rs`.
 - Created `crates/arb-core/src/state.rs`.
 - Exported audit and state types from `crates/arb-core/src/lib.rs`.
-- Added `serde_json` and `sha2` dependencies for JSONL serialization and hash chaining.
+- Added `serde_json`, `sha2`, and `rusqlite` dependencies for JSONL serialization, hash chaining, and SQLite WAL checkpoint persistence.
+- Added `SqliteWalStateStore` for non-secret local checkpoint persistence.
 - Updated `arb-agent` status text without starting runtime journal writes.
 - Updated `scripts/validate_structure.py`.
 - Updated governance and gap tracker.
@@ -198,7 +200,7 @@ Status: Implemented in ChatGPT Project Mode as an audit/state boundary patch.
 - Crash/recovery tests.
 - Concurrent append tests.
 - Filesystem permission tests.
-- SQLite WAL state-store implementation.
+- SQLite WAL crash/recovery, migration, file-locking, backup/restore, and filesystem-permission validation.
 
 ### Environment-Limited Tasks
 
@@ -209,7 +211,7 @@ Status: Implemented in ChatGPT Project Mode as an audit/state boundary patch.
 ### New Discovered Gaps
 
 - Phase 4 Rust validation not executed.
-- SQLite WAL state store not implemented.
+- SQLite WAL state store is implemented for local non-secret checkpoints, but production durability validation is incomplete.
 - Audit durability/concurrency/filesystem validation missing.
 - Audit not yet mandatory in execution paths.
 
@@ -219,7 +221,7 @@ Current production readiness: 20%.
 
 ### Risk Posture Recalculation
 
-Risk remains High because live trading, wallet custody, execution adapters, connector integrations, durable database persistence, and external runtime validations are still missing.
+Risk remains High because live trading, wallet custody, execution adapters, connector integrations, production durability validation, and external runtime validations are still missing.
 
 ### Next Continuation Path
 

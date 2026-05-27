@@ -1,8 +1,13 @@
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::missing_errors_doc)]
 
+use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, fmt};
+use std::{
+    collections::BTreeMap,
+    fmt,
+    path::{Path, PathBuf},
+};
 
 /// State checkpoint persisted by future durable stores.
 ///
@@ -45,16 +50,133 @@ impl StateCheckpoint {
 }
 
 /// Storage abstraction for operational state.
-///
-/// Phase 4 only provides the trait and an in-memory implementation for tests and
-/// local scaffolding. Production persistence must be added through a future
-/// SQLite WAL-backed implementation and must be externally validated.
 pub trait StateStore {
     /// Persist or replace a checkpoint.
     fn put_checkpoint(&mut self, checkpoint: StateCheckpoint) -> Result<(), StateStoreError>;
 
     /// Retrieve a checkpoint by key.
     fn get_checkpoint(&self, key: &str) -> Result<Option<StateCheckpoint>, StateStoreError>;
+}
+
+/// SQLite WAL-backed state store for non-secret operational checkpoints.
+///
+/// This store is local and typed only. It does not encrypt data, store secrets,
+/// execute trades, call networks, or replace the future custody/signer boundary.
+#[derive(Debug)]
+pub struct SqliteWalStateStore {
+    connection: Connection,
+    path: PathBuf,
+}
+
+impl SqliteWalStateStore {
+    /// Open or create a SQLite WAL-backed state store at `path`.
+    ///
+    /// The path is retained for operator diagnostics only and must not contain
+    /// credentials or secret-bearing material.
+    pub fn open(path: impl AsRef<Path>) -> Result<Self, StateStoreError> {
+        let path = path.as_ref();
+        if path.as_os_str().is_empty() {
+            return Err(StateStoreError::ValidationFailed {
+                reason: "state database path is required".to_owned(),
+            });
+        }
+        let connection =
+            Connection::open(path).map_err(|error| StateStoreError::BackendFailed {
+                reason: format!("failed to open sqlite state store: {error}"),
+            })?;
+        let store = Self {
+            connection,
+            path: path.to_path_buf(),
+        };
+        store.initialize()?;
+        Ok(store)
+    }
+
+    /// Filesystem path backing this store.
+    #[must_use]
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    fn initialize(&self) -> Result<(), StateStoreError> {
+        self.connection
+            .pragma_update(None, "journal_mode", "WAL")
+            .map_err(sqlite_backend_error("failed to enable sqlite WAL mode"))?;
+        self.connection
+            .pragma_update(None, "synchronous", "FULL")
+            .map_err(sqlite_backend_error(
+                "failed to set sqlite synchronous mode",
+            ))?;
+        self.connection
+            .pragma_update(None, "foreign_keys", "ON")
+            .map_err(sqlite_backend_error("failed to enable sqlite foreign keys"))?;
+        self.connection
+            .busy_timeout(std::time::Duration::from_secs(5))
+            .map_err(sqlite_backend_error("failed to set sqlite busy timeout"))?;
+        self.connection
+            .execute_batch(
+                "CREATE TABLE IF NOT EXISTS state_checkpoints (
+                    key TEXT PRIMARY KEY NOT NULL,
+                    subsystem TEXT NOT NULL,
+                    value TEXT NOT NULL,
+                    updated_at_unix_ms INTEGER NOT NULL
+                );",
+            )
+            .map_err(sqlite_backend_error("failed to initialize state schema"))?;
+        Ok(())
+    }
+}
+
+impl StateStore for SqliteWalStateStore {
+    fn put_checkpoint(&mut self, checkpoint: StateCheckpoint) -> Result<(), StateStoreError> {
+        checkpoint.validate()?;
+        let updated_at_unix_ms = i64::try_from(checkpoint.updated_at_unix_ms).map_err(|_| {
+            StateStoreError::ValidationFailed {
+                reason: "checkpoint timestamp exceeds sqlite integer range".to_owned(),
+            }
+        })?;
+        self.connection
+            .execute(
+                "INSERT INTO state_checkpoints (key, subsystem, value, updated_at_unix_ms)
+                 VALUES (?1, ?2, ?3, ?4)
+                 ON CONFLICT(key) DO UPDATE SET
+                    subsystem = excluded.subsystem,
+                    value = excluded.value,
+                    updated_at_unix_ms = excluded.updated_at_unix_ms",
+                params![
+                    checkpoint.key,
+                    checkpoint.subsystem,
+                    checkpoint.value,
+                    updated_at_unix_ms
+                ],
+            )
+            .map_err(sqlite_backend_error("failed to write state checkpoint"))?;
+        Ok(())
+    }
+
+    fn get_checkpoint(&self, key: &str) -> Result<Option<StateCheckpoint>, StateStoreError> {
+        validate_checkpoint_key(key)?;
+        self.connection
+            .query_row(
+                "SELECT key, subsystem, value, updated_at_unix_ms
+                 FROM state_checkpoints
+                 WHERE key = ?1",
+                params![key],
+                |row| {
+                    let updated_at_unix_ms: i64 = row.get(3)?;
+                    Ok(StateCheckpoint {
+                        key: row.get(0)?,
+                        subsystem: row.get(1)?,
+                        value: row.get(2)?,
+                        updated_at_unix_ms: u64::try_from(updated_at_unix_ms).map_err(|_| {
+                            rusqlite::Error::IntegralValueOutOfRange(3, updated_at_unix_ms)
+                        })?,
+                    })
+                },
+            )
+            .optional()
+            .map_err(sqlite_backend_error("failed to read state checkpoint"))
+    }
 }
 
 /// Non-production in-memory state store.
@@ -94,11 +216,7 @@ impl StateStore for InMemoryStateStore {
     }
 
     fn get_checkpoint(&self, key: &str) -> Result<Option<StateCheckpoint>, StateStoreError> {
-        if key.trim().is_empty() {
-            return Err(StateStoreError::ValidationFailed {
-                reason: "checkpoint key is required".to_owned(),
-            });
-        }
+        validate_checkpoint_key(key)?;
         Ok(self.checkpoints.get(key).cloned())
     }
 }
@@ -142,9 +260,36 @@ fn contains_secret_like_content(value: &str) -> bool {
     .any(|needle| normalized.contains(needle))
 }
 
+fn validate_checkpoint_key(key: &str) -> Result<(), StateStoreError> {
+    if key.trim().is_empty() {
+        return Err(StateStoreError::ValidationFailed {
+            reason: "checkpoint key is required".to_owned(),
+        });
+    }
+    if contains_secret_like_content(key) {
+        return Err(StateStoreError::ValidationFailed {
+            reason: "checkpoint key contains secret-like content".to_owned(),
+        });
+    }
+    Ok(())
+}
+
+fn sqlite_backend_error(context: &'static str) -> impl FnOnce(rusqlite::Error) -> StateStoreError {
+    move |error| StateStoreError::BackendFailed {
+        reason: format!("{context}: {error}"),
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{InMemoryStateStore, StateCheckpoint, StateStore, StateStoreError};
+    use super::{
+        InMemoryStateStore, SqliteWalStateStore, StateCheckpoint, StateStore, StateStoreError,
+    };
+    use std::{
+        fs,
+        path::PathBuf,
+        time::{SystemTime, UNIX_EPOCH},
+    };
 
     #[test]
     fn in_memory_store_round_trips_checkpoint() {
@@ -180,5 +325,98 @@ mod tests {
             .put_checkpoint(checkpoint)
             .expect_err("secret-like state should fail");
         assert!(matches!(error, StateStoreError::ValidationFailed { .. }));
+    }
+
+    #[test]
+    fn sqlite_wal_store_round_trips_checkpoint_across_reopen() {
+        let path = unique_state_path("round-trip");
+        let checkpoint = StateCheckpoint {
+            key: "runtime:last-safe-mode".to_owned(),
+            subsystem: "runtime".to_owned(),
+            value: "paper".to_owned(),
+            updated_at_unix_ms: 42,
+        };
+        {
+            let mut store = SqliteWalStateStore::open(&path).expect("sqlite store opens");
+            assert_eq!(store.path(), path.as_path());
+            store
+                .put_checkpoint(checkpoint.clone())
+                .expect("checkpoint persists");
+        }
+        {
+            let store = SqliteWalStateStore::open(&path).expect("sqlite store reopens");
+            assert_eq!(
+                store
+                    .get_checkpoint("runtime:last-safe-mode")
+                    .expect("checkpoint reads"),
+                Some(checkpoint)
+            );
+        }
+        cleanup_state_files(&path);
+    }
+
+    #[test]
+    fn sqlite_wal_store_replaces_checkpoint() {
+        let path = unique_state_path("replace");
+        let mut store = SqliteWalStateStore::open(&path).expect("sqlite store opens");
+        store
+            .put_checkpoint(StateCheckpoint {
+                key: "planner:last-plan".to_owned(),
+                subsystem: "planner".to_owned(),
+                value: "plan-001".to_owned(),
+                updated_at_unix_ms: 1,
+            })
+            .expect("initial checkpoint persists");
+        store
+            .put_checkpoint(StateCheckpoint {
+                key: "planner:last-plan".to_owned(),
+                subsystem: "planner".to_owned(),
+                value: "plan-002".to_owned(),
+                updated_at_unix_ms: 2,
+            })
+            .expect("replacement checkpoint persists");
+
+        let checkpoint = store
+            .get_checkpoint("planner:last-plan")
+            .expect("checkpoint reads")
+            .expect("checkpoint exists");
+        assert_eq!(checkpoint.value, "plan-002");
+        assert_eq!(checkpoint.updated_at_unix_ms, 2);
+        drop(store);
+        cleanup_state_files(&path);
+    }
+
+    #[test]
+    fn sqlite_wal_store_rejects_secret_like_checkpoint() {
+        let path = unique_state_path("secret-reject");
+        let mut store = SqliteWalStateStore::open(&path).expect("sqlite store opens");
+        let error = store
+            .put_checkpoint(StateCheckpoint {
+                key: "runtime:last".to_owned(),
+                subsystem: "runtime".to_owned(),
+                value: "bearer token".to_owned(),
+                updated_at_unix_ms: 1,
+            })
+            .expect_err("secret-like value is rejected");
+        assert!(matches!(error, StateStoreError::ValidationFailed { .. }));
+        drop(store);
+        cleanup_state_files(&path);
+    }
+
+    fn unique_state_path(label: &str) -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock is after epoch")
+            .as_nanos();
+        std::env::temp_dir().join(format!(
+            "arbyclaw-{label}-{}-{nanos}.sqlite3",
+            std::process::id()
+        ))
+    }
+
+    fn cleanup_state_files(path: &PathBuf) {
+        let _ = fs::remove_file(path);
+        let _ = fs::remove_file(path.with_extension("sqlite3-wal"));
+        let _ = fs::remove_file(path.with_extension("sqlite3-shm"));
     }
 }

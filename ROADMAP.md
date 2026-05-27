@@ -9,7 +9,7 @@ Fully Autonomous Crypto Arbitrage Agent
 - Active phase: Phase 18 — Agentic Handoff Package implemented; next required work is production hardening evidence review and external validation closure beyond current Rust/CI gates
 - Active sub-roadmap: `PHASE_18_SUBROADMAP.md`
 - Current production readiness: 87%
-- Current implementation status: Minimal Rust workspace, typed config, reference-only secret boundary, mode-gate validation, deny-by-default policy engine, append-only audit journal primitives, state-store trait boundary, normalized market-data models, fee models, freshness classification, provider trait boundaries, deterministic paper connectors, CEX connector framework types/traits, DEX/Web3 connector framework types/traits, deterministic opportunity-engine types/traits, draft-only execution-planner types/traits, execution-adapter boundary records/traits, communications/CLI command and notification boundaries, embedded-dashboard local render boundaries, observability/runbook local record boundaries, deterministic testing/fuzzing/backtesting plan boundaries, deterministic packaging/deployment plan boundaries, deterministic external-hardening evidence/checklist boundaries, and deterministic agentic handoff package boundaries exist; local and GitHub Actions evidence covers current structure, formatting, workspace compilation, tests, clippy, locked release build, dependency audit, SBOM generation, local-SARIF SAST, example image scan, secret-pattern scan, and hardening evidence indexing. Live trading, production container/systemd/ARM deployment validation, real validation runner execution beyond Cargo tests, real fuzzing engines, real backtest corpus execution, real observability runtime, real dashboard hosting, outbound messaging integrations, external adapter submission, exchange-specific live connectors, DEX RPC adapters, wallet signer, transaction broadcasts, custody backend, durable SQLite state, and production execution logic are not implemented.
+- Current implementation status: Minimal Rust workspace, typed config, reference-only secret boundary, mode-gate validation, deny-by-default policy engine, append-only audit journal primitives, state-store trait boundary, SQLite WAL-backed checkpoint store, normalized market-data models, fee models, freshness classification, provider trait boundaries, deterministic paper connectors, CEX connector framework types/traits, DEX/Web3 connector framework types/traits, deterministic opportunity-engine types/traits, draft-only execution-planner types/traits, execution-adapter boundary records/traits, communications/CLI command and notification boundaries, embedded-dashboard local render boundaries, observability/runbook local record boundaries, deterministic testing/fuzzing/backtesting plan boundaries, deterministic packaging/deployment plan boundaries, deterministic external-hardening evidence/checklist boundaries, and deterministic agentic handoff package boundaries exist; local and GitHub Actions evidence covers current structure, formatting, workspace compilation, tests, clippy, locked release build, dependency audit, SBOM generation, local-SARIF SAST, example image scan, secret-pattern scan, and hardening evidence indexing. Live trading, production container/systemd/ARM deployment validation, real validation runner execution beyond Cargo tests, real fuzzing engines, real backtest corpus execution, real observability runtime, real dashboard hosting, outbound messaging integrations, external adapter submission, exchange-specific live connectors, DEX RPC adapters, wallet signer, transaction broadcasts, custody backend, production durability validation, and production execution logic are not implemented.
 - Current risk posture: High, because live-funds architecture is policy-, audit-, market-data-, paper-simulation-, CEX-framework-, DEX/Web3-framework-, opportunity-engine-, planner-, adapter-, communication-, dashboard-, observability-, and validation-boundary-gated but lacks custody isolation, exchange-specific live connectors, live DEX/RPC adapters, signer boundary, live adapter submission, real communications adapters, real dashboard hosting/authentication, real metrics/exporter/alert runtime, property/fuzz/backtest execution beyond current Cargo tests, real package/deployment validation, broad external hardening validation, future-agent execution validation, durable database validation, and external validation.
 
 ## Roadmap Governance Rules
@@ -31,7 +31,7 @@ Fully Autonomous Crypto Arbitrage Agent
 | 1 | Rust Workspace Scaffold | Scaffold complete; current workspace Rust/CI validation covered | +2% realized / +1% deferred | Minimal workspace, CI skeleton, safety docs, and structure validator created. Future changes must rerun Cargo validation. |
 | 2 | Config, Secrets, and Mode Gates | Implemented; current workspace Rust/CI validation covered | +5% realized / +1% deferred | Typed config, environment secret references, keystore interface boundary, and live mode-gate validation added. |
 | 3 | Policy Engine and Trust Contract | Implemented; current workspace Rust/CI validation covered | +7% realized / +3% deferred | Deny-by-default policy checks, intent model, trust-contract denials, and CLI policy initialization added. |
-| 4 | Audit Journal and State Store | Implemented; current workspace Rust/CI validation covered; SQLite WAL deferred | +4% realized / +2% deferred | Append-only hash-chained JSONL audit primitives, redaction checks, and state-store trait added; SQLite WAL persistence remains future work. |
+| 4 | Audit Journal and State Store | Implemented; current workspace Rust/CI validation covered; external durability validation deferred | +4% realized / +2% deferred | Append-only hash-chained JSONL audit primitives, redaction checks, state-store trait, in-memory store, and SQLite WAL checkpoint store added; crash/concurrency/filesystem validation remains future work. |
 | 5 | Market Data Core | Implemented; current workspace Rust/CI validation covered; live provider validation deferred | +5% realized / +2% deferred | Normalized quotes/order books, freshness windows, fee models, and provider traits added; no live network providers. |
 | 6 | Simulated/Paper Connectors | Implemented; current workspace Rust/CI validation covered; paper-model limitations deferred | +6% realized / +1% deferred | Deterministic in-memory paper market data, static fee provider, and policy-gated paper execution adapter added; no live venues or balances. |
 | 7 | CEX Connector Framework | Implemented as framework boundary; current workspace Rust/CI validation covered; live exchange validation deferred | +6% realized / +2% deferred | CEX venue profiles, capability registry, order request model, policy gate, and connector traits added; no exchange-specific adapters or live orders. |
@@ -247,7 +247,7 @@ Met for ChatGPT Project Mode policy implementation with current workspace Rust/C
 
 ### Status
 
-Implemented in ChatGPT Project Mode; Rust toolchain validation, SQLite WAL persistence, crash testing, concurrent append testing, and filesystem permission validation deferred.
+Implemented in ChatGPT Project Mode with current local/CI Rust validation evidence; SQLite WAL checkpoint persistence is implemented, while crash testing, concurrent append testing, filesystem permission validation, and production durability validation remain deferred.
 
 ### Goal
 
@@ -284,6 +284,7 @@ Create durable, efficient, redacted, append-only audit and state tracking.
 - `StateCheckpoint` model
 - `StateStore` trait
 - `InMemoryStateStore` for tests and early local wiring only
+- `SqliteWalStateStore` for local SQLite WAL-backed checkpoint persistence
 - Secret-like checkpoint content rejection
 
 ### Validation Completed
@@ -312,7 +313,7 @@ Additional Phase 4 validations deferred:
 - crash/recovery testing
 - concurrent append testing
 - filesystem permission testing
-- durable SQLite WAL implementation and migration validation
+- SQLite WAL crash/recovery, migration, file-locking, backup/restore, and filesystem-permission validation
 
 ### Exit Criteria
 

@@ -162,7 +162,9 @@ pub use execution_adapter::{
     EXECUTION_ADAPTER_FRAMEWORK_VERSION,
 };
 
-pub use state::{InMemoryStateStore, StateCheckpoint, StateStore, StateStoreError};
+pub use state::{
+    InMemoryStateStore, SqliteWalStateStore, StateCheckpoint, StateStore, StateStoreError,
+};
 
 pub use policy::{
     DestinationPolicy, ExecutionIntent, ExecutionIntentKind, ExecutionScope, PolicyApproval,

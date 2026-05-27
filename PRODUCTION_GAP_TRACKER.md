@@ -11,7 +11,7 @@ The project is in Phase 18 agentic-handoff-package-complete status for ChatGPT P
 - `python3 scripts/validate_structure.py` passed.
 - `cargo fmt --check` passed.
 - `cargo check --workspace` passed.
-- `cargo test --workspace` passed with 71 tests across 3 suites.
+- `cargo test --workspace` passed with 74 tests across 3 suites.
 - `cargo clippy --workspace --all-targets -- -D warnings` passed.
 - This validates local structure, formatting, compilation, tests, and linting only. It does not validate production deployment, live funds, live exchange/RPC integrations, signing, broadcasts, containers, systemd, ARM, CI, penetration testing, load testing, rollback drills, incident drills, external hardening, or production readiness.
 
@@ -33,7 +33,7 @@ The project is in Phase 18 agentic-handoff-package-complete status for ChatGPT P
 
 2026-05-26 ArbyClaw roadmap-anchored production gap tracker audit:
 
-- Local validation rerun passed: `python3 scripts/validate_structure.py`, `cargo fmt --check`, `cargo check --workspace`, `cargo test --workspace` with 71 tests across 3 suites, and `cargo clippy --workspace --all-targets -- -D warnings`.
+- Local validation rerun passed: `python3 scripts/validate_structure.py`, `cargo fmt --check`, `cargo check --workspace`, `cargo test --workspace` with 74 tests across 3 suites, and `cargo clippy --workspace --all-targets -- -D warnings`.
 - Latest referenced GitHub Actions validation passed on `main` in run `https://github.com/dominator509/arbyclaw/actions/runs/26443625602` for commit `0b98a9a31d3701704d950779ad989daefcf1193b`.
 - The Rust/Cargo validation class of gaps is now locally and CI-covered for the current workspace state: GAP-0001, GAP-0029, GAP-0031, GAP-0033, GAP-0036, GAP-0040, GAP-0043, GAP-0046, GAP-0050, GAP-0053, GAP-0055, GAP-0057, GAP-0059, GAP-0061, GAP-0063, GAP-0065, GAP-0067, GAP-0069, and GAP-0071.
 - These validation updates do not prove production readiness, deployment readiness, live-funds readiness, public exposure readiness, code-scanning upload processing, SBOM review, penetration testing, load testing, rollback drills, incident drills, custody readiness, or live exchange/RPC readiness.
@@ -121,7 +121,7 @@ Reasoning:
 - Governance and architecture foundation exist.
 - Minimal Rust workspace scaffold, CI skeleton, safety docs, and structure validation script exist.
 - Typed config, environment secret-reference handling, encrypted-keystore interface boundary, redacted secret material, initial mode gates, deny-by-default policy checks, append-only audit/state primitives, normalized market-data models, freshness classification, fee models, deterministic paper market-data, static paper fees, policy-gated paper execution reports, CEX framework models/traits, DEX/Web3 framework models/traits, opportunity-engine models/traits, execution-planner draft models/traits, execution-adapter boundary records/traits, communications/CLI command and notification boundaries, embedded-dashboard local render boundaries, observability/runbook local record boundaries, deterministic testing/fuzzing/backtesting validation boundaries, deterministic packaging/deployment planning boundaries, deterministic external hardening evidence/checklist boundaries, and deterministic agentic handoff boundaries exist.
-- Encrypted-keystore backend, SQLite WAL state persistence, audit crash/concurrency validation, live market-data providers, exchange-specific CEX adapters, live DEX/RPC adapters, signer/custody backends, transaction broadcast controls, external adapter submission, real outbound communications adapters, real dashboard hosting/authentication, real observability/exporter/alert runtime, real property/fuzz/backtest runner execution, durable planner/adapter/communications/dashboard/observability/testing audit-state lifecycle, container/systemd/ARM validation, runtime deployment, broad external hardening execution, external agent execution validation, rollback drills, incident drills, and production validations are still incomplete.
+- Encrypted-keystore backend, SQLite WAL production durability validation, audit crash/concurrency validation, live market-data providers, exchange-specific CEX adapters, live DEX/RPC adapters, signer/custody backends, transaction broadcast controls, external adapter submission, real outbound communications adapters, real dashboard hosting/authentication, real observability/exporter/alert runtime, real property/fuzz/backtest runner execution, durable planner/adapter/communications/dashboard/observability/testing audit-state lifecycle, container/systemd/ARM validation, runtime deployment, broad external hardening execution, external agent execution validation, rollback drills, incident drills, and production validations are still incomplete.
 - Live-funds risk remains high.
 
 ## Current Completed Phases
@@ -130,7 +130,7 @@ Reasoning:
 - Phase 1 — Rust Workspace Scaffold (scaffold created; current workspace Rust/CI validation covered)
 - Phase 2 — Config, Secrets, and Mode Gates (implemented; current workspace Rust/CI validation covered)
 - Phase 3 — Policy Engine and Trust Contract (implemented; current workspace Rust/CI validation covered)
-- Phase 4 — Audit Journal and State Store (implemented as boundary; current workspace Rust/CI validation covered; SQLite WAL deferred)
+- Phase 4 — Audit Journal and State Store (implemented as boundary; current workspace Rust/CI validation covered; SQLite WAL checkpoint store implemented; production durability validation deferred)
 - Phase 5 — Market Data Core (implemented as boundary; current workspace Rust/CI validation covered; live provider validation deferred)
 - Phase 6 — Simulated/Paper Connectors (implemented as deterministic boundary; current workspace Rust/CI validation covered; paper-model limitations deferred)
 - Phase 7 — CEX Connector Framework (implemented as typed framework boundary; current workspace Rust/CI validation covered; live exchange validation deferred)
@@ -203,7 +203,7 @@ See gap entries below.
 - `arb-agent` binary is scaffold-only and must be replaced/extended with real runtime orchestration in later phases.
 - `PolicyEngine` is implemented and connected to Phase 11 adapter-boundary revalidation only; live execution-adapter integration remains missing.
 - `AppendOnlyAuditJournal` is implemented but not yet integrated into runtime/execution paths or externally durability-tested.
-- `InMemoryStateStore` is a non-production test/local wiring implementation and must be replaced with durable SQLite WAL persistence.
+- `InMemoryStateStore` remains a non-production test/local wiring implementation; `SqliteWalStateStore` now provides local non-secret SQLite WAL checkpoint persistence, but runtime lifecycle wiring and production durability validation are still incomplete.
 - Encrypted-keystore provider is an interface boundary only and must be replaced with a real encrypted backend.
 - Market-data and fee provider traits exist, but all real REST/WebSocket/paid-provider implementations are missing.
 - `PaperMarketDataProvider`, `PaperFeeProvider`, and `PaperExecutionAdapter` are deterministic paper scaffolds and must not be treated as live connector implementations.
@@ -229,7 +229,7 @@ See gap entries below.
 
 1. No encrypted secret/custody backend or signer boundary.
 2. Audit journal is not externally validated, crash-tested, concurrency-tested, or fully connected to execution adapters.
-3. No durable SQLite WAL state store.
+3. SQLite WAL state store exists for local checkpoints, but production durability validation and runtime lifecycle wiring are missing.
 4. Policy engine is connected to paper execution, Phase 7 CEX validation, Phase 8 DEX/Web3 framework validation, Phase 10 draft planner preflight, and Phase 11 adapter-boundary revalidation only; no live execution adapters or external submission exist.
 5. No wallet signer boundary.
 6. No exchange-specific live CEX adapters, rate-limit validation, or fee-schedule verification.
@@ -362,13 +362,13 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Unique ID: GAP-0007
 - Phase association: Phase 4 / Phase 11 / Phase 17
 - Subsystem association: Audit journal / state store
-- Description: Phase 4 added `AppendOnlyAuditJournal`, typed audit events, redacted metadata values, hash-chained JSONL records, replay validation, `StateStore`, `StateCheckpoint`, and a non-production in-memory state store.
-- Why incomplete: Current Rust/Cargo validation exists for the audit/state boundary, but the audit journal is not yet wired into runtime, policy, planner, connector, signer, or execution-adapter paths; SQLite WAL state persistence is not implemented.
+- Description: Phase 4 added `AppendOnlyAuditJournal`, typed audit events, redacted metadata values, hash-chained JSONL records, replay validation, `StateStore`, `StateCheckpoint`, a non-production in-memory state store, and a SQLite WAL-backed checkpoint store for local non-secret state.
+- Why incomplete: Current Rust/Cargo validation exists for the audit/state boundary, but the audit journal and SQLite WAL state store are not yet wired into runtime, policy, planner, connector, signer, or execution-adapter paths; crash/concurrency/filesystem durability validation remains incomplete.
 - Why blocked in ChatGPT Project Mode: Current local and CI validation covers compile/test/lint only; filesystem durability tests, crash tests, concurrent append tests, and real runtime validation require future implementation and a capable external environment.
 - Risk level: High
-- Dependency requirements: Current Rust validation baseline, Phase 5 market data, future execution planner/adapters, durable state backend, filesystem permission model.
+- Dependency requirements: Current Rust validation baseline, Phase 5 market data, future execution planner/adapters, SQLite WAL state backend, filesystem permission model.
 - Exact future validation required: Append/reopen tests, tamper-detection tests, redaction tests, crash-recovery tests, concurrent append tests, file-permission tests, WAL persistence tests, schema migration tests, plus rerun standard Cargo validation after changes.
-- Exact future tooling/environment required: Rust, Cargo, local filesystem, CI runner, future SQLite dependency and migration tooling.
+- Exact future tooling/environment required: Rust, Cargo, local filesystem, CI runner, SQLite runtime, and migration tooling.
 - Recommended future agent type: Audit and Observability Agent + Rust Implementation Agent + DevSecOps Orchestrator
 - Estimated production impact: Accountability architecture now exists, but live trading remains blocked until every execution path writes durable redacted audit records and durability is validated.
 - Completion criteria: Every intent, policy decision, execution, signer request, connector result, failure, and reconciliation event is durably journaled without secrets; journal replay detects tampering; crash/concurrency tests pass.
@@ -872,21 +872,21 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Completion criteria: Met for the current workspace Rust/Cargo validation aspect; future changes must rerun the validation commands.
 - Rollback considerations: Revert Phase 4 audit/state files and docs if validation exposes unrecoverable defects.
 
-## GAP-0037 — SQLite WAL State Store Not Implemented
+## GAP-0037 — SQLite WAL State Store Implemented; Production Durability Validation Missing
 
 - Unique ID: GAP-0037
 - Phase association: Phase 4 / Phase 14 / Phase 17
 - Subsystem association: State store / persistence
-- Description: Phase 4 added the state-store trait and in-memory implementation, but no durable SQLite WAL-backed store exists.
-- Why incomplete: The smallest safe Phase 4 patch introduced the abstraction first and avoided adding database migrations before external Rust validation.
-- Why blocked in ChatGPT Project Mode: Database dependency resolution, migration validation, file locking behavior, WAL behavior, crash testing, and filesystem permission checks require local or CI runtime environments.
+- Description: Phase 4 now includes `SqliteWalStateStore`, a local SQLite WAL-backed checkpoint store for non-secret operational state, plus round-trip, replacement, secret-like rejection, and reopen tests.
+- Why incomplete: The store exists and has local Rust validation, but production durability still needs crash/recovery, file-locking, migration, backup/restore, runtime lifecycle wiring, and filesystem permission validation.
+- Why blocked in ChatGPT Project Mode: Deeper crash testing, concurrent process behavior, backup/restore validation, filesystem permission checks, and runtime lifecycle validation require targeted local or CI runtime scenarios beyond unit tests.
 - Risk level: High
-- Dependency requirements: Current Rust validation baseline, SQLite crate selection and supply-chain review, schema design, migration plan, backup/restore plan.
-- Exact future validation required: schema migration tests, WAL persistence tests, checkpoint round-trip tests, crash-recovery tests, file-locking tests, backup/restore tests.
+- Dependency requirements: Current Rust validation baseline, SQLite crate supply-chain review, schema migration plan, backup/restore plan, and runtime lifecycle integration.
+- Exact future validation required: schema migration tests, crash-recovery tests, file-locking tests, concurrent access tests, backup/restore tests, and runtime checkpoint lifecycle tests.
 - Exact future tooling/environment required: Rust toolchain, SQLite runtime, local filesystem, CI runner.
 - Recommended future agent type: Audit and Observability Agent + Rust Implementation Agent
-- Estimated production impact: Blocks durable runtime state, restart recovery, and production-grade reconciliation.
-- Completion criteria: SQLite WAL-backed state store persists and restores checkpoints safely across process restarts and passes migration/recovery tests.
+- Estimated production impact: Removes the pure implementation gap for local SQLite checkpoint persistence, but production-grade restart recovery and reconciliation remain blocked until lifecycle wiring and durability tests are complete.
+- Completion criteria: SQLite WAL-backed state store is wired into runtime checkpoints, persists and restores checkpoints safely across process restarts, and passes migration/recovery/locking/backup tests.
 - Rollback considerations: Disable durable state features, fall back to observe/paper modes, and revert database migrations if validation fails.
 
 ## GAP-0038 — Audit Durability, Concurrency, and Filesystem Validation Missing
@@ -1020,7 +1020,7 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Subsystem association: Paper execution / audit journal / state store
 - Description: Phase 6 paper execution calls policy before producing a report, but it does not append audit records, update durable state, reconcile balances, or persist reports.
 - Why incomplete: Audit/state integration was intentionally deferred to keep the Phase 6 patch small and reversible.
-- Why blocked in ChatGPT Project Mode: Current Rust/Cargo validation exists for the paper connector boundary, but filesystem durability validation, SQLite WAL implementation, and runtime lifecycle wiring remain unavailable or scheduled for later implementation.
+- Why blocked in ChatGPT Project Mode: Current Rust/Cargo validation exists for the paper connector boundary, but filesystem durability validation and runtime lifecycle wiring remain unavailable or scheduled for later implementation.
 - Risk level: High
 - Dependency requirements: Phase 4 audit/state validation, future durable SQLite state store, Phase 10 planner, Phase 11 adapter lifecycle, and current Rust validation baseline.
 - Exact future validation required: paper intent audit-before-action test, paper report audit-after-action test, audit-fail-closed test, state checkpoint update test, restart/replay consistency test, and durable persistence test.
