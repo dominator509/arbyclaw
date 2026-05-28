@@ -88,3 +88,5 @@ Met when realistic paper fills are represented by typed deterministic local reco
 - Historical replay and backtesting corpus execution.
 - Paper audit/replay validation.
 - Production runtime validation and deployment-host validation.
+
+Phase 24 later added local deterministic implementations for exchange matching profiles, adverse-selection penalties, reference-only calibration records, paper replay validation, local historical-fixture backtest execution, and runtime validation records. Real sandbox/live evidence, venue-data calibration, and deployment-host validation remain deferred.

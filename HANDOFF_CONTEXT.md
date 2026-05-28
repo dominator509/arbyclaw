@@ -34,10 +34,11 @@ The current authoritative baseline is the Phase 18 agentic handoff package snaps
 - Phase 21 — Paper Balance Ledgering
 - Phase 22 — Crash/Restart Durability Validation
 - Phase 23 — Realistic Paper Fills
+- Phase 24 — Paper Replay, Calibration, Backtest, and Runtime Validation Boundaries
 
 ## Current Production Readiness
 
-93% as of Phase 23 governance. Phase 23 adds local deterministic realistic paper fills for supplied order-book depth, partial fills, latency, queue position, slippage, and ledger-safe unfilled notional release, but exchange-specific calibration and real deployment-host validation remain environment-limited. This percentage is a governance approximation only and does not imply readiness for live funds or production deployment.
+94% as of Phase 24 governance. Phase 24 adds local deterministic venue matching profiles, adverse-selection modeling, reference-only calibration records, paper ledger replay validation, local historical-fixture paper backtest execution, and runtime validation records, but external sandbox/live calibration evidence and real deployment-host validation remain environment-limited. This percentage is a governance approximation only and does not imply readiness for live funds or production deployment.
 
 ## Non-Negotiable Safety State
 
@@ -58,7 +59,7 @@ The project is not ready for:
 - real dashboard hosting
 - real observability/exporter/alert runtime
 - real fuzzing engine execution
-- real backtest execution
+- real external backtest execution beyond local paper fixtures
 - production deployment
 - production release claims
 - external agent execution claims
@@ -189,6 +190,7 @@ You are continuing the ArbyClaw project. Inspect the latest repository checkout 
 - Phase 21 paper balance ledgering exists for local simulated balances only. It reserves quote notional, settles filled paper reports with net paper P&L, fails closed on insufficient balances or missing reservations, and persists ledger checkpoints through the typed local state-store boundary.
 - Phase 22 crash/restart validation exists as a local Cargo integration harness. It launches child processes, writes SQLite WAL checkpoints, exits abruptly after start/plan/adapter stages, reopens from the parent, runs integrity checks, and verifies expected checkpoint recovery.
 - Phase 23 realistic paper fills exist for local deterministic simulation only. They consume caller-supplied order-book depth, model full/partial/unfilled outcomes, latency, queue-position haircuts, average price, slippage, and ledger settlement that releases unfilled reserved notional without external submission.
+- Phase 24 paper realism and validation records exist for local deterministic simulation only. They model venue tick/step/min-notional constraints, adverse-selection penalties, reference-only calibration records, paper ledger replay validation, local historical-fixture paper backtest execution, and runtime validation records that keep production-host evidence blockers open.
 - SQLite WAL-backed checkpoint state store exists for local non-secret state, and paper execution reports, paper balance ledgers, execution-plan drafts, and execution-adapter runs can now be persisted through typed local checkpoint helpers; deployment-host filesystem validation remains incomplete.
 - No encrypted keystore backend.
 - No signer boundary.
@@ -200,5 +202,5 @@ You are continuing the ArbyClaw project. Inspect the latest repository checkout 
 - No real outbound communications integrations or authenticated remote command channels.
 - No real dashboard hosting/authentication.
 - Observability runtime exists only as local model/trait boundaries; no exporters, metrics endpoint, log shipping, or alert delivery exist.
-- Testing/backtesting runtime exists only as local plan/fixture model boundaries; no actual property/fuzz/backtest runner execution exists.
+- Testing/backtesting runtime has local paper-fixture backtest execution in Phase 24, while property/fuzz runners, broader curated corpora, CI-scale replay runners, load tests, penetration tests, and production validation remain missing.
 - No penetration, load, rollback, incident-drill, production container, systemd, ARM, cloud, or deployment validation.

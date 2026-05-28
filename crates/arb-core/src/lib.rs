@@ -134,13 +134,20 @@ pub use opportunity::{
 
 pub use paper::{
     persist_paper_balance_ledger_checkpoint, persist_paper_execution_report_checkpoint,
-    PaperAssetBalance, PaperBalanceLedger, PaperConnectorError, PaperExecutionAdapter,
-    PaperExecutionReport, PaperExecutionStatus, PaperFeeProvider, PaperFillModelConfig,
-    PaperFillSide, PaperFillSimulationReport, PaperFillSimulationRequest,
-    PaperFillSimulationStatus, PaperLedgerEntry, PaperLedgerEntryKind, PaperLedgeredExecution,
-    PaperMarketDataProvider, PAPER_BALANCE_LEDGER_CHECKPOINT_KEY, PAPER_BALANCE_LEDGER_VERSION,
-    PAPER_CONNECTOR_VERSION, PAPER_EXECUTION_LAST_REPORT_CHECKPOINT_KEY,
-    PAPER_EXECUTION_STATE_SUBSYSTEM, PAPER_REALISTIC_FILL_MODEL_VERSION,
+    validate_paper_runtime, PaperAdverseSelectionConfig, PaperAdverseSelectionReport,
+    PaperAssetBalance, PaperAuditReplayValidationReport, PaperBacktestCorpus,
+    PaperBacktestRunReport, PaperBacktestScenario, PaperBacktestScenarioReport, PaperBacktestStep,
+    PaperBalanceLedger, PaperCalibrationApplicationReport, PaperConnectorError,
+    PaperExchangeMatchingProfile, PaperExecutionAdapter, PaperExecutionReport,
+    PaperExecutionStatus, PaperFeeProvider, PaperFillModelConfig, PaperFillSide,
+    PaperFillSimulationReport, PaperFillSimulationRequest, PaperFillSimulationStatus,
+    PaperLedgerEntry, PaperLedgerEntryKind, PaperLedgeredExecution, PaperMarketDataProvider,
+    PaperMatchingProfileReport, PaperReplayValidationStatus, PaperReplayViolation,
+    PaperRuntimeValidationReport, PaperRuntimeValidationRequest, PaperVenueCalibrationRecord,
+    PaperVenueRealismExecution, PaperVenueRealismLedgeredExecution, PaperVenueRealismRequest,
+    PAPER_BALANCE_LEDGER_CHECKPOINT_KEY, PAPER_BALANCE_LEDGER_VERSION, PAPER_CONNECTOR_VERSION,
+    PAPER_EXECUTION_LAST_REPORT_CHECKPOINT_KEY, PAPER_EXECUTION_STATE_SUBSYSTEM,
+    PAPER_REALISM_VALIDATION_VERSION, PAPER_REALISTIC_FILL_MODEL_VERSION,
 };
 
 pub use testing::{

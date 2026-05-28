@@ -6,11 +6,11 @@ ArbyClaw
 
 ## Current Roadmap Position
 
-- Active phase: Phase 23 - Realistic Paper Fills implemented for local order-book depth, partial-fill, latency, queue-position, and ledger settlement modeling; next required work is paper audit/replay integration plus deployment-host runtime validation beyond current Rust/CI gates
-- Active sub-roadmap: `PHASE_23_SUBROADMAP.md`
-- Current production readiness: 93%
-- Current implementation status: Minimal Rust workspace, typed config, reference-only secret boundary, mode-gate validation, deny-by-default policy engine, append-only audit journal primitives, state-store trait boundary, SQLite WAL-backed checkpoint store with local integrity/checkpoint/reopen/backup-restore/multi-handle durability validation and process-level crash/restart recovery tests, normalized market-data models, fee models, freshness classification, provider trait boundaries, deterministic paper connectors with local paper-report checkpoint persistence, local paper balance ledgering, and realistic local paper fill modeling, CEX connector framework types/traits, DEX/Web3 connector framework types/traits, deterministic opportunity-engine types/traits, draft-only execution-planner types/traits with local plan-draft checkpoint persistence, execution-adapter boundary records/traits with local run checkpoint persistence, local fail-closed runtime lifecycle wiring for audit/state/adapter sequencing, communications/CLI command and notification boundaries, embedded-dashboard local render boundaries, observability/runbook local record boundaries, deterministic testing/fuzzing/backtesting plan boundaries, deterministic packaging/deployment plan boundaries, deterministic external-hardening evidence/checklist boundaries, and deterministic agentic handoff package boundaries exist; local and GitHub Actions evidence covers current structure, formatting, workspace compilation, tests, clippy, locked release build, dependency audit, SBOM generation, local-SARIF SAST, example image scan, secret-pattern scan, and hardening evidence indexing. Live trading, production container/systemd/ARM deployment validation, real validation runner execution beyond Cargo tests, real fuzzing engines, real backtest corpus execution, real observability runtime, real dashboard hosting, outbound messaging integrations, external adapter submission, exchange-specific live connectors, DEX RPC adapters, wallet signer, transaction broadcasts, custody backend, deployment-host durability validation, exchange-specific fill calibration, and production execution logic are not implemented.
-- Current risk posture: High, because live-funds architecture is policy-, audit-, market-data-, paper-simulation-, paper-ledger-, realistic-paper-fill-, CEX-framework-, DEX/Web3-framework-, opportunity-engine-, planner-, adapter-, runtime-lifecycle-, communication-, dashboard-, observability-, and validation-boundary-gated but lacks custody isolation, exchange-specific live connectors, live DEX/RPC adapters, signer boundary, live adapter submission, real communications adapters, real dashboard hosting/authentication, real metrics/exporter/alert runtime, property/fuzz/backtest execution beyond current Cargo tests, real package/deployment validation, broad external hardening validation, future-agent execution validation, deployment-host database validation, exchange-specific fill calibration, and external validation.
+- Active phase: Phase 24 - Paper Replay, Calibration, Backtest, and Runtime Validation Boundaries implemented for local venue matching profiles, adverse-selection penalties, reference-only calibration records, paper ledger replay, and local historical-fixture backtest execution; next required work is deployment-host/runtime validation and external sandbox/live evidence beyond current Rust/CI gates
+- Active sub-roadmap: `PHASE_24_SUBROADMAP.md`
+- Current production readiness: 94%
+- Current implementation status: Minimal Rust workspace, typed config, reference-only secret boundary, mode-gate validation, deny-by-default policy engine, append-only audit journal primitives, state-store trait boundary, SQLite WAL-backed checkpoint store with local integrity/checkpoint/reopen/backup-restore/multi-handle durability validation and process-level crash/restart recovery tests, normalized market-data models, fee models, freshness classification, provider trait boundaries, deterministic paper connectors with local paper-report checkpoint persistence, local paper balance ledgering, realistic local paper fill modeling, venue matching profiles, adverse-selection modeling, reference-only calibration records, paper ledger replay validation, and local historical-fixture paper backtest corpus execution, CEX connector framework types/traits, DEX/Web3 connector framework types/traits, deterministic opportunity-engine types/traits, draft-only execution-planner types/traits with local plan-draft checkpoint persistence, execution-adapter boundary records/traits with local run checkpoint persistence, local fail-closed runtime lifecycle wiring for audit/state/adapter sequencing, communications/CLI command and notification boundaries, embedded-dashboard local render boundaries, observability/runbook local record boundaries, deterministic testing/fuzzing/backtesting plan boundaries, deterministic packaging/deployment plan boundaries, deterministic external-hardening evidence/checklist boundaries, and deterministic agentic handoff package boundaries exist; local and GitHub Actions evidence covers current structure, formatting, workspace compilation, tests, clippy, locked release build, dependency audit, SBOM generation, local-SARIF SAST, example image scan, secret-pattern scan, and hardening evidence indexing. Live trading, production container/systemd/ARM deployment validation, real validation runner execution beyond Cargo tests, real fuzzing engines, real external backtest corpus execution, real observability runtime, real dashboard hosting, outbound messaging integrations, external adapter submission, exchange-specific live connectors, DEX RPC adapters, wallet signer, transaction broadcasts, custody backend, deployment-host durability validation, external sandbox/live calibration evidence, and production execution logic are not implemented.
+- Current risk posture: High, because live-funds architecture is policy-, audit-, market-data-, paper-simulation-, paper-ledger-, paper-realism/replay/backtest-, CEX-framework-, DEX/Web3-framework-, opportunity-engine-, planner-, adapter-, runtime-lifecycle-, communication-, dashboard-, observability-, and validation-boundary-gated but lacks custody isolation, exchange-specific live connectors, live DEX/RPC adapters, signer boundary, live adapter submission, real communications adapters, real dashboard hosting/authentication, real metrics/exporter/alert runtime, property/fuzz/backtest execution beyond current Cargo tests, real package/deployment validation, broad external hardening validation, future-agent execution validation, deployment-host database validation, external sandbox/live fill calibration evidence, and external validation.
 
 ## Roadmap Governance Rules
 
@@ -50,9 +50,10 @@ ArbyClaw
 | 20 | SQLite WAL Durability Validation | Implemented as local deterministic state-store validation boundary; external production-host validation deferred | +1% realized / +0% deferred in ChatGPT | Validates WAL mode, synchronous FULL, integrity check, WAL checkpoint truncate, primary reopen, checkpointed backup/restore, and multi-handle visibility with non-secret probes. |
 | 21 | Paper Balance Ledgering | Implemented as local deterministic paper balance boundary; paper realism/audit/runtime validation deferred | +1% realized / +0% deferred in ChatGPT | Adds simulated paper balances, quote-notional reservation, fill settlement with net P&L, insufficient-balance denial, missing-reservation denial, and SQLite ledger checkpointing. |
 | 22 | Crash/Restart Durability Validation | Implemented as local process-level SQLite WAL recovery validation; deployment-host validation deferred | +1% realized / +0% deferred in ChatGPT | Spawns child processes that write runtime checkpoints and exit abruptly, then reopens the WAL database and verifies integrity plus expected checkpoint survival. |
-| 23 | Realistic Paper Fills | Implemented as local deterministic order-book depth and partial-fill modeling; exchange-specific calibration deferred | +1% realized / +0% deferred in ChatGPT | Consumes supplied order-book depth, models latency, queue-position, slippage, full/partial/unfilled outcomes, and ledger-safe unfilled notional release without external submission. |
+| 23 | Realistic Paper Fills | Implemented as local deterministic order-book depth and partial-fill modeling; external calibration deferred | +1% realized / +0% deferred in ChatGPT | Consumes supplied order-book depth, models latency, queue-position, slippage, full/partial/unfilled outcomes, and ledger-safe unfilled notional release without external submission. |
+| 24 | Paper Replay, Calibration, Backtest, and Runtime Validation Boundaries | Implemented as local deterministic venue-realism, replay, and historical-fixture backtest boundary; external sandbox/live and deployment-host validation deferred | +1% realized / +0% deferred in ChatGPT | Adds local exchange matching profiles, adverse-selection penalties, reference-only calibration records, paper ledger replay validation, local backtest corpus execution, and runtime validation records without external calls. |
 
-Potential total inside ChatGPT Project Mode: approximately 75-93% of code/documentation readiness, but not full production readiness because live infrastructure, external exchange credentials, real deployment, penetration testing, exchange-specific fill calibration, deployment-host durability validation, and live trading verification are environment-limited.
+Potential total inside ChatGPT Project Mode: approximately 75-94% of code/documentation readiness, but not full production readiness because live infrastructure, external exchange credentials, real deployment, penetration testing, external sandbox/live calibration evidence, deployment-host durability validation, and live trading verification are environment-limited.
 
 ## Phase 0 — Governance Initialization
 
@@ -377,7 +378,7 @@ Met for ChatGPT Project Mode market-data/fee-model boundary implementation with 
 
 ### Status
 
-Implemented in ChatGPT Project Mode as deterministic in-memory paper connector boundaries with current workspace Rust/CI validation evidence; local paper-balance ledgering and realistic local fill simulation now exist, while paper audit/runtime replay integration and exchange-specific calibration remain deferred.
+Implemented in ChatGPT Project Mode as deterministic in-memory paper connector boundaries with current workspace Rust/CI validation evidence; local paper-balance ledgering, realistic local fill simulation, venue matching profiles, adverse-selection modeling, reference-only calibration records, paper ledger replay validation, and local historical-fixture backtest execution now exist, while external sandbox/live calibration evidence and deployment-host runtime validation remain deferred.
 
 ### Goal
 
@@ -393,6 +394,7 @@ Enable deterministic strategy testing without live funds.
 - Added a typed local `StateStore` checkpoint helper for the latest paper execution report, including SQLite WAL persistence/reopen coverage.
 - Added local paper balance ledgering in Phase 21 with quote-notional reservation, deterministic settlement, insufficient-balance denial, missing-reservation denial, and SQLite checkpoint persistence.
 - Added realistic local fill simulation in Phase 23 with supplied order-book depth walking, partial/unfilled outcomes, latency, queue-position, average price, slippage, and ledger-safe unfilled notional release.
+- Added Phase 24 local paper venue-realism, replay, and backtest validation records for exchange matching profiles, adverse selection, reference-only calibration records, ledger replay, local historical-fixture backtest corpus execution, and runtime validation records that preserve production blockers.
 - Exported paper connector primitives through `arb-core`.
 - Updated `arb-agent` status output to report paper connector boundary availability.
 - Updated structure validation to require Phase 6 files.
@@ -401,10 +403,10 @@ Enable deterministic strategy testing without live funds.
 
 - Cargo format/check/test/clippy validation.
 - Position tracking beyond quote-balance ledgering.
-- Exchange-specific matching behavior, adverse selection, sandbox/live discrepancy calibration, and historical replay validation.
+- External sandbox/live discrepancy calibration evidence and exchange account validation.
 - Audit journal integration for paper execution events.
-- Paper audit/runtime replay integration and production runtime validation beyond local lifecycle checkpointing.
-- Scenario fixture library and backtesting harness.
+- Production runtime validation beyond local replay/backtest records and lifecycle checkpointing.
+- Broader scenario fixture library, property/fuzz runner integration, and external backtest corpora.
 - Live CEX/DEX connector implementation.
 
 ### Validation
@@ -426,7 +428,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 ### Exit Criteria
 
-Met for ChatGPT Project Mode deterministic paper connector boundary implementation with current workspace Rust/CI validation evidence. Exchange-specific calibration, paper audit/replay validation, and backtesting corpus execution remain required before Phase 6 can be treated as tested production-like runtime behavior.
+Met for ChatGPT Project Mode deterministic paper connector boundary implementation with current workspace Rust/CI validation evidence. Local exchange matching profiles, adverse-selection modeling, calibration records, paper replay validation, and local backtest execution are implemented; external sandbox/live calibration evidence and production-host runtime validation remain required before Phase 6 can be treated as tested production-like runtime behavior.
 
 ## Phase 7 — CEX Connector Framework
 
@@ -1003,7 +1005,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 ### Exit Criteria
 
-Met for ChatGPT Project Mode testing, fuzzing, fixture, and backtesting boundary implementation with current workspace Rust/CI validation evidence. Property-test execution, fuzzing engine execution, fixture corpus expansion, replay/backtest execution, load testing, penetration testing, and production runtime validation remain required before production claims.
+Met for ChatGPT Project Mode testing, fuzzing, fixture, and backtesting boundary implementation with current workspace Rust/CI validation evidence. Phase 24 now executes local paper backtest corpora over caller-supplied fixtures, but property-test execution, fuzzing engine execution, broader fixture corpus expansion, CI-scale replay/backtest execution, load testing, penetration testing, and production runtime validation remain required before production claims.
 
 ## Phase 16 — Packaging and Deployment
 
@@ -1446,12 +1448,11 @@ Replace full-notional paper-fill assumptions with caller-supplied order-book dep
 
 ### Deferred Tasks
 
-- Exchange-specific matching behavior.
-- Adverse-selection and queue-position calibration.
-- Sandbox/live discrepancy analysis.
-- Paper audit/replay validation.
-- Historical backtesting corpus execution.
-- Production runtime validation.
+- External sandbox/live discrepancy evidence and exchange account validation.
+- Broader queue-position calibration against venue data.
+- Direct append-only audit journal integration for paper reports.
+- Deployment-host production runtime validation.
+- Broader fixture corpora, CI-scale replay, and production runtime validation.
 
 ### Validation
 
@@ -1467,4 +1468,52 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 ### Exit Criteria
 
-Met for local deterministic realistic paper fill modeling only. Live trading, production deployment, public exposure readiness, live exchange/RPC validation, exchange-specific calibration, and production readiness are not claimed.
+Met for local deterministic realistic paper fill modeling only. Live trading, production deployment, public exposure readiness, live exchange/RPC validation, external exchange-specific calibration evidence, and production readiness are not claimed.
+
+## Phase 24 - Paper Replay, Calibration, Backtest, and Runtime Validation Boundaries
+
+### Status
+
+Implemented for local deterministic paper validation scope.
+
+### Goal
+
+Close the local coding gaps around paper venue realism and validation by adding exchange-specific matching profiles, adverse-selection modeling, reference-only calibration records, paper ledger replay validation, local historical-fixture backtest corpus execution, and runtime validation records that preserve external production blockers.
+
+### Completed Tasks
+
+- Created `PHASE_24_SUBROADMAP.md` before implementation.
+- Added local `PaperExchangeMatchingProfile` records for venue tick size, quantity step, min/max notional, order-type support, partial-fill support, and queue-position behavior.
+- Added `PaperVenueRealismRequest` and related execution records that apply exchange matching, adverse-selection penalties, and optional calibration records through the existing paper adapter and ledger.
+- Added reference-only sandbox/live calibration records that can store sanitized evidence locators without copying artifact contents or secret material into the repo.
+- Added paper ledger replay validation that reconstructs balances from ledger entries and detects mutation mismatches or open reservations.
+- Added local paper backtest corpus execution over caller-supplied historical fixtures with no data downloads, live network use, or external execution.
+- Added paper runtime validation records that distinguish local replay/backtest coverage from missing production-host evidence.
+- Exported Phase 24 paper validation types from `arb-core`.
+- Surfaced Phase 24 status in `arb-agent`.
+- Updated structure validation for Phase 24 files.
+
+### Explicit Non-Goals
+
+- No live trading.
+- No real exchange, sandbox, or RPC calls.
+- No real balance reads or real account mutation.
+- No signing, withdrawals, bridges, broadcasts, wallet custody, or external adapter submission.
+- No production deployment or production-readiness approval.
+- No claim that local calibration records are externally observed sandbox/live evidence unless a future operator supplies non-secret external evidence references.
+
+### Validation
+
+Must be refreshed after this patch:
+
+```bash
+python3 scripts/validate_structure.py
+cargo fmt --check
+cargo check --workspace
+cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
+```
+
+### Exit Criteria
+
+Met for local deterministic paper venue-realism, replay, and fixture-backtest validation only. External sandbox/live calibration evidence, production-host runtime validation, deployment validation, live exchange/RPC validation, custody/signing validation, and production readiness are not claimed.

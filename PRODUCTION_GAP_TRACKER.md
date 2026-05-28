@@ -2,7 +2,7 @@
 
 ## Executive Status Summary
 
-The project is in Phase 23 local-realistic-paper-fill-modeled status for ChatGPT Project Mode. Architecture, roadmap, agent governance, phase sub-roadmaps, gap tracking, a minimal Rust workspace scaffold, typed non-secret config, reference-only secret abstractions, redacted secret material, initial live-mode validation, an isolated deny-by-default policy engine, append-only audit journal primitives, a state-store trait boundary with local SQLite WAL checkpoints, deterministic local durability validation, and process-level crash/restart recovery tests, normalized market-data models, freshness classification, fee models, provider trait boundaries, deterministic paper connectors with local paper-report and paper-ledger checkpoints plus realistic local fill modeling, CEX framework types/traits, DEX/Web3 framework types/traits, deterministic opportunity-engine types/traits, draft-only execution-planner types/traits with local plan-draft checkpoints, execution-adapter boundary records/traits with local adapter-run checkpoints, local fail-closed runtime lifecycle records for audit/state/adapter sequencing, communications/CLI command and notification boundary records/traits, embedded-dashboard local render records/traits, observability/runbook local health/log/metric/runbook records/traits, deterministic validation plan/fixture/fuzz/backtest records/traits, deterministic packaging/deployment plan records/traits plus example deployment templates, deterministic external hardening evidence/review records/traits plus hardening checklists, and deterministic agentic handoff package records/traits plus future-agent prompts and checklists exist. The 2026-05-27 ArbyClaw local validation sequence completed for repository structure, formatting, workspace compilation, tests, and clippy; this is local validation evidence only. GitHub Actions CI also runs structure, Rust validation, locked release build, dependency audit, SBOM generation, local-SARIF SAST, example image scan, secret-pattern scan, and hardening evidence indexing for pushed commits. The project is not ready for live funds, live exchange credentials, wallet keys, production deployment, transaction signing, broadcasts, live adapter submission, real outbound communications, real dashboard hosting, real observability/exporter/alert runtime, real fuzzing engine execution, real backtest execution, production container/systemd/ARM validation, broader external hardening execution, external agent execution validation, rollback drills, cloud deployment, production release, live-funds approval, or autonomous execution.
+The project is in Phase 24 local-paper-replay-calibration-backtest status for ChatGPT Project Mode. Architecture, roadmap, agent governance, phase sub-roadmaps, gap tracking, a minimal Rust workspace scaffold, typed non-secret config, reference-only secret abstractions, redacted secret material, initial live-mode validation, an isolated deny-by-default policy engine, append-only audit journal primitives, a state-store trait boundary with local SQLite WAL checkpoints, deterministic local durability validation, and process-level crash/restart recovery tests, normalized market-data models, freshness classification, fee models, provider trait boundaries, deterministic paper connectors with local paper-report and paper-ledger checkpoints plus realistic local fill modeling, local venue matching profiles, adverse-selection penalties, reference-only calibration records, paper ledger replay validation, local historical-fixture paper backtest execution, CEX framework types/traits, DEX/Web3 framework types/traits, deterministic opportunity-engine types/traits, draft-only execution-planner types/traits with local plan-draft checkpoints, execution-adapter boundary records/traits with local adapter-run checkpoints, local fail-closed runtime lifecycle records for audit/state/adapter sequencing, communications/CLI command and notification boundary records/traits, embedded-dashboard local render records/traits, observability/runbook local health/log/metric/runbook records/traits, deterministic validation plan/fixture/fuzz/backtest records/traits, deterministic packaging/deployment plan records/traits plus example deployment templates, deterministic external hardening evidence/review records/traits plus hardening checklists, and deterministic agentic handoff package records/traits plus future-agent prompts and checklists exist. The 2026-05-27 ArbyClaw local validation sequence completed for repository structure, formatting, workspace compilation, tests, and clippy; this is local validation evidence only. GitHub Actions CI also runs structure, Rust validation, locked release build, dependency audit, SBOM generation, local-SARIF SAST, example image scan, secret-pattern scan, and hardening evidence indexing for pushed commits. The project is not ready for live funds, live exchange credentials, wallet keys, production deployment, transaction signing, broadcasts, live adapter submission, real outbound communications, real dashboard hosting, real observability/exporter/alert runtime, real fuzzing engine execution, real external backtest execution beyond local paper fixtures, production container/systemd/ARM validation, broader external hardening execution, external agent execution validation, rollback drills, cloud deployment, production release, live-funds approval, or autonomous execution.
 
 ## Latest Local Validation Attempt
 
@@ -11,7 +11,7 @@ The project is in Phase 23 local-realistic-paper-fill-modeled status for ChatGPT
 - `python3 scripts/validate_structure.py` passed.
 - `cargo fmt --check` passed.
 - `cargo check --workspace` passed.
-- `cargo test --workspace` passed with 93 tests across 4 suites.
+- `cargo test --workspace` passed with 98 tests across 4 suites after Phase 24 local paper replay/calibration/backtest additions.
 - `cargo clippy --workspace --all-targets -- -D warnings` passed.
 - This validates local structure, formatting, compilation, tests, and linting only. It does not validate production deployment, live funds, live exchange/RPC integrations, signing, broadcasts, containers, systemd, ARM, CI, penetration testing, load testing, rollback drills, incident drills, external hardening, or production readiness.
 
@@ -31,6 +31,18 @@ The project is in Phase 23 local-realistic-paper-fill-modeled status for ChatGPT
 
 ## Latest Gap Tracker Audit
 
+2026-05-27 ArbyClaw Phase 24 paper replay/calibration/backtest validation audit:
+
+- Added `PHASE_24_SUBROADMAP.md` for local paper replay, calibration, backtest, and runtime validation boundaries.
+- Added local exchange matching profiles in `crates/arb-core/src/paper.rs` for tick size, quantity step, min/max notional, market/limit/post-only/partial-fill support, queue-position behavior, and calibration-required flags.
+- Added venue-realism paper execution records that apply exchange matching profiles, adverse-selection penalties, and reference-only sandbox/live calibration records through the existing paper adapter and paper ledger without external calls.
+- Added paper ledger replay validation that reconstructs final balances from ledger entries, detects entry/result mismatches, checks closed reservations, and records that direct append-only audit journal integration remains future work.
+- Added local historical-fixture paper backtest corpus execution that runs caller-supplied paper steps through the paper adapter and ledger with `live_network_used = false`, `external_data_downloaded = false`, and `external_execution_performed = false`.
+- Added paper runtime validation records that distinguish local replay/backtest evidence from missing production-host validation and preserve `production_ready = false`.
+- Added focused Rust tests for venue realism, adjusted P&L settlement, replay success/failure, local paper backtest execution, and runtime validation blocker preservation.
+- Phase 24 local validation passed for `cargo fmt --check`, `cargo check --workspace`, `cargo test --workspace` with 98 tests across 4 suites, and `cargo clippy --workspace --all-targets -- -D warnings`; the full final validation sequence is recorded in the latest local validation attempt above.
+- This closes the local deterministic coding gap for exchange-specific paper matching behavior, adverse-selection modeling, reference-only calibration records, paper replay validation, and local historical-fixture backtest execution. It does not close real sandbox/live calibration evidence, direct append-only audit journal integration for every paper event, production-host runtime validation, deployment validation, real exchange/RPC validation, custody/signing, or production-readiness blockers.
+
 2026-05-27 ArbyClaw Phase 23 realistic paper fill validation audit:
 
 - Added `PHASE_19_SUBROADMAP.md` and `crates/arb-core/src/runtime.rs` for local deterministic runtime lifecycle wiring.
@@ -45,7 +57,7 @@ The project is in Phase 23 local-realistic-paper-fill-modeled status for ChatGPT
 - Added `PHASE_23_SUBROADMAP.md` and local realistic paper fill modeling in `crates/arb-core/src/paper.rs` for supplied order-book depth walking, buy/sell side selection, full/partial/unfilled outcomes, latency, queue-position haircuts, average price, slippage, and consumed-level reporting.
 - Wired realistic paper reports into paper ledger settlement so the ledger reserves requested notional, settles modeled fill P&L, and releases unfilled reserved notional without real balance mutation.
 - Post-Phase 23 local validation passed: `python3 scripts/validate_structure.py`, `python3 -m py_compile scripts/validate_structure.py scripts/generate_structure_manifest.py`, `cargo fmt --check`, `cargo check --workspace`, `cargo test --workspace` with 93 tests across 4 suites, and `cargo clippy --workspace --all-targets -- -D warnings`.
-- This closes the local deterministic realistic paper fill modeling gap. It does not close exchange-specific matching calibration, adverse-selection modeling, sandbox/live discrepancy analysis, paper audit/replay validation, historical backtesting corpus execution, disk-full testing, filesystem permission fault validation, audit journal crash/concurrency validation, long-running daemon restart validation, deployment-host validation, real observability runtime, real dashboard hosting, real outbound communications, live/sandbox exchange/RPC validation, custody, signer, external adapter submission, deployment, rollback, incident, penetration, load, or production-readiness blockers.
+- This closed the local deterministic realistic paper fill modeling gap as of Phase 23. Phase 24 later added local matching profiles, adverse-selection records, reference-only calibration records, paper replay validation, and local historical-fixture backtest execution; real sandbox/live discrepancy evidence, direct append-only paper audit integration, disk-full testing, filesystem permission fault validation, audit journal crash/concurrency validation, long-running daemon restart validation, deployment-host validation, real observability runtime, real dashboard hosting, real outbound communications, live/sandbox exchange/RPC validation, custody, signer, external adapter submission, deployment, rollback, incident, penetration, load, and production-readiness blockers remain open.
 
 2026-05-27 ArbyClaw end-to-end repository reconciliation audit:
 
@@ -53,7 +65,7 @@ The project is in Phase 23 local-realistic-paper-fill-modeled status for ChatGPT
 - Reconciled the repository identity to ArbyClaw, replaced the placeholder repository URL with `https://github.com/dominator509/arbyclaw`, updated CLI/status wording for existing SQLite WAL checkpoint boundaries, and refreshed roadmap/security/handoff language to separate current local/CI Rust evidence from production/runtime validation that remains missing.
 - Post-reconciliation local validation passed: `python3 scripts/validate_structure.py`, `cargo fmt --check`, `cargo check --workspace`, `cargo test --workspace` with 78 tests across 3 suites, and `cargo clippy --workspace --all-targets -- -D warnings`.
 - No implemented live trading, signing, withdrawals, bridges, broadcasts, real exchange/RPC calls, wallet custody, or secret material was found in the code scan; matching terms remain as explicit deny-by-default policy text, boundary documentation, test fixtures, or CI hardening-tool setup.
-- No production blockers were closed by this reconciliation. Runtime lifecycle wiring, external production-host SQLite WAL validation, paper audit/replay validation, live/sandbox connector validation, public-exposure review, deployment validation, and broader external hardening evidence remain open where already tracked.
+- No production blockers were closed by this reconciliation. Runtime lifecycle wiring, external production-host SQLite WAL validation, direct append-only paper audit integration, live/sandbox connector validation, public-exposure review, deployment validation, and broader external hardening evidence remain open where already tracked.
 - `STRUCTURE_MANIFEST.md` was refreshed to match the reconciled working tree artifacts without treating the manifest itself as production-readiness evidence.
 
 2026-05-26 ArbyClaw roadmap-anchored production gap tracker audit:
@@ -139,14 +151,14 @@ The project is in Phase 23 local-realistic-paper-fill-modeled status for ChatGPT
 
 ## Current Production Readiness %
 
-93%
+94%
 
 Reasoning:
 
 - Governance and architecture foundation exist.
 - Minimal Rust workspace scaffold, CI skeleton, safety docs, and structure validation script exist.
-- Typed config, environment secret-reference handling, encrypted-keystore interface boundary, redacted secret material, initial mode gates, deny-by-default policy checks, append-only audit/state primitives, SQLite WAL local checkpoints, SQLite WAL process-level crash/restart recovery validation, normalized market-data models, freshness classification, fee models, deterministic paper market-data, static paper fees, policy-gated paper execution reports, local paper-report checkpoint helper, local paper balance ledgering, local realistic paper fill modeling, CEX framework models/traits, DEX/Web3 framework models/traits, opportunity-engine models/traits, execution-planner draft models/traits, local plan-draft checkpoint helper, execution-adapter boundary records/traits, local adapter-run checkpoint helper, local runtime lifecycle audit/state/adapter wiring, communications/CLI command and notification boundaries, embedded-dashboard local render boundaries, observability/runbook local record boundaries, deterministic testing/fuzzing/backtesting validation boundaries, deterministic packaging/deployment planning boundaries, deterministic external hardening evidence/checklist boundaries, and deterministic agentic handoff boundaries exist.
-- Encrypted-keystore backend, deployment-host SQLite WAL crash/restart/filesystem validation, disk-full validation, filesystem permission fault validation, audit crash/concurrency validation, live market-data providers, exchange-specific CEX adapters, live DEX/RPC adapters, signer/custody backends, transaction broadcast controls, external adapter submission, exchange-specific fill calibration, paper audit/replay validation, real outbound communications adapters, real dashboard hosting/authentication, real observability/exporter/alert runtime, real property/fuzz/backtest runner execution, durable planner/adapter/communications/dashboard/observability/testing audit-state lifecycle beyond the local paper-report, paper-ledger, and plan-draft checkpoint helpers, container/systemd/ARM validation, runtime deployment, broad external hardening execution, external agent execution validation, rollback drills, incident drills, and production validations are still incomplete.
+- Typed config, environment secret-reference handling, encrypted-keystore interface boundary, redacted secret material, initial mode gates, deny-by-default policy checks, append-only audit/state primitives, SQLite WAL local checkpoints, SQLite WAL process-level crash/restart recovery validation, normalized market-data models, freshness classification, fee models, deterministic paper market-data, static paper fees, policy-gated paper execution reports, local paper-report checkpoint helper, local paper balance ledgering, local realistic paper fill modeling, local venue matching profiles, adverse-selection penalties, reference-only calibration records, paper replay validation, local historical-fixture backtest execution, CEX framework models/traits, DEX/Web3 framework models/traits, opportunity-engine models/traits, execution-planner draft models/traits, local plan-draft checkpoint helper, execution-adapter boundary records/traits, local adapter-run checkpoint helper, local runtime lifecycle audit/state/adapter wiring, communications/CLI command and notification boundaries, embedded-dashboard local render boundaries, observability/runbook local record boundaries, deterministic testing/fuzzing/backtesting validation boundaries, deterministic packaging/deployment planning boundaries, deterministic external hardening evidence/checklist boundaries, and deterministic agentic handoff boundaries exist.
+- Encrypted-keystore backend, deployment-host SQLite WAL crash/restart/filesystem validation, disk-full validation, filesystem permission fault validation, audit crash/concurrency validation, live market-data providers, exchange-specific CEX adapters, live DEX/RPC adapters, signer/custody backends, transaction broadcast controls, external adapter submission, external sandbox/live fill calibration evidence, direct paper append-only audit journal integration, real outbound communications adapters, real dashboard hosting/authentication, real observability/exporter/alert runtime, real property/fuzz runner execution, broader CI-scale replay/backtest runner execution, durable planner/adapter/communications/dashboard/observability/testing audit-state lifecycle beyond the local paper-report, paper-ledger, replay, backtest, and plan-draft checkpoint helpers, container/systemd/ARM validation, runtime deployment, broad external hardening execution, external agent execution validation, rollback drills, incident drills, and production validations are still incomplete.
 - Live-funds risk remains high.
 
 ## Current Completed Phases
@@ -157,7 +169,7 @@ Reasoning:
 - Phase 3 — Policy Engine and Trust Contract (implemented; current workspace Rust/CI validation covered)
 - Phase 4 — Audit Journal and State Store (implemented as boundary; current workspace Rust/CI validation covered; SQLite WAL checkpoint store and local durability validation implemented; external production-host validation deferred)
 - Phase 5 — Market Data Core (implemented as boundary; current workspace Rust/CI validation covered; live provider validation deferred)
-- Phase 6 — Simulated/Paper Connectors (implemented as deterministic boundary; current workspace Rust/CI validation covered; exchange-specific paper calibration deferred)
+- Phase 6 — Simulated/Paper Connectors (implemented as deterministic boundary; current workspace Rust/CI validation covered; external sandbox/live paper calibration evidence deferred)
 - Phase 7 — CEX Connector Framework (implemented as typed framework boundary; current workspace Rust/CI validation covered; live exchange validation deferred)
 - Phase 8 — DEX/Web3 Connector Framework (implemented as typed framework boundary; current workspace Rust/CI validation covered; live RPC validation, signer validation, and broadcast validation deferred)
 - Phase 9 — Opportunity Engine (implemented as deterministic discovery/ranking boundary; current workspace Rust/CI validation covered; advanced route modeling and live-data validation deferred)
@@ -166,15 +178,16 @@ Reasoning:
 - Phase 12 — Communications and CLI (implemented as deterministic model/trait boundary; current workspace Rust/CI validation covered; real outbound integrations and audit/state lifecycle deferred)
 - Phase 13 — Embedded Dashboard (implemented as deterministic model/trait boundary; current workspace Rust/CI validation covered; real hosting, auth, and audit/state lifecycle deferred)
 - Phase 14 — Observability and Runbooks (implemented as deterministic model/trait boundary; current workspace Rust/CI validation covered; real telemetry runtime, exporters, alerts, and audit/state lifecycle deferred)
-- Phase 15 — Testing, Fuzzing, and Backtesting (implemented as deterministic model/trait boundary; current workspace Rust/CI validation covered; real property/fuzz/backtest execution, load testing, and penetration testing deferred)
+- Phase 15 — Testing, Fuzzing, and Backtesting (implemented as deterministic model/trait boundary; current workspace Rust/CI validation covered; Phase 24 local paper backtest execution exists; real property/fuzz, CI-scale replay/backtest, load testing, and penetration testing deferred)
 - Phase 16 — Packaging and Deployment (implemented as deterministic model/docs boundary; current release-build CI gate covered; production container/systemd/ARM validation, runtime deployment, and rollback drills deferred)
 - Phase 17 — External Production Hardening (implemented as deterministic evidence/checklist boundary; real external hardening execution deferred)
 - Phase 18 — Agentic Handoff Package (implemented as deterministic model/docs boundary; external agent execution and production validation deferred)
 - Phase 19 — Runtime Lifecycle Wiring (implemented as local deterministic audit/state/adapter lifecycle boundary; production runtime validation deferred)
 - Phase 20 — SQLite WAL Durability Validation (implemented as local deterministic state-store validation boundary; external production-host validation deferred)
-- Phase 21 — Paper Balance Ledgering (implemented as local deterministic paper balance boundary; paper audit/replay deferred)
+- Phase 21 — Paper Balance Ledgering (implemented as local deterministic paper balance boundary; direct append-only paper audit integration deferred)
 - Phase 22 — Crash/Restart Durability Validation (implemented as local process-level SQLite WAL recovery validation; deployment-host validation deferred)
-- Phase 23 — Realistic Paper Fills (implemented as local deterministic fill-model boundary; exchange-specific calibration and paper audit/replay deferred)
+- Phase 23 — Realistic Paper Fills (implemented as local deterministic fill-model boundary; external sandbox/live calibration evidence deferred)
+- Phase 24 — Paper Replay, Calibration, Backtest, and Runtime Validation Boundaries (implemented as local deterministic paper validation boundary; production-host validation and external sandbox/live evidence deferred)
 
 ## Current Incomplete Phases
 
@@ -421,17 +434,17 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Completion criteria: Market data is normalized, provenance-tracked, and freshness-checked.
 - Rollback considerations: Revert market-data crate changes.
 
-## GAP-0009 — Simulated/Paper Connector Boundary Implemented; Calibration and Replay Missing
+## GAP-0009 — Simulated/Paper Connector Boundary Implemented; External Calibration and Direct Audit Missing
 
 - Unique ID: GAP-0009
-- Phase association: Phase 6 / Phase 21 / Phase 23
+- Phase association: Phase 6 / Phase 21 / Phase 23 / Phase 24
 - Subsystem association: Simulation / paper trading
-- Description: Phase 6 deterministic in-memory paper market data, static paper fee schedules, and policy-gated paper execution reports exist with current local and GitHub Actions validation evidence. Phase 21 adds balance constraints and Phase 23 adds local realistic paper fill modeling for supplied order-book depth, partial fills, latency, queue position, slippage, and ledger-safe unfilled notional release. Exchange-specific calibration, durable audit/state integration, and richer replay validation remain incomplete.
-- Why incomplete: The deterministic paper boundary, local balance constraints, and local fill realism exist, but production-like calibration and lifecycle integration remain incomplete.
+- Description: Phase 6 deterministic in-memory paper market data, static paper fee schedules, and policy-gated paper execution reports exist with current local and GitHub Actions validation evidence. Phase 21 adds balance constraints, Phase 23 adds local realistic paper fill modeling for supplied order-book depth, partial fills, latency, queue position, slippage, and ledger-safe unfilled notional release, and Phase 24 adds local matching profiles, adverse-selection modeling, reference-only calibration records, paper replay validation, and local historical-fixture backtest execution. External sandbox/live calibration evidence and direct append-only paper audit integration remain incomplete.
+- Why incomplete: The deterministic paper boundary, local balance constraints, local fill realism, local replay, and local fixture backtest execution exist, but production-like external calibration and direct audit lifecycle integration remain incomplete.
 - Why blocked in ChatGPT Project Mode: Not blocked.
 - Risk level: High
-- Dependency requirements: Market-data core, execution intent model, audit journal, paper ledger, realistic fill model, scenario fixtures.
-- Exact future validation required: deterministic replay tests, paper audit lifecycle tests, exchange-specific calibration tests, failed-trade simulation tests, paper-vs-sandbox discrepancy analysis.
+- Dependency requirements: Market-data core, execution intent model, audit journal, paper ledger, realistic fill model, local replay/backtest records, and scenario fixtures.
+- Exact future validation required: direct paper audit lifecycle tests, exchange-specific sandbox/live calibration tests, failed-trade simulation tests, paper-vs-sandbox discrepancy analysis, and production-host runtime validation.
 - Exact future tooling/environment required: Rust test runner, fixture data.
 - Recommended future agent type: Rust Implementation Agent
 - Estimated production impact: Blocks safe validation before live execution.
@@ -502,7 +515,7 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Exact future validation required: intent-generation tests, policy-preflight tests, planner-integrated partial-fill tests, timeout tests, cancellation tests, failure-mode tests, audit-before-adapter tests, restart/recovery tests.
 - Exact future tooling/environment required: Rust test runner, temporary filesystem/database, mocked adapter fixtures, CI runner.
 - Recommended future agent type: Rust Implementation Agent + Policy Engine Agent + Audit and Observability Agent
-- Estimated production impact: Draft planning, local deterministic adapter handoff, SQLite WAL local durability validation, and direct paper realistic fills no longer block architecture, but live and production paper execution safety still depend on production-host runtime validation, planner-integrated fill handling, paper audit/replay, exchange-specific calibration, and real adapter integration.
+- Estimated production impact: Draft planning, local deterministic adapter handoff, SQLite WAL local durability validation, direct paper realistic fills, and local paper replay/backtest records no longer block architecture, but live and production paper execution safety still depend on production-host runtime validation, planner-integrated fill handling, direct append-only paper audit integration, external sandbox/live calibration evidence, and real adapter integration.
 - Completion criteria: Opportunities become durable, auditable, policy-checked plans that adapters can consume only after audit/state writes succeed, restart replay is validated, and external tests pass.
 - Rollback considerations: Remove `crates/arb-core/src/planner.rs`, remove planner exports/status text, force Paper/Observe modes, and return roadmap/gap tracker to Phase 9 state.
 
@@ -659,17 +672,17 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Completion criteria: Documented approval or documented restrictions integrated into config/policy.
 - Rollback considerations: Disable non-approved venues, strategies, and jurisdictions.
 
-## GAP-0023 — Real Runtime Validation Missing
+## GAP-0023 — Production Runtime Validation Missing Beyond Local Records
 
 - Unique ID: GAP-0023
-- Phase association: Phase 17
+- Phase association: Phase 17 / Phase 19 / Phase 24
 - Subsystem association: Runtime validation
-- Description: No daemon, service, CLI, network, or long-running process validation has been performed.
-- Why incomplete: No code exists yet.
-- Why blocked in ChatGPT Project Mode: Requires compiled runtime and target environment.
+- Description: Phase 19 local runtime lifecycle records and Phase 24 local paper runtime validation records exist, but no daemon, service, network, or long-running production-host process validation has been performed.
+- Why incomplete: Local lifecycle and paper runtime validation records exist, but deployment-host startup, service management, soak, restart, config reload, permissions, and observability validation remain external.
+- Why blocked in ChatGPT Project Mode: Production runtime validation requires a compiled runtime, target environment, service manager or process supervisor, and retained non-secret evidence.
 - Risk level: High
-- Dependency requirements: Runtime implementation, config, logging, health checks.
-- Exact future validation required: start/stop tests, crash recovery, config reload, service restart, daemon uptime soak test.
+- Dependency requirements: Runtime implementation, config, logging, health checks, deployment target, and non-secret evidence workflow.
+- Exact future validation required: start/stop tests, crash recovery, config reload, service restart, daemon uptime soak test, filesystem-permission test, disk-full test, and observability smoke test.
 - Exact future tooling/environment required: local machine, VPS, systemd or process supervisor.
 - Recommended future agent type: DevSecOps Orchestrator
 - Estimated production impact: Blocks unattended operation.
@@ -1026,37 +1039,37 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Completion criteria: Met for the current workspace Rust/Cargo validation aspect; future changes must rerun the validation commands.
 - Rollback considerations: Revert `crates/arb-core/src/paper.rs`, paper exports, CLI text, validator requirements, and Phase 6 governance updates if validation exposes unrecoverable defects.
 
-## GAP-0044 — Paper Connector Model Has Ledgering and Local Fill Realism; Calibration Missing
+## GAP-0044 — Paper Connector Model Has Local Realism, Replay, and Backtest Boundaries; External Calibration Evidence Missing
 
 - Unique ID: GAP-0044
-- Phase association: Phase 6 / Phase 9 / Phase 15 / Phase 21 / Phase 23
+- Phase association: Phase 6 / Phase 9 / Phase 15 / Phase 21 / Phase 23 / Phase 24
 - Subsystem association: Paper execution / simulation / backtesting
-- Description: Phase 6 provides deterministic in-memory market data, static fee schedules, and policy-gated paper execution reports. Phase 21 adds local simulated balance ledgering with quote-notional reservation, fill settlement, insufficient-balance denial, missing-reservation denial, and SQLite checkpoint persistence. Phase 23 adds local fill realism for supplied order-book depth consumption, partial fills, unfilled outcomes, latency, queue position, average price, slippage, and ledger-safe unfilled notional release. The paper model still lacks adverse-selection modeling, exchange-specific matching/settlement calibration, and sandbox/live discrepancy analysis.
-- Why incomplete: Local balance constraints and deterministic fill realism now exist, but exchange-specific calibration and replay validation belong to later opportunity, backtesting, testing, and sandbox-comparison phases.
+- Description: Phase 6 provides deterministic in-memory market data, static fee schedules, and policy-gated paper execution reports. Phase 21 adds local simulated balance ledgering with quote-notional reservation, fill settlement, insufficient-balance denial, missing-reservation denial, and SQLite checkpoint persistence. Phase 23 adds local fill realism for supplied order-book depth consumption, partial fills, unfilled outcomes, latency, queue position, average price, slippage, and ledger-safe unfilled notional release. Phase 24 adds local exchange matching profiles, adverse-selection modeling, reference-only calibration records, paper ledger replay validation, and local historical-fixture paper backtest execution. External sandbox/live calibration evidence and real venue discrepancy analysis remain missing.
+- Why incomplete: Local balance constraints, deterministic fill realism, venue matching, adverse-selection penalties, reference-only calibration records, replay validation, and local paper backtests now exist, but production trust still requires real sandbox/live samples, venue data, and external evidence.
 - Why blocked in ChatGPT Project Mode: Exchange-specific calibration requires historical market data, live or sandbox venue behavior samples, latency observations, and external evidence beyond local deterministic tests.
 - Risk level: High
-- Dependency requirements: Phase 9 opportunity engine, Phase 15 backtesting/scenario harness, external market-data samples, and current Rust validation baseline.
-- Exact future validation required: scenario replay tests, exchange-specific matching tests, adverse-selection tests, latency/slippage calibration tests, multi-asset position reconciliation tests, fee-model comparison tests, and paper-vs-sandbox discrepancy analysis.
+- Dependency requirements: Phase 9 opportunity engine, Phase 15 backtesting/scenario harness, Phase 24 local paper replay/backtest boundary, external market-data samples, and current Rust validation baseline.
+- Exact future validation required: sandbox/live venue sampling, latency/slippage calibration tests against external evidence, multi-asset position reconciliation tests, fee-model comparison tests, paper-vs-sandbox discrepancy analysis, and CI-scale historical fixture replay.
 - Exact future tooling/environment required: Rust test runner, historical data fixtures, sandbox exchange access where available, local SQLite or fixture store, CI runner.
 - Recommended future agent type: Simulation/Backtesting Agent + Market Data Connector Agent + Rust Implementation Agent
 - Estimated production impact: Paper profits may still overstate achievable live results; live execution must remain blocked until sandbox validation and calibration narrow the gap.
-- Completion criteria: Paper execution models depth, slippage, latency, fees, multi-asset positions, and partial fills with deterministic scenario tests, paper audit/replay coverage, and documented exchange-specific calibration limits.
+- Completion criteria: Paper execution models depth, slippage, latency, fees, multi-asset positions, and partial fills with deterministic scenario tests and paper replay coverage locally, then external sandbox/live evidence documents exchange-specific calibration limits and acceptable discrepancy thresholds.
 - Rollback considerations: Force Observe mode or disable paper-derived strategy promotion if paper/live discrepancies exceed thresholds.
 
-## GAP-0045 — Paper Ledger State Exists; Audit and Replay Integration Missing
+## GAP-0045 — Paper Ledger Replay Exists; Direct Audit Journal Integration Missing
 
 - Unique ID: GAP-0045
-- Phase association: Phase 6 / Phase 4 / Phase 10 / Phase 11 / Phase 19 / Phase 21
+- Phase association: Phase 6 / Phase 4 / Phase 10 / Phase 11 / Phase 19 / Phase 21 / Phase 24
 - Subsystem association: Paper execution / audit journal / state store
-- Description: Phase 6 paper execution calls policy before producing a report, and the latest deterministic paper report can be persisted through a typed local `StateStore` checkpoint helper with SQLite WAL reopen coverage. Phase 19 adds local planner-to-adapter audit/state lifecycle wiring. Phase 21 adds local paper balance ledgering with state checkpoint persistence. Direct paper-report audit lifecycle records, replay validation, and production runtime orchestration remain incomplete.
-- Why incomplete: Local report checkpointing, paper ledger checkpointing, and planner-to-adapter lifecycle wiring exist, but paper-report-specific audit-before-action, audit-after-action, restart replay, and production runtime orchestration remain deferred.
-- Why blocked in ChatGPT/Codex environment: Current Rust/Cargo validation exists for the paper connector, ledger, and local lifecycle boundary, but audit replay validation and production runtime validation remain incomplete.
+- Description: Phase 6 paper execution calls policy before producing a report, and the latest deterministic paper report can be persisted through a typed local `StateStore` checkpoint helper with SQLite WAL reopen coverage. Phase 19 adds local planner-to-adapter audit/state lifecycle wiring. Phase 21 adds local paper balance ledgering with state checkpoint persistence. Phase 24 adds local paper ledger replay validation. Direct paper-report append-only audit lifecycle records and production runtime orchestration remain incomplete.
+- Why incomplete: Local report checkpointing, paper ledger checkpointing, planner-to-adapter lifecycle wiring, and ledger replay validation exist, but paper-report-specific audit-before-action, audit-after-action, restart replay orchestration, and production runtime orchestration remain deferred.
+- Why blocked in ChatGPT/Codex environment: Current Rust/Cargo validation exists for the paper connector, ledger, replay, and local lifecycle boundary, but direct audit journal integration and production runtime validation remain incomplete.
 - Risk level: High
 - Dependency requirements: Phase 4 audit/state validation, SQLite WAL state store, Phase 10 planner, Phase 11 adapter lifecycle, and current Rust validation baseline.
-- Exact future validation required: paper intent audit-before-action test, paper report audit-after-action test, ledger replay consistency test, restart/replay consistency test, and production durability persistence test.
+- Exact future validation required: paper intent audit-before-action test, paper report audit-after-action test, restart/replay orchestration test, and production durability persistence test.
 - Exact future tooling/environment required: Rust test runner, temporary filesystem, SQLite WAL backend, CI runner, audit replay harness.
 - Recommended future agent type: Audit and Observability Agent + Execution Adapter Agent + Rust Implementation Agent
-- Estimated production impact: Paper balance accounting is now locally modeled, but using paper execution as auditable evidence for promotion toward live strategy controls remains blocked until audit/replay validation exists.
+- Estimated production impact: Paper balance accounting and ledger replay are now locally modeled, but using paper execution as auditable evidence for promotion toward live strategy controls remains blocked until direct append-only audit integration and production runtime validation exist.
 - Completion criteria: Every paper execution intent, ledger mutation, and result is journaled, state is checkpointed, replay is deterministic, and execution fails closed when audit/state writes fail.
 - Rollback considerations: Disable paper execution adapter use in strategy promotion and revert to read-only market-data simulation until audit/state integration is proven.
 
@@ -1416,17 +1429,17 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Completion criteria: Met for the current workspace Rust/Cargo validation aspect; future changes must rerun the validation commands.
 - Rollback considerations: Revert `crates/arb-core/src/testing.rs`, remove exports, remove CLI status text, and return roadmap/gap tracker to Phase 14 state if validation exposes unrecoverable defects.
 
-## GAP-0066 — Validation Runner, Fuzzing Engine, Corpus, and Backtest Execution Missing
+## GAP-0066 — Validation Runner, Fuzzing Engine, Broader Corpus, and Production Backtest Evidence Missing
 
 - Unique ID: GAP-0066
 - Phase association: Phase 15 / Phase 17
 - Subsystem association: Testing / fuzzing / backtesting / CI / runtime validation
-- Description: Phase 15 validation records are deterministic local models only. No actual property-test framework integration, external fuzzing engine execution, curated fuzz corpus, deterministic market replay runner, backtest execution engine, load testing, penetration testing, CI gate execution, or production validation run exists.
-- Why incomplete: Phase 15 intentionally implements only model/trait boundaries and disables external fuzzer invocation, live network tests, live execution, credential-bearing fixtures, signing, and broadcasts.
+- Description: Phase 15 validation records are deterministic local models, and Phase 24 adds local paper backtest corpus execution over caller-supplied fixtures. No actual property-test framework integration, external fuzzing engine execution, curated fuzz corpus, CI-scale deterministic market replay runner, production backtest evidence, load testing, penetration testing, or production validation run exists.
+- Why incomplete: Phase 15 intentionally implements only model/trait boundaries and disables external fuzzer invocation, live network tests, live execution, credential-bearing fixtures, signing, and broadcasts. Phase 24 executes local paper fixtures only and does not replace property, fuzz, load, penetration, or production validation.
 - Why blocked in ChatGPT Project Mode: Current Rust/Cargo and CI evidence exists for the validation-plan boundary, but real runner execution requires fixture files, fuzzing dependencies, replay datasets, temporary filesystems/databases, security tooling, and external runtime environments.
 - Risk level: High
-- Dependency requirements: Current Rust validation baseline, Phase 4 audit/state validation, Phase 5 market data validation, Phase 6 paper validation, Phase 9 opportunity validation, Phase 10 planner validation, Phase 11 adapter validation, Phase 14 observability validation, curated fixtures, and CI runner.
-- Exact future validation required: unit tests, integration tests, property tests, fuzz tests, deny-path tests, audit replay tests, deterministic backtest replay tests, scenario regression tests, load tests, rollback tests, incident-drill tests, and penetration tests.
+- Dependency requirements: Current Rust validation baseline, Phase 4 audit/state validation, Phase 5 market data validation, Phase 6/24 paper validation, Phase 9 opportunity validation, Phase 10 planner validation, Phase 11 adapter validation, Phase 14 observability validation, curated fixtures, and CI runner.
+- Exact future validation required: unit tests, integration tests, property tests, fuzz tests, deny-path tests, direct audit journal replay tests, CI-scale deterministic backtest replay tests, scenario regression tests, load tests, rollback tests, incident-drill tests, and penetration tests.
 - Exact future tooling/environment required: Rust test runner, property-test crate, fuzzing engine, fixture corpus, temporary filesystem, SQLite WAL backend, mocked CEX/DEX/RPC fixtures, CI runner, load-test tooling, and AppSec review workflow.
 - Recommended future agent type: Testing, Fuzzing, and Backtesting Agent + AppSec Lead + Rust Implementation Agent + DevSecOps Orchestrator
 - Estimated production impact: Blocks evidence-based confidence in safety, strategy correctness, replay determinism, and production readiness.
@@ -1596,8 +1609,8 @@ Before implementation begins, create `PHASE_18_SUBROADMAP.md`. Also run the defe
 - Unique ID: GAP-0076
 - Phase association: Phase 19
 - Subsystem association: Runtime lifecycle / audit journal / state store / execution adapter
-- Description: Phase 19 wires local deterministic runtime lifecycle sequencing for planner-to-adapter boundaries. The lifecycle appends audit records, checkpoints the plan before adapter evaluation, evaluates the deterministic adapter boundary, checkpoints the adapter run, appends adapter-completion audit records, rejects live scope before audit/state mutation, and preserves no external submission or live execution.
-- Why incomplete: The local code path and unit tests exist, including SQLite WAL reopen coverage and process-level crash/restart checkpoint recovery coverage, but production runtime lifecycle validation is still missing for concurrent access, filesystem permissions, disk-full behavior, long-running daemon orchestration, graceful shutdown, backup/restore under deployment load, observability integration, and real deployment environments.
+- Description: Phase 19 wires local deterministic runtime lifecycle sequencing for planner-to-adapter boundaries. The lifecycle appends audit records, checkpoints the plan before adapter evaluation, evaluates the deterministic adapter boundary, checkpoints the adapter run, appends adapter-completion audit records, rejects live scope before audit/state mutation, and preserves no external submission or live execution. Phase 24 adds local paper runtime validation records over replay/backtest evidence while preserving production blockers.
+- Why incomplete: The local code path and unit tests exist, including SQLite WAL reopen coverage, process-level crash/restart checkpoint recovery coverage, and local paper replay/backtest runtime records, but production runtime lifecycle validation is still missing for concurrent access, filesystem permissions, disk-full behavior, long-running daemon orchestration, graceful shutdown, backup/restore under deployment load, observability integration, and real deployment environments.
 - Why blocked in ChatGPT/Codex environment: Production runtime lifecycle validation requires targeted runtime scenarios, filesystem and process control, deployment-like environments, service-manager restart harnesses, and external evidence that cannot be claimed from local unit tests alone.
 - Risk level: High
 - Dependency requirements: Phase 4 audit/state validation, Phase 10 planner, Phase 11 execution-adapter boundary, SQLite WAL store, runtime test harness, filesystem controls, CI or local integration runner, and non-secret evidence recording.

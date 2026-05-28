@@ -29,7 +29,7 @@ Live execution remains blocked until all of the following exist and are validate
 4. Market-data freshness checks and externally verified fee models
 5. Draft-only execution planner
 6. Simulated or paper-trading validation
-7. Paper execution audit integration and scenario validation
+7. Paper execution replay/backtest validation, direct audit integration, and external sandbox/live calibration evidence
 8. Constrained signer boundary
 9. Deterministic opportunity discovery and policy-preflight execution planning
 10. Execution adapters with durable audit/state preconditions
@@ -62,7 +62,7 @@ The market-data and fee subsystems provide normalized read-only models and provi
 
 ## Phase 6 Paper Connector Boundary
 
-The paper connector subsystem provides deterministic in-memory market data, static paper fee schedules, policy-gated paper execution reports, local report checkpoint helpers, local simulated balance ledgering, and local realistic fill modeling only. It can consume caller-supplied order-book depth, model partial and unfilled outcomes, apply latency and queue-position assumptions, and release unfilled reserved notional through the paper ledger. It does not call live venues, connect to Web3 RPCs, load secrets, sign transactions, withdraw funds, or mutate real balances. Paper execution is not proof of production profitability. Exchange-specific calibration, audit/runtime replay integration, and backtesting scenario validation remain required before strategy decisions may be trusted.
+The paper connector subsystem provides deterministic in-memory market data, static paper fee schedules, policy-gated paper execution reports, local report checkpoint helpers, local simulated balance ledgering, local realistic fill modeling, local venue matching profiles, adverse-selection modeling, reference-only calibration records, paper ledger replay validation, and local paper backtest execution only. It can consume caller-supplied order-book depth, model partial and unfilled outcomes, apply latency and queue-position assumptions, and release unfilled reserved notional through the paper ledger. It does not call live venues, connect to Web3 RPCs, load secrets, sign transactions, withdraw funds, or mutate real balances. Paper execution is not proof of production profitability. Direct append-only audit journal integration, external sandbox/live calibration evidence, and production-host runtime validation remain required before strategy decisions may be trusted beyond local paper fixtures.
 
 ## Phase 7 CEX Connector Framework Boundary
 
@@ -103,7 +103,7 @@ The observability/runbook subsystem provides deterministic local health, structu
 
 ## Phase 15 Testing, Fuzzing, and Backtesting Boundary
 
-The testing/fuzzing/backtesting subsystem provides deterministic validation planning models only. It does not invoke external fuzzers, run live-network tests, download live market data, load credentials, submit orders or swaps, sign transactions, broadcast transactions, withdraw funds, bridge funds, or call exchanges/RPC providers. Credential-bearing fixtures are rejected, and secret-like operator labels are redacted in local validation records. Property-testing dependencies, fuzzing engine setup, curated corpus review, deterministic replay validation, backtest correctness checks, load tests, and penetration tests remain required before production validation claims.
+The testing/fuzzing/backtesting subsystem provides deterministic validation planning models, and Phase 24 adds local paper backtest execution over caller-supplied fixtures. It does not invoke external fuzzers, run live-network tests, download live market data, load credentials, submit orders or swaps, sign transactions, broadcast transactions, withdraw funds, bridge funds, or call exchanges/RPC providers. Credential-bearing fixtures are rejected, and secret-like operator labels are redacted in local validation records. Property-testing dependencies, fuzzing engine setup, broader curated corpus review, CI-scale replay validation, production backtest correctness checks, load tests, and penetration tests remain required before production validation claims.
 
 ## Phase 16 Packaging and Deployment Boundary
 
@@ -138,3 +138,7 @@ The crash/restart durability boundary is local and non-secret only. It validates
 ## Phase 23 Realistic Paper Fill Boundary
 
 The realistic paper fill boundary is local-only. It uses supplied normalized order-book snapshots to model full, partial, or unfilled paper outcomes with deterministic depth consumption, latency, queue-position haircuts, average price, slippage, and ledger settlement. It does not call exchanges, RPC providers, routers, wallets, signers, or external adapters, and it does not approve live execution or production readiness.
+
+## Phase 24 Paper Replay, Calibration, Backtest, and Runtime Validation Boundary
+
+The Phase 24 paper validation boundary is local-only. It models venue tick/step/min-notional behavior, adverse-selection penalties, reference-only calibration records, paper ledger replay, local historical-fixture backtests, and runtime validation records while preserving `production_ready = false`. It does not call sandbox or live exchanges, use live networks, download data, embed artifact contents, store secrets, mutate real balances, submit external orders, sign transactions, broadcast transactions, withdraw funds, bridge funds, or approve production readiness.
