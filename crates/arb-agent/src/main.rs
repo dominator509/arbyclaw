@@ -7,7 +7,8 @@ use arb_core::{
     DEFAULT_MARKET_DATA_FRESHNESS_MS, DEX_CONNECTOR_FRAMEWORK_VERSION,
     EXECUTION_ADAPTER_FRAMEWORK_VERSION, EXECUTION_PLANNER_VERSION, EXTERNAL_HARDENING_VERSION,
     OBSERVABILITY_RUNBOOK_VERSION, OPPORTUNITY_ENGINE_VERSION, PACKAGING_DEPLOYMENT_VERSION,
-    PAPER_CONNECTOR_VERSION, TESTING_BACKTESTING_VERSION,
+    PAPER_BALANCE_LEDGER_VERSION, PAPER_CONNECTOR_VERSION, PAPER_REALISTIC_FILL_MODEL_VERSION,
+    RUNTIME_LIFECYCLE_VERSION, SQLITE_WAL_DURABILITY_VERSION, TESTING_BACKTESTING_VERSION,
 };
 use std::{env, path::PathBuf, process::ExitCode};
 
@@ -45,14 +46,17 @@ fn run() -> Result<(), ConfigError> {
             );
             println!("policy: {} initialized", policy.trust_contract_version());
             println!("audit: append-only boundary available; runtime journal writing is not auto-started yet");
-            println!("state: trait boundary and local SQLite WAL checkpoints available; production durability and runtime lifecycle wiring pending");
+            println!("state: trait boundary and local SQLite WAL checkpoints available; {SQLITE_WAL_DURABILITY_VERSION} validates local integrity, WAL checkpoint, reopen, backup/restore, and multi-handle durability; external production-host validation pending");
             println!("market-data: normalized quote/order-book/fee boundaries available; live providers pending");
             println!("paper-connectors: {PAPER_CONNECTOR_VERSION} available for deterministic in-memory simulation only");
+            println!("paper-balance-ledger: {PAPER_BALANCE_LEDGER_VERSION} available for local simulated balances, reservations, fills, and SQLite checkpoints only");
+            println!("paper-fill-model: {PAPER_REALISTIC_FILL_MODEL_VERSION} available for supplied-depth local paper fills only; exchange-specific calibration pending");
             println!("cex-framework: {CEX_CONNECTOR_FRAMEWORK_VERSION} available as typed interface only; live exchange adapters pending");
             println!("dex-web3-framework: {DEX_CONNECTOR_FRAMEWORK_VERSION} available as typed interface only; live RPC, signing, and broadcasts pending");
             println!("opportunity-engine: {OPPORTUNITY_ENGINE_VERSION} available for deterministic discovery/ranking only; live execution pending");
             println!("execution-planner: {EXECUTION_PLANNER_VERSION} available for draft-only policy-evaluated planning; adapter submission disabled");
             println!("execution-adapter-framework: {EXECUTION_ADAPTER_FRAMEWORK_VERSION} available for deterministic boundary records only; external submission disabled");
+            println!("runtime-lifecycle: {RUNTIME_LIFECYCLE_VERSION} available for local fail-closed audit/state/adapter wiring only; live execution disabled");
             println!("communications-cli: {COMMUNICATIONS_CLI_VERSION} available for typed command/notification boundaries only; outbound integrations disabled");
             println!("embedded-dashboard: {DASHBOARD_BOUNDARY_VERSION} available for local render records only; web server exposure and live controls disabled");
             println!("observability-runbooks: {OBSERVABILITY_RUNBOOK_VERSION} available for local health/metric/log/runbook records only; metrics endpoints and outbound alerts disabled");
@@ -61,7 +65,7 @@ fn run() -> Result<(), ConfigError> {
             println!("external-hardening: {EXTERNAL_HARDENING_VERSION} available for deterministic evidence/checklist records only; external actions, production claims, and live-funds approval disabled");
             println!("agentic-handoff: {AGENTIC_HANDOFF_VERSION} available for deterministic prompts/checklists/package records only; external agent execution, production claims, and live-funds approval disabled");
             println!("market-data-default-freshness-ms: {DEFAULT_MARKET_DATA_FRESHNESS_MS}");
-            println!("status: config/policy/audit/market-data/paper/cex-framework/dex-web3-framework/opportunity-engine/execution-planner/execution-adapter-framework/communications-cli/dashboard/observability/testing/packaging/external-hardening/agentic-handoff-ready; live trading still requires custody, exchange-specific live connectors, DEX RPC adapters, signing boundaries, live adapter submission, outbound communications adapters, dashboard hosting hardening, observability runtime hardening, external validation harness execution, packaging/deployment hardening, executed external hardening evidence, and execution hardening phases");
+            println!("status: config/policy/audit/market-data/paper/paper-ledger/paper-fill-model/cex-framework/dex-web3-framework/opportunity-engine/execution-planner/execution-adapter-framework/runtime-lifecycle/communications-cli/dashboard/observability/testing/packaging/external-hardening/agentic-handoff-ready; live trading still requires custody, exchange-specific live connectors, DEX RPC adapters, signing boundaries, live adapter submission, outbound communications adapters, dashboard hosting hardening, observability runtime hardening, external validation harness execution, packaging/deployment hardening, executed external hardening evidence, and production execution hardening phases");
             Ok(())
         }
         Some("--help" | "-h") => {
@@ -75,7 +79,7 @@ fn run() -> Result<(), ConfigError> {
             reason: "unknown argument; use --help".to_owned(),
         }),
         None => {
-            println!("status: scaffold/config/policy/audit/market-data/paper/cex-framework/dex-web3-framework/opportunity-engine/execution-planner/execution-adapter-framework/communications-cli/dashboard/observability/testing/packaging/external-hardening/agentic-handoff-ready; live trading disabled until secrets, custody, exchange-specific live connectors, DEX RPC adapters, signing boundaries, live adapter submission, outbound communications adapters, dashboard hosting hardening, observability runtime hardening, external validation harness execution, packaging/deployment hardening, executed external hardening evidence, and execution hardening phases are implemented");
+            println!("status: scaffold/config/policy/audit/market-data/paper/paper-ledger/paper-fill-model/cex-framework/dex-web3-framework/opportunity-engine/execution-planner/execution-adapter-framework/runtime-lifecycle/communications-cli/dashboard/observability/testing/packaging/external-hardening/agentic-handoff-ready; live trading disabled until secrets, custody, exchange-specific live connectors, DEX RPC adapters, signing boundaries, live adapter submission, outbound communications adapters, dashboard hosting hardening, observability runtime hardening, external validation harness execution, packaging/deployment hardening, executed external hardening evidence, and production execution hardening phases are implemented");
             Ok(())
         }
     }

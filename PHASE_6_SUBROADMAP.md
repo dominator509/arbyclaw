@@ -123,14 +123,14 @@ No secrets, external accounts, runtime state, wallets, infrastructure, or networ
 
 - Rust validation remains deferred.
 - Paper connectors are not production execution connectors.
-- Paper execution does not model full order-book slippage, partial fills, latency, or real settlement.
+- Phase 23 now models local supplied-depth slippage, partial fills, latency, queue position, and unfilled notional release; exchange-specific calibration, adverse selection, sandbox/live discrepancy analysis, paper audit/replay, and real settlement remain deferred.
 - Audit/state integration remains deferred.
 - Live connectors remain unimplemented.
 
 ## Expected Future Continuation Tasks
 
 - Add opportunity detection using paper market data.
-- Add paper balance ledger and fill simulation.
+- Paper balance ledgering was added in Phase 21 for local simulated balances, quote-notional reservation, deterministic settlement, insufficient-balance denial, missing-reservation denial, and SQLite checkpoint persistence. Phase 23 added local supplied-depth fill simulation with partial fills and latency; future work still needs exchange-specific calibration, paper audit/replay, and historical scenario validation.
 - Add audit journaling for every paper execution event.
 - Add deterministic scenario fixtures.
 - Add CEX sandbox connectors after validation.

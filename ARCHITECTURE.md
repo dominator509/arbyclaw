@@ -6,11 +6,11 @@ ArbyClaw
 
 ## Architecture Status
 
-- Status: Phase 18 agentic handoff package boundary implemented; current workspace Rust/CI validation evidence exists, while external agent execution and real production hardening validation remain deferred.
-- Production readiness: 87% unchanged; Phase 18 adds handoff governance but no externally executed validation or production approval.
-- Implementation status: Minimal Rust workspace, typed config, redacted secret-reference abstractions, CLI config loading, isolated policy engine, append-only audit journal primitives, state-store trait boundary, normalized market-data models, freshness classification, fee models, provider trait boundaries, deterministic paper connectors, CEX connector framework types/traits, DEX/Web3 framework types/traits, deterministic opportunity-engine types/traits, draft-only execution-planner types/traits with local plan-draft checkpoint persistence, execution-adapter boundary records/traits, communications/CLI command and notification boundaries, embedded-dashboard local render boundaries, observability/runbook local record boundaries, testing/fuzzing/backtesting validation-plan boundaries, packaging/deployment plan boundaries, external hardening evidence/checklist boundaries, and agentic handoff package boundaries exist; current local and GitHub Actions validation covers structure, formatting, workspace compilation, tests, clippy, locked release build, dependency audit, SBOM generation, local-SARIF SAST evidence, example image scan, secret-pattern scan, and hardening evidence indexing. Production container validation, service installation, ARM cross-build validation, runtime deployment, validation runner execution, external fuzzing engine, backtest corpus execution, observability runtime, real dashboard hosting, outbound messaging integrations, external adapter submission, exchange-specific live adapters, live RPC adapters, wallet signer, transaction broadcasts, bridges, and live trading adapters remain unimplemented or unvalidated.
-- Safety posture: Design-time controls, Phase 2 mode gates, Phase 3 policy checks, Phase 4 redacted audit/hash-chain primitives and SQLite WAL checkpoint persistence, Phase 5 read-only market-data/fee boundaries, Phase 6 paper-only simulation boundaries with local paper-report checkpoint persistence, Phase 7 CEX framework live-order denial, Phase 8 DEX/Web3 framework live-swap/RPC/broadcast denial, Phase 9 opportunity discovery, Phase 10 draft-only execution planning with policy preflight outcomes, Phase 11 execution-adapter boundary records with policy revalidation, Phase 12 command/notification boundaries with outbound-network denial, Phase 13 dashboard render records with server/public-exposure/live-control denial, Phase 14 observability records with metrics-endpoint/outbound-alert denial, Phase 15 validation plans with external-fuzzer/live-network/live-execution denial, Phase 16 packaging records with build/deployment/public-exposure/production-claim denial, Phase 17 hardening records with external-action/production-claim/live-funds/public-exposure denial, and Phase 18 handoff records with external-agent-execution/external-validation-claim/production-claim/live-funds/public-exposure denial exist; signer boundary, live connector integrations, live execution controls, production durability validation, external adapter submission, real communication delivery, real dashboard hosting/authentication, real metrics/exporter/alert runtime, actual property/fuzz/backtest execution, production container/systemd/ARM deployment validation, broader Phase 17 production hardening review, future-agent execution validation, and external validation are not yet implemented or externally validated.
-- Current mode: Config/policy/audit/market-data/paper/CEX-framework/DEX-Web3-framework/opportunity-engine/execution-planner/execution-adapter-framework/communications-CLI/dashboard/observability/testing/packaging/hardening/handoff-ready greenfield construction with live trading disabled until later custody, exchange-specific live connector, DEX RPC adapter, signer, live adapter submission, execution hardening, real communications adapters, dashboard hosting hardening, observability runtime hardening, validation runner execution, packaging/deployment validation, production hardening review, and external validation phases are complete.
+- Status: Phase 23 local realistic paper-fill modeling implemented; current workspace Rust/CI validation evidence exists, while exchange-specific realism calibration, deployment-host durability validation, external agent execution, and real production hardening validation remain deferred.
+- Production readiness: 93%; Phase 23 adds deterministic local order-book depth, partial-fill, latency, queue-position, and ledger settlement modeling for paper execution but no live-funds approval, deployment approval, or externally executed production validation.
+- Implementation status: Minimal Rust workspace, typed config, redacted secret-reference abstractions, CLI config loading, isolated policy engine, append-only audit journal primitives, state-store trait boundary with SQLite WAL checkpoint persistence, local durability validation, and process-level crash/restart recovery tests, normalized market-data models, freshness classification, fee models, provider trait boundaries, deterministic paper connectors with local paper balance ledgering and realistic local fill simulation, CEX connector framework types/traits, DEX/Web3 framework types/traits, deterministic opportunity-engine types/traits, draft-only execution-planner types/traits with local plan-draft checkpoint persistence, execution-adapter boundary records/traits with local adapter-run checkpoint persistence, local fail-closed runtime lifecycle wiring for audit/state/adapter sequencing, communications/CLI command and notification boundaries, embedded-dashboard local render boundaries, observability/runbook local record boundaries, testing/fuzzing/backtesting validation-plan boundaries, packaging/deployment plan boundaries, external hardening evidence/checklist boundaries, and agentic handoff package boundaries exist; current local and GitHub Actions validation covers structure, formatting, workspace compilation, tests, clippy, locked release build, dependency audit, SBOM generation, local-SARIF SAST evidence, example image scan, secret-pattern scan, and hardening evidence indexing. Production container validation, service installation, ARM cross-build validation, runtime deployment, validation runner execution, external fuzzing engine, backtest corpus execution, observability runtime, real dashboard hosting, outbound messaging integrations, external adapter submission, exchange-specific live adapters, live RPC adapters, wallet signer, transaction broadcasts, bridges, deployment-host durability validation, exchange-specific fill calibration, and live trading adapters remain unimplemented or unvalidated.
+- Safety posture: Design-time controls, Phase 2 mode gates, Phase 3 policy checks, Phase 4 redacted audit/hash-chain primitives and SQLite WAL checkpoint persistence, Phase 5 read-only market-data/fee boundaries, Phase 6 paper-only simulation boundaries with local paper-report and paper-ledger checkpoint persistence, Phase 7 CEX framework live-order denial, Phase 8 DEX/Web3 framework live-swap/RPC/broadcast denial, Phase 9 opportunity discovery, Phase 10 draft-only execution planning with policy preflight outcomes, Phase 11 execution-adapter boundary records with policy revalidation, Phase 12 command/notification boundaries with outbound-network denial, Phase 13 dashboard render records with server/public-exposure/live-control denial, Phase 14 observability records with metrics-endpoint/outbound-alert denial, Phase 15 validation plans with external-fuzzer/live-network/live-execution denial, Phase 16 packaging records with build/deployment/public-exposure/production-claim denial, Phase 17 hardening records with external-action/production-claim/live-funds/public-exposure denial, Phase 18 handoff records with external-agent-execution/external-validation-claim/production-claim/live-funds/public-exposure denial, Phase 19 runtime lifecycle records with audit-before-adapter and state-before-adapter checks, Phase 20 SQLite WAL durability checks with non-secret probes, Phase 21 paper balance ledger checks, Phase 22 process-level crash/restart recovery checks, and Phase 23 realistic paper fill checks exist; signer boundary, live connector integrations, live execution controls, exchange-specific fill calibration, deployment-host durability validation, external adapter submission, real communication delivery, real dashboard hosting/authentication, real metrics/exporter/alert runtime, actual property/fuzz/backtest execution, production container/systemd/ARM deployment validation, broader Phase 17 production hardening review, future-agent execution validation, and external validation are not yet implemented or externally validated.
+- Current mode: Config/policy/audit/market-data/paper/CEX-framework/DEX-Web3-framework/opportunity-engine/execution-planner/execution-adapter-framework/runtime-lifecycle/communications-CLI/dashboard/observability/testing/packaging/hardening/handoff-ready greenfield construction with live trading disabled until later custody, exchange-specific live connector, DEX RPC adapter, signer, live adapter submission, production execution hardening, real communications adapters, dashboard hosting hardening, observability runtime hardening, validation runner execution, packaging/deployment validation, production hardening review, and external validation phases are complete.
 
 ## Mission
 
@@ -202,11 +202,19 @@ Responsibilities:
 - Expose CLI commands
 - Trigger graceful shutdown
 
+Phase 19 implementation status:
+
+- `arb-core::runtime` defines local `RuntimeLifecycleRequest`, `RuntimeLifecycleRecord`, lifecycle status/error types, and `run_local_runtime_lifecycle`.
+- The lifecycle appends an audit event, persists the execution-plan draft, appends a plan-checkpoint audit event, evaluates the deterministic execution-adapter boundary, persists the adapter run, and appends an adapter-complete audit event.
+- Live-scope lifecycle requests are rejected before audit/state mutation.
+- Lifecycle records preserve `external_submission_performed = false` and `live_execution_performed = false`.
+
 Boundaries:
 
 - Does not sign transactions
 - Does not bypass policy
 - Does not directly mutate secrets
+- Does not submit external adapter requests or live orders
 
 ### 2. Configuration Subsystem
 
@@ -347,6 +355,7 @@ Responsibilities:
 - Provide deterministic in-memory market-data fixtures
 - Provide static paper fee schedules
 - Produce policy-gated paper execution reports
+- Track local simulated paper balances, notional reservations, and modeled fill settlement
 - Support future opportunity-engine and backtesting phases without live funds
 
 Phase 6 implementation status:
@@ -356,6 +365,9 @@ Phase 6 implementation status:
 - Paper fees implement the Phase 5 `FeeProvider` trait using static schedules.
 - Paper execution requires `PolicyEngine` approval and rejects non-paper scopes before producing a report.
 - `persist_paper_execution_report_checkpoint` stores the latest deterministic paper report through the typed local `StateStore` boundary and can use `SqliteWalStateStore` for non-secret local checkpoint persistence.
+- `PaperBalanceLedger` tracks caller-supplied simulated balances, reserves quote notional for paper intents, settles filled, partial, or unfilled reports with net paper P&L, releases unfilled reserved notional, and fails closed on insufficient balances or missing reservations.
+- `PaperFillSimulationRequest` and `PaperFillSimulationReport` consume caller-supplied local order-book depth, model buy/sell side fills, partial fills, unfilled outcomes, average fill price, slippage, latency, queue-position haircuts, and consumed levels without network calls.
+- `persist_paper_balance_ledger_checkpoint` stores the latest deterministic paper ledger through the typed local `StateStore` boundary and can use `SqliteWalStateStore` for non-secret local checkpoint persistence.
 
 Boundaries:
 
@@ -363,9 +375,9 @@ Boundaries:
 - Does not load secrets
 - Does not sign transactions
 - Does not mutate real balances
-- Does not model production-grade depth, partial fills, latency, or settlement yet
+- Does not model exchange-specific matching, adverse selection, sandbox/live discrepancy calibration, or production-grade settlement yet
 - Must call policy before paper execution reports are produced
-- Does not replace future mandatory audit-before-action, fail-closed state writes, balance reconciliation, or production durability validation
+- Does not replace future mandatory audit-before-action, paper replay validation, exchange-specific realism checks, or external production-host durability validation
 
 ### 6B. CEX Connector Framework Subsystem
 
@@ -508,6 +520,7 @@ Phase 11 implementation status:
 - Paper fills and reconciliation records are deterministic model records only.
 - `external_submission_enabled` and every per-attempt `submitted_to_external_adapter` flag remain false.
 - Live scope and external adapter submission are rejected fail-closed.
+- `persist_execution_adapter_run_checkpoint` stores the latest deterministic adapter run through the typed local `StateStore` boundary and can use `SqliteWalStateStore` for non-secret local checkpoint persistence.
 
 Boundaries:
 
@@ -519,7 +532,7 @@ Boundaries:
 - Does not sign or broadcast transactions
 - Does not withdraw or bridge funds
 - Does not submit external orders or transactions
-- Does not provide durable audit/state persistence yet
+- Does not provide production-validated durable audit/state persistence yet
 
 ### 10. Audit Journal Subsystem
 
@@ -548,7 +561,7 @@ Boundaries:
 - Must be efficient and non-blocking where possible
 - Must support durable flush semantics for live-fund operations
 - Phase 4 JSONL audit is not yet SQLite WAL storage, externally crash-tested durability, concurrent append validation, or log shipping
-- State persistence is not production-ready until the SQLite WAL-backed implementation is crash/concurrency/filesystem validated and wired into runtime lifecycle paths
+- State persistence has local SQLite WAL integrity/checkpoint/reopen/backup-restore/multi-handle validation, but is not production-ready until crash/restart, filesystem failure, and deployment-host validation are executed with non-secret evidence references
 
 ### 11. Communications Subsystem
 
@@ -938,12 +951,12 @@ Every phase must preserve rollback safety by:
 - No exchange-specific live CEX adapters
 - No live DEX/Web3 RPC adapters, signer, transaction simulation integrations, or broadcasts
 - No live execution adapter submissions
-- SQLite WAL state store exists for local checkpoints, but production durability validation and runtime lifecycle wiring are missing
+- SQLite WAL state store exists for local checkpoints, is wired into the local runtime lifecycle boundary, and has local integrity/checkpoint/reopen/backup-restore/multi-handle plus process-level crash/restart validation, but deployment-host crash/restart/filesystem validation is missing
 - Audit journal is not crash/concurrency/filesystem validated
 - CEX framework is not connected to real REST/WebSocket APIs or sandboxes
 - DEX/Web3 framework is not connected to real RPC, router, aggregator, signer, simulation, or broadcast adapters
 - Opportunity engine has current workspace Rust validation evidence but does not yet model inventory, transfer latency, full triangular path discovery, or depth-aware slippage
-- Execution planner and execution-adapter framework have current workspace Rust validation evidence but do not provide durable audit/state lifecycle integration
+- Execution planner and execution-adapter framework have current workspace Rust validation evidence and local audit/state lifecycle wiring, but production runtime validation and live/sandbox adapter integration remain missing
 - No runtime deployment validation
 - No container, systemd, ARM, or rollback-drill validation
 - CI/CD execution validation exists for structure, Rust validation, locked release build, dependency audit, SBOM generation, local-SARIF SAST evidence, example image scan, secret-pattern scan, and hardening evidence indexing only

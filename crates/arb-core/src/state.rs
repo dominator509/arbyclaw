@@ -5,9 +5,12 @@ use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
-    fmt,
+    fmt, fs,
     path::{Path, PathBuf},
 };
+
+/// Version marker for SQLite WAL durability validation records.
+pub const SQLITE_WAL_DURABILITY_VERSION: &str = "phase20-sqlite-wal-durability-v1";
 
 /// State checkpoint persisted by future durable stores.
 ///
@@ -68,6 +71,36 @@ pub struct SqliteWalStateStore {
     path: PathBuf,
 }
 
+/// Non-secret result of a SQLite WAL durability validation pass.
+///
+/// This report intentionally records outcomes only. It does not include local
+/// filesystem paths, checkpoint values, database contents, secrets, dependency
+/// graphs, or embedded artifacts.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct SqliteWalDurabilityReport {
+    /// SQLite journal mode observed by the validation pass.
+    pub journal_mode: String,
+    /// SQLite synchronous mode observed by the validation pass.
+    pub synchronous_mode: String,
+    /// True when `PRAGMA integrity_check` returned `ok`.
+    pub integrity_check_passed: bool,
+    /// True when `PRAGMA wal_checkpoint(TRUNCATE)` completed without busy pages.
+    pub wal_checkpoint_truncate_passed: bool,
+    /// True when a fresh handle reopened the primary database and read the probe.
+    pub reopen_read_check_passed: bool,
+    /// True when a copied, checkpointed database reopened and read the probe.
+    pub backup_restore_check_passed: bool,
+    /// True when two local handles observed each other's non-secret checkpoints.
+    pub multi_handle_check_passed: bool,
+    /// Live execution is never performed by this validation boundary.
+    pub live_execution_performed: bool,
+    /// External network access is never performed by this validation boundary.
+    pub external_network_used: bool,
+    /// Secret material is never recorded by this validation boundary.
+    pub secret_material_recorded: bool,
+}
+
 impl SqliteWalStateStore {
     /// Open or create a SQLite WAL-backed state store at `path`.
     ///
@@ -96,6 +129,167 @@ impl SqliteWalStateStore {
     #[must_use]
     pub fn path(&self) -> &Path {
         &self.path
+    }
+
+    /// Return the current SQLite journal mode for validation evidence.
+    pub fn journal_mode(&self) -> Result<String, StateStoreError> {
+        self.connection
+            .query_row("PRAGMA journal_mode", [], |row| row.get::<_, String>(0))
+            .map(|mode| mode.to_ascii_lowercase())
+            .map_err(sqlite_backend_error("failed to read sqlite journal mode"))
+    }
+
+    /// Return the current SQLite synchronous mode for validation evidence.
+    pub fn synchronous_mode(&self) -> Result<String, StateStoreError> {
+        let mode = self
+            .connection
+            .query_row("PRAGMA synchronous", [], |row| row.get::<_, i64>(0))
+            .map_err(sqlite_backend_error(
+                "failed to read sqlite synchronous mode",
+            ))?;
+        Ok(match mode {
+            0 => "OFF",
+            1 => "NORMAL",
+            2 => "FULL",
+            3 => "EXTRA",
+            _ => "UNKNOWN",
+        }
+        .to_owned())
+    }
+
+    /// Run SQLite's integrity check and fail closed unless it returns `ok`.
+    pub fn integrity_check(&self) -> Result<(), StateStoreError> {
+        let result = self
+            .connection
+            .query_row("PRAGMA integrity_check", [], |row| row.get::<_, String>(0))
+            .map_err(sqlite_backend_error("failed to run sqlite integrity check"))?;
+        if result == "ok" {
+            Ok(())
+        } else {
+            Err(StateStoreError::BackendFailed {
+                reason: format!("sqlite integrity check failed: {result}"),
+            })
+        }
+    }
+
+    /// Flush WAL pages into the main database and truncate the WAL file.
+    pub fn wal_checkpoint_truncate(&self) -> Result<(), StateStoreError> {
+        let (busy, _log_pages, _checkpointed_pages): (i64, i64, i64) = self
+            .connection
+            .query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |row| {
+                Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+            })
+            .map_err(sqlite_backend_error(
+                "failed to run sqlite WAL checkpoint truncate",
+            ))?;
+        if busy == 0 {
+            Ok(())
+        } else {
+            Err(StateStoreError::BackendFailed {
+                reason: format!("sqlite WAL checkpoint was busy: {busy}"),
+            })
+        }
+    }
+
+    /// Validate local SQLite WAL durability without live trading or network use.
+    ///
+    /// The validation writes deterministic non-secret probe checkpoints, verifies
+    /// two local handles can observe each other's writes, runs integrity and WAL
+    /// checkpoint checks, reopens the primary database, copies the checkpointed
+    /// main database to `backup_path`, and verifies the copied database can be
+    /// reopened and read. `backup_path` must not already exist.
+    pub fn validate_durability(
+        &mut self,
+        probe_key: &str,
+        backup_path: impl AsRef<Path>,
+        now_unix_ms: u64,
+    ) -> Result<SqliteWalDurabilityReport, StateStoreError> {
+        validate_checkpoint_key(probe_key)?;
+        let backup_path = backup_path.as_ref();
+        validate_backup_path(&self.path, backup_path)?;
+
+        let journal_mode = self.journal_mode()?;
+        if journal_mode != "wal" {
+            return Err(StateStoreError::BackendFailed {
+                reason: format!("sqlite journal mode is not WAL: {journal_mode}"),
+            });
+        }
+
+        let synchronous_mode = self.synchronous_mode()?;
+        if synchronous_mode != "FULL" {
+            return Err(StateStoreError::BackendFailed {
+                reason: format!("sqlite synchronous mode is not FULL: {synchronous_mode}"),
+            });
+        }
+
+        let primary_checkpoint = StateCheckpoint {
+            key: probe_key.to_owned(),
+            subsystem: "state-durability".to_owned(),
+            value: "sqlite-wal-durability-validation".to_owned(),
+            updated_at_unix_ms: now_unix_ms,
+        };
+        self.put_checkpoint(primary_checkpoint.clone())?;
+
+        let peer_key = format!("{probe_key}:peer");
+        {
+            let mut peer_store = Self::open(&self.path)?;
+            peer_store.put_checkpoint(StateCheckpoint {
+                key: peer_key.clone(),
+                subsystem: "state-durability".to_owned(),
+                value: "sqlite-wal-multi-handle-validation".to_owned(),
+                updated_at_unix_ms: now_unix_ms.saturating_add(1),
+            })?;
+            let peer_read = peer_store.get_checkpoint(probe_key)?;
+            if peer_read != Some(primary_checkpoint.clone()) {
+                return Err(StateStoreError::BackendFailed {
+                    reason: "sqlite peer handle could not read primary checkpoint".to_owned(),
+                });
+            }
+        }
+        let primary_read = self.get_checkpoint(&peer_key)?;
+        if primary_read.is_none() {
+            return Err(StateStoreError::BackendFailed {
+                reason: "sqlite primary handle could not read peer checkpoint".to_owned(),
+            });
+        }
+
+        self.integrity_check()?;
+        self.wal_checkpoint_truncate()?;
+
+        {
+            let reopened = Self::open(&self.path)?;
+            if reopened.get_checkpoint(probe_key)? != Some(primary_checkpoint.clone()) {
+                return Err(StateStoreError::BackendFailed {
+                    reason: "sqlite reopened primary could not read durability probe".to_owned(),
+                });
+            }
+        }
+
+        fs::copy(&self.path, backup_path).map_err(filesystem_backend_error(
+            "failed to copy sqlite durability backup",
+        ))?;
+        {
+            let restored = Self::open(backup_path)?;
+            if restored.get_checkpoint(probe_key)? != Some(primary_checkpoint) {
+                return Err(StateStoreError::BackendFailed {
+                    reason: "sqlite restored backup could not read durability probe".to_owned(),
+                });
+            }
+            restored.integrity_check()?;
+        }
+
+        Ok(SqliteWalDurabilityReport {
+            journal_mode,
+            synchronous_mode,
+            integrity_check_passed: true,
+            wal_checkpoint_truncate_passed: true,
+            reopen_read_check_passed: true,
+            backup_restore_check_passed: true,
+            multi_handle_check_passed: true,
+            live_execution_performed: false,
+            external_network_used: false,
+            secret_material_recorded: false,
+        })
     }
 
     fn initialize(&self) -> Result<(), StateStoreError> {
@@ -274,7 +468,39 @@ fn validate_checkpoint_key(key: &str) -> Result<(), StateStoreError> {
     Ok(())
 }
 
+fn validate_backup_path(primary_path: &Path, backup_path: &Path) -> Result<(), StateStoreError> {
+    if backup_path.as_os_str().is_empty() {
+        return Err(StateStoreError::ValidationFailed {
+            reason: "sqlite durability backup path is required".to_owned(),
+        });
+    }
+    if backup_path == primary_path {
+        return Err(StateStoreError::ValidationFailed {
+            reason: "sqlite durability backup path must differ from primary path".to_owned(),
+        });
+    }
+    if backup_path.exists() {
+        return Err(StateStoreError::ValidationFailed {
+            reason: "sqlite durability backup path already exists".to_owned(),
+        });
+    }
+    if contains_secret_like_content(&backup_path.display().to_string()) {
+        return Err(StateStoreError::ValidationFailed {
+            reason: "sqlite durability backup path contains secret-like content".to_owned(),
+        });
+    }
+    Ok(())
+}
+
 fn sqlite_backend_error(context: &'static str) -> impl FnOnce(rusqlite::Error) -> StateStoreError {
+    move |error| StateStoreError::BackendFailed {
+        reason: format!("{context}: {error}"),
+    }
+}
+
+fn filesystem_backend_error(
+    context: &'static str,
+) -> impl FnOnce(std::io::Error) -> StateStoreError {
     move |error| StateStoreError::BackendFailed {
         reason: format!("{context}: {error}"),
     }
@@ -401,6 +627,56 @@ mod tests {
         assert!(matches!(error, StateStoreError::ValidationFailed { .. }));
         drop(store);
         cleanup_state_files(&path);
+    }
+
+    #[test]
+    fn sqlite_wal_durability_validation_covers_integrity_checkpoint_reopen_and_backup() {
+        let path = unique_state_path("durability");
+        let backup_path = unique_state_path("durability-backup");
+        let mut store = SqliteWalStateStore::open(&path).expect("sqlite store opens");
+
+        let report = store
+            .validate_durability("state:durability-probe", &backup_path, 100)
+            .expect("durability validation passes");
+
+        assert_eq!(report.journal_mode, "wal");
+        assert_eq!(report.synchronous_mode, "FULL");
+        assert!(report.integrity_check_passed);
+        assert!(report.wal_checkpoint_truncate_passed);
+        assert!(report.reopen_read_check_passed);
+        assert!(report.backup_restore_check_passed);
+        assert!(report.multi_handle_check_passed);
+        assert!(!report.live_execution_performed);
+        assert!(!report.external_network_used);
+        assert!(!report.secret_material_recorded);
+
+        let restored = SqliteWalStateStore::open(&backup_path).expect("backup reopens");
+        let checkpoint = restored
+            .get_checkpoint("state:durability-probe")
+            .expect("backup checkpoint reads")
+            .expect("backup checkpoint exists");
+        assert_eq!(checkpoint.value, "sqlite-wal-durability-validation");
+
+        drop(store);
+        cleanup_state_files(&path);
+        cleanup_state_files(&backup_path);
+    }
+
+    #[test]
+    fn sqlite_wal_durability_validation_rejects_existing_backup_path() {
+        let path = unique_state_path("durability-existing-backup");
+        let backup_path = unique_state_path("durability-existing-backup-copy");
+        fs::write(&backup_path, b"existing").expect("existing backup fixture writes");
+        let mut store = SqliteWalStateStore::open(&path).expect("sqlite store opens");
+
+        let error = store
+            .validate_durability("state:durability-probe", &backup_path, 100)
+            .expect_err("existing backup path should fail closed");
+
+        assert!(matches!(error, StateStoreError::ValidationFailed { .. }));
+        drop(store);
+        cleanup_state_files(&path);
+        cleanup_state_files(&backup_path);
     }
 
     fn unique_state_path(label: &str) -> PathBuf {

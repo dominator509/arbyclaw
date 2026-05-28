@@ -29,10 +29,15 @@ The current authoritative baseline is the Phase 18 agentic handoff package snaps
 - Phase 16 — Packaging and Deployment
 - Phase 17 — External Production Hardening evidence boundary
 - Phase 18 — Agentic Handoff Package
+- Phase 19 — Runtime Lifecycle Wiring
+- Phase 20 — SQLite WAL Durability Validation
+- Phase 21 — Paper Balance Ledgering
+- Phase 22 — Crash/Restart Durability Validation
+- Phase 23 — Realistic Paper Fills
 
 ## Current Production Readiness
 
-87% as of Phase 18 governance. Phase 18 did not increase readiness because handoff packaging is documentation/model-only and real external validation remains environment-limited. This percentage is a governance approximation only and does not imply readiness for live funds or production deployment.
+93% as of Phase 23 governance. Phase 23 adds local deterministic realistic paper fills for supplied order-book depth, partial fills, latency, queue position, slippage, and ledger-safe unfilled notional release, but exchange-specific calibration and real deployment-host validation remain environment-limited. This percentage is a governance approximation only and does not imply readiness for live funds or production deployment.
 
 ## Non-Negotiable Safety State
 
@@ -100,6 +105,7 @@ Current `arb-core` modules:
 - `packaging`
 - `hardening`
 - `handoff`
+- `runtime`
 
 ## Current Validation Reality
 
@@ -178,7 +184,12 @@ You are continuing the ArbyClaw project. Inspect the latest repository checkout 
 - Phase 16 packaging/deployment plans exist only as local model/documentation boundaries; current CI evidence includes release-build and example-only container/image-scan gates, but no production container image validation, systemd install, ARM build, runtime deployment, rollback drill, incident drill, or production release validation exists.
 - Phase 17 hardening records and CI evidence paths now cover current workspace Rust validation, locked release build, dependency audit, SBOM generation, local-SARIF SAST evidence, example image scan, secret-pattern scan, and hardening artifact indexing; no staging deployment, load test, penetration test, rollback drill, incident drill, live exchange/RPC validation, or production readiness review was executed.
 - Phase 18 handoff records exist only as local prompts/checklists/package models; no external agents were executed and no validation was performed by the handoff boundary.
-- SQLite WAL-backed checkpoint state store exists for local non-secret state, and paper execution reports plus execution-plan drafts can now be persisted through typed local checkpoint helpers; production durability validation and broader runtime lifecycle wiring remain incomplete.
+- Phase 19 runtime lifecycle wiring exists for local deterministic audit/state/adapter sequencing only. It rejects live scope, persists plan and adapter checkpoints, and records no external submission or live execution.
+- Phase 20 SQLite WAL durability validation exists for local non-secret checkpoint probes. It verifies WAL mode, synchronous FULL, integrity check, WAL checkpoint truncate, primary reopen, checkpointed backup/restore, and multi-handle visibility.
+- Phase 21 paper balance ledgering exists for local simulated balances only. It reserves quote notional, settles filled paper reports with net paper P&L, fails closed on insufficient balances or missing reservations, and persists ledger checkpoints through the typed local state-store boundary.
+- Phase 22 crash/restart validation exists as a local Cargo integration harness. It launches child processes, writes SQLite WAL checkpoints, exits abruptly after start/plan/adapter stages, reopens from the parent, runs integrity checks, and verifies expected checkpoint recovery.
+- Phase 23 realistic paper fills exist for local deterministic simulation only. They consume caller-supplied order-book depth, model full/partial/unfilled outcomes, latency, queue-position haircuts, average price, slippage, and ledger settlement that releases unfilled reserved notional without external submission.
+- SQLite WAL-backed checkpoint state store exists for local non-secret state, and paper execution reports, paper balance ledgers, execution-plan drafts, and execution-adapter runs can now be persisted through typed local checkpoint helpers; deployment-host filesystem validation remains incomplete.
 - No encrypted keystore backend.
 - No signer boundary.
 - No exchange-specific CEX adapters.

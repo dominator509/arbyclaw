@@ -35,6 +35,7 @@ pub mod packaging;
 pub mod paper;
 pub mod planner;
 pub mod policy;
+pub mod runtime;
 pub mod secrets;
 pub mod state;
 pub mod testing;
@@ -132,10 +133,14 @@ pub use opportunity::{
 };
 
 pub use paper::{
-    persist_paper_execution_report_checkpoint, PaperConnectorError, PaperExecutionAdapter,
-    PaperExecutionReport, PaperExecutionStatus, PaperFeeProvider, PaperMarketDataProvider,
+    persist_paper_balance_ledger_checkpoint, persist_paper_execution_report_checkpoint,
+    PaperAssetBalance, PaperBalanceLedger, PaperConnectorError, PaperExecutionAdapter,
+    PaperExecutionReport, PaperExecutionStatus, PaperFeeProvider, PaperFillModelConfig,
+    PaperFillSide, PaperFillSimulationReport, PaperFillSimulationRequest,
+    PaperFillSimulationStatus, PaperLedgerEntry, PaperLedgerEntryKind, PaperLedgeredExecution,
+    PaperMarketDataProvider, PAPER_BALANCE_LEDGER_CHECKPOINT_KEY, PAPER_BALANCE_LEDGER_VERSION,
     PAPER_CONNECTOR_VERSION, PAPER_EXECUTION_LAST_REPORT_CHECKPOINT_KEY,
-    PAPER_EXECUTION_STATE_SUBSYSTEM,
+    PAPER_EXECUTION_STATE_SUBSYSTEM, PAPER_REALISTIC_FILL_MODEL_VERSION,
 };
 
 pub use testing::{
@@ -157,16 +162,24 @@ pub use planner::{
 };
 
 pub use execution_adapter::{
-    DeterministicExecutionAdapterBoundary, ExecutionAdapter, ExecutionAdapterAction,
-    ExecutionAdapterAttempt, ExecutionAdapterAttemptStatus, ExecutionAdapterConfig,
-    ExecutionAdapterError, ExecutionAdapterRequest, ExecutionAdapterRunRecord,
-    ExecutionAdapterRunStatus, ExecutionAdapterViolation, ExecutionFillRecord, ExecutionFillStatus,
+    persist_execution_adapter_run_checkpoint, DeterministicExecutionAdapterBoundary,
+    ExecutionAdapter, ExecutionAdapterAction, ExecutionAdapterAttempt,
+    ExecutionAdapterAttemptStatus, ExecutionAdapterConfig, ExecutionAdapterError,
+    ExecutionAdapterRequest, ExecutionAdapterRunRecord, ExecutionAdapterRunStatus,
+    ExecutionAdapterViolation, ExecutionFillRecord, ExecutionFillStatus,
     ExecutionReconciliationRecord, ExecutionReconciliationStatus,
-    EXECUTION_ADAPTER_FRAMEWORK_VERSION,
+    EXECUTION_ADAPTER_FRAMEWORK_VERSION, EXECUTION_ADAPTER_LAST_RUN_CHECKPOINT_KEY,
+    EXECUTION_ADAPTER_STATE_SUBSYSTEM,
 };
 
 pub use state::{
-    InMemoryStateStore, SqliteWalStateStore, StateCheckpoint, StateStore, StateStoreError,
+    InMemoryStateStore, SqliteWalDurabilityReport, SqliteWalStateStore, StateCheckpoint,
+    StateStore, StateStoreError, SQLITE_WAL_DURABILITY_VERSION,
+};
+
+pub use runtime::{
+    run_local_runtime_lifecycle, RuntimeLifecycleError, RuntimeLifecycleRecord,
+    RuntimeLifecycleRequest, RuntimeLifecycleStatus, RUNTIME_LIFECYCLE_VERSION,
 };
 
 pub use policy::{

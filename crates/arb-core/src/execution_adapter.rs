@@ -6,13 +6,19 @@
 use crate::{
     ExecutionIntent, ExecutionIntentKind, ExecutionPlanDraft, ExecutionPlanStatus,
     ExecutionPlannerError, ExecutionScope, PlannerPolicyStatus, PolicyDecision, PolicyEngine,
-    VenueRef,
+    StateCheckpoint, StateStore, StateStoreError, VenueRef,
 };
 use serde::{Deserialize, Serialize};
 use std::{error::Error, fmt};
 
 /// Stable execution-adapter framework version for audit, replay, and handoff surfaces.
 pub const EXECUTION_ADAPTER_FRAMEWORK_VERSION: &str = "phase-11-execution-adapter-framework-v1";
+
+/// State-store subsystem name for execution-adapter checkpoints.
+pub const EXECUTION_ADAPTER_STATE_SUBSYSTEM: &str = "execution-adapter";
+
+/// State-store key for the latest deterministic execution-adapter run.
+pub const EXECUTION_ADAPTER_LAST_RUN_CHECKPOINT_KEY: &str = "execution-adapter:last-run";
 
 /// Phase 11 adapter configuration.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -393,6 +399,31 @@ impl ExecutionAdapterRunRecord {
 
         finish_validation(violations)
     }
+}
+
+/// Persist the latest deterministic execution-adapter run as a non-secret checkpoint.
+///
+/// This helper only writes through the typed local `StateStore` boundary. It
+/// does not submit adapters, place orders, call exchanges/RPCs, sign payloads,
+/// broadcast transactions, withdraw funds, or bridge assets.
+pub fn persist_execution_adapter_run_checkpoint(
+    store: &mut impl StateStore,
+    run: &ExecutionAdapterRunRecord,
+) -> Result<StateCheckpoint, StateStoreError> {
+    run.validate()
+        .map_err(|error| StateStoreError::ValidationFailed {
+            reason: error.to_string(),
+        })?;
+    let checkpoint = StateCheckpoint {
+        key: EXECUTION_ADAPTER_LAST_RUN_CHECKPOINT_KEY.to_owned(),
+        subsystem: EXECUTION_ADAPTER_STATE_SUBSYSTEM.to_owned(),
+        value: serde_json::to_string(run).map_err(|error| StateStoreError::BackendFailed {
+            reason: format!("failed to serialize execution-adapter run checkpoint: {error}"),
+        })?,
+        updated_at_unix_ms: run.created_at_unix_ms,
+    };
+    store.put_checkpoint(checkpoint.clone())?;
+    Ok(checkpoint)
 }
 
 /// Execution-adapter trait boundary.
@@ -788,14 +819,16 @@ impl Error for ExecutionAdapterError {}
 #[cfg(test)]
 mod tests {
     use super::{
-        DeterministicExecutionAdapterBoundary, ExecutionAdapter, ExecutionAdapterConfig,
-        ExecutionAdapterRequest, ExecutionAdapterRunStatus,
+        persist_execution_adapter_run_checkpoint, DeterministicExecutionAdapterBoundary,
+        ExecutionAdapter, ExecutionAdapterConfig, ExecutionAdapterRequest,
+        ExecutionAdapterRunStatus, EXECUTION_ADAPTER_LAST_RUN_CHECKPOINT_KEY,
+        EXECUTION_ADAPTER_STATE_SUBSYSTEM,
     };
     use crate::{
         AgentConfig, DeterministicExecutionPlanner, ExecutionPlanner, ExecutionPlannerConfig,
-        ExecutionPlannerRequest, FeeAdjustedEdge, FeeEstimate, LiquidityRole, MarketPair,
-        OpportunityCandidate, OpportunityLeg, OpportunityLegSide, OpportunityRouteKind,
-        OpportunityScore, PolicyEngine, VenueKind, VenueRef,
+        ExecutionPlannerRequest, FeeAdjustedEdge, FeeEstimate, InMemoryStateStore, LiquidityRole,
+        MarketPair, OpportunityCandidate, OpportunityLeg, OpportunityLegSide, OpportunityRouteKind,
+        OpportunityScore, PolicyEngine, StateStore, VenueKind, VenueRef,
     };
 
     const PAPER_CONFIG: &str = r#"
@@ -874,6 +907,38 @@ redact_secrets = true
             .fills
             .iter()
             .all(|fill| fill.external_order_id.is_none()));
+    }
+
+    #[test]
+    fn adapter_run_persists_as_state_checkpoint() {
+        let policy = policy();
+        let plan = planner_plan(&policy);
+        let request = ExecutionAdapterRequest {
+            id: "adapter-request-1".to_owned(),
+            plan,
+            config: ExecutionAdapterConfig::default(),
+            now_unix_ms: 20_000,
+        };
+        let run = DeterministicExecutionAdapterBoundary::new()
+            .evaluate_plan(&request, &policy)
+            .expect("adapter run should be modeled");
+        let mut store = InMemoryStateStore::new();
+
+        let checkpoint = persist_execution_adapter_run_checkpoint(&mut store, &run)
+            .expect("adapter run checkpoint should persist");
+
+        assert_eq!(checkpoint.key, EXECUTION_ADAPTER_LAST_RUN_CHECKPOINT_KEY);
+        assert_eq!(checkpoint.subsystem, EXECUTION_ADAPTER_STATE_SUBSYSTEM);
+        assert_eq!(checkpoint.updated_at_unix_ms, run.created_at_unix_ms);
+        let restored: super::ExecutionAdapterRunRecord =
+            serde_json::from_str(&checkpoint.value).expect("checkpoint json should parse");
+        assert_eq!(restored, run);
+        assert_eq!(
+            store
+                .get_checkpoint(EXECUTION_ADAPTER_LAST_RUN_CHECKPOINT_KEY)
+                .expect("checkpoint should read"),
+            Some(checkpoint)
+        );
     }
 
     fn policy() -> PolicyEngine {

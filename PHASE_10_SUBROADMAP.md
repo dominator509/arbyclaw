@@ -116,7 +116,7 @@ Met when:
 
 - Keep Rust compilation, formatting, clippy, and unit tests current after future changes.
 - Durable audit journal writes for plan creation and policy outcomes.
-- Full runtime lifecycle wiring beyond the current local plan-draft checkpoint helper.
+- Production runtime validation beyond the current local lifecycle checkpoint wiring.
 - Execution adapter handoff in Phase 11.
 - Advanced partial-fill, timeout, cancellation, and hedge sequencing.
 - Live mode enablement remains blocked by custody, signer, audit, state, connector, and external validation phases.

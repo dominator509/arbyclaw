@@ -23,6 +23,11 @@ Rust-first, governance-driven crypto arbitrage agent scaffold.
 - Phase 16 packaging/deployment plan, target, release-gate, rollback-step, and example deployment documentation boundaries implemented.
 - Phase 17 external hardening evidence, release-blocker, production-readiness checklist, and incident-drill template boundaries implemented.
 - Phase 18 agentic handoff package records, future-agent prompts, governance checklist, and external validation checklist boundaries implemented.
+- Phase 19 local runtime lifecycle wiring implemented for fail-closed audit/state/adapter sequencing.
+- Phase 20 local SQLite WAL durability validation implemented for integrity, WAL checkpoint, reopen, backup/restore, and multi-handle state-store checks.
+- Phase 21 local paper balance ledgering implemented for simulated balances, reservations, fill settlement, insufficient-balance denial, and SQLite checkpoints.
+- Phase 22 local process-level crash/restart durability validation implemented for SQLite WAL checkpoint recovery.
+- Phase 23 local realistic paper fills implemented for supplied order-book depth, partial fills, unfilled outcomes, latency, queue position, slippage, and ledger-safe unfilled notional release.
 - Live trading is not implemented.
 - Wallet signing is not implemented.
 - External adapter submission, exchange-specific live CEX adapters, live DEX/Web3 RPC/signing/broadcast adapters, real outbound communications adapters, real dashboard hosting, real observability/exporter/alert runtime, real fuzzing engines, real backtest execution, production container validation, systemd installation, ARM validation, external agent execution, and production deployment are not implemented.
@@ -53,7 +58,7 @@ python3 scripts/validate_structure.py
 
 ## Safety Position
 
-This repository is not ready for live funds. Future live execution must remain gated behind typed config, encrypted secret handling, deny-by-default policy checks, durable redacted audit journaling, validated market-data freshness, simulation where available, and constrained signer boundaries. Phase 6 paper primitives, Phase 7 CEX framework primitives, Phase 8 DEX/Web3 framework primitives, Phase 9 opportunity-engine primitives, Phase 10 execution-planner draft primitives, Phase 11 execution-adapter framework primitives, Phase 12 communications/CLI primitives, Phase 13 embedded-dashboard primitives, Phase 14 observability/runbook primitives, Phase 15 testing/backtesting validation primitives, Phase 16 packaging/deployment planning primitives, Phase 17 external-hardening evidence/checklist primitives, and Phase 18 agentic handoff primitives exist, and local/CI Rust validation is current for this workspace state. External adapter submission, exchange-specific live adapters, live DEX/RPC adapters, signer/broadcast controls, live provider validation, realistic fill simulation, paper balance ledgering, real outbound communications adapters, authenticated remote command channels, real dashboard hosting/authentication, real metrics/exporter/alert runtime, real property/fuzz/backtest runner execution, production packaging/deployment validation, real external hardening execution, external agent execution validation, opportunity/planner/adapter/CEX/DEX/communications/dashboard/observability/testing/packaging/hardening/handoff audit-state integration, crash testing, concurrent append testing, filesystem hardening, production SQLite WAL durability validation, and live execution integration remain incomplete.
+This repository is not ready for live funds. Future live execution must remain gated behind typed config, encrypted secret handling, deny-by-default policy checks, durable redacted audit journaling, validated market-data freshness, simulation where available, and constrained signer boundaries. Phase 6 paper primitives, Phase 7 CEX framework primitives, Phase 8 DEX/Web3 framework primitives, Phase 9 opportunity-engine primitives, Phase 10 execution-planner draft primitives, Phase 11 execution-adapter framework primitives, Phase 12 communications/CLI primitives, Phase 13 embedded-dashboard primitives, Phase 14 observability/runbook primitives, Phase 15 testing/backtesting validation primitives, Phase 16 packaging/deployment planning primitives, Phase 17 external-hardening evidence/checklist primitives, Phase 18 agentic handoff primitives, Phase 19 local runtime lifecycle primitives, Phase 20 local SQLite WAL durability validation primitives, Phase 21 local paper balance ledger primitives, Phase 22 local process-level crash/restart validation primitives, and Phase 23 realistic paper fill primitives exist, and local/CI Rust validation is current for this workspace state. External adapter submission, exchange-specific live adapters, live DEX/RPC adapters, signer/broadcast controls, live provider validation, exchange-specific fill calibration, paper audit/replay validation, real outbound communications adapters, authenticated remote command channels, real dashboard hosting/authentication, real metrics/exporter/alert runtime, real property/fuzz/backtest runner execution, production packaging/deployment validation, real external hardening execution, external agent execution validation, disk-full testing, concurrent audit append testing, filesystem permission hardening, deployment-host SQLite WAL durability validation, production runtime validation, and live execution integration remain incomplete.
 
 
 ## Phase 12 Communications and CLI Boundary
@@ -86,3 +91,23 @@ The external hardening boundary defines deterministic evidence records, hardenin
 ## Phase 18 Agentic Handoff Boundary
 
 The handoff subsystem provides deterministic package records, continuation prompts, governance reconciliation checklists, and external validation checklists for future agents and maintainers. It does not call external coding-agent services, deploy infrastructure, approve production readiness, approve public exposure, approve live funds, or store credentials. See `handoff/AGENTIC_HANDOFF_PACKAGE.md`, `handoff/FUTURE_AGENT_PROMPTS.md`, and `handoff/EXTERNAL_VALIDATION_CHECKLIST.md`.
+
+## Phase 19 Runtime Lifecycle Boundary
+
+The runtime lifecycle boundary wires local audit/state preconditions around deterministic adapter evaluation. It appends audit events, checkpoints the plan before adapter evaluation, evaluates the deterministic adapter boundary, checkpoints the adapter run, and records that no external submission or live execution occurred. It rejects live-scope lifecycle requests before audit/state mutation. This is local lifecycle wiring only, not production deployment or live execution readiness.
+
+## Phase 20 SQLite WAL Durability Boundary
+
+The SQLite WAL durability boundary validates local non-secret checkpoint persistence. It verifies WAL mode, synchronous FULL, SQLite integrity check, WAL checkpoint truncate, primary database reopen, checkpointed backup/restore, and multi-handle visibility. It does not store secrets, call networks, trade, sign, broadcast, deploy services, or approve production readiness. External production-host crash/restart/filesystem validation remains required.
+
+## Phase 21 Paper Balance Ledger Boundary
+
+The paper balance ledger boundary tracks local simulated balances only. It reserves quote notional for paper intents, settles filled paper reports with net paper P&L, fails closed on insufficient balances or missing reservations, and can persist the ledger through SQLite WAL checkpoints. It does not read real balances, mutate real accounts, call venues, sign, broadcast, withdraw, bridge, or approve production readiness.
+
+## Phase 22 Crash/Restart Durability Boundary
+
+The crash/restart durability boundary is a local Cargo integration harness. It starts child test processes that write SQLite WAL checkpoints and exit abruptly after start, planner, or adapter stages; the parent process reopens the database, runs integrity checks, and verifies expected checkpoint recovery. It does not simulate power loss, disk-full behavior, deployment services, live trading, real venues, signing, broadcasts, withdrawals, bridges, custody, or production readiness.
+
+## Phase 23 Realistic Paper Fill Boundary
+
+The realistic paper fill boundary consumes caller-supplied normalized order-book snapshots and models local paper fills with depth walking, buy/sell side selection, partial and unfilled outcomes, latency, queue-position haircuts, average price, slippage, and ledger settlement that releases unfilled reserved notional. It does not call live venues, read or mutate real balances, submit orders, sign transactions, broadcast transactions, withdraw, bridge, or prove production profitability.
