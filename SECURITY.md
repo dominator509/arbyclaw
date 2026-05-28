@@ -52,7 +52,7 @@ The policy engine is deny-by-default and must be called by every future executio
 
 ## Phase 4 Audit Boundary
 
-The audit subsystem provides typed redacted events, secret-like metadata rejection, append-only JSONL records, and a local hash chain. This improves accountability but is not yet sufficient for live funds. Rust validation, crash recovery testing, concurrent append testing, filesystem permission hardening, SQLite WAL persistence, retention policy, and execution-adapter integration remain required before production use.
+The audit subsystem provides typed redacted events, secret-like metadata rejection, append-only JSONL records, and a local hash chain. This improves accountability but is not yet sufficient for live funds. Current workspace Rust validation exists for the modeled boundary, while crash recovery testing, concurrent append testing, filesystem permission hardening, production SQLite WAL durability validation, retention policy, and execution-adapter integration remain required before production use.
 
 
 ## Phase 5 Market Data and Fee Boundary
@@ -62,7 +62,7 @@ The market-data and fee subsystems provide normalized read-only models and provi
 
 ## Phase 6 Paper Connector Boundary
 
-The paper connector subsystem provides deterministic in-memory market data, static paper fee schedules, and policy-gated paper execution reports only. It does not call live venues, connect to Web3 RPCs, load secrets, sign transactions, withdraw funds, or mutate real balances. Paper execution is not proof of production profitability. Rust validation, paper balance ledgering, realistic fill/slippage/latency modeling, audit integration, and backtesting scenario validation remain required before strategy decisions may be trusted.
+The paper connector subsystem provides deterministic in-memory market data, static paper fee schedules, policy-gated paper execution reports, and local report checkpoint helpers only. It does not call live venues, connect to Web3 RPCs, load secrets, sign transactions, withdraw funds, or mutate real balances. Paper execution is not proof of production profitability. Paper balance ledgering, realistic fill/slippage/latency modeling, audit/runtime lifecycle integration, and backtesting scenario validation remain required before strategy decisions may be trusted.
 
 ## Phase 7 CEX Connector Framework Boundary
 
@@ -76,15 +76,15 @@ The DEX/Web3 connector framework defines typed chain profiles, token profiles, r
 
 ## Phase 9 Opportunity Engine Boundary
 
-The opportunity engine defines deterministic discovery and ranking models only. It consumes supplied normalized quotes and fee schedules, applies market-data freshness checks, calculates fee-aware edges, and returns non-executing opportunity records. It does not create execution intents, submit orders, sign transactions, call exchange APIs, call DEX/router/RPC APIs, withdraw funds, bridge assets, mutate balances, or bypass policy. Full triangular path search, inventory-aware sizing, depth-aware slippage, durable audit/state lifecycle integration, live-data validation, and Rust/Cargo validation remain required before any strategy output may be trusted with real funds.
+The opportunity engine defines deterministic discovery and ranking models only. It consumes supplied normalized quotes and fee schedules, applies market-data freshness checks, calculates fee-aware edges, and returns non-executing opportunity records. It does not create execution intents, submit orders, sign transactions, call exchange APIs, call DEX/router/RPC APIs, withdraw funds, bridge assets, mutate balances, or bypass policy. Full triangular path search, inventory-aware sizing, depth-aware slippage, durable audit/state lifecycle integration, and live-data validation remain required before any strategy output may be trusted with real funds.
 
 ## Phase 10 Execution Planner Boundary
 
-The execution planner defines draft-only planning models. It converts validated opportunity candidates into per-leg `ExecutionIntent` records, evaluates each draft intent through the policy engine, captures redacted policy outcomes, and models sequencing plus failure boundaries. It does not submit to execution adapters, place orders, sign transactions, broadcast transactions, withdraw funds, bridge assets, call exchange APIs, call DEX/router/RPC APIs, or mutate balances. Live scope is rejected by the planner. Durable audit/state lifecycle integration, adapter handoff, partial-fill/cancellation handling, runtime orchestration, and Rust/Cargo validation remain required before any plan can be used beyond draft review.
+The execution planner defines draft-only planning models. It converts validated opportunity candidates into per-leg `ExecutionIntent` records, evaluates each draft intent through the policy engine, captures redacted policy outcomes, models sequencing plus failure boundaries, and can checkpoint draft plans to local SQLite WAL state. It does not submit to execution adapters, place orders, sign transactions, broadcast transactions, withdraw funds, bridge assets, call exchange APIs, call DEX/router/RPC APIs, or mutate balances. Live scope is rejected by the planner. Durable audit/runtime lifecycle integration, adapter handoff, partial-fill/cancellation handling, and runtime orchestration remain required before any plan can be used beyond draft review.
 
 ## Phase 11 Execution Adapter Framework Boundary
 
-The execution-adapter framework defines deterministic adapter-boundary records only. It consumes `ExecutionPlanDraft` records, revalidates each intent through the policy engine, and produces attempt, fill, and reconciliation records without external submission. It does not call exchange APIs, call DEX/router/RPC APIs, sign transactions, broadcast transactions, withdraw funds, bridge assets, mutate real balances, or load secrets. Live scope and external adapter submission are explicitly unavailable in Phase 11. Durable audit/state integration, paper balance ledgering, sandbox adapters, exchange-specific live adapters, signer/custody integration, kill-switch enforcement, duplicate-submission prevention, and Rust/Cargo validation remain required before any real execution use.
+The execution-adapter framework defines deterministic adapter-boundary records only. It consumes `ExecutionPlanDraft` records, revalidates each intent through the policy engine, and produces attempt, fill, and reconciliation records without external submission. It does not call exchange APIs, call DEX/router/RPC APIs, sign transactions, broadcast transactions, withdraw funds, bridge assets, mutate real balances, or load secrets. Live scope and external adapter submission are explicitly unavailable in Phase 11. Durable audit/state integration, paper balance ledgering, sandbox adapters, exchange-specific live adapters, signer/custody integration, kill-switch enforcement, and duplicate-submission prevention remain required before any real execution use.
 
 
 ## Phase 12 Communications and CLI Boundary
@@ -94,16 +94,16 @@ The communications/CLI boundary is local and deterministic only. It defines type
 
 ## Phase 13 Embedded Dashboard Boundary
 
-The embedded-dashboard subsystem provides local snapshot, panel, and render-record models only. It does not start an HTTP server, expose a network listener, provide remote access, authenticate browser sessions, execute dashboard commands, enable live controls, load credentials, render secret-like text, sign transactions, broadcast transactions, withdraw funds, bridge funds, or submit orders. Public exposure is explicitly rejected by the boundary model. Real dashboard hosting must be designed and validated later with loopback defaults, authentication, authorization, CSRF protection, clickjacking protections, rate limiting, audit/state integration, secure headers, UX review, penetration testing, and Rust/Cargo validation before production use.
+The embedded-dashboard subsystem provides local snapshot, panel, and render-record models only. It does not start an HTTP server, expose a network listener, provide remote access, authenticate browser sessions, execute dashboard commands, enable live controls, load credentials, render secret-like text, sign transactions, broadcast transactions, withdraw funds, bridge funds, or submit orders. Public exposure is explicitly rejected by the boundary model. Real dashboard hosting must be designed and validated later with loopback defaults, authentication, authorization, CSRF protection, clickjacking protections, rate limiting, audit/state integration, secure headers, UX review, and penetration testing before production use.
 
 ## Phase 14 Observability and Runbook Boundary
 
-The observability/runbook subsystem provides deterministic local health, structured-log, metric, and runbook records only. It does not start metrics endpoints, expose public telemetry, ship logs, send alerts, call OpenTelemetry/Prometheus/SIEM/PagerDuty/Slack/email/webhook providers, load secrets, sign transactions, broadcast transactions, or call exchanges/RPC providers. Secret-like observability text is redacted before collection records are returned. Real tracing subscribers, exporters, authenticated metrics endpoints, alert routing, log retention/rotation, audit/state persistence, incident drills, and Rust/Cargo validation remain required before production observability use.
+The observability/runbook subsystem provides deterministic local health, structured-log, metric, and runbook records only. It does not start metrics endpoints, expose public telemetry, ship logs, send alerts, call OpenTelemetry/Prometheus/SIEM/PagerDuty/Slack/email/webhook providers, load secrets, sign transactions, broadcast transactions, or call exchanges/RPC providers. Secret-like observability text is redacted before collection records are returned. Real tracing subscribers, exporters, authenticated metrics endpoints, alert routing, log retention/rotation, audit/state persistence, and incident drills remain required before production observability use.
 
 
 ## Phase 15 Testing, Fuzzing, and Backtesting Boundary
 
-The testing/fuzzing/backtesting subsystem provides deterministic validation planning models only. It does not invoke external fuzzers, run live-network tests, download live market data, load credentials, submit orders or swaps, sign transactions, broadcast transactions, withdraw funds, bridge funds, or call exchanges/RPC providers. Credential-bearing fixtures are rejected, and secret-like operator labels are redacted in local validation records. Real test runner execution, property-testing dependencies, fuzzing engine setup, curated corpus review, deterministic replay validation, backtest correctness checks, load tests, penetration tests, CI gating, and Rust/Cargo validation remain required before production validation claims.
+The testing/fuzzing/backtesting subsystem provides deterministic validation planning models only. It does not invoke external fuzzers, run live-network tests, download live market data, load credentials, submit orders or swaps, sign transactions, broadcast transactions, withdraw funds, bridge funds, or call exchanges/RPC providers. Credential-bearing fixtures are rejected, and secret-like operator labels are redacted in local validation records. Property-testing dependencies, fuzzing engine setup, curated corpus review, deterministic replay validation, backtest correctness checks, load tests, and penetration tests remain required before production validation claims.
 
 ## Phase 16 Packaging and Deployment Boundary
 
@@ -118,4 +118,3 @@ The external hardening boundary provides local evidence plans and review records
 ## Phase 18 Agentic Handoff Boundary
 
 The agentic handoff package is documentation and deterministic local model state only. It must not contain credentials, secret-bearing evidence, production approvals, live-funds approvals, public-exposure approvals, or instructions to bypass policy. Future-agent prompts must preserve governance reconciliation, unresolved gaps, external validation blockers, and live-trading denials. External coding agents, CI systems, cloud services, exchanges, RPC providers, and messaging systems are not invoked by Phase 18.
-

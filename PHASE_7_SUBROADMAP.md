@@ -77,7 +77,7 @@ Executable inside ChatGPT Project Mode:
 python3 scripts/validate_structure.py
 ```
 
-Deferred until Rust-enabled environment:
+Current workspace validation now passes locally and in GitHub Actions:
 
 ```bash
 cargo fmt --check

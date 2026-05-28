@@ -5,14 +5,20 @@
 
 use crate::{
     DestinationPolicy, ExecutionIntent, ExecutionIntentKind, ExecutionScope, OpportunityCandidate,
-    OpportunityError, OpportunityLeg, OpportunityLegSide, PolicyDecision, PolicyEngine, VenueKind,
-    DEFAULT_MAX_MARKET_DATA_AGE_MS,
+    OpportunityError, OpportunityLeg, OpportunityLegSide, PolicyDecision, PolicyEngine,
+    StateCheckpoint, StateStore, StateStoreError, VenueKind, DEFAULT_MAX_MARKET_DATA_AGE_MS,
 };
 use serde::{Deserialize, Serialize};
 use std::{error::Error, fmt};
 
 /// Stable planner version for audit, replay, and handoff surfaces.
 pub const EXECUTION_PLANNER_VERSION: &str = "phase-10-execution-planner-v1";
+
+/// State-store subsystem name for execution-planner checkpoints.
+pub const EXECUTION_PLANNER_STATE_SUBSYSTEM: &str = "execution-planner";
+
+/// State-store key for the latest deterministic execution-plan draft.
+pub const EXECUTION_PLANNER_LAST_DRAFT_CHECKPOINT_KEY: &str = "execution-planner:last-draft";
 
 /// Conservative execution-planner settings.
 #[derive(Debug, Clone, Copy, PartialEq, Deserialize, Serialize)]
@@ -432,6 +438,32 @@ impl ExecutionPlanDraft {
 
         finish_validation(violations)
     }
+}
+
+/// Persist the latest deterministic execution-plan draft as a non-secret checkpoint.
+///
+/// This helper only writes through the typed local `StateStore` boundary. It
+/// does not submit adapters, place orders, call exchanges/RPCs, sign payloads,
+/// broadcast transactions, withdraw funds, or bridge assets.
+pub fn persist_execution_plan_draft_checkpoint(
+    store: &mut impl StateStore,
+    draft: &ExecutionPlanDraft,
+) -> Result<StateCheckpoint, StateStoreError> {
+    draft
+        .validate()
+        .map_err(|error| StateStoreError::ValidationFailed {
+            reason: error.to_string(),
+        })?;
+    let checkpoint = StateCheckpoint {
+        key: EXECUTION_PLANNER_LAST_DRAFT_CHECKPOINT_KEY.to_owned(),
+        subsystem: EXECUTION_PLANNER_STATE_SUBSYSTEM.to_owned(),
+        value: serde_json::to_string(draft).map_err(|error| StateStoreError::BackendFailed {
+            reason: format!("failed to serialize execution-plan draft checkpoint: {error}"),
+        })?,
+        updated_at_unix_ms: draft.created_at_unix_ms,
+    };
+    store.put_checkpoint(checkpoint.clone())?;
+    Ok(checkpoint)
 }
 
 /// Execution planner trait boundary.
@@ -860,13 +892,19 @@ impl Error for ExecutionPlannerError {}
 #[cfg(test)]
 mod tests {
     use super::{
-        DeterministicExecutionPlanner, ExecutionPlanStatus, ExecutionPlanner,
-        ExecutionPlannerConfig, ExecutionPlannerRequest,
+        persist_execution_plan_draft_checkpoint, DeterministicExecutionPlanner,
+        ExecutionPlanStatus, ExecutionPlanner, ExecutionPlannerConfig, ExecutionPlannerRequest,
+        EXECUTION_PLANNER_LAST_DRAFT_CHECKPOINT_KEY, EXECUTION_PLANNER_STATE_SUBSYSTEM,
     };
     use crate::{
         AgentConfig, FeeAdjustedEdge, FeeEstimate, LiquidityRole, MarketPair, OpportunityCandidate,
         OpportunityLeg, OpportunityLegSide, OpportunityRouteKind, OpportunityScore, PolicyEngine,
-        VenueKind, VenueRef,
+        SqliteWalStateStore, StateStore, VenueKind, VenueRef,
+    };
+    use std::{
+        env, fs,
+        path::{Path, PathBuf},
+        process,
     };
 
     const BASE_CONFIG: &str = r#"
@@ -943,6 +981,73 @@ redact_secrets = true
             .all(|outcome| outcome.is_approved()));
     }
 
+    #[test]
+    fn planner_draft_persists_as_state_checkpoint() {
+        let plan = plan();
+        let mut store = crate::InMemoryStateStore::new();
+
+        let checkpoint = persist_execution_plan_draft_checkpoint(&mut store, &plan)
+            .expect("planner draft checkpoint should persist");
+
+        assert_eq!(checkpoint.key, EXECUTION_PLANNER_LAST_DRAFT_CHECKPOINT_KEY);
+        assert_eq!(checkpoint.subsystem, EXECUTION_PLANNER_STATE_SUBSYSTEM);
+        assert_eq!(checkpoint.updated_at_unix_ms, plan.created_at_unix_ms);
+        let restored: super::ExecutionPlanDraft =
+            serde_json::from_str(&checkpoint.value).expect("checkpoint json should parse");
+        assert_eq!(restored, plan);
+        assert_eq!(
+            store
+                .get_checkpoint(EXECUTION_PLANNER_LAST_DRAFT_CHECKPOINT_KEY)
+                .expect("checkpoint should read"),
+            Some(checkpoint)
+        );
+    }
+
+    #[test]
+    fn planner_draft_persists_through_sqlite_wal_store() {
+        let path = unique_state_path("planner-draft");
+        let plan = plan();
+
+        {
+            let mut store = SqliteWalStateStore::open(&path).expect("sqlite store opens");
+            persist_execution_plan_draft_checkpoint(&mut store, &plan)
+                .expect("planner draft checkpoint should persist");
+        }
+
+        {
+            let store = SqliteWalStateStore::open(&path).expect("sqlite store reopens");
+            let checkpoint = store
+                .get_checkpoint(EXECUTION_PLANNER_LAST_DRAFT_CHECKPOINT_KEY)
+                .expect("checkpoint should read")
+                .expect("checkpoint should exist");
+            let restored: super::ExecutionPlanDraft =
+                serde_json::from_str(&checkpoint.value).expect("checkpoint json should parse");
+            assert_eq!(checkpoint.subsystem, EXECUTION_PLANNER_STATE_SUBSYSTEM);
+            assert_eq!(checkpoint.updated_at_unix_ms, plan.created_at_unix_ms);
+            assert_eq!(restored, plan);
+        }
+
+        cleanup_state_files(&path);
+    }
+
+    fn plan() -> super::ExecutionPlanDraft {
+        let policy = PolicyEngine::from_config(
+            AgentConfig::from_toml_str(BASE_CONFIG).expect("config should validate"),
+        );
+        let request = ExecutionPlannerRequest {
+            id: "planner-request-1".to_owned(),
+            strategy_id: "strategy-basic-arb".to_owned(),
+            candidate: candidate(),
+            config: ExecutionPlannerConfig::default(),
+            default_chain: None,
+            now_unix_ms: 10_000,
+        };
+
+        DeterministicExecutionPlanner::new()
+            .plan(&request, &policy)
+            .expect("plan should be created")
+    }
+
     fn candidate() -> OpportunityCandidate {
         let pair = MarketPair::new("BTC", "USD").expect("pair should validate");
         let edge = FeeAdjustedEdge::calculate(15.0, 2.0, 100.0).expect("edge should validate");
@@ -1001,6 +1106,25 @@ redact_secrets = true
             },
             source_quote_id: format!("quote-{venue_name}"),
             market_data_age_ms: 100,
+        }
+    }
+
+    fn unique_state_path(label: &str) -> PathBuf {
+        let mut path = env::temp_dir();
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system clock should be after unix epoch")
+            .as_nanos();
+        path.push(format!(
+            "arbyclaw-planner-{label}-{}-{nanos}.sqlite3",
+            process::id()
+        ));
+        path
+    }
+
+    fn cleanup_state_files(path: &Path) {
+        for suffix in ["", "-wal", "-shm"] {
+            let _ = fs::remove_file(PathBuf::from(format!("{}{suffix}", path.display())));
         }
     }
 }

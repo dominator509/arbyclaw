@@ -2,14 +2,14 @@
 
 ## Project
 
-Fully Autonomous Crypto Arbitrage Agent
+ArbyClaw
 
 ## Current Roadmap Position
 
 - Active phase: Phase 18 — Agentic Handoff Package implemented; next required work is production hardening evidence review and external validation closure beyond current Rust/CI gates
 - Active sub-roadmap: `PHASE_18_SUBROADMAP.md`
 - Current production readiness: 87%
-- Current implementation status: Minimal Rust workspace, typed config, reference-only secret boundary, mode-gate validation, deny-by-default policy engine, append-only audit journal primitives, state-store trait boundary, SQLite WAL-backed checkpoint store, normalized market-data models, fee models, freshness classification, provider trait boundaries, deterministic paper connectors with local paper-report checkpoint persistence, CEX connector framework types/traits, DEX/Web3 connector framework types/traits, deterministic opportunity-engine types/traits, draft-only execution-planner types/traits, execution-adapter boundary records/traits, communications/CLI command and notification boundaries, embedded-dashboard local render boundaries, observability/runbook local record boundaries, deterministic testing/fuzzing/backtesting plan boundaries, deterministic packaging/deployment plan boundaries, deterministic external-hardening evidence/checklist boundaries, and deterministic agentic handoff package boundaries exist; local and GitHub Actions evidence covers current structure, formatting, workspace compilation, tests, clippy, locked release build, dependency audit, SBOM generation, local-SARIF SAST, example image scan, secret-pattern scan, and hardening evidence indexing. Live trading, production container/systemd/ARM deployment validation, real validation runner execution beyond Cargo tests, real fuzzing engines, real backtest corpus execution, real observability runtime, real dashboard hosting, outbound messaging integrations, external adapter submission, exchange-specific live connectors, DEX RPC adapters, wallet signer, transaction broadcasts, custody backend, production durability validation, and production execution logic are not implemented.
+- Current implementation status: Minimal Rust workspace, typed config, reference-only secret boundary, mode-gate validation, deny-by-default policy engine, append-only audit journal primitives, state-store trait boundary, SQLite WAL-backed checkpoint store, normalized market-data models, fee models, freshness classification, provider trait boundaries, deterministic paper connectors with local paper-report checkpoint persistence, CEX connector framework types/traits, DEX/Web3 connector framework types/traits, deterministic opportunity-engine types/traits, draft-only execution-planner types/traits with local plan-draft checkpoint persistence, execution-adapter boundary records/traits, communications/CLI command and notification boundaries, embedded-dashboard local render boundaries, observability/runbook local record boundaries, deterministic testing/fuzzing/backtesting plan boundaries, deterministic packaging/deployment plan boundaries, deterministic external-hardening evidence/checklist boundaries, and deterministic agentic handoff package boundaries exist; local and GitHub Actions evidence covers current structure, formatting, workspace compilation, tests, clippy, locked release build, dependency audit, SBOM generation, local-SARIF SAST, example image scan, secret-pattern scan, and hardening evidence indexing. Live trading, production container/systemd/ARM deployment validation, real validation runner execution beyond Cargo tests, real fuzzing engines, real backtest corpus execution, real observability runtime, real dashboard hosting, outbound messaging integrations, external adapter submission, exchange-specific live connectors, DEX RPC adapters, wallet signer, transaction broadcasts, custody backend, production durability validation, and production execution logic are not implemented.
 - Current risk posture: High, because live-funds architecture is policy-, audit-, market-data-, paper-simulation-, CEX-framework-, DEX/Web3-framework-, opportunity-engine-, planner-, adapter-, communication-, dashboard-, observability-, and validation-boundary-gated but lacks custody isolation, exchange-specific live connectors, live DEX/RPC adapters, signer boundary, live adapter submission, real communications adapters, real dashboard hosting/authentication, real metrics/exporter/alert runtime, property/fuzz/backtest execution beyond current Cargo tests, real package/deployment validation, broad external hardening validation, future-agent execution validation, durable database validation, and external validation.
 
 ## Roadmap Governance Rules
@@ -37,7 +37,7 @@ Fully Autonomous Crypto Arbitrage Agent
 | 7 | CEX Connector Framework | Implemented as framework boundary; current workspace Rust/CI validation covered; live exchange validation deferred | +6% realized / +2% deferred | CEX venue profiles, capability registry, order request model, policy gate, and connector traits added; no exchange-specific adapters or live orders. |
 | 8 | DEX/Web3 Connector Framework | Implemented as framework boundary; current workspace Rust/CI validation covered; live RPC, signing, and broadcast validation deferred | +8% realized / +0% deferred in ChatGPT | Chain/router/token profiles, router capabilities, swap quote models, local transaction simulation boundary, policy gate, and connector traits added; no live RPC, signing, bridges, or broadcasts. |
 | 9 | Opportunity Engine | Implemented as deterministic discovery/ranking boundary; current workspace Rust/CI validation covered; advanced route validation deferred | +8% realized / +0% deferred in ChatGPT | Cross-venue top-of-book discovery, CEX/CEX, DEX/DEX, CEX/DEX, triangular model boundary, freshness checks, and fee-aware scoring added; no execution intents or order placement. |
-| 10 | Execution Planner | Implemented as draft-only model boundary; current workspace Rust/CI validation covered; adapter integration deferred | +7% realized / +0% deferred in ChatGPT | Deterministic plan drafts, per-leg intent generation, policy preflight outcomes, sequencing, and failure-mode boundaries added; no adapter submission or live execution. |
+| 10 | Execution Planner | Implemented as draft-only model boundary; current workspace Rust/CI validation covered; adapter integration deferred | +7% realized / +0% deferred in ChatGPT | Deterministic plan drafts, per-leg intent generation, policy preflight outcomes, sequencing, failure-mode boundaries, and local plan-draft state checkpoint helper added; no adapter submission or live execution. |
 | 11 | Execution Adapters | Implemented as deterministic boundary framework; current workspace Rust/CI validation covered; live submission deferred | +7% realized / +0% deferred in ChatGPT | Consumes planner drafts, revalidates policy, models attempts/fills/reconciliation, and blocks all external submission. |
 | 12 | Communications and CLI | Implemented as deterministic model/trait boundary; current workspace Rust/CI validation covered; real outbound integrations deferred | +6% realized / +0% deferred in ChatGPT | Typed local command parsing/routing, notification models, redaction checks, and local dispatch records added; no platform tokens or outbound network delivery. |
 | 13 | Embedded Dashboard | Implemented as deterministic model/trait boundary; current workspace Rust/CI validation covered; real hosting deferred | +3% realized / +0% deferred in ChatGPT | Local snapshot/panel/render records, fail-closed server binding, secret redaction, and live-control denial added; no web server or public exposure. |
@@ -170,7 +170,7 @@ Add typed non-secret configuration, secret-reference boundaries, and determinist
 
 ### Validation Deferred
 
-The following commands require a Rust-enabled environment:
+The following commands have current local and GitHub Actions evidence for the present workspace state:
 
 ```bash
 cargo fmt --check
@@ -230,7 +230,7 @@ Implement deterministic deny-by-default policy enforcement before any live execu
 
 ### Validation Deferred
 
-The following commands require a Rust-enabled environment:
+The following commands have current local and GitHub Actions evidence for the present workspace state:
 
 ```bash
 cargo fmt --check
@@ -296,7 +296,7 @@ Create durable, efficient, redacted, append-only audit and state tracking.
 
 ### Validation Deferred
 
-The following commands require a Rust-enabled environment:
+The following commands have current local and GitHub Actions evidence for the present workspace state:
 
 ```bash
 cargo fmt --check
@@ -323,7 +323,7 @@ Met for ChatGPT Project Mode audit/state boundary implementation with current wo
 
 ### Status
 
-Implemented in ChatGPT Project Mode as model and trait boundaries; Rust/Cargo validation and live provider validation are deferred.
+Implemented in ChatGPT Project Mode as model and trait boundaries with current workspace Rust/CI validation evidence; live provider validation remains deferred.
 
 ### Goal
 
@@ -355,7 +355,7 @@ Executed in ChatGPT Project Mode:
 python3 scripts/validate_structure.py
 ```
 
-Deferred until Rust-enabled environment:
+Current workspace validation now passes locally and in GitHub Actions:
 
 ```bash
 cargo fmt --check
@@ -372,7 +372,7 @@ Met for ChatGPT Project Mode market-data/fee-model boundary implementation with 
 
 ### Status
 
-Implemented in ChatGPT Project Mode as deterministic in-memory paper connector boundaries; Rust/Cargo validation, paper-balance ledgering, audit integration, and realistic fill simulation are deferred.
+Implemented in ChatGPT Project Mode as deterministic in-memory paper connector boundaries with current workspace Rust/CI validation evidence; paper-balance ledgering, audit/runtime lifecycle integration, and realistic fill simulation remain deferred.
 
 ### Goal
 
@@ -408,7 +408,7 @@ Executed in ChatGPT Project Mode:
 python3 scripts/validate_structure.py
 ```
 
-Deferred until Rust-enabled environment:
+Current workspace validation now passes locally and in GitHub Actions:
 
 ```bash
 cargo fmt --check
@@ -460,7 +460,7 @@ Executed in ChatGPT Project Mode:
 python3 scripts/validate_structure.py
 ```
 
-Deferred until Rust-enabled environment:
+Current workspace validation now passes locally and in GitHub Actions:
 
 ```bash
 cargo fmt --check
@@ -477,7 +477,7 @@ Met for ChatGPT Project Mode CEX framework boundary implementation with current 
 
 ### Status
 
-Implemented as typed framework boundary; Rust validation, live RPC validation, signer validation, transaction simulation integration, and broadcast validation deferred.
+Implemented as typed framework boundary; current workspace Rust validation covered; live RPC validation, signer validation, transaction simulation integration, and broadcast validation deferred.
 
 ### Goal
 
@@ -514,7 +514,7 @@ Executed in ChatGPT Project Mode:
 python3 scripts/validate_structure.py
 ```
 
-Deferred until Rust-enabled environment:
+Current workspace validation now passes locally and in GitHub Actions:
 
 ```bash
 cargo fmt --check
@@ -580,7 +580,7 @@ python3 scripts/validate_structure.py
 python3 -m py_compile scripts/validate_structure.py
 ```
 
-Deferred until Rust-enabled environment:
+Current workspace validation now passes locally and in GitHub Actions:
 
 ```bash
 cargo fmt --check
@@ -613,6 +613,7 @@ Generate deterministic execution-plan drafts and per-leg execution intents from 
 - Rejected live planner scope fail-closed.
 - Evaluated each generated draft intent through `PolicyEngine` and captured redacted approval/denial outcomes.
 - Modeled deterministic sequencing and failure boundaries without adapter submission.
+- Added a typed local `StateStore` checkpoint helper for the latest execution-plan draft, including SQLite WAL persistence/reopen coverage.
 - Exported planner types from `arb-core`.
 - Updated CLI status output and structure validation.
 
@@ -632,7 +633,7 @@ Generate deterministic execution-plan drafts and per-leg execution intents from 
 ### Deferred Tasks
 
 - Durable audit records for plan creation and policy outcomes.
-- Durable state lifecycle/checkpointing for plan drafts.
+- Full runtime lifecycle wiring that makes planner handoff fail closed on audit/state persistence failure.
 - Execution adapter handoff in Phase 11.
 - Partial-fill, timeout, cancellation, and hedge sequencing validation.
 - Keep Rust validation current after each workspace change.
@@ -646,7 +647,7 @@ python3 scripts/validate_structure.py
 python3 -m py_compile scripts/validate_structure.py
 ```
 
-Deferred until Rust-enabled environment:
+Current workspace validation now passes locally and in GitHub Actions:
 
 ```bash
 cargo fmt --check

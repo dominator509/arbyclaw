@@ -1,4 +1,4 @@
-# Non-secret example configuration for the Fully Autonomous Crypto Arbitrage Agent.
+# Non-secret example configuration for ArbyClaw.
 # Do not place API keys, wallet keys, seed phrases, mnemonics, bearer tokens, or raw secrets in this file.
 
 [runtime]

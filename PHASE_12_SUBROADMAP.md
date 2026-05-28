@@ -6,7 +6,7 @@ Phase 12 — Communications and CLI
 
 ## Status
 
-Implemented for ChatGPT Project Mode as a deterministic communications and CLI model/trait boundary. Rust/Cargo validation remains deferred because the ChatGPT environment does not provide Cargo.
+Implemented for ChatGPT Project Mode as a deterministic communications and CLI model/trait boundary. Current workspace Rust/Cargo validation evidence exists and must be refreshed after changes.
 
 ## Governance Inputs
 
@@ -176,4 +176,4 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 ## Completion Notes
 
-Phase 12 is complete for ChatGPT Project Mode framework scope only. External Rust validation, real messaging adapters, authentication, channel-token storage, durable notification audit/state integration, and runtime operator UX validation remain future work.
+Phase 12 is complete for ChatGPT Project Mode framework scope only. Real messaging adapters, authentication, channel-token storage, durable notification audit/state integration, external adapter validation, and runtime operator UX validation remain future work.

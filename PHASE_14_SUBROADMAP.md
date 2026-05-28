@@ -168,7 +168,7 @@ Completed for ChatGPT Project Mode after Phase 14 implementation and validation.
 
 ## Deferred Work
 
-- Rust/Cargo validation in a Rust-enabled environment.
+- Keep Rust/Cargo validation current after future changes.
 - Real tracing/logging subscriber integration.
 - Prometheus/OpenTelemetry exporter implementation.
 - Metrics endpoint authentication and loopback binding validation.

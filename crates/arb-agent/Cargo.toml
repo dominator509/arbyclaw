@@ -1,6 +1,6 @@
 [package]
 name = "arb-agent"
-description = "Single-binary runtime entrypoint for the Fully Autonomous Crypto Arbitrage Agent."
+description = "Single-binary runtime entrypoint for ArbyClaw."
 edition.workspace = true
 version.workspace = true
 rust-version.workspace = true

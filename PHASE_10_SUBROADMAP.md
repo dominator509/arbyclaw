@@ -6,7 +6,7 @@ Phase 10 — Execution Planner
 
 ## Status
 
-Implemented for ChatGPT Project Mode as a deterministic execution-planner model boundary; Rust toolchain validation is deferred because Cargo is unavailable in this environment.
+Implemented for ChatGPT Project Mode as a deterministic execution-planner model boundary; current workspace Rust/Cargo validation evidence exists and must be refreshed after changes.
 
 ## Governance Prerequisites
 
@@ -82,7 +82,7 @@ python3 scripts/validate_structure.py
 python3 -m py_compile scripts/validate_structure.py
 ```
 
-Deferred until Rust-enabled environment:
+Current workspace validation now passes locally and in GitHub Actions:
 
 ```bash
 cargo fmt --check
@@ -114,9 +114,9 @@ Met when:
 
 ## Deferred Work
 
-- Rust compilation, formatting, clippy, and unit tests in a Rust-enabled environment.
+- Keep Rust compilation, formatting, clippy, and unit tests current after future changes.
 - Durable audit journal writes for plan creation and policy outcomes.
-- Durable state checkpointing for plan lifecycle.
+- Full runtime lifecycle wiring beyond the current local plan-draft checkpoint helper.
 - Execution adapter handoff in Phase 11.
 - Advanced partial-fill, timeout, cancellation, and hedge sequencing.
 - Live mode enablement remains blocked by custody, signer, audit, state, connector, and external validation phases.

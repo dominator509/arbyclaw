@@ -10,7 +10,7 @@ edition = "2021"
 version = "0.1.0"
 rust-version = "1.78"
 license = "UNLICENSED"
-repository = "https://example.invalid/fully-autonomous-crypto-arbitrage-agent"
+repository = "https://github.com/dominator509/arbyclaw"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

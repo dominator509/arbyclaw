@@ -76,7 +76,7 @@ Executable in ChatGPT Project Mode:
 - static file-existence validation
 - secret-assignment scan
 
-Deferred until Rust-enabled environment:
+Current workspace validation now passes locally and in GitHub Actions:
 
 - `cargo fmt --check`
 - `cargo check --workspace`
@@ -114,7 +114,7 @@ No secrets, external accounts, runtime state, wallets, infrastructure, or networ
 
 ## Environment Limitations
 
-- Rust/Cargo is unavailable in ChatGPT Project Mode.
+- Current workspace Rust/Cargo validation has local and CI evidence for the present state.
 - No live exchange sandbox credentials are available.
 - No actual network calls can be validated as production-ready.
 - No runtime persistence, concurrency, or crash-recovery validation is performed.

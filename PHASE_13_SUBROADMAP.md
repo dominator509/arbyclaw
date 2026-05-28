@@ -6,7 +6,7 @@ Phase 13 — Embedded Dashboard
 
 ## Status
 
-Implemented for ChatGPT Project Mode as a deterministic embedded-dashboard model/trait boundary. Rust/Cargo validation remains deferred because the ChatGPT environment does not provide Cargo.
+Implemented for ChatGPT Project Mode as a deterministic embedded-dashboard model/trait boundary. Current workspace Rust/Cargo validation evidence exists and must be refreshed after changes.
 
 ## Governance Inputs
 
@@ -178,4 +178,4 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 ## Completion Notes
 
-Phase 13 is complete for ChatGPT Project Mode framework scope only. External Rust validation, real dashboard hosting, authentication/session design, CSRF protection, durable dashboard state, runtime UX validation, and penetration testing remain future work.
+Phase 13 is complete for ChatGPT Project Mode framework scope only. Real dashboard hosting, authentication/session design, CSRF protection, durable dashboard state, runtime UX validation, public-exposure validation, and penetration testing remain future work.

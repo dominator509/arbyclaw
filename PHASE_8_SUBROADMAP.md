@@ -69,7 +69,7 @@ Available in ChatGPT Project Mode:
 python3 scripts/validate_structure.py
 ```
 
-Deferred until a Rust-enabled environment:
+Current workspace validation now passes locally and in GitHub Actions:
 
 ```bash
 cargo fmt --check
@@ -111,7 +111,7 @@ Phase 8 may be marked complete for ChatGPT Project Mode only when:
 
 ## Deferred Work
 
-- Rust/Cargo validation in a Rust-enabled environment.
+- Keep Rust/Cargo validation current after future changes.
 - Real chain RPC adapters.
 - Testnet/mainnet transaction simulation integrations.
 - Signer boundary and custody implementation.

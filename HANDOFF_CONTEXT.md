@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This file is a compact continuation checkpoint for the Fully Autonomous Crypto Arbitrage Agent project. It is intended to prevent context drift when continuing in a new chat, external coding agent, local IDE, or CI environment.
+This file is a compact continuation checkpoint for the ArbyClaw project. It is intended to prevent context drift when continuing in a new chat, external coding agent, local IDE, or CI environment.
 
 ## Authoritative Repository State
 
@@ -158,7 +158,7 @@ Scope should remain evidence-focused:
 Use this compact prompt in a fresh chat after uploading the latest checkpoint ZIP:
 
 ```text
-You are continuing the Fully Autonomous Crypto Arbitrage Agent project. Unpack and inspect the latest repository ZIP first. Treat HANDOFF_CONTEXT.md, STRUCTURE_MANIFEST.md, ARCHITECTURE.md, ROADMAP.md, AGENTS.md, the latest PHASE_X_SUBROADMAP.md, and PRODUCTION_GAP_TRACKER.md as authoritative. Before any code, run the structure validator if available, reconcile roadmap position, confirm completed phases 0-18, and identify whether the next work is external validation or a new governed phase. Do not implement live trading, signing, secrets, withdrawals, bridges, broadcasts, public web exposure, real messaging tokens, real dashboard hosting, real observability exporters, real fuzzing execution, live network tests, real backtest downloads, real RPC/exchange calls, real cloud deployment, production release claims, production readiness claims, or live-funds approval. Implement only the next governed boundary or record external validation evidence honestly, then update ROADMAP.md and PRODUCTION_GAP_TRACKER.md and provide commit-ready output.
+You are continuing the ArbyClaw project. Inspect the latest repository checkout or approved archive first. Treat HANDOFF_CONTEXT.md, STRUCTURE_MANIFEST.md, ARCHITECTURE.md, ROADMAP.md, AGENTS.md, the latest PHASE_X_SUBROADMAP.md, and PRODUCTION_GAP_TRACKER.md as authoritative. Before any code, run the structure validator if available, reconcile roadmap position, confirm completed phases 0-18, and identify whether the next work is external validation or a new governed phase. Do not implement live trading, signing, secrets, withdrawals, bridges, broadcasts, public web exposure, real messaging tokens, real dashboard hosting, real observability exporters, real fuzzing execution, live network tests, real backtest downloads, real RPC/exchange calls, real cloud deployment, production release claims, production readiness claims, or live-funds approval. Implement only the next governed boundary or record external validation evidence honestly, then update ROADMAP.md and PRODUCTION_GAP_TRACKER.md and provide commit-ready output.
 ```
 
 ## Anti-Drift Rules For Future Agents
@@ -178,13 +178,13 @@ You are continuing the Fully Autonomous Crypto Arbitrage Agent project. Unpack a
 - Phase 16 packaging/deployment plans exist only as local model/documentation boundaries; current CI evidence includes release-build and example-only container/image-scan gates, but no production container image validation, systemd install, ARM build, runtime deployment, rollback drill, incident drill, or production release validation exists.
 - Phase 17 hardening records and CI evidence paths now cover current workspace Rust validation, locked release build, dependency audit, SBOM generation, local-SARIF SAST evidence, example image scan, secret-pattern scan, and hardening artifact indexing; no staging deployment, load test, penetration test, rollback drill, incident drill, live exchange/RPC validation, or production readiness review was executed.
 - Phase 18 handoff records exist only as local prompts/checklists/package models; no external agents were executed and no validation was performed by the handoff boundary.
-- SQLite WAL-backed checkpoint state store exists for local non-secret state, and paper execution reports can now be persisted through a typed local checkpoint helper; production durability validation and broader runtime lifecycle wiring remain incomplete.
+- SQLite WAL-backed checkpoint state store exists for local non-secret state, and paper execution reports plus execution-plan drafts can now be persisted through typed local checkpoint helpers; production durability validation and broader runtime lifecycle wiring remain incomplete.
 - No encrypted keystore backend.
 - No signer boundary.
 - No exchange-specific CEX adapters.
 - No live DEX/Web3 adapters, RPC integrations, signer, or broadcasts.
 - Opportunity engine advanced validation and live-data validation are incomplete.
-- Execution planner and execution-adapter durable audit/state lifecycle integration are incomplete.
+- Execution-plan drafts can now be persisted through a typed local checkpoint helper, but planner/adapter durable audit-state lifecycle integration and fail-closed runtime handoff are incomplete.
 - No live execution-adapter submissions.
 - No real outbound communications integrations or authenticated remote command channels.
 - No real dashboard hosting/authentication.

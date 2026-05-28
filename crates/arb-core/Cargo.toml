@@ -1,6 +1,6 @@
 [package]
 name = "arb-core"
-description = "Core primitives for the Fully Autonomous Crypto Arbitrage Agent."
+description = "Core primitives for ArbyClaw."
 edition.workspace = true
 version.workspace = true
 rust-version.workspace = true

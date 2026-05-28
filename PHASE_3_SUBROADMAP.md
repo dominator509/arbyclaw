@@ -102,7 +102,7 @@ No secrets, infrastructure, exchange accounts, wallet keys, deployed services, o
 
 ## Environment Limitations
 
-Rust/Cargo is unavailable in the current ChatGPT execution environment. Rust formatting, compilation, unit tests, clippy, fuzzing, and property tests must be run later in a Rust-enabled environment or CI runner.
+Current workspace Rust/Cargo validation has local and GitHub Actions evidence for formatting, compilation, unit tests, and clippy. Fuzzing and property tests remain future validation work.
 
 ## Expected Unresolved Gaps
 

@@ -57,7 +57,7 @@ Phase 18 is documentation- and handoff-focused only. It must preserve live-funds
 9. Re-run available validations.
 10. Update governance and handoff docs.
 11. Recompute `STRUCTURE_MANIFEST.md`.
-12. Package the repository ZIP.
+12. Prepare a commit-ready repository state.
 
 ## Acceptance Criteria
 

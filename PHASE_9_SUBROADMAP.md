@@ -87,7 +87,7 @@ python3 scripts/validate_structure.py
 python3 -m py_compile scripts/validate_structure.py
 ```
 
-Run later in a Rust-enabled environment:
+Current workspace validation now passes locally and in GitHub Actions:
 
 ```bash
 cargo fmt --check
@@ -118,7 +118,7 @@ Phase 9 is complete for ChatGPT Project Mode when:
 - Cross-venue transfer latency and settlement risk models.
 - Execution intent generation in Phase 10.
 - Live execution adapters in later phases.
-- External Rust validation.
+- Production/runtime validation.
 
 ## Rollback Plan
 

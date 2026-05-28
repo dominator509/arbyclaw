@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This package gives future coding agents and human maintainers a deterministic continuation path for the Fully Autonomous Crypto Arbitrage Agent repository.
+This package gives future coding agents and human maintainers a deterministic continuation path for the ArbyClaw repository.
 
 It is not a production-readiness approval, deployment record, live-funds approval, security certification, or external validation result.
 
@@ -21,7 +21,7 @@ Future agents must read these files before making changes:
 
 ## Required Opening Procedure
 
-1. Unpack the latest complete repository ZIP.
+1. Use the latest repository checkout or approved archive.
 2. Prefer the newest complete ZIP over older partial files.
 3. Run `python3 scripts/validate_structure.py` before modifying files.
 4. Reconcile current phase, completed phases, unresolved gaps, and subsystem boundaries.

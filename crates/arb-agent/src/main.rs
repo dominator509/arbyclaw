@@ -45,7 +45,7 @@ fn run() -> Result<(), ConfigError> {
             );
             println!("policy: {} initialized", policy.trust_contract_version());
             println!("audit: append-only boundary available; runtime journal writing is not auto-started yet");
-            println!("state: trait boundary available; durable SQLite WAL implementation pending");
+            println!("state: trait boundary and local SQLite WAL checkpoints available; production durability and runtime lifecycle wiring pending");
             println!("market-data: normalized quote/order-book/fee boundaries available; live providers pending");
             println!("paper-connectors: {PAPER_CONNECTOR_VERSION} available for deterministic in-memory simulation only");
             println!("cex-framework: {CEX_CONNECTOR_FRAMEWORK_VERSION} available as typed interface only; live exchange adapters pending");

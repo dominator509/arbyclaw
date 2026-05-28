@@ -7,7 +7,7 @@ Phase 1 — Rust Workspace Scaffold
 ## Status
 
 - Status: Scaffold implemented in ChatGPT Project Mode.
-- Production readiness contribution: Partial +2% realized; external Rust validation remains deferred.
+- Production readiness contribution: Partial +2% realized; production validation remains deferred.
 - Current phase result: Minimal Rust workspace files, CI skeleton, safety docs, and structural validator exist.
 
 ## Objectives
@@ -116,13 +116,13 @@ No runtime state, secrets, infrastructure, or live integrations were created.
 - Do not add live trading behavior in Phase 1.
 - Do not add wallet/signing behavior in Phase 1.
 - Do not add secret parsing beyond `.env.example` documentation in Phase 1.
-- Do not claim Rust validation until the commands actually run in a Rust-enabled environment.
+- Do not claim Rust validation for future changes until the commands actually run for that changed workspace state.
 - Keep `unsafe_code` forbidden.
 
 ## Environment Limitations
 
-- Rust/Cargo unavailable in the ChatGPT execution environment.
-- Hosted CI unavailable until the project is pushed to a repository with CI enabled.
+- Current workspace Rust/Cargo validation has local and CI evidence for the present state.
+- Hosted CI is available on dominator509/arbyclaw and must be rerun after future changes.
 - No target hardware, VPS, or ARM device validation was performed.
 
 ## Expected Unresolved Gaps

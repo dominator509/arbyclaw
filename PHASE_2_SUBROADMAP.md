@@ -6,8 +6,8 @@ Phase 2 — Config, Secrets, and Mode Gates
 
 ## Status
 
-- Status: Implemented in ChatGPT Project Mode; Rust toolchain validation deferred.
-- Production readiness contribution: Partial +5% realized; +1% deferred pending Cargo validation.
+- Status: Implemented in ChatGPT Project Mode; current workspace Rust/Cargo validation evidence exists and must be refreshed after changes.
+- Production readiness contribution: +5% realized; +1% deferred for deeper production validation.
 - Current phase result: Typed configuration, secret-reference abstractions, redacted secret material, mode-gate validation, config example, and CLI config loading path exist. No live trading, wallet signing, or external secret injection was implemented.
 
 ## Objectives
@@ -127,20 +127,20 @@ No runtime state, live secrets, exchange connections, wallet keys, infrastructur
 - Do not implement wallet signing in Phase 2.
 - Do not implement live execution in Phase 2.
 - Do not claim encrypted-keystore implementation; only the boundary exists.
-- Do not claim Rust validation until commands run in a Rust-enabled environment.
+- Do not claim Rust validation for future changes until commands run for that changed workspace state.
 - Keep `unsafe_code` forbidden.
 
 ## Environment Limitations
 
-- Rust/Cargo unavailable in the ChatGPT execution environment.
+- Current workspace Rust/Cargo validation has local and CI evidence for the present state.
 - No local `.env` with real credentials was used or requested.
 - No encrypted-keystore backend exists yet.
 - No target hardware, VPS, or ARM device validation was performed.
-- Hosted CI unavailable until pushed to a repository with CI enabled.
+- Hosted CI is available on dominator509/arbyclaw and must be rerun after future changes.
 
 ## Expected Unresolved Gaps
 
-- Rust compile/test/clippy validation deferred.
+- Rust compile/test/clippy validation is covered for the present workspace and must be rerun after future changes.
 - Encrypted-keystore backend missing.
 - Secret lifecycle/zeroization hardening missing.
 - Policy engine missing.
@@ -150,8 +150,8 @@ No runtime state, live secrets, exchange connections, wallet keys, infrastructur
 
 ## Expected Future Continuation Tasks
 
-1. Run Rust validation commands in a Rust-enabled environment.
-2. Fix any compile, clippy, or formatting issues discovered externally.
+1. Re-run Rust validation commands after future changes.
+2. Fix any compile, clippy, or formatting issues discovered in the current workspace or CI.
 3. Implement Phase 3 deny-by-default policy engine and trust-contract checks.
 4. Replace the keystore boundary with a validated encrypted backend.
 5. Add redaction tests and no-secret-log tests under Cargo validation.
@@ -160,7 +160,7 @@ No runtime state, live secrets, exchange connections, wallet keys, infrastructur
 
 ### ROADMAP.md
 
-Updated to reflect Phase 2 implementation and deferred Rust validation.
+Updated to reflect Phase 2 implementation and current Rust validation evidence for the present workspace.
 
 ### PRODUCTION_GAP_TRACKER.md
 

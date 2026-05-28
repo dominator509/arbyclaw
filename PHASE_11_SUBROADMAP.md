@@ -65,7 +65,7 @@ Introduce a fail-closed execution-adapter framework that consumes Phase 10 `Exec
 6. Update the structure validator for Phase 11 governance and module files.
 7. Update architecture, roadmap, security, README, handoff context, manifest, and gap tracker.
 8. Re-run available validation.
-9. Package a commit-ready repository ZIP.
+9. Prepare a commit-ready repository state.
 
 ## Security Requirements
 
@@ -118,4 +118,4 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 ## Phase 11 Result
 
-Completed in ChatGPT Project Mode as a framework-only execution-adapter boundary. External Rust validation remains required before production claims.
+Completed in ChatGPT Project Mode as a framework-only execution-adapter boundary. Production/external validation remains required before production claims.

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This file defines the deterministic agentic governance model for building and maintaining the Fully Autonomous Crypto Arbitrage Agent. It is intended for ChatGPT Project Mode, future Codex/Cursor/Jules/Claude Code continuation, local coding agents, and human maintainers.
+This file defines the deterministic agentic governance model for building and maintaining ArbyClaw. It is intended for ChatGPT Project Mode, future Codex/Cursor/Jules/Claude Code continuation, local coding agents, and human maintainers.
 
 ## Global Agent Rules
 
@@ -376,4 +376,3 @@ Every completed task must end with:
 - Do not include credentials, secret-bearing evidence, private infrastructure details, or real sensitive logs in prompts, checklists, Markdown, TOML, source code, service units, containers, screenshots, or artifacts.
 - Do not claim external validation, production readiness, public exposure approval, live-funds approval, or external agent execution unless that work actually occurred outside ChatGPT Project Mode and is referenced through non-secret evidence.
 - Do not use handoff docs to bypass `ARCHITECTURE.md`, `ROADMAP.md`, active `PHASE_X_SUBROADMAP.md`, `AGENTS.md`, or `PRODUCTION_GAP_TRACKER.md`.
-

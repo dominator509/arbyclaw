@@ -16,7 +16,7 @@
 )]
 #![allow(clippy::module_name_repetitions)]
 
-//! Core primitives for the Fully Autonomous Crypto Arbitrage Agent.
+//! Core primitives for ArbyClaw.
 
 pub mod audit;
 pub mod cex;
@@ -148,10 +148,11 @@ pub use testing::{
 };
 
 pub use planner::{
-    DeterministicExecutionPlanner, ExecutionPlanDraft, ExecutionPlanFailureMode,
-    ExecutionPlanStatus, ExecutionPlanStep, ExecutionPlanStepAction, ExecutionPlanner,
-    ExecutionPlannerConfig, ExecutionPlannerError, ExecutionPlannerRequest,
+    persist_execution_plan_draft_checkpoint, DeterministicExecutionPlanner, ExecutionPlanDraft,
+    ExecutionPlanFailureMode, ExecutionPlanStatus, ExecutionPlanStep, ExecutionPlanStepAction,
+    ExecutionPlanner, ExecutionPlannerConfig, ExecutionPlannerError, ExecutionPlannerRequest,
     ExecutionPlannerViolation, PlannerPolicyOutcome, PlannerPolicyStatus, PlannerPolicyViolation,
+    EXECUTION_PLANNER_LAST_DRAFT_CHECKPOINT_KEY, EXECUTION_PLANNER_STATE_SUBSYSTEM,
     EXECUTION_PLANNER_VERSION,
 };
 
@@ -177,7 +178,7 @@ pub use policy::{
 use serde::{Deserialize, Serialize};
 
 /// Stable project display name used by CLI/runtime surfaces.
-pub const AGENT_NAME: &str = "fully-autonomous-crypto-arbitrage-agent";
+pub const AGENT_NAME: &str = "ArbyClaw";
 
 /// Runtime execution mode.
 ///

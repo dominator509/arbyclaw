@@ -2,7 +2,7 @@
 # Do not install this unit until Rust, config, filesystem, rollback, and security gates pass externally.
 
 [Unit]
-Description=Fully Autonomous Crypto Arbitrage Agent - observe mode only
+Description=ArbyClaw - observe mode only
 After=network-online.target
 Wants=network-online.target
 

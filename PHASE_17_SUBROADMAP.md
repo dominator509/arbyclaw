@@ -67,7 +67,7 @@ Add deterministic external-production-hardening evidence boundaries and checklis
 8. Re-run available validations.
 9. Update governance and handoff docs.
 10. Recompute `STRUCTURE_MANIFEST.md`.
-11. Package the repository ZIP.
+11. Prepare a commit-ready repository state.
 
 ## Acceptance Criteria
 
