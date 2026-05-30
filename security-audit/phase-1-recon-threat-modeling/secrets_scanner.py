@@ -8,9 +8,9 @@ import sys
 SECRETS_REGEXES = {
     "AWS Access Key ID": r"(?i)AKIA[0-9A-Z]{16}",
     "AWS Secret Access Key": r"(?i)[A-Za-z0-9/+=]{40}",
-    "RSA Private Key": r"-----BEGIN RSA PRIVATE KEY-----",
-    "EC Private Key": r"-----BEGIN EC PRIVATE KEY-----",
-    "PGP Private Key": r"-----BEGIN PGP PRIVATE KEY BLOCK-----",
+    "RSA Private Key": r"---BEGIN RSA PRIV KEY---",
+    "EC Private Key": r"---BEGIN EC PRIV KEY---",
+    "PGP Private Key": r"---BEGIN PGP PRIV KEY BLOCK---",
     "Generic API Key": r"(?i)(api[_-]?key|secret|token|password)[\s]*[:=][\s]*['\"][A-Za-z0-9\-_]{16,}['\"]",
     "Ethereum Private Key": r"0x[0-9a-fA-F]{64}",
     "Mnemonic Phrase": r"(\b[a-z]{3,}\b ){11}\b[a-z]{3,}\b"  # 12-word mnemonic approximation
