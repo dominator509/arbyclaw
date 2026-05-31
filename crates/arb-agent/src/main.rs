@@ -3,13 +3,14 @@
 
 use arb_core::{
     load_config_file, BuildIdentity, ConfigError, PolicyEngine, AGENTIC_HANDOFF_VERSION,
-    CEX_CONNECTOR_FRAMEWORK_VERSION, COMMUNICATIONS_CLI_VERSION, DASHBOARD_BOUNDARY_VERSION,
-    DEFAULT_MARKET_DATA_FRESHNESS_MS, DEX_CONNECTOR_FRAMEWORK_VERSION,
-    EXECUTION_ADAPTER_FRAMEWORK_VERSION, EXECUTION_PLANNER_VERSION, EXTERNAL_HARDENING_VERSION,
-    OBSERVABILITY_RUNBOOK_VERSION, OPPORTUNITY_ENGINE_VERSION, PACKAGING_DEPLOYMENT_VERSION,
-    PAPER_AUDIT_INTEGRATION_VERSION, PAPER_BALANCE_LEDGER_VERSION, PAPER_CONNECTOR_VERSION,
-    PAPER_REALISM_VALIDATION_VERSION, PAPER_REALISTIC_FILL_MODEL_VERSION,
-    RUNTIME_LIFECYCLE_VERSION, SQLITE_WAL_DURABILITY_VERSION, TESTING_BACKTESTING_VERSION,
+    AUDIT_DURABILITY_VALIDATION_VERSION, CEX_CONNECTOR_FRAMEWORK_VERSION,
+    COMMUNICATIONS_CLI_VERSION, DASHBOARD_BOUNDARY_VERSION, DEFAULT_MARKET_DATA_FRESHNESS_MS,
+    DEX_CONNECTOR_FRAMEWORK_VERSION, EXECUTION_ADAPTER_FRAMEWORK_VERSION,
+    EXECUTION_PLANNER_VERSION, EXTERNAL_HARDENING_VERSION, OBSERVABILITY_RUNBOOK_VERSION,
+    OPPORTUNITY_ENGINE_VERSION, PACKAGING_DEPLOYMENT_VERSION, PAPER_AUDIT_INTEGRATION_VERSION,
+    PAPER_BALANCE_LEDGER_VERSION, PAPER_CONNECTOR_VERSION, PAPER_REALISM_VALIDATION_VERSION,
+    PAPER_REALISTIC_FILL_MODEL_VERSION, RUNTIME_LIFECYCLE_VERSION, SQLITE_WAL_DURABILITY_VERSION,
+    TESTING_BACKTESTING_VERSION,
 };
 use std::{env, path::PathBuf, process::ExitCode};
 
@@ -46,7 +47,7 @@ fn run() -> Result<(), ConfigError> {
                 config.runtime.mode.permits_live_execution()
             );
             println!("policy: {} initialized", policy.trust_contract_version());
-            println!("audit: append-only boundary available; runtime journal writing is not auto-started yet");
+            println!("audit: append-only boundary available; {AUDIT_DURABILITY_VALIDATION_VERSION} validates local replay rejection, sync, concurrency, filesystem failure, and simulated disk-full fail-closed probes; runtime journal writing is not auto-started yet");
             println!("state: trait boundary and local SQLite WAL checkpoints available; {SQLITE_WAL_DURABILITY_VERSION} validates local integrity, WAL checkpoint, reopen, backup/restore, and multi-handle durability; external production-host validation pending");
             println!("market-data: normalized quote/order-book/fee boundaries available; live providers pending");
             println!("paper-connectors: {PAPER_CONNECTOR_VERSION} available for deterministic in-memory simulation only");

@@ -73,8 +73,9 @@ pub use dashboard::{
 };
 
 pub use audit::{
-    AppendOnlyAuditJournal, AuditError, AuditEvent, AuditEventKind, AuditRecord, AuditValue,
-    AuditViolation, AUDIT_GENESIS_HASH, AUDIT_JOURNAL_FORMAT_VERSION,
+    validate_audit_journal_durability, AppendOnlyAuditJournal, AuditDurabilityValidationReport,
+    AuditError, AuditEvent, AuditEventKind, AuditRecord, AuditValue, AuditViolation,
+    AUDIT_DURABILITY_VALIDATION_VERSION, AUDIT_GENESIS_HASH, AUDIT_JOURNAL_FORMAT_VERSION,
 };
 
 pub use config::{

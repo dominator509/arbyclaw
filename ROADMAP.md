@@ -6,11 +6,11 @@ ArbyClaw
 
 ## Current Roadmap Position
 
-- Active phase: Phase 25 - Paper Audit Journal Integration implemented for local paper report and ledger mutation audit records; next required work is audit durability/runtime validation and external sandbox/live evidence beyond current Rust/CI gates
-- Active sub-roadmap: `PHASE_25_SUBROADMAP.md`
-- Current production readiness: 95%
-- Current implementation status: Minimal Rust workspace, typed config, reference-only secret boundary, mode-gate validation, deny-by-default policy engine, append-only audit journal primitives, state-store trait boundary, SQLite WAL-backed checkpoint store with local integrity/checkpoint/reopen/backup-restore/multi-handle durability validation and process-level crash/restart recovery tests, normalized market-data models, fee models, freshness classification, provider trait boundaries, deterministic paper connectors with local paper-report checkpoint persistence, local paper balance ledgering, realistic local paper fill modeling, venue matching profiles, adverse-selection modeling, reference-only calibration records, paper ledger replay validation, local historical-fixture paper backtest corpus execution, and direct local audit journal records for paper reports plus reserve/settlement ledger mutations, CEX connector framework types/traits, DEX/Web3 connector framework types/traits, deterministic opportunity-engine types/traits, draft-only execution-planner types/traits with local plan-draft checkpoint persistence, execution-adapter boundary records/traits with local run checkpoint persistence, local fail-closed runtime lifecycle wiring for audit/state/adapter sequencing, communications/CLI command and notification boundaries, embedded-dashboard local render boundaries, observability/runbook local record boundaries, deterministic testing/fuzzing/backtesting plan boundaries, deterministic packaging/deployment plan boundaries, deterministic external-hardening evidence/checklist boundaries, and deterministic agentic handoff package boundaries exist; local and GitHub Actions evidence covers current structure, formatting, workspace compilation, tests, clippy, locked release build, dependency audit, SBOM generation, local-SARIF SAST, example image scan, secret-pattern scan, and hardening evidence indexing. Live trading, production container/systemd/ARM deployment validation, real validation runner execution beyond Cargo tests, real fuzzing engines, real external backtest corpus execution, real observability runtime, real dashboard hosting, outbound messaging integrations, external adapter submission, exchange-specific live connectors, DEX RPC adapters, wallet signer, transaction broadcasts, custody backend, audit journal crash/concurrency/filesystem validation, deployment-host durability validation, external sandbox/live calibration evidence, and production execution logic are not implemented.
-- Current risk posture: High, because live-funds architecture is policy-, audit-, market-data-, paper-simulation-, paper-ledger-, paper-realism/replay/backtest/audit-, CEX-framework-, DEX/Web3-framework-, opportunity-engine-, planner-, adapter-, runtime-lifecycle-, communication-, dashboard-, observability-, and validation-boundary-gated but lacks custody isolation, exchange-specific live connectors, live DEX/RPC adapters, signer boundary, live adapter submission, real communications adapters, real dashboard hosting/authentication, real metrics/exporter/alert runtime, property/fuzz/backtest execution beyond current Cargo tests, real package/deployment validation, broad external hardening validation, future-agent execution validation, audit journal crash/concurrency/filesystem validation, deployment-host database validation, external sandbox/live fill calibration evidence, and external validation.
+- Active phase: Phase 26 - Audit Crash, Concurrency, Filesystem, and Disk-Full Validation implemented for local audit journal durability probes; next required work is deployment-host/runtime validation and external sandbox/live evidence beyond current Rust/CI gates
+- Active sub-roadmap: `PHASE_26_SUBROADMAP.md`
+- Current production readiness: 96%
+- Current implementation status: Minimal Rust workspace, typed config, reference-only secret boundary, mode-gate validation, deny-by-default policy engine, append-only audit journal primitives with local lock/sync append behavior and crash/concurrency/filesystem/simulated-disk-full validation probes, state-store trait boundary, SQLite WAL-backed checkpoint store with local integrity/checkpoint/reopen/backup-restore/multi-handle durability validation and process-level crash/restart recovery tests, normalized market-data models, fee models, freshness classification, provider trait boundaries, deterministic paper connectors with local paper-report checkpoint persistence, local paper balance ledgering, realistic local paper fill modeling, venue matching profiles, adverse-selection modeling, reference-only calibration records, paper ledger replay validation, local historical-fixture paper backtest corpus execution, and direct local audit journal records for paper reports plus reserve/settlement ledger mutations, CEX connector framework types/traits, DEX/Web3 connector framework types/traits, deterministic opportunity-engine types/traits, draft-only execution-planner types/traits with local plan-draft checkpoint persistence, execution-adapter boundary records/traits with local run checkpoint persistence, local fail-closed runtime lifecycle wiring for audit/state/adapter sequencing, communications/CLI command and notification boundaries, embedded-dashboard local render boundaries, observability/runbook local record boundaries, deterministic testing/fuzzing/backtesting plan boundaries, deterministic packaging/deployment plan boundaries, deterministic external-hardening evidence/checklist boundaries, and deterministic agentic handoff package boundaries exist; local and GitHub Actions evidence covers current structure, formatting, workspace compilation, tests, clippy, locked release build, dependency audit, SBOM generation, local-SARIF SAST, example image scan, secret-pattern scan, and hardening evidence indexing. Live trading, production container/systemd/ARM deployment validation, real validation runner execution beyond Cargo tests, real fuzzing engines, real external backtest corpus execution, real observability runtime, real dashboard hosting, outbound messaging integrations, external adapter submission, exchange-specific live connectors, DEX RPC adapters, wallet signer, transaction broadcasts, custody backend, deployment-host durability validation, physical disk-full and retention/rotation evidence, external sandbox/live calibration evidence, and production execution logic are not implemented.
+- Current risk posture: High, because live-funds architecture is policy-, audit-, market-data-, paper-simulation-, paper-ledger-, paper-realism/replay/backtest/audit-, CEX-framework-, DEX/Web3-framework-, opportunity-engine-, planner-, adapter-, runtime-lifecycle-, communication-, dashboard-, observability-, and validation-boundary-gated but lacks custody isolation, exchange-specific live connectors, live DEX/RPC adapters, signer boundary, live adapter submission, real communications adapters, real dashboard hosting/authentication, real metrics/exporter/alert runtime, property/fuzz/backtest execution beyond current Cargo tests, real package/deployment validation, broad external hardening validation, future-agent execution validation, deployment-host database and audit validation, physical disk-full and retention/rotation evidence, external sandbox/live fill calibration evidence, and external validation.
 
 ## Roadmap Governance Rules
 
@@ -31,7 +31,7 @@ ArbyClaw
 | 1 | Rust Workspace Scaffold | Scaffold complete; current workspace Rust/CI validation covered | +2% realized / +1% deferred | Minimal workspace, CI skeleton, safety docs, and structure validator created. Future changes must rerun Cargo validation. |
 | 2 | Config, Secrets, and Mode Gates | Implemented; current workspace Rust/CI validation covered | +5% realized / +1% deferred | Typed config, environment secret references, keystore interface boundary, and live mode-gate validation added. |
 | 3 | Policy Engine and Trust Contract | Implemented; current workspace Rust/CI validation covered | +7% realized / +3% deferred | Deny-by-default policy checks, intent model, trust-contract denials, and CLI policy initialization added. |
-| 4 | Audit Journal and State Store | Implemented; current workspace Rust/CI validation covered; external durability validation deferred | +4% realized / +2% deferred | Append-only hash-chained JSONL audit primitives, redaction checks, state-store trait, in-memory store, and SQLite WAL checkpoint store added; crash/concurrency/filesystem validation remains future work. |
+| 4 | Audit Journal and State Store | Implemented; current workspace Rust/CI validation covered; deployment-host durability validation deferred | +4% realized / +2% deferred | Append-only hash-chained JSONL audit primitives, redaction checks, state-store trait, in-memory store, SQLite WAL checkpoint store, and Phase 26 local audit crash/concurrency/filesystem/simulated-disk-full probes added; physical disk-full, retention/rotation, service-manager restart, and deployment-host validation remain future work. |
 | 5 | Market Data Core | Implemented; current workspace Rust/CI validation covered; live provider validation deferred | +5% realized / +2% deferred | Normalized quotes/order books, freshness windows, fee models, and provider traits added; no live network providers. |
 | 6 | Simulated/Paper Connectors | Implemented; current workspace Rust/CI validation covered; paper-model limitations deferred | +6% realized / +1% deferred | Deterministic in-memory paper market data, static fee provider, policy-gated paper execution adapter, and local paper-report state checkpoint helper added; no live venues or balances. |
 | 7 | CEX Connector Framework | Implemented as framework boundary; current workspace Rust/CI validation covered; live exchange validation deferred | +6% realized / +2% deferred | CEX venue profiles, capability registry, order request model, policy gate, and connector traits added; no exchange-specific adapters or live orders. |
@@ -53,8 +53,9 @@ ArbyClaw
 | 23 | Realistic Paper Fills | Implemented as local deterministic order-book depth and partial-fill modeling; external calibration deferred | +1% realized / +0% deferred in ChatGPT | Consumes supplied order-book depth, models latency, queue-position, slippage, full/partial/unfilled outcomes, and ledger-safe unfilled notional release without external submission. |
 | 24 | Paper Replay, Calibration, Backtest, and Runtime Validation Boundaries | Implemented as local deterministic venue-realism, replay, and historical-fixture backtest boundary; external sandbox/live and deployment-host validation deferred | +1% realized / +0% deferred in ChatGPT | Adds local exchange matching profiles, adverse-selection penalties, reference-only calibration records, paper ledger replay validation, local backtest corpus execution, and runtime validation records without external calls. |
 | 25 | Paper Audit Journal Integration | Implemented as local deterministic audit journal integration; production audit durability validation deferred | +1% realized / +0% deferred in ChatGPT | Adds append-only audit records for paper execution reports and paper reserve/settlement ledger mutations, with local journal reopen/replay tests and no external calls. |
+| 26 | Audit Crash, Concurrency, Filesystem, and Disk-Full Validation | Implemented as local deterministic audit durability validation; deployment-host evidence deferred | +1% realized / +0% deferred in ChatGPT | Adds lock/sync append behavior plus local probes for append replay, truncated crash-like replay rejection, tamper rejection, concurrent appends, invalid filesystem failure, and simulated disk-full fail-closed behavior. |
 
-Potential total inside ChatGPT Project Mode: approximately 75-95% of code/documentation readiness, but not full production readiness because live infrastructure, external exchange credentials, real deployment, penetration testing, audit durability validation, external sandbox/live calibration evidence, deployment-host durability validation, and live trading verification are environment-limited.
+Potential total inside ChatGPT Project Mode: approximately 75-96% of code/documentation readiness, but not full production readiness because live infrastructure, external exchange credentials, real deployment, penetration testing, deployment-host audit validation, external sandbox/live calibration evidence, deployment-host durability validation, and live trading verification are environment-limited.
 
 ## Phase 0 — Governance Initialization
 
@@ -254,7 +255,7 @@ Met for ChatGPT Project Mode policy implementation with current workspace Rust/C
 
 ### Status
 
-Implemented in ChatGPT Project Mode with current local/CI Rust validation evidence; SQLite WAL checkpoint persistence and local durability validation are implemented, while audit crash testing, concurrent append testing, filesystem permission validation, and external production-host validation remain deferred.
+Implemented in ChatGPT Project Mode with current local/CI Rust validation evidence; SQLite WAL checkpoint persistence, local state-store durability validation, and Phase 26 local audit crash/concurrency/filesystem/simulated-disk-full probes are implemented, while deployment-host audit validation, physical disk-full behavior, retention/rotation, service-manager restart behavior, and external production-host validation remain deferred.
 
 ### Goal
 
@@ -285,6 +286,11 @@ Create durable, efficient, redacted, append-only audit and state tracking.
 - Replay-time format-version validation
 - Replay-time event redaction validation
 - Replay-time record-hash validation
+- Local lock/sync append behavior
+- Local crash-like truncation rejection
+- Local concurrent append replay validation
+- Local invalid-filesystem fail-closed validation
+- Local simulated disk-full append failure classification and state-preservation validation
 
 ### State Boundary Implemented
 
@@ -312,19 +318,26 @@ cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 ```
 
-Additional Phase 4 validations deferred:
+Additional Phase 4 validations covered locally as of Phase 26:
 
 - audit append/reopen test execution
 - audit tamper-detection test execution
 - audit redaction test execution
-- crash/recovery testing
-- concurrent append testing
-- filesystem permission testing
-- SQLite WAL crash/recovery, migration, file-locking, backup/restore, and filesystem-permission validation
+- crash-like truncated replay rejection
+- concurrent append replay validation
+- invalid-filesystem failure validation
+
+Additional Phase 4 production validations deferred:
+
+- deployment-host audit crash/recovery testing
+- physical deployment-host disk-full behavior testing
+- retention/rotation validation
+- stale-lock/service-manager restart validation
+- SQLite WAL migration, deployment file-locking, backup/restore under deployment load, and filesystem-permission validation
 
 ### Exit Criteria
 
-Met for ChatGPT Project Mode audit/state boundary implementation with current workspace Rust/CI validation evidence. Durable database implementation remains required before any live execution path may depend on audit persistence.
+Met for ChatGPT Project Mode audit/state boundary implementation with current workspace Rust/CI validation evidence and local Phase 26 audit durability probes. Deployment-host audit/state validation remains required before any live execution path may depend on audit persistence.
 
 ## Phase 5 — Market Data Core
 
@@ -1274,9 +1287,9 @@ Validate the SQLite WAL state-store boundary for non-secret checkpoint durabilit
 ### Deferred Tasks
 
 - External production-host crash/restart validation.
-- Filesystem permission and disk-full validation.
+- Filesystem permission and physical disk-full validation.
 - Long-running runtime lifecycle load validation.
-- Audit journal crash/concurrency durability validation.
+- Deployment-host audit journal durability validation beyond Phase 26 local crash/concurrency/filesystem probes.
 - Deployment-like validation with retained non-secret evidence references.
 - Container/systemd/ARM deployment validation.
 
@@ -1391,9 +1404,9 @@ Validate that committed non-secret runtime checkpoints survive abrupt child-proc
 
 ### Deferred Tasks
 
-- Disk-full validation.
+- Physical deployment-host disk-full evidence.
 - Filesystem permission fault validation.
-- Audit journal crash/concurrency validation.
+- Deployment-host audit journal validation beyond Phase 26 local crash/concurrency/filesystem probes.
 - Long-running daemon restart validation.
 - Deployment-host crash/restart validation outside local Cargo tests.
 
@@ -1565,3 +1578,51 @@ cargo clippy --workspace --all-targets -- -D warnings
 ### Exit Criteria
 
 Met for local deterministic paper execution report and ledger mutation audit journal wiring only. Audit journal production durability, live connector audit-before-action enforcement, production-host runtime validation, deployment validation, live exchange/RPC validation, custody/signing validation, and production readiness are not claimed.
+
+## Phase 26 - Audit Crash, Concurrency, Filesystem, and Disk-Full Validation
+
+### Status
+
+Implemented for local deterministic audit durability validation scope.
+
+### Goal
+
+Fill the local coding gap for append-only audit journal crash, concurrency, and filesystem validation while preserving no-live-execution and no-external-call boundaries.
+
+### Completed Tasks
+
+- Created `PHASE_26_SUBROADMAP.md`.
+- Added `AUDIT_DURABILITY_VALIDATION_VERSION`.
+- Updated `AppendOnlyAuditJournal::append_event` to acquire a local lock before replay, sequence/hash calculation, and append.
+- Updated audit append persistence to flush and `sync_all` the JSONL file.
+- Added `AuditDurabilityValidationReport` and `validate_audit_journal_durability`.
+- Added local probes for append/reopen replay, crash-like truncated record rejection, tamper/hash-chain rejection, concurrent append replay, invalid filesystem failure, and simulated disk-full append failure.
+- Added Rust tests for durability validation, direct partial JSONL replay rejection, permission/disk-failure state preservation, and existing-workspace fail-closed behavior.
+- Exported Phase 26 audit validation types from `arb-core`.
+- Surfaced Phase 26 status in `arb-agent`.
+- Updated structure validation for Phase 26 files.
+
+### Explicit Non-Goals
+
+- No live trading.
+- No real exchange, sandbox, or RPC calls.
+- No real balance reads or real account mutation.
+- No signing, withdrawals, bridges, broadcasts, wallet custody, or external adapter submission.
+- No production deployment or production-readiness approval.
+- No claim that local validation proves every deployment filesystem, physical disk-full condition, retention/rotation policy, container runtime, service-manager restart, or remote storage layer.
+
+### Validation
+
+Must be refreshed after this patch:
+
+```bash
+python3 scripts/validate_structure.py
+cargo fmt --check
+cargo check --workspace
+cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
+```
+
+### Exit Criteria
+
+Met for local deterministic audit append/replay, crash-like truncation rejection, tamper rejection, concurrent append replay, invalid filesystem fail-closed validation, and simulated disk-full fail-closed validation only. Deployment-host audit validation, physical disk-full evidence, retention/rotation validation, live exchange/RPC validation, custody/signing validation, and production readiness are not claimed.
