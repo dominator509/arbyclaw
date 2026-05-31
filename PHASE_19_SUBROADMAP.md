@@ -21,7 +21,20 @@ In scope:
 - Fail-closed plan state checkpoint before adapter evaluation.
 - Deterministic adapter-boundary evaluation after audit/state preconditions pass.
 - Adapter run checkpoint persistence after deterministic adapter evaluation.
+- Local graceful-shutdown audit/state checkpoint records without stopping services.
+- Local runtime audit/SQLite backup-restore validation records without deployment actions.
+- Local runtime restart recovery validation records without service resume or deployment actions.
+- Local restart recovery dispositions for ready-for-local-review versus needs-operator-review.
+- CLI status text for local restart recovery dispositions without loading secrets or resuming services.
 - Tests proving in-memory and SQLite WAL-backed checkpoint persistence.
+- Tests proving concurrent local runtime lifecycle access over shared audit and SQLite WAL paths.
+- Tests proving local state permission failure stops the lifecycle before adapter evaluation.
+- Tests proving graceful-shutdown audit/state checkpoints reopen locally.
+- Tests proving copied local audit and SQLite state artifacts reopen with runtime checkpoints.
+- Tests proving local restart recovery replays audit and reopens SQLite runtime checkpoints.
+- Tests proving local restart recovery marks missing graceful-shutdown checkpoints as needs-operator-review.
+- Tests proving CLI status labels expose the restart recovery dispositions as local operator-review states.
+- Tests proving local restart recovery fails closed when audit exists but required SQLite checkpoints are missing.
 - Tests proving live-scope lifecycle requests are rejected before audit/state mutation.
 
 Out of scope:
@@ -58,6 +71,12 @@ The local lifecycle must:
 7. Append an adapter-complete audit event.
 8. Preserve `external_submission_performed = false`.
 9. Preserve `live_execution_performed = false`.
+10. Record local graceful-shutdown checkpoints without service-manager actions.
+11. Validate local audit/state backup-restore copies without storing paths, contents, secrets, or production-readiness claims in the report.
+12. Validate local restart recovery summaries without service resume, deployment actions, or production-readiness claims.
+13. Classify locally coherent restart recovery as ready-for-local-review or needs-operator-review.
+14. Surface those dispositions in CLI status text as local operator-review states only.
+15. Fail closed when restart recovery sees incomplete local lifecycle checkpoint state.
 
 Any audit, state, planner, adapter, or lifecycle validation failure must stop the lifecycle before subsequent steps.
 
@@ -75,8 +94,8 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 ## Deferred Work
 
-- Production durability validation for SQLite WAL under crash, restart, locking, filesystem permission, backup/restore, and concurrent access scenarios.
-- Long-running daemon orchestration and graceful shutdown.
+- Production durability validation for SQLite WAL under crash, restart, locking, deployment-host filesystem permission, backup/restore, and deployment-host concurrent access scenarios.
+- Long-running daemon orchestration and deployment-host graceful shutdown execution.
 - Real observability runtime integration.
 - Real dashboard hosting integration.
 - Real outbound communications integration.

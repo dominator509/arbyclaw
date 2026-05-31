@@ -87,6 +87,8 @@ REQUIRED_FILES = [
     "handoff/AGENTIC_HANDOFF_PACKAGE.md",
     "handoff/FUTURE_AGENT_PROMPTS.md",
     "handoff/EXTERNAL_VALIDATION_CHECKLIST.md",
+    "scripts/validate_container_example.py",
+    "scripts/validate_systemd_example.py",
 ]
 
 FORBIDDEN_SECRET_ASSIGNMENT = re.compile(

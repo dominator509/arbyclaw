@@ -73,9 +73,12 @@ pub use dashboard::{
 };
 
 pub use audit::{
-    validate_audit_journal_durability, AppendOnlyAuditJournal, AuditDurabilityValidationReport,
-    AuditError, AuditEvent, AuditEventKind, AuditRecord, AuditValue, AuditViolation,
-    AUDIT_DURABILITY_VALIDATION_VERSION, AUDIT_GENESIS_HASH, AUDIT_JOURNAL_FORMAT_VERSION,
+    plan_audit_journal_retention, plan_audit_stale_lock_recheck, validate_audit_journal_durability,
+    AppendOnlyAuditJournal, AuditDurabilityValidationReport, AuditError, AuditEvent,
+    AuditEventKind, AuditJournalFileMetadata, AuditLockFileMetadata, AuditRecord,
+    AuditRetentionPlan, AuditRetentionPolicy, AuditStaleLockPlan, AuditStaleLockPolicy, AuditValue,
+    AuditViolation, AUDIT_DURABILITY_VALIDATION_VERSION, AUDIT_GENESIS_HASH,
+    AUDIT_JOURNAL_FORMAT_VERSION,
 };
 
 pub use config::{
@@ -189,8 +192,16 @@ pub use state::{
 };
 
 pub use runtime::{
-    run_local_runtime_lifecycle, RuntimeLifecycleError, RuntimeLifecycleRecord,
-    RuntimeLifecycleRequest, RuntimeLifecycleStatus, RUNTIME_LIFECYCLE_VERSION,
+    run_local_graceful_shutdown_checkpoint, run_local_runtime_lifecycle,
+    validate_local_runtime_backup_restore, validate_local_runtime_deployment_smoke,
+    validate_local_runtime_restart_recovery, RuntimeBackupRestoreValidationReport,
+    RuntimeDeploymentSmokeValidationReport, RuntimeDeploymentSmokeValidationRequest,
+    RuntimeGracefulShutdownRecord, RuntimeGracefulShutdownRequest, RuntimeLifecycleError,
+    RuntimeLifecycleRecord, RuntimeLifecycleRequest, RuntimeLifecycleStatus,
+    RuntimeRestartRecoveryDisposition, RuntimeRestartRecoveryValidationReport,
+    RUNTIME_BACKUP_RESTORE_VALIDATION_VERSION, RUNTIME_DEPLOYMENT_SMOKE_VALIDATION_VERSION,
+    RUNTIME_GRACEFUL_SHUTDOWN_CHECKPOINT_KEY, RUNTIME_GRACEFUL_SHUTDOWN_VERSION,
+    RUNTIME_LIFECYCLE_VERSION, RUNTIME_RESTART_RECOVERY_VALIDATION_VERSION,
 };
 
 pub use policy::{

@@ -22,7 +22,7 @@ pub const AUDIT_JOURNAL_FORMAT_VERSION: &str = "audit-jsonl-hash-chain-v1";
 
 /// Current local audit durability validation version.
 pub const AUDIT_DURABILITY_VALIDATION_VERSION: &str =
-    "phase-26-audit-crash-concurrency-filesystem-disk-full-v1";
+    "phase-26-audit-crash-concurrency-filesystem-disk-full-stale-lock-v1";
 
 const AUDIT_LOCK_RETRY_COUNT: usize = 200;
 const AUDIT_LOCK_RETRY_DELAY: Duration = Duration::from_millis(5);
@@ -198,6 +198,224 @@ pub struct AuditDurabilityValidationReport {
     pub unresolved_blockers: Vec<String>,
     /// Validation timestamp in Unix milliseconds.
     pub validated_at_unix_ms: u64,
+}
+
+/// Local audit retention and rotation policy.
+///
+/// This model plans retention decisions only. It never deletes files, renames
+/// files, compresses archives, or starts a background rotation task.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct AuditRetentionPolicy {
+    /// Maximum active journal size before a rotation should be requested.
+    pub max_active_bytes: u64,
+    /// Maximum archived journals to retain after age filtering.
+    pub max_archived_files: usize,
+    /// Maximum archive age in milliseconds.
+    pub retention_window_ms: u64,
+}
+
+/// Metadata for one local audit journal file supplied to the retention model.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct AuditJournalFileMetadata {
+    /// Local path or sanitized file label.
+    pub path: String,
+    /// File size in bytes.
+    pub size_bytes: u64,
+    /// Last modified timestamp in Unix milliseconds.
+    pub modified_at_unix_ms: u64,
+    /// Whether this is the active append target.
+    pub active: bool,
+}
+
+/// Local retention/rotation plan for audit journals.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct AuditRetentionPlan {
+    /// Whether the active journal should be rotated by a future operator/runtime.
+    pub rotate_active: bool,
+    /// Active journal path or label.
+    pub active_path: String,
+    /// Archive paths retained by the model.
+    pub retained_archives: Vec<String>,
+    /// Archive paths marked expired by the model.
+    pub expired_archives: Vec<String>,
+    /// Whether this model deleted files.
+    pub deletion_performed: bool,
+    /// Whether this model changed the filesystem.
+    pub filesystem_mutated: bool,
+    /// Whether this plan approves production readiness.
+    pub production_ready: bool,
+}
+
+/// Local stale-lock recheck policy for audit journal restart planning.
+///
+/// This model never removes lock files or starts services. It only records
+/// whether a caller-supplied lock observation should be rechecked by a future
+/// operator or service manager after restart.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct AuditStaleLockPolicy {
+    /// Age threshold after which a lock should be treated as stale.
+    pub stale_after_ms: u64,
+}
+
+/// Caller-supplied metadata for one observed audit journal lock file.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct AuditLockFileMetadata {
+    /// Local path or sanitized file label for the lock.
+    pub path: String,
+    /// Process id recorded in the lock metadata.
+    pub owner_pid: u32,
+    /// Timestamp when the lock was acquired in Unix milliseconds.
+    pub acquired_at_unix_ms: u64,
+}
+
+/// Side-effect-free stale-lock recheck plan.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct AuditStaleLockPlan {
+    /// Lock path or sanitized file label.
+    pub lock_path: String,
+    /// Lock owner process id from caller-supplied metadata.
+    pub owner_pid: u32,
+    /// Observed lock age in milliseconds.
+    pub lock_age_ms: u64,
+    /// Whether the lock age exceeds the configured stale threshold.
+    pub stale: bool,
+    /// Whether a future operator/service-manager restart recheck is required.
+    pub service_manager_recheck_required: bool,
+    /// Whether this model removed the lock file.
+    pub lock_removal_performed: bool,
+    /// Whether this model changed the filesystem.
+    pub filesystem_mutated: bool,
+    /// Whether this plan approves production readiness.
+    pub production_ready: bool,
+}
+
+/// Build a local audit retention/rotation plan from caller-supplied metadata.
+///
+/// The plan is intentionally side-effect free. It records which archives would
+/// be retained or marked expired by a future runtime, but it does not mutate or
+/// delete local files.
+pub fn plan_audit_journal_retention(
+    policy: &AuditRetentionPolicy,
+    files: &[AuditJournalFileMetadata],
+    now_unix_ms: u64,
+) -> Result<AuditRetentionPlan, AuditError> {
+    if policy.max_active_bytes == 0 {
+        return Err(AuditError::ValidationHarnessFailed {
+            reason: "audit retention max_active_bytes must be non-zero".to_owned(),
+        });
+    }
+    if policy.retention_window_ms == 0 {
+        return Err(AuditError::ValidationHarnessFailed {
+            reason: "audit retention window must be non-zero".to_owned(),
+        });
+    }
+    if now_unix_ms == 0 {
+        return Err(AuditError::ValidationHarnessFailed {
+            reason: "audit retention timestamp must be non-zero".to_owned(),
+        });
+    }
+
+    let active_files = files.iter().filter(|file| file.active).collect::<Vec<_>>();
+    if active_files.len() != 1 {
+        return Err(AuditError::ValidationHarnessFailed {
+            reason: "audit retention plan requires exactly one active journal".to_owned(),
+        });
+    }
+    if files.iter().any(|file| file.path.trim().is_empty()) {
+        return Err(AuditError::ValidationHarnessFailed {
+            reason: "audit retention file paths must be non-empty".to_owned(),
+        });
+    }
+
+    let active = active_files[0];
+    let rotate_active = active.size_bytes > policy.max_active_bytes;
+    let cutoff = now_unix_ms.saturating_sub(policy.retention_window_ms);
+    let mut archives = files.iter().filter(|file| !file.active).collect::<Vec<_>>();
+    archives.sort_by(|left, right| {
+        right
+            .modified_at_unix_ms
+            .cmp(&left.modified_at_unix_ms)
+            .then_with(|| left.path.cmp(&right.path))
+    });
+
+    let mut retained_archives = Vec::new();
+    let mut expired_archives = Vec::new();
+    for archive in archives {
+        if archive.modified_at_unix_ms < cutoff
+            || retained_archives.len() >= policy.max_archived_files
+        {
+            expired_archives.push(archive.path.clone());
+        } else {
+            retained_archives.push(archive.path.clone());
+        }
+    }
+
+    Ok(AuditRetentionPlan {
+        rotate_active,
+        active_path: active.path.clone(),
+        retained_archives,
+        expired_archives,
+        deletion_performed: false,
+        filesystem_mutated: false,
+        production_ready: false,
+    })
+}
+
+/// Build a side-effect-free stale-lock recheck plan from caller-supplied lock metadata.
+///
+/// The plan intentionally does not inspect processes, remove lock files, start
+/// services, or mutate deployment state. A stale result is only a request for a
+/// future operator/runtime to recheck the lock under deployment-specific rules.
+pub fn plan_audit_stale_lock_recheck(
+    policy: &AuditStaleLockPolicy,
+    lock: &AuditLockFileMetadata,
+    now_unix_ms: u64,
+) -> Result<AuditStaleLockPlan, AuditError> {
+    if policy.stale_after_ms == 0 {
+        return Err(AuditError::ValidationHarnessFailed {
+            reason: "audit stale-lock threshold must be non-zero".to_owned(),
+        });
+    }
+    if lock.path.trim().is_empty() {
+        return Err(AuditError::ValidationHarnessFailed {
+            reason: "audit stale-lock path must be non-empty".to_owned(),
+        });
+    }
+    if lock.owner_pid == 0 {
+        return Err(AuditError::ValidationHarnessFailed {
+            reason: "audit stale-lock owner pid must be non-zero".to_owned(),
+        });
+    }
+    if lock.acquired_at_unix_ms == 0 || now_unix_ms == 0 {
+        return Err(AuditError::ValidationHarnessFailed {
+            reason: "audit stale-lock timestamps must be non-zero".to_owned(),
+        });
+    }
+    if lock.acquired_at_unix_ms > now_unix_ms {
+        return Err(AuditError::ValidationHarnessFailed {
+            reason: "audit stale-lock acquired timestamp cannot be in the future".to_owned(),
+        });
+    }
+
+    let lock_age_ms = now_unix_ms - lock.acquired_at_unix_ms;
+    let stale = lock_age_ms >= policy.stale_after_ms;
+
+    Ok(AuditStaleLockPlan {
+        lock_path: lock.path.clone(),
+        owner_pid: lock.owner_pid,
+        lock_age_ms,
+        stale,
+        service_manager_recheck_required: stale,
+        lock_removal_performed: false,
+        filesystem_mutated: false,
+        production_ready: false,
+    })
 }
 
 /// Run local audit crash/concurrency/filesystem validation probes.
@@ -930,9 +1148,11 @@ fn validation_event(id: impl Into<String>) -> AuditEvent {
 #[cfg(test)]
 mod tests {
     use super::{
+        plan_audit_journal_retention, plan_audit_stale_lock_recheck,
         validate_audit_journal_durability, validate_disk_full_failure_probe,
         AppendOnlyAuditJournal, AuditAppendFault, AuditError, AuditEvent, AuditEventKind,
-        AuditValue, AUDIT_DURABILITY_VALIDATION_VERSION, AUDIT_GENESIS_HASH,
+        AuditJournalFileMetadata, AuditLockFileMetadata, AuditRetentionPolicy,
+        AuditStaleLockPolicy, AuditValue, AUDIT_DURABILITY_VALIDATION_VERSION, AUDIT_GENESIS_HASH,
     };
     use std::{env, fs, fs::OpenOptions, io::Write, process};
 
@@ -1097,5 +1317,178 @@ mod tests {
         assert_eq!(reopened.next_sequence(), next_sequence_before);
         assert_eq!(reopened.previous_hash(), first.record_hash);
         let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn retention_plan_marks_rotation_without_deleting_logs() {
+        let policy = AuditRetentionPolicy {
+            max_active_bytes: 100,
+            max_archived_files: 2,
+            retention_window_ms: 1_000,
+        };
+        let files = vec![
+            AuditJournalFileMetadata {
+                path: "audit.jsonl".to_owned(),
+                size_bytes: 101,
+                modified_at_unix_ms: 10_000,
+                active: true,
+            },
+            AuditJournalFileMetadata {
+                path: "audit.3.jsonl".to_owned(),
+                size_bytes: 40,
+                modified_at_unix_ms: 9_900,
+                active: false,
+            },
+            AuditJournalFileMetadata {
+                path: "audit.2.jsonl".to_owned(),
+                size_bytes: 40,
+                modified_at_unix_ms: 9_800,
+                active: false,
+            },
+            AuditJournalFileMetadata {
+                path: "audit.1.jsonl".to_owned(),
+                size_bytes: 40,
+                modified_at_unix_ms: 8_000,
+                active: false,
+            },
+        ];
+
+        let plan =
+            plan_audit_journal_retention(&policy, &files, 10_000).expect("plan should build");
+        assert!(plan.rotate_active);
+        assert_eq!(plan.active_path, "audit.jsonl");
+        assert_eq!(
+            plan.retained_archives,
+            vec!["audit.3.jsonl", "audit.2.jsonl"]
+        );
+        assert_eq!(plan.expired_archives, vec!["audit.1.jsonl"]);
+        assert!(!plan.deletion_performed);
+        assert!(!plan.filesystem_mutated);
+        assert!(!plan.production_ready);
+    }
+
+    #[test]
+    fn retention_plan_expires_over_count_without_filesystem_mutation() {
+        let policy = AuditRetentionPolicy {
+            max_active_bytes: 1_000,
+            max_archived_files: 1,
+            retention_window_ms: 10_000,
+        };
+        let files = vec![
+            AuditJournalFileMetadata {
+                path: "active.jsonl".to_owned(),
+                size_bytes: 12,
+                modified_at_unix_ms: 20_000,
+                active: true,
+            },
+            AuditJournalFileMetadata {
+                path: "newer.jsonl".to_owned(),
+                size_bytes: 1,
+                modified_at_unix_ms: 19_000,
+                active: false,
+            },
+            AuditJournalFileMetadata {
+                path: "older.jsonl".to_owned(),
+                size_bytes: 1,
+                modified_at_unix_ms: 18_000,
+                active: false,
+            },
+        ];
+
+        let plan =
+            plan_audit_journal_retention(&policy, &files, 20_000).expect("plan should build");
+        assert!(!plan.rotate_active);
+        assert_eq!(plan.retained_archives, vec!["newer.jsonl"]);
+        assert_eq!(plan.expired_archives, vec!["older.jsonl"]);
+        assert!(!plan.deletion_performed);
+        assert!(!plan.filesystem_mutated);
+    }
+
+    #[test]
+    fn retention_plan_rejects_ambiguous_active_journals() {
+        let policy = AuditRetentionPolicy {
+            max_active_bytes: 100,
+            max_archived_files: 1,
+            retention_window_ms: 1_000,
+        };
+        let files = vec![
+            AuditJournalFileMetadata {
+                path: "active-a.jsonl".to_owned(),
+                size_bytes: 1,
+                modified_at_unix_ms: 1,
+                active: true,
+            },
+            AuditJournalFileMetadata {
+                path: "active-b.jsonl".to_owned(),
+                size_bytes: 1,
+                modified_at_unix_ms: 1,
+                active: true,
+            },
+        ];
+
+        let error = plan_audit_journal_retention(&policy, &files, 2)
+            .expect_err("ambiguous active journals must fail closed");
+        assert!(matches!(error, AuditError::ValidationHarnessFailed { .. }));
+    }
+
+    #[test]
+    fn stale_lock_plan_marks_restart_recheck_without_removing_lock() {
+        let policy = AuditStaleLockPolicy {
+            stale_after_ms: 5_000,
+        };
+        let lock = AuditLockFileMetadata {
+            path: "audit.jsonl.lock".to_owned(),
+            owner_pid: 42,
+            acquired_at_unix_ms: 10_000,
+        };
+
+        let plan =
+            plan_audit_stale_lock_recheck(&policy, &lock, 16_000).expect("plan should build");
+
+        assert_eq!(plan.lock_path, "audit.jsonl.lock");
+        assert_eq!(plan.owner_pid, 42);
+        assert_eq!(plan.lock_age_ms, 6_000);
+        assert!(plan.stale);
+        assert!(plan.service_manager_recheck_required);
+        assert!(!plan.lock_removal_performed);
+        assert!(!plan.filesystem_mutated);
+        assert!(!plan.production_ready);
+    }
+
+    #[test]
+    fn fresh_lock_plan_does_not_request_restart_recheck() {
+        let policy = AuditStaleLockPolicy {
+            stale_after_ms: 5_000,
+        };
+        let lock = AuditLockFileMetadata {
+            path: "audit.jsonl.lock".to_owned(),
+            owner_pid: 42,
+            acquired_at_unix_ms: 10_000,
+        };
+
+        let plan =
+            plan_audit_stale_lock_recheck(&policy, &lock, 14_999).expect("plan should build");
+
+        assert_eq!(plan.lock_age_ms, 4_999);
+        assert!(!plan.stale);
+        assert!(!plan.service_manager_recheck_required);
+        assert!(!plan.lock_removal_performed);
+        assert!(!plan.filesystem_mutated);
+    }
+
+    #[test]
+    fn stale_lock_plan_rejects_future_timestamp() {
+        let policy = AuditStaleLockPolicy {
+            stale_after_ms: 5_000,
+        };
+        let lock = AuditLockFileMetadata {
+            path: "audit.jsonl.lock".to_owned(),
+            owner_pid: 42,
+            acquired_at_unix_ms: 20_000,
+        };
+
+        let error = plan_audit_stale_lock_recheck(&policy, &lock, 19_999)
+            .expect_err("future timestamp must fail closed");
+        assert!(matches!(error, AuditError::ValidationHarnessFailed { .. }));
     }
 }

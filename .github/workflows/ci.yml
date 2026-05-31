@@ -43,6 +43,8 @@ jobs:
           rm crates/arb-core/arbyclaw.cdx.json crates/arb-agent/arbyclaw.cdx.json
       - name: Repository structure validation
         run: python3 scripts/validate_structure.py
+      - name: Example systemd unit static and syntax validation
+        run: python3 scripts/validate_systemd_example.py --systemd-analyze --require-systemd-analyze
 
   codeql:
     name: codeql-sast
@@ -191,6 +193,7 @@ jobs:
           | `trivy-image-scan-evidence` | `example-container-image-scan` | Example container image scan evidence only; not production image readiness. |
           | `gitleaks-secret-scan-evidence` | `secret-pattern-scan` | Redacted repository secret-pattern scan evidence. |
           | Docker build record artifact | `example-container-image-scan` | Docker Buildx build record for the example image when emitted by the action. |
+          | Example systemd unit gate | `rust-validation` | Static and `systemd-analyze verify` syntax checks for the example unit only; not service installation or deployment readiness. |
           | CycloneDX SBOM gate | `rust-validation` | Non-empty per-crate SBOM generation check; SBOM files are removed from the runner and not retained as artifacts. |
           | Dependency audit gate | `rust-validation` | `cargo audit` gate over `Cargo.lock`; no separate artifact retained. |
 
@@ -228,6 +231,7 @@ jobs:
           | `trivy-image-scan-evidence` | `example-container-image-scan` | Example container image scan evidence only; not production image readiness. |
           | `gitleaks-secret-scan-evidence` | `secret-pattern-scan` | Redacted repository secret-pattern scan evidence. |
           | Docker build record artifact | `example-container-image-scan` | Docker Buildx build record for the example image when emitted by the action. |
+          | Example systemd unit gate | `rust-validation` | Static and `systemd-analyze verify` syntax checks for the example unit only; not service installation or deployment readiness. |
           | CycloneDX SBOM gate | `rust-validation` | Non-empty per-crate SBOM generation check; SBOM files are removed from the runner and not retained as artifacts. |
           | Dependency audit gate | `rust-validation` | `cargo audit` gate over `Cargo.lock`; no separate artifact retained. |
 

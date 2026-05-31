@@ -19,7 +19,10 @@ cargo check --workspace
 cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 cargo build --release --locked
+python3 scripts/validate_systemd_example.py
 ```
+
+`scripts/validate_systemd_example.py` checks the committed example unit only. On Linux hosts with `systemd-analyze`, `python3 scripts/validate_systemd_example.py --systemd-analyze` also runs syntax verification against a temporary fake root without installing, enabling, reloading, or starting a service. Passing it is not production service-manager validation.
 
 Additional target-specific validation is required for containers, systemd, ARM builds, rollback drills, incident drills, and security review.
 

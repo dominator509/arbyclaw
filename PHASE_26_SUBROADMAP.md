@@ -1,4 +1,4 @@
-# Phase 26 - Audit Crash, Concurrency, Filesystem, and Disk-Full Validation
+# Phase 26 - Audit Crash, Concurrency, Filesystem, Disk-Full, and Stale-Lock Validation
 
 ## Status
 
@@ -20,7 +20,15 @@ Fill the local coding gap for append-only audit journal crash, concurrency, and 
 - Validate concurrent local append replay.
 - Validate fail-closed filesystem shape errors.
 - Validate simulated disk-full append failure classification and fail-closed journal state.
+- Model audit retention and rotation decisions without deleting files or mutating the filesystem.
+- Model stale-lock/service-manager restart recheck decisions without deleting lock files, inspecting live processes, starting services, or mutating deployment state.
+- Add a local deployment-like runtime smoke harness and CLI runner that combine lifecycle, graceful-shutdown, backup/restore, restart recovery, and audit durability probes without starting services or touching deployment state.
+- Add static and optional syntax validation for the committed example systemd unit without installing, enabling, reloading, starting services, or mutating deployment state.
 - Add Rust tests for the validation harness, partial JSONL replay rejection, permission/disk-failure state preservation, and fail-closed workspace handling.
+- Add Rust tests for side-effect-free retention/rotation planning.
+- Add Rust tests for side-effect-free stale-lock restart recheck planning.
+- Add a Rust test for the local deployment-like runtime smoke harness.
+- Add a CLI smoke-runner check using non-secret local paths.
 - Update roadmap, architecture, handoff, manifest, and gap tracker language.
 
 ## Explicit Non-Goals
@@ -42,6 +50,10 @@ Fill the local coding gap for append-only audit journal crash, concurrency, and 
 - Local validation proves concurrent local appenders produce a replayable journal.
 - Local validation proves invalid filesystem shape fails closed.
 - Local validation proves simulated disk-full append failure is classified and does not advance in-memory or replayed journal state.
+- Local retention/rotation planning marks rotate/retain/expired decisions without deleting files, renaming files, or mutating the filesystem.
+- Local stale-lock restart recheck planning marks stale/fresh lock observations without deleting lock files, starting services, or mutating deployment state.
+- Local deployment-like runtime smoke validation runs lifecycle, graceful-shutdown, backup/restore, restart recovery, and audit durability probes from a typed CLI command without service-manager actions, external calls, or production claims.
+- Static example systemd-unit validation checks hardening directives and secret-free service configuration, and CI runs syntax verification against a temporary fake root, without installing, enabling, reloading, or starting services.
 - Standard structure and Cargo validation pass.
 
 ## Validation
@@ -68,6 +80,6 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 - Deployment-host audit validation.
 - Physical deployment-host disk-full evidence.
-- Retention and rotation validation.
-- Service-manager restart validation.
-- Production runtime validation with non-secret evidence references.
+- Deployment-host retention and rotation execution evidence.
+- Deployment-host service-manager restart execution evidence.
+- Production runtime validation with external non-secret evidence references.

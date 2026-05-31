@@ -49,7 +49,7 @@ Add deterministic external-production-hardening evidence boundaries and checklis
 - Running Rust/Cargo validation.
 - Running CI/CD.
 - Running SAST, dependency audit, SBOM, image scanning, load tests, penetration tests, cloud deployment, live exchange validation, DEX/RPC validation, rollback drills, incident drills, or production readiness reviews.
-- Building container images or release binaries.
+- Building production container images or release binaries.
 - Installing or starting services.
 - Public network exposure.
 - Live trading, signing, withdrawals, bridges, broadcasts, real exchange/RPC calls, real secrets, credentials, provider tokens, or wallet key material.
@@ -133,4 +133,4 @@ production readiness review
 
 Completed for ChatGPT Project Mode after Phase 17 evidence-boundary patch and available validation.
 
-Rust, Cargo, CI, container, systemd, ARM, SAST, dependency audit, SBOM, image scan, cloud/staging deployment, load, penetration, rollback, incident-response, live exchange/RPC, and production readiness validation remain external unless explicitly run in a capable environment.
+Rust, Cargo, CI, local example-container build, and example image scan validation now have repeatable local/CI paths where the required tools are available. Production container, systemd, ARM, SAST review, dependency audit review, SBOM review, cloud/staging deployment, load, penetration, rollback, incident-response, live exchange/RPC, and production readiness validation remain external unless explicitly run in a capable environment.

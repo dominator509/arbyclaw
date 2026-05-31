@@ -39,13 +39,14 @@ Add deterministic packaging and deployment planning boundaries that document how
 - Add local deployment plan records.
 - Add package target and hardening metadata.
 - Add container, systemd, ARM, and deployment documentation templates.
+- Add a local example-container validation script for Docker build, Trivy image scan, critical-vulnerability enforcement, and CLI smoke checks.
 - Update CLI status text to expose the Phase 16 boundary.
 - Update the structure validator for Phase 16 files.
 - Update roadmap, architecture, security, handoff, manifest, README, AGENTS, and gap tracker.
 
 ## Out of Scope
 
-- Building container images.
+- Building production container images.
 - Installing systemd units.
 - Starting daemons or services.
 - Public network exposure.
@@ -134,4 +135,4 @@ rollback drill validation
 
 Completed for ChatGPT Project Mode after Phase 16 patch and available validation.
 
-Rust, Cargo, container, systemd, ARM, CI, deployment, rollback, and security hardening validation remain external unless explicitly run in a capable environment.
+Rust, Cargo, example-container, and CI validation now have repeatable local/CI paths where the required tools are available. Production container, systemd, ARM, deployment, rollback, and security hardening validation remain external unless explicitly run in a capable environment.
