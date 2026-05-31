@@ -6,11 +6,11 @@ ArbyClaw
 
 ## Current Roadmap Position
 
-- Active phase: Phase 24 - Paper Replay, Calibration, Backtest, and Runtime Validation Boundaries implemented for local venue matching profiles, adverse-selection penalties, reference-only calibration records, paper ledger replay, and local historical-fixture backtest execution; next required work is deployment-host/runtime validation and external sandbox/live evidence beyond current Rust/CI gates
-- Active sub-roadmap: `PHASE_24_SUBROADMAP.md`
-- Current production readiness: 94%
-- Current implementation status: Minimal Rust workspace, typed config, reference-only secret boundary, mode-gate validation, deny-by-default policy engine, append-only audit journal primitives, state-store trait boundary, SQLite WAL-backed checkpoint store with local integrity/checkpoint/reopen/backup-restore/multi-handle durability validation and process-level crash/restart recovery tests, normalized market-data models, fee models, freshness classification, provider trait boundaries, deterministic paper connectors with local paper-report checkpoint persistence, local paper balance ledgering, realistic local paper fill modeling, venue matching profiles, adverse-selection modeling, reference-only calibration records, paper ledger replay validation, and local historical-fixture paper backtest corpus execution, CEX connector framework types/traits, DEX/Web3 connector framework types/traits, deterministic opportunity-engine types/traits, draft-only execution-planner types/traits with local plan-draft checkpoint persistence, execution-adapter boundary records/traits with local run checkpoint persistence, local fail-closed runtime lifecycle wiring for audit/state/adapter sequencing, communications/CLI command and notification boundaries, embedded-dashboard local render boundaries, observability/runbook local record boundaries, deterministic testing/fuzzing/backtesting plan boundaries, deterministic packaging/deployment plan boundaries, deterministic external-hardening evidence/checklist boundaries, and deterministic agentic handoff package boundaries exist; local and GitHub Actions evidence covers current structure, formatting, workspace compilation, tests, clippy, locked release build, dependency audit, SBOM generation, local-SARIF SAST, example image scan, secret-pattern scan, and hardening evidence indexing. Live trading, production container/systemd/ARM deployment validation, real validation runner execution beyond Cargo tests, real fuzzing engines, real external backtest corpus execution, real observability runtime, real dashboard hosting, outbound messaging integrations, external adapter submission, exchange-specific live connectors, DEX RPC adapters, wallet signer, transaction broadcasts, custody backend, deployment-host durability validation, external sandbox/live calibration evidence, and production execution logic are not implemented.
-- Current risk posture: High, because live-funds architecture is policy-, audit-, market-data-, paper-simulation-, paper-ledger-, paper-realism/replay/backtest-, CEX-framework-, DEX/Web3-framework-, opportunity-engine-, planner-, adapter-, runtime-lifecycle-, communication-, dashboard-, observability-, and validation-boundary-gated but lacks custody isolation, exchange-specific live connectors, live DEX/RPC adapters, signer boundary, live adapter submission, real communications adapters, real dashboard hosting/authentication, real metrics/exporter/alert runtime, property/fuzz/backtest execution beyond current Cargo tests, real package/deployment validation, broad external hardening validation, future-agent execution validation, deployment-host database validation, external sandbox/live fill calibration evidence, and external validation.
+- Active phase: Phase 25 - Paper Audit Journal Integration implemented for local paper report and ledger mutation audit records; next required work is audit durability/runtime validation and external sandbox/live evidence beyond current Rust/CI gates
+- Active sub-roadmap: `PHASE_25_SUBROADMAP.md`
+- Current production readiness: 95%
+- Current implementation status: Minimal Rust workspace, typed config, reference-only secret boundary, mode-gate validation, deny-by-default policy engine, append-only audit journal primitives, state-store trait boundary, SQLite WAL-backed checkpoint store with local integrity/checkpoint/reopen/backup-restore/multi-handle durability validation and process-level crash/restart recovery tests, normalized market-data models, fee models, freshness classification, provider trait boundaries, deterministic paper connectors with local paper-report checkpoint persistence, local paper balance ledgering, realistic local paper fill modeling, venue matching profiles, adverse-selection modeling, reference-only calibration records, paper ledger replay validation, local historical-fixture paper backtest corpus execution, and direct local audit journal records for paper reports plus reserve/settlement ledger mutations, CEX connector framework types/traits, DEX/Web3 connector framework types/traits, deterministic opportunity-engine types/traits, draft-only execution-planner types/traits with local plan-draft checkpoint persistence, execution-adapter boundary records/traits with local run checkpoint persistence, local fail-closed runtime lifecycle wiring for audit/state/adapter sequencing, communications/CLI command and notification boundaries, embedded-dashboard local render boundaries, observability/runbook local record boundaries, deterministic testing/fuzzing/backtesting plan boundaries, deterministic packaging/deployment plan boundaries, deterministic external-hardening evidence/checklist boundaries, and deterministic agentic handoff package boundaries exist; local and GitHub Actions evidence covers current structure, formatting, workspace compilation, tests, clippy, locked release build, dependency audit, SBOM generation, local-SARIF SAST, example image scan, secret-pattern scan, and hardening evidence indexing. Live trading, production container/systemd/ARM deployment validation, real validation runner execution beyond Cargo tests, real fuzzing engines, real external backtest corpus execution, real observability runtime, real dashboard hosting, outbound messaging integrations, external adapter submission, exchange-specific live connectors, DEX RPC adapters, wallet signer, transaction broadcasts, custody backend, audit journal crash/concurrency/filesystem validation, deployment-host durability validation, external sandbox/live calibration evidence, and production execution logic are not implemented.
+- Current risk posture: High, because live-funds architecture is policy-, audit-, market-data-, paper-simulation-, paper-ledger-, paper-realism/replay/backtest/audit-, CEX-framework-, DEX/Web3-framework-, opportunity-engine-, planner-, adapter-, runtime-lifecycle-, communication-, dashboard-, observability-, and validation-boundary-gated but lacks custody isolation, exchange-specific live connectors, live DEX/RPC adapters, signer boundary, live adapter submission, real communications adapters, real dashboard hosting/authentication, real metrics/exporter/alert runtime, property/fuzz/backtest execution beyond current Cargo tests, real package/deployment validation, broad external hardening validation, future-agent execution validation, audit journal crash/concurrency/filesystem validation, deployment-host database validation, external sandbox/live fill calibration evidence, and external validation.
 
 ## Roadmap Governance Rules
 
@@ -52,8 +52,9 @@ ArbyClaw
 | 22 | Crash/Restart Durability Validation | Implemented as local process-level SQLite WAL recovery validation; deployment-host validation deferred | +1% realized / +0% deferred in ChatGPT | Spawns child processes that write runtime checkpoints and exit abruptly, then reopens the WAL database and verifies integrity plus expected checkpoint survival. |
 | 23 | Realistic Paper Fills | Implemented as local deterministic order-book depth and partial-fill modeling; external calibration deferred | +1% realized / +0% deferred in ChatGPT | Consumes supplied order-book depth, models latency, queue-position, slippage, full/partial/unfilled outcomes, and ledger-safe unfilled notional release without external submission. |
 | 24 | Paper Replay, Calibration, Backtest, and Runtime Validation Boundaries | Implemented as local deterministic venue-realism, replay, and historical-fixture backtest boundary; external sandbox/live and deployment-host validation deferred | +1% realized / +0% deferred in ChatGPT | Adds local exchange matching profiles, adverse-selection penalties, reference-only calibration records, paper ledger replay validation, local backtest corpus execution, and runtime validation records without external calls. |
+| 25 | Paper Audit Journal Integration | Implemented as local deterministic audit journal integration; production audit durability validation deferred | +1% realized / +0% deferred in ChatGPT | Adds append-only audit records for paper execution reports and paper reserve/settlement ledger mutations, with local journal reopen/replay tests and no external calls. |
 
-Potential total inside ChatGPT Project Mode: approximately 75-94% of code/documentation readiness, but not full production readiness because live infrastructure, external exchange credentials, real deployment, penetration testing, external sandbox/live calibration evidence, deployment-host durability validation, and live trading verification are environment-limited.
+Potential total inside ChatGPT Project Mode: approximately 75-95% of code/documentation readiness, but not full production readiness because live infrastructure, external exchange credentials, real deployment, penetration testing, audit durability validation, external sandbox/live calibration evidence, deployment-host durability validation, and live trading verification are environment-limited.
 
 ## Phase 0 — Governance Initialization
 
@@ -1336,7 +1337,7 @@ Add paper-only simulated balances and ledger entries so modeled paper fills rese
 - Partial fills.
 - Latency and queue-position modeling.
 - Exchange-specific matching behavior.
-- Direct audit journal entries for every paper ledger mutation.
+- Production audit durability validation for paper ledger mutation audit records.
 - Production runtime replay and deployment-host validation.
 
 ### Validation
@@ -1517,3 +1518,50 @@ cargo clippy --workspace --all-targets -- -D warnings
 ### Exit Criteria
 
 Met for local deterministic paper venue-realism, replay, and fixture-backtest validation only. External sandbox/live calibration evidence, production-host runtime validation, deployment validation, live exchange/RPC validation, custody/signing validation, and production readiness are not claimed.
+
+## Phase 25 - Paper Audit Journal Integration
+
+### Status
+
+Implemented for local deterministic paper audit scope.
+
+### Goal
+
+Wire paper execution reports and local paper balance-ledger mutations into the existing append-only audit journal with local replay tests, while preserving no-live-execution and no-external-call boundaries.
+
+### Completed Tasks
+
+- Created `PHASE_25_SUBROADMAP.md`.
+- Added `PAPER_AUDIT_INTEGRATION_VERSION`.
+- Added audit append helpers for paper execution reports and paper reserve/settlement ledger entries.
+- Added audited ledgered execution helpers for realistic paper fills and venue-realistic paper fills.
+- Reopened the local audit journal after paper audit appends to verify hash-chain replay.
+- Added Rust tests covering paper report/ledger mutation audit records and journal replay.
+- Exported Phase 25 paper audit integration types and helpers from `arb-core`.
+- Surfaced Phase 25 status in `arb-agent`.
+- Updated structure validation for Phase 25 files.
+
+### Explicit Non-Goals
+
+- No live trading.
+- No real exchange, sandbox, or RPC calls.
+- No real balance reads or real account mutation.
+- No signing, withdrawals, bridges, broadcasts, wallet custody, or external adapter submission.
+- No production deployment or production-readiness approval.
+- No audit journal crash, concurrency, filesystem permission, disk-full, rotation, retention, or deployment-host validation claim.
+
+### Validation
+
+Must be refreshed after this patch:
+
+```bash
+python3 scripts/validate_structure.py
+cargo fmt --check
+cargo check --workspace
+cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
+```
+
+### Exit Criteria
+
+Met for local deterministic paper execution report and ledger mutation audit journal wiring only. Audit journal production durability, live connector audit-before-action enforcement, production-host runtime validation, deployment validation, live exchange/RPC validation, custody/signing validation, and production readiness are not claimed.

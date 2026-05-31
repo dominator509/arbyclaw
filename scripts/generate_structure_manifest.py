@@ -36,7 +36,7 @@ def main() -> int:
     lines = [
         "# STRUCTURE_MANIFEST.md",
         "",
-        "Generated during Phase 24 paper replay, calibration, backtest, and runtime validation checkpoint after governance reconciliation and validation.",
+        "Generated during Phase 25 paper audit journal integration checkpoint after governance reconciliation and validation.",
         "",
         "Note: this manifest intentionally excludes `STRUCTURE_MANIFEST.md` itself to avoid self-referential hash drift.",
         "",

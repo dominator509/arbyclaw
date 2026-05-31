@@ -91,5 +91,5 @@ cargo clippy --workspace --all-targets -- -D warnings
 - Partial fills.
 - Latency and queue-position modeling.
 - Exchange-specific matching behavior.
-- Direct audit journal entries for every paper ledger mutation.
+- Production audit durability validation for paper ledger mutation audit records.
 - Production runtime replay and deployment-host validation.

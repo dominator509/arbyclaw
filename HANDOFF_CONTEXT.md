@@ -35,10 +35,11 @@ The current authoritative baseline is the Phase 18 agentic handoff package snaps
 - Phase 22 — Crash/Restart Durability Validation
 - Phase 23 — Realistic Paper Fills
 - Phase 24 — Paper Replay, Calibration, Backtest, and Runtime Validation Boundaries
+- Phase 25 — Paper Audit Journal Integration
 
 ## Current Production Readiness
 
-94% as of Phase 24 governance. Phase 24 adds local deterministic venue matching profiles, adverse-selection modeling, reference-only calibration records, paper ledger replay validation, local historical-fixture paper backtest execution, and runtime validation records, but external sandbox/live calibration evidence and real deployment-host validation remain environment-limited. This percentage is a governance approximation only and does not imply readiness for live funds or production deployment.
+95% as of Phase 25 governance. Phase 25 adds local append-only audit journal records for paper execution reports and paper reserve/settlement ledger mutations with local journal replay tests, but audit crash/concurrency/filesystem validation, external sandbox/live calibration evidence, and real deployment-host validation remain environment-limited. This percentage is a governance approximation only and does not imply readiness for live funds or production deployment.
 
 ## Non-Negotiable Safety State
 
@@ -191,6 +192,7 @@ You are continuing the ArbyClaw project. Inspect the latest repository checkout 
 - Phase 22 crash/restart validation exists as a local Cargo integration harness. It launches child processes, writes SQLite WAL checkpoints, exits abruptly after start/plan/adapter stages, reopens from the parent, runs integrity checks, and verifies expected checkpoint recovery.
 - Phase 23 realistic paper fills exist for local deterministic simulation only. They consume caller-supplied order-book depth, model full/partial/unfilled outcomes, latency, queue-position haircuts, average price, slippage, and ledger settlement that releases unfilled reserved notional without external submission.
 - Phase 24 paper realism and validation records exist for local deterministic simulation only. They model venue tick/step/min-notional constraints, adverse-selection penalties, reference-only calibration records, paper ledger replay validation, local historical-fixture paper backtest execution, and runtime validation records that keep production-host evidence blockers open.
+- Phase 25 paper audit journal integration exists for local deterministic simulation only. It appends sanitized paper execution report and reserve/settlement ledger mutation records to the append-only JSONL audit journal and reopens the journal for local hash-chain replay checks; audit crash/concurrency/filesystem validation remains incomplete.
 - SQLite WAL-backed checkpoint state store exists for local non-secret state, and paper execution reports, paper balance ledgers, execution-plan drafts, and execution-adapter runs can now be persisted through typed local checkpoint helpers; deployment-host filesystem validation remains incomplete.
 - No encrypted keystore backend.
 - No signer boundary.

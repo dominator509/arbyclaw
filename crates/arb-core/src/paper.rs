@@ -2,10 +2,11 @@
 #![allow(clippy::missing_errors_doc)]
 
 use crate::{
-    ExecutionIntent, ExecutionScope, FeeAdjustedEdge, FeeModelError, FeeProvider, FeeSchedule,
-    LiquidityRole, MarketDataCapabilities, MarketDataError, MarketDataProvider, MarketDataRequest,
-    MarketPair, NormalizedQuote, OrderBookSnapshot, PolicyDecision, PolicyEngine, PolicyViolation,
-    PriceLevel, StateCheckpoint, StateStore, StateStoreError, VenueRef,
+    AppendOnlyAuditJournal, AuditEvent, AuditEventKind, AuditRecord, AuditValue, ExecutionIntent,
+    ExecutionScope, FeeAdjustedEdge, FeeModelError, FeeProvider, FeeSchedule, LiquidityRole,
+    MarketDataCapabilities, MarketDataError, MarketDataProvider, MarketDataRequest, MarketPair,
+    NormalizedQuote, OrderBookSnapshot, PolicyDecision, PolicyEngine, PolicyViolation, PriceLevel,
+    StateCheckpoint, StateStore, StateStoreError, VenueRef,
 };
 use serde::{Deserialize, Serialize};
 use std::{error::Error, fmt};
@@ -18,6 +19,9 @@ pub const PAPER_REALISTIC_FILL_MODEL_VERSION: &str = "phase-23-realistic-paper-f
 
 /// Stable venue-realism, replay, and backtest validation version.
 pub const PAPER_REALISM_VALIDATION_VERSION: &str = "phase-24-paper-replay-calibration-runtime-v1";
+
+/// Stable paper audit journal integration version.
+pub const PAPER_AUDIT_INTEGRATION_VERSION: &str = "phase-25-paper-audit-journal-v1";
 
 /// State-store subsystem name for paper execution checkpoints.
 pub const PAPER_EXECUTION_STATE_SUBSYSTEM: &str = "paper-execution";
@@ -430,6 +434,26 @@ impl PaperExecutionAdapter {
         })
     }
 
+    /// Submit a realistic local paper fill, mutate the local paper ledger, and
+    /// append the report plus ledger mutations to the local audit journal.
+    pub fn submit_with_fill_model_ledger_and_audit(
+        &self,
+        request: &PaperFillSimulationRequest,
+        ledger: &mut PaperBalanceLedger,
+        journal: &mut AppendOnlyAuditJournal,
+    ) -> Result<PaperAuditedLedgeredExecution, PaperConnectorError> {
+        let ledgered_execution = self.submit_with_fill_model_and_ledger(request, ledger)?;
+        let audit_report = append_paper_ledgered_execution_audit(
+            journal,
+            &ledgered_execution,
+            request.now_unix_ms.saturating_add(2),
+        )?;
+        Ok(PaperAuditedLedgeredExecution {
+            ledgered_execution,
+            audit_report,
+        })
+    }
+
     /// Submit a venue-realism paper execution and settle it into the local ledger.
     ///
     /// The ledger reserves the requested notional and settles the adjusted paper
@@ -452,6 +476,31 @@ impl PaperExecutionAdapter {
             execution,
             reserve_entry,
             settlement_entry,
+        })
+    }
+
+    /// Submit a venue-realistic local paper fill, mutate the local paper ledger,
+    /// and append the report plus ledger mutations to the local audit journal.
+    pub fn submit_with_venue_realism_ledger_and_audit(
+        &self,
+        request: &PaperVenueRealismRequest,
+        ledger: &mut PaperBalanceLedger,
+        journal: &mut AppendOnlyAuditJournal,
+    ) -> Result<PaperAuditedVenueRealismLedgeredExecution, PaperConnectorError> {
+        let ledgered_execution = self.submit_with_venue_realism_and_ledger(request, ledger)?;
+        let plain_ledgered_execution = PaperLedgeredExecution {
+            report: ledgered_execution.execution.report.clone(),
+            reserve_entry: ledgered_execution.reserve_entry.clone(),
+            settlement_entry: ledgered_execution.settlement_entry.clone(),
+        };
+        let audit_report = append_paper_ledgered_execution_audit(
+            journal,
+            &plain_ledgered_execution,
+            request.fill_request.now_unix_ms.saturating_add(2),
+        )?;
+        Ok(PaperAuditedVenueRealismLedgeredExecution {
+            ledgered_execution,
+            audit_report,
         })
     }
 
@@ -1550,6 +1599,54 @@ pub struct PaperLedgeredExecution {
     pub settlement_entry: PaperLedgerEntry,
 }
 
+/// Audit journal append summary for one ledgered paper execution.
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct PaperAuditJournalWriteReport {
+    /// Audit integration version.
+    pub integration_version: String,
+    /// Paper execution report id.
+    pub execution_report_id: String,
+    /// Source execution intent id.
+    pub intent_id: String,
+    /// Audit record sequence for the reserve ledger mutation.
+    pub reserve_record_sequence: u64,
+    /// Audit record sequence for the settlement ledger mutation.
+    pub settlement_record_sequence: u64,
+    /// Audit record sequence for the paper execution report.
+    pub report_record_sequence: u64,
+    /// Number of audit records appended by this operation.
+    pub records_appended: usize,
+    /// Whether reopening the journal replayed the appended hash chain.
+    pub journal_replay_verified: bool,
+    /// Whether live network access was used by this local integration.
+    pub live_network_used: bool,
+    /// Whether external execution was performed by this local integration.
+    pub external_execution_performed: bool,
+    /// Runtime clock in Unix milliseconds.
+    pub audited_at_unix_ms: u64,
+}
+
+/// Paper ledgered execution paired with append-only audit journal records.
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct PaperAuditedLedgeredExecution {
+    /// Local deterministic ledgered execution.
+    pub ledgered_execution: PaperLedgeredExecution,
+    /// Audit journal append summary.
+    pub audit_report: PaperAuditJournalWriteReport,
+}
+
+/// Venue-realistic paper ledgered execution paired with audit journal records.
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct PaperAuditedVenueRealismLedgeredExecution {
+    /// Local deterministic venue-realistic ledgered execution.
+    pub ledgered_execution: PaperVenueRealismLedgeredExecution,
+    /// Audit journal append summary.
+    pub audit_report: PaperAuditJournalWriteReport,
+}
+
 /// Deterministic paper execution status.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -1658,6 +1755,166 @@ pub fn persist_paper_balance_ledger_checkpoint(
     };
     store.put_checkpoint(checkpoint.clone())?;
     Ok(checkpoint)
+}
+
+/// Append one local paper execution report to the append-only audit journal.
+///
+/// This records sanitized identifiers and modeled paper amounts only. It does
+/// not submit externally, call a venue, sign, broadcast, or record secrets.
+pub fn append_paper_execution_report_audit(
+    journal: &mut AppendOnlyAuditJournal,
+    report: &PaperExecutionReport,
+    occurred_at_unix_ms: u64,
+) -> Result<AuditRecord, PaperConnectorError> {
+    validate_audit_timestamp(occurred_at_unix_ms)?;
+    let mut event = AuditEvent::new(
+        format!("paper-report-audit-{}", report.id),
+        AuditEventKind::ExecutionResult,
+        PAPER_EXECUTION_STATE_SUBSYSTEM,
+        "paper-execution-adapter",
+        "paper execution report recorded",
+    );
+    event.occurred_at_unix_ms = occurred_at_unix_ms;
+    event = event
+        .with_metadata(
+            "paper_audit_integration_version",
+            AuditValue::Text(PAPER_AUDIT_INTEGRATION_VERSION.to_owned()),
+        )
+        .with_metadata("report_id", AuditValue::Text(report.id.clone()))
+        .with_metadata("intent_id", AuditValue::Text(report.intent_id.clone()))
+        .with_metadata("strategy_id", AuditValue::Text(report.strategy_id.clone()))
+        .with_metadata("adapter", AuditValue::Text(report.adapter.clone()))
+        .with_metadata("venue", AuditValue::Text(report.venue.name.clone()))
+        .with_metadata("base_asset", AuditValue::Text(report.base_asset.clone()))
+        .with_metadata("quote_asset", AuditValue::Text(report.quote_asset.clone()))
+        .with_metadata("scope", AuditValue::Text(format!("{:?}", report.scope)))
+        .with_metadata("status", AuditValue::Text(format!("{:?}", report.status)))
+        .with_metadata(
+            "notional_quote",
+            AuditValue::Text(format_audit_amount(report.notional_quote)),
+        )
+        .with_metadata(
+            "filled_notional_quote",
+            AuditValue::Text(format_audit_amount(report.filled_notional_quote)),
+        )
+        .with_metadata(
+            "unfilled_notional_quote",
+            AuditValue::Text(format_audit_amount(report.unfilled_notional_quote)),
+        )
+        .with_metadata(
+            "net_profit_quote",
+            AuditValue::Text(format_audit_amount(report.net_profit_quote)),
+        )
+        .with_metadata(
+            "connector_version",
+            AuditValue::Text(report.connector_version.clone()),
+        )
+        .with_metadata(
+            "fill_model_version",
+            AuditValue::Text(report.fill_model_version.clone()),
+        )
+        .with_metadata("live_network_used", AuditValue::Bool(false))
+        .with_metadata("external_execution_performed", AuditValue::Bool(false));
+    journal
+        .append_event(event)
+        .map_err(|source| PaperConnectorError::AuditJournalFailed {
+            reason: source.to_string(),
+        })
+}
+
+/// Append one local paper ledger mutation to the append-only audit journal.
+///
+/// This records modeled paper balance deltas only and never reads or mutates
+/// real account balances.
+pub fn append_paper_ledger_entry_audit(
+    journal: &mut AppendOnlyAuditJournal,
+    entry: &PaperLedgerEntry,
+) -> Result<AuditRecord, PaperConnectorError> {
+    validate_audit_timestamp(entry.recorded_at_unix_ms)?;
+    let mut event = AuditEvent::new(
+        format!("paper-ledger-audit-{}", entry.id),
+        AuditEventKind::Reconciliation,
+        PAPER_EXECUTION_STATE_SUBSYSTEM,
+        "paper-balance-ledger",
+        "paper ledger mutation recorded",
+    );
+    event.occurred_at_unix_ms = entry.recorded_at_unix_ms;
+    event = event
+        .with_metadata(
+            "paper_audit_integration_version",
+            AuditValue::Text(PAPER_AUDIT_INTEGRATION_VERSION.to_owned()),
+        )
+        .with_metadata("ledger_entry_id", AuditValue::Text(entry.id.clone()))
+        .with_metadata(
+            "ledger_entry_kind",
+            AuditValue::Text(format!("{:?}", entry.kind)),
+        )
+        .with_metadata("venue", AuditValue::Text(entry.venue.name.clone()))
+        .with_metadata("asset", AuditValue::Text(entry.asset.clone()))
+        .with_metadata(
+            "available_delta",
+            AuditValue::Text(format_audit_amount(entry.available_delta)),
+        )
+        .with_metadata(
+            "reserved_delta",
+            AuditValue::Text(format_audit_amount(entry.reserved_delta)),
+        )
+        .with_metadata(
+            "resulting_available",
+            AuditValue::Text(format_audit_amount(entry.resulting_available)),
+        )
+        .with_metadata(
+            "resulting_reserved",
+            AuditValue::Text(format_audit_amount(entry.resulting_reserved)),
+        )
+        .with_metadata("live_network_used", AuditValue::Bool(false))
+        .with_metadata("external_execution_performed", AuditValue::Bool(false));
+    if let Some(intent_id) = &entry.intent_id {
+        event = event.with_metadata("intent_id", AuditValue::Text(intent_id.clone()));
+    }
+    if let Some(report_id) = &entry.report_id {
+        event = event.with_metadata("report_id", AuditValue::Text(report_id.clone()));
+    }
+    journal
+        .append_event(event)
+        .map_err(|source| PaperConnectorError::AuditJournalFailed {
+            reason: source.to_string(),
+        })
+}
+
+/// Append audit records for both paper ledger mutations and the resulting
+/// paper execution report, then reopen the journal to verify local replay.
+pub fn append_paper_ledgered_execution_audit(
+    journal: &mut AppendOnlyAuditJournal,
+    execution: &PaperLedgeredExecution,
+    audited_at_unix_ms: u64,
+) -> Result<PaperAuditJournalWriteReport, PaperConnectorError> {
+    validate_audit_timestamp(audited_at_unix_ms)?;
+    let reserve_record = append_paper_ledger_entry_audit(journal, &execution.reserve_entry)?;
+    let settlement_record = append_paper_ledger_entry_audit(journal, &execution.settlement_entry)?;
+    let report_record =
+        append_paper_execution_report_audit(journal, &execution.report, audited_at_unix_ms)?;
+    let reopened = AppendOnlyAuditJournal::open(journal.path()).map_err(|source| {
+        PaperConnectorError::AuditJournalFailed {
+            reason: source.to_string(),
+        }
+    })?;
+    let journal_replay_verified = reopened.next_sequence() == journal.next_sequence()
+        && reopened.previous_hash() == journal.previous_hash();
+
+    Ok(PaperAuditJournalWriteReport {
+        integration_version: PAPER_AUDIT_INTEGRATION_VERSION.to_owned(),
+        execution_report_id: execution.report.id.clone(),
+        intent_id: execution.report.intent_id.clone(),
+        reserve_record_sequence: reserve_record.sequence,
+        settlement_record_sequence: settlement_record.sequence,
+        report_record_sequence: report_record.sequence,
+        records_appended: 3,
+        journal_replay_verified,
+        live_network_used: false,
+        external_execution_performed: false,
+        audited_at_unix_ms,
+    })
 }
 
 /// Validate local paper replay/backtest evidence while preserving production blockers.
@@ -1790,6 +2047,8 @@ pub enum PaperConnectorError {
     InvalidBacktestCorpus { reason: String },
     /// Paper runtime validation request failed.
     InvalidRuntimeValidation { reason: String },
+    /// Paper audit journal append or replay failed.
+    AuditJournalFailed { reason: String },
 }
 
 impl fmt::Display for PaperConnectorError {
@@ -1879,6 +2138,9 @@ impl fmt::Display for PaperConnectorError {
             Self::InvalidRuntimeValidation { reason } => {
                 write!(formatter, "invalid paper runtime validation: {reason}")
             }
+            Self::AuditJournalFailed { reason } => {
+                write!(formatter, "paper audit journal failed: {reason}")
+            }
         }
     }
 }
@@ -1946,6 +2208,20 @@ fn validate_finite(label: &str, value: f64) -> Result<(), PaperConnectorError> {
             reason: format!("{label} must be finite"),
         })
     }
+}
+
+fn validate_audit_timestamp(value: u64) -> Result<(), PaperConnectorError> {
+    if value == 0 {
+        Err(PaperConnectorError::AuditJournalFailed {
+            reason: "paper audit timestamp must be non-zero".to_owned(),
+        })
+    } else {
+        Ok(())
+    }
+}
+
+fn format_audit_amount(value: f64) -> String {
+    format!("{value:.8}")
 }
 
 fn normalize_zero(value: f64) -> f64 {
@@ -2696,10 +2972,10 @@ mod tests {
         PAPER_EXECUTION_STATE_SUBSYSTEM, PAPER_REALISM_VALIDATION_VERSION,
     };
     use crate::{
-        AgentConfig, DestinationPolicy, ExecutionIntent, ExecutionIntentKind, ExecutionScope,
-        FeeProvider, FeeSchedule, LiquidityRole, MarketDataProvider, MarketDataRequest, MarketPair,
-        OrderBookSnapshot, PolicyEngine, PriceLevel, SqliteWalStateStore, StateStore, VenueKind,
-        VenueRef,
+        AgentConfig, AppendOnlyAuditJournal, DestinationPolicy, ExecutionIntent,
+        ExecutionIntentKind, ExecutionScope, FeeProvider, FeeSchedule, LiquidityRole,
+        MarketDataProvider, MarketDataRequest, MarketPair, OrderBookSnapshot, PolicyEngine,
+        PriceLevel, SqliteWalStateStore, StateStore, VenueKind, VenueRef,
     };
     use std::{
         env, fs,
@@ -3076,6 +3352,84 @@ redact_secrets = true
     }
 
     #[test]
+    fn paper_ledgered_execution_appends_report_and_mutations_to_audit_journal() {
+        let config = AgentConfig::from_toml_str(PAPER_CONFIG).expect("config should validate");
+        let adapter = PaperExecutionAdapter::new("paper-exec", PolicyEngine::from_config(config))
+            .expect("adapter should validate");
+        let mut ledger =
+            PaperBalanceLedger::new(
+                vec![PaperAssetBalance::available(venue(), "USDC", 1_000.0)
+                    .expect("balance validates")],
+                1_700_000_000_000,
+            )
+            .expect("ledger validates");
+        let path = unique_audit_path("paper-ledgered-execution");
+        let mut journal = AppendOnlyAuditJournal::open(&path).expect("audit journal opens");
+
+        let execution = adapter
+            .submit_with_fill_model_ledger_and_audit(
+                &fill_request(20.3, 120, true),
+                &mut ledger,
+                &mut journal,
+            )
+            .expect("audited ledgered fill succeeds");
+
+        assert_eq!(execution.audit_report.records_appended, 3);
+        assert!(execution.audit_report.journal_replay_verified);
+        assert_eq!(execution.audit_report.reserve_record_sequence, 1);
+        assert_eq!(execution.audit_report.settlement_record_sequence, 2);
+        assert_eq!(execution.audit_report.report_record_sequence, 3);
+        assert!(!execution.audit_report.live_network_used);
+        assert!(!execution.audit_report.external_execution_performed);
+
+        let reopened = AppendOnlyAuditJournal::open(&path).expect("audit journal replays");
+        assert_eq!(reopened.next_sequence(), 4);
+        assert_eq!(journal.previous_hash(), reopened.previous_hash());
+        let lines = fs::read_to_string(&path).expect("journal should be readable");
+        assert!(lines.contains("\"kind\":\"reconciliation\""));
+        assert!(lines.contains("\"kind\":\"execution-result\""));
+        assert!(lines.contains("paper_audit_integration_version"));
+
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn venue_realism_ledgered_execution_appends_to_audit_journal() {
+        let config = AgentConfig::from_toml_str(PAPER_CONFIG).expect("config should validate");
+        let adapter = PaperExecutionAdapter::new("paper-exec", PolicyEngine::from_config(config))
+            .expect("adapter should validate");
+        let mut ledger =
+            PaperBalanceLedger::new(
+                vec![PaperAssetBalance::available(venue(), "USDC", 1_000.0)
+                    .expect("balance validates")],
+                1_700_000_000_000,
+            )
+            .expect("ledger validates");
+        let path = unique_audit_path("paper-venue-realism");
+        let mut journal = AppendOnlyAuditJournal::open(&path).expect("audit journal opens");
+        let request = PaperVenueRealismRequest {
+            fill_request: fill_request(20.3, 120, true),
+            matching_profile: matching_profile(),
+            adverse_selection: adverse_selection(),
+            calibration: Some(calibration_record()),
+        };
+
+        let execution = adapter
+            .submit_with_venue_realism_ledger_and_audit(&request, &mut ledger, &mut journal)
+            .expect("audited venue-realistic execution succeeds");
+
+        assert_eq!(execution.audit_report.records_appended, 3);
+        assert!(execution.audit_report.journal_replay_verified);
+        assert_eq!(
+            execution.audit_report.execution_report_id,
+            execution.ledgered_execution.execution.report.id
+        );
+        assert_eq!(journal.next_sequence(), 4);
+
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
     fn realistic_paper_fill_can_fail_closed_when_partials_are_disallowed() {
         let config = AgentConfig::from_toml_str(PAPER_CONFIG).expect("config should validate");
         let adapter = PaperExecutionAdapter::new("paper-exec", PolicyEngine::from_config(config))
@@ -3404,6 +3758,19 @@ redact_secrets = true
             .as_nanos();
         path.push(format!(
             "arbyclaw-paper-{label}-{}-{nanos}.sqlite3",
+            process::id()
+        ));
+        path
+    }
+
+    fn unique_audit_path(label: &str) -> PathBuf {
+        let mut path = env::temp_dir();
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system clock should be after unix epoch")
+            .as_nanos();
+        path.push(format!(
+            "arbyclaw-paper-audit-{label}-{}-{nanos}.jsonl",
             process::id()
         ));
         path
