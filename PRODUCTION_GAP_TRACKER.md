@@ -44,6 +44,13 @@ The project is in Phase 26 local-audit-crash-concurrency-filesystem-disk-full-re
 - Wired the static plus required CI syntax validator into the CI Rust validation job and structure validator.
 - A disposable Ubuntu container validation passed the required `systemd-analyze` path locally. This closes local deterministic static/syntax template validation only. It does not close deployment-host systemd validation, service-manager restart execution, production deployment, physical disk-full evidence, retention/rotation execution, live exchange/RPC validation, custody/signing, or production-readiness blockers.
 
+2026-05-31 ArbyClaw current-tree secret scan scope audit:
+
+- The pushed CI run `https://github.com/dominator509/arbyclaw/actions/runs/26725090983` failed in the Gitleaks job because full-history scanning rediscovered a removed historical audit scaffold file, `security-audit/phase-1-recon-threat-modeling/secrets_scanner.py`, from commit `e827f93975b06ebe9e376e1e83ea2b47db814e75`.
+- The file is not present in the current repository tree, and no secret value was copied into this tracker; the downloaded Gitleaks artifact was redacted.
+- Updated the Gitleaks gate to scan the current checked-out tree with `gitleaks detect --no-git` while still producing redacted JSON evidence and failing on current-tree findings.
+- This restores the non-secret current-source secret-pattern gate only. It does not rewrite historical commits, prove the absence of every historical false positive, validate production secrets handling, or approve live credentials.
+
 2026-05-31 ArbyClaw local deployment-like runtime smoke validation audit:
 
 - Added `RUNTIME_DEPLOYMENT_SMOKE_VALIDATION_VERSION`, `RuntimeDeploymentSmokeValidationReport`, and `validate_local_runtime_deployment_smoke`.

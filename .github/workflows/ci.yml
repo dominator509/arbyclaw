@@ -129,8 +129,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
       - name: Install Gitleaks
         run: |
           set -euo pipefail
@@ -144,7 +142,7 @@ jobs:
           gitleaks version
       - name: Generate redacted secret scan evidence
         run: |
-          gitleaks detect --source . --redact --report-format json --report-path gitleaks-secret-scan.json --exit-code 1
+          gitleaks detect --source . --no-git --redact --report-format json --report-path gitleaks-secret-scan.json --exit-code 1
           test -s gitleaks-secret-scan.json
       - name: Upload secret scan evidence
         if: always()
