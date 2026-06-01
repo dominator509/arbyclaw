@@ -2,13 +2,14 @@
 #![allow(clippy::module_name_repetitions)]
 
 use arb_core::{
-    load_config_file, AgentConfig, BuildIdentity, ConfigError, DeterministicExecutionPlanner,
+    load_config_file, phase27_local_opportunity_replay_corpus, AgentConfig, BuildIdentity,
+    ConfigError, DeterministicExecutionPlanner, DeterministicOpportunityEngine,
     ExecutionAdapterConfig, ExecutionPlanner, ExecutionPlannerConfig, ExecutionPlannerRequest,
     ExecutionScope, FeeAdjustedEdge, FeeEstimate, LiquidityRole, MarketPair, OpportunityCandidate,
-    OpportunityLeg, OpportunityLegSide, OpportunityRouteKind, OpportunityScore, PolicyEngine,
-    RuntimeDeploymentSmokeValidationRequest, RuntimeGracefulShutdownRequest,
-    RuntimeRestartRecoveryDisposition, VenueKind, VenueRef, AGENTIC_HANDOFF_VERSION,
-    AUDIT_DURABILITY_VALIDATION_VERSION, CEX_CONNECTOR_FRAMEWORK_VERSION,
+    OpportunityLeg, OpportunityLegSide, OpportunityReplayStatus, OpportunityRouteKind,
+    OpportunityScore, PolicyEngine, RuntimeDeploymentSmokeValidationRequest,
+    RuntimeGracefulShutdownRequest, RuntimeRestartRecoveryDisposition, VenueKind, VenueRef,
+    AGENTIC_HANDOFF_VERSION, AUDIT_DURABILITY_VALIDATION_VERSION, CEX_CONNECTOR_FRAMEWORK_VERSION,
     COMMUNICATIONS_CLI_VERSION, DASHBOARD_BOUNDARY_VERSION, DEFAULT_MARKET_DATA_FRESHNESS_MS,
     DEX_CONNECTOR_FRAMEWORK_VERSION, EXECUTION_ADAPTER_FRAMEWORK_VERSION,
     EXECUTION_PLANNER_VERSION, EXTERNAL_HARDENING_VERSION, OBSERVABILITY_RUNBOOK_VERSION,
@@ -89,6 +90,7 @@ fn run_with_args(args: impl IntoIterator<Item = String>) -> Result<(), AgentCliE
         }
         Some("--help" | "-h") => {
             println!("usage: arb-agent [--config <path>]");
+            println!("       arb-agent validate-opportunity-replay");
             println!(
                 "       arb-agent validate-runtime-smoke --config <path> --workspace <fresh-dir>"
             );
@@ -100,6 +102,7 @@ fn run_with_args(args: impl IntoIterator<Item = String>) -> Result<(), AgentCliE
             let options = parse_runtime_smoke_options(args)?;
             run_runtime_smoke_validation(&options)
         }
+        Some("validate-opportunity-replay") => run_opportunity_replay_validation(),
         Some(other) => Err(ConfigError::ReadFailed {
             path: other.to_owned(),
             reason: "unknown argument; use --help".to_owned(),
@@ -114,6 +117,54 @@ fn run_with_args(args: impl IntoIterator<Item = String>) -> Result<(), AgentCliE
             Ok(())
         }
     }
+}
+
+fn run_opportunity_replay_validation() -> Result<(), AgentCliError> {
+    let corpus = phase27_local_opportunity_replay_corpus()
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let report = DeterministicOpportunityEngine::new()
+        .replay_corpus(&corpus)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+
+    println!("opportunity-replay-corpus: {}", report.corpus_id);
+    println!("scenario-count: {}", report.scenario_count);
+    println!("passed-scenarios: {}", report.passed_scenarios);
+    println!("failed-scenarios: {}", report.failed_scenarios);
+    println!("total-candidates: {}", report.total_candidates);
+    println!(
+        "opportunity-replay-status: {}",
+        opportunity_replay_status_label(report.status)
+    );
+    println!(
+        "external-calls-performed: {}",
+        report.external_calls_performed
+    );
+    println!(
+        "live-execution-performed: {}",
+        report.live_execution_performed
+    );
+    println!("production-ready: false");
+
+    if report.external_calls_performed || report.live_execution_performed {
+        return Err(AgentCliError::Validation(
+            "opportunity replay reported forbidden side effects".to_owned(),
+        ));
+    }
+
+    if report.status != OpportunityReplayStatus::Passed {
+        let failed = report
+            .scenario_reports
+            .iter()
+            .filter(|scenario| scenario.status == OpportunityReplayStatus::Failed)
+            .map(|scenario| scenario.scenario_id.as_str())
+            .collect::<Vec<_>>()
+            .join(", ");
+        return Err(AgentCliError::Validation(format!(
+            "opportunity replay failed scenarios: {failed}"
+        )));
+    }
+
+    Ok(())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -451,11 +502,19 @@ const fn recovery_disposition_label(
     }
 }
 
+const fn opportunity_replay_status_label(status: OpportunityReplayStatus) -> &'static str {
+    match status {
+        OpportunityReplayStatus::Passed => "passed",
+        OpportunityReplayStatus::Failed => "failed",
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        parse_runtime_smoke_options, recovery_disposition_label,
-        runtime_recovery_disposition_status, RuntimeRestartRecoveryDisposition,
+        opportunity_replay_status_label, parse_runtime_smoke_options, recovery_disposition_label,
+        run_opportunity_replay_validation, runtime_recovery_disposition_status,
+        OpportunityReplayStatus, RuntimeRestartRecoveryDisposition,
     };
 
     #[test]
@@ -500,5 +559,22 @@ mod tests {
             options.workspace_dir,
             std::path::PathBuf::from("target/runtime-smoke")
         );
+    }
+
+    #[test]
+    fn opportunity_replay_status_labels_are_operator_facing() {
+        assert_eq!(
+            opportunity_replay_status_label(OpportunityReplayStatus::Passed),
+            "passed"
+        );
+        assert_eq!(
+            opportunity_replay_status_label(OpportunityReplayStatus::Failed),
+            "failed"
+        );
+    }
+
+    #[test]
+    fn opportunity_replay_validation_runs_local_corpus_only() {
+        run_opportunity_replay_validation().expect("local opportunity replay should pass");
     }
 }

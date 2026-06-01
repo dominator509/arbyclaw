@@ -24,7 +24,7 @@ In scope:
 - Same-venue triangular path discovery over caller-supplied local quotes and fee schedules.
 - Local replay corpus records and a built-in local regression corpus for deterministic scenario and false-positive checks.
 - Candidate records that expose liquidity and transfer-risk modeling details.
-- Rust tests for depth/inventory sizing, transfer-risk scoring, triangular discovery, local replay expectations, and the built-in local regression corpus.
+- Rust tests and a local CLI validation command for depth/inventory sizing, transfer-risk scoring, triangular discovery, local replay expectations, and the built-in local regression corpus.
 
 Out of scope:
 
@@ -60,10 +60,11 @@ Out of scope:
 8. Add local replay corpus, scenario, expectation, and report records.
 9. Add false-positive expectation checks without external calls or execution.
 10. Add a built-in local regression corpus covering cross-venue, no-candidate, triangular, depth/inventory, and transfer-risk scenarios.
-11. Export new Phase 27 opportunity types.
-12. Surface the refined opportunity-engine scope in CLI status.
-13. Update governance docs, structure validation, and production gap tracking.
-14. Run the standard validation sequence.
+11. Add a local CLI validation command for the built-in opportunity replay corpus.
+12. Export new Phase 27 opportunity types.
+13. Surface the refined opportunity-engine scope in CLI status.
+14. Update governance docs, structure validation, and production gap tracking.
+15. Run the standard validation sequence.
 
 ## Validation
 
@@ -89,7 +90,8 @@ Met for local deterministic modeling when:
 - Same-venue triangular paths can be discovered from supplied local quotes and fee schedules.
 - Local scenario replay can detect expected candidates and false positives from supplied local records.
 - Built-in local regression corpus covers the core Phase 27 opportunity scenarios without live data or execution.
-- Tests cover depth/inventory caps, transfer-risk penalties, triangular discovery, local replay expectations, and the built-in local regression corpus.
+- CLI validation can run the built-in local replay corpus and fail closed on failed scenarios or forbidden side-effect flags.
+- Tests cover depth/inventory caps, transfer-risk penalties, triangular discovery, local replay expectations, the built-in local regression corpus, and the CLI validation path.
 - Standard validation passes.
 
 ## Deferred Work
