@@ -22,9 +22,9 @@ In scope:
 - Optional transfer-risk profiles with sanitized evidence labels.
 - Deterministic score penalties for transfer latency/settlement risk.
 - Same-venue triangular path discovery over caller-supplied local quotes and fee schedules.
-- Local replay corpus records for deterministic scenario and false-positive checks.
+- Local replay corpus records and a built-in local regression corpus for deterministic scenario and false-positive checks.
 - Candidate records that expose liquidity and transfer-risk modeling details.
-- Rust tests for depth/inventory sizing, transfer-risk scoring, triangular discovery, and local replay expectations.
+- Rust tests for depth/inventory sizing, transfer-risk scoring, triangular discovery, local replay expectations, and the built-in local regression corpus.
 
 Out of scope:
 
@@ -59,10 +59,11 @@ Out of scope:
 7. Add same-venue triangular path search from local quote and fee inputs only.
 8. Add local replay corpus, scenario, expectation, and report records.
 9. Add false-positive expectation checks without external calls or execution.
-10. Export new Phase 27 opportunity types.
-11. Surface the refined opportunity-engine scope in CLI status.
-12. Update governance docs, structure validation, and production gap tracking.
-13. Run the standard validation sequence.
+10. Add a built-in local regression corpus covering cross-venue, no-candidate, triangular, depth/inventory, and transfer-risk scenarios.
+11. Export new Phase 27 opportunity types.
+12. Surface the refined opportunity-engine scope in CLI status.
+13. Update governance docs, structure validation, and production gap tracking.
+14. Run the standard validation sequence.
 
 ## Validation
 
@@ -87,12 +88,13 @@ Met for local deterministic modeling when:
 - Transfer-risk score penalties can be attached from sanitized local profiles.
 - Same-venue triangular paths can be discovered from supplied local quotes and fee schedules.
 - Local scenario replay can detect expected candidates and false positives from supplied local records.
-- Tests cover depth/inventory caps, transfer-risk penalties, triangular discovery, and local replay expectations.
+- Built-in local regression corpus covers the core Phase 27 opportunity scenarios without live data or execution.
+- Tests cover depth/inventory caps, transfer-risk penalties, triangular discovery, local replay expectations, and the built-in local regression corpus.
 - Standard validation passes.
 
 ## Deferred Work
 
-- Larger curated scenario corpora and CI-scale replay remain future work.
+- Larger historical/deployment corpora and CI-scale replay remain future work.
 - Inventory-aware opportunity discovery must still be validated against broader historical and deployment-host corpora.
 - External sandbox/live calibration evidence remains missing.
 - Production-host runtime validation remains missing.

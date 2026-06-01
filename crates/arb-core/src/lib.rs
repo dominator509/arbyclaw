@@ -130,11 +130,14 @@ pub use observability::{
 };
 
 pub use opportunity::{
-    DeterministicOpportunityEngine, OpportunityCandidate, OpportunityDiscoveryConfig,
-    OpportunityDiscoveryRequest, OpportunityEngine, OpportunityError, OpportunityInventoryLimit,
-    OpportunityLeg, OpportunityLegSide, OpportunityLiquidityModel, OpportunityRouteKind,
-    OpportunityScore, OpportunityTransferRisk, OpportunityTransferRiskProfile,
-    OpportunityViolation, OPPORTUNITY_ENGINE_VERSION,
+    phase27_local_opportunity_replay_corpus, DeterministicOpportunityEngine, OpportunityCandidate,
+    OpportunityDiscoveryConfig, OpportunityDiscoveryRequest, OpportunityEngine, OpportunityError,
+    OpportunityInventoryLimit, OpportunityLeg, OpportunityLegSide, OpportunityLiquidityModel,
+    OpportunityReplayCorpus, OpportunityReplayExpectation, OpportunityReplayRouteCount,
+    OpportunityReplayRunReport, OpportunityReplayScenario, OpportunityReplayScenarioReport,
+    OpportunityReplayStatus, OpportunityReplayViolation, OpportunityRouteKind, OpportunityScore,
+    OpportunityTransferRisk, OpportunityTransferRiskProfile, OpportunityViolation,
+    OPPORTUNITY_ENGINE_VERSION,
 };
 
 pub use paper::{
