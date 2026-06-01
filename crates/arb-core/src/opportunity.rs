@@ -867,12 +867,18 @@ impl OpportunityCandidate {
             {
                 violations.extend(leg_violations);
             }
+        }
 
-            if leg.pair != self.pair {
-                violations.push(OpportunityViolation::new(
+        if self.route_kind == OpportunityRouteKind::Triangular {
+            collect_triangular_leg_violations(&self.legs, &mut violations);
+        } else {
+            for leg in &self.legs {
+                if leg.pair != self.pair {
+                    violations.push(OpportunityViolation::new(
                     "OPPORTUNITY_LEG_PAIR_MISMATCH",
                     "each leg pair must match the candidate pair for Phase 9 cross-venue records",
                 ));
+                }
             }
         }
 
@@ -979,6 +985,7 @@ impl OpportunityEngine for DeterministicOpportunityEngine {
                 }
             }
         }
+        discover_triangular_candidates(request, &mut candidates)?;
 
         rank_candidates(candidates, request.config.max_candidates)
     }
@@ -1097,6 +1104,243 @@ fn build_cross_venue_candidate(
     Ok(Some(candidate))
 }
 
+fn discover_triangular_candidates(
+    request: &OpportunityDiscoveryRequest,
+    candidates: &mut Vec<OpportunityCandidate>,
+) -> Result<(), OpportunityError> {
+    for first_quote in &request.quotes {
+        for second_quote in &request.quotes {
+            if first_quote.id == second_quote.id
+                || !same_venue(&first_quote.venue, &second_quote.venue)
+                || first_quote.venue.kind == VenueKind::Bridge
+                || first_quote.pair.base != second_quote.pair.base
+                || first_quote.pair.quote == second_quote.pair.quote
+            {
+                continue;
+            }
+
+            for third_quote in &request.quotes {
+                if third_quote.id == first_quote.id
+                    || third_quote.id == second_quote.id
+                    || !same_venue(&first_quote.venue, &third_quote.venue)
+                {
+                    continue;
+                }
+
+                if third_quote.pair.base != second_quote.pair.quote {
+                    continue;
+                }
+
+                if third_quote.pair.quote != first_quote.pair.quote {
+                    continue;
+                }
+
+                if let Some(candidate) =
+                    build_triangular_candidate(first_quote, second_quote, third_quote, request)?
+                {
+                    candidates.push(candidate);
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn build_triangular_candidate(
+    first_quote: &NormalizedQuote,
+    second_quote: &NormalizedQuote,
+    third_quote: &NormalizedQuote,
+    request: &OpportunityDiscoveryRequest,
+) -> Result<Option<OpportunityCandidate>, OpportunityError> {
+    let quantity_base = triangular_first_leg_quantity(first_quote, second_quote, third_quote);
+    if !is_positive_finite(quantity_base) {
+        return Ok(None);
+    }
+
+    let first_notional_quote = quantity_base * first_quote.ask.price_quote;
+    let second_notional_quote = quantity_base * second_quote.bid.price_quote;
+    let third_quantity_base = second_notional_quote;
+    let third_notional_quote = third_quantity_base * third_quote.bid.price_quote;
+    let gross_profit_quote = third_notional_quote - first_notional_quote;
+    if gross_profit_quote <= 0.0 || !gross_profit_quote.is_finite() {
+        return Ok(None);
+    }
+
+    let first_schedule = find_fee_schedule(
+        &request.fee_schedules,
+        &first_quote.venue,
+        &first_quote.pair,
+    )?;
+    let second_schedule = find_fee_schedule(
+        &request.fee_schedules,
+        &second_quote.venue,
+        &second_quote.pair,
+    )?;
+    let third_schedule = find_fee_schedule(
+        &request.fee_schedules,
+        &third_quote.venue,
+        &third_quote.pair,
+    )?;
+    let first_fee = estimate_fee(first_schedule, first_notional_quote)?;
+    let second_fee = estimate_fee(second_schedule, second_notional_quote)?;
+    let third_fee = estimate_fee(third_schedule, third_notional_quote)?;
+    let second_fee_in_start_quote = second_fee.total_fee_quote * third_quote.bid.price_quote;
+    let total_fees_quote =
+        first_fee.total_fee_quote + second_fee_in_start_quote + third_fee.total_fee_quote;
+    let edge =
+        FeeAdjustedEdge::calculate(gross_profit_quote, total_fees_quote, first_notional_quote)
+            .map_err(OpportunityError::FeeModel)?;
+
+    if edge.net_profit_quote < request.config.min_net_profit_quote
+        || edge.roi_bps < request.config.min_roi_bps
+    {
+        return Ok(None);
+    }
+
+    let first_age_ms = quote_age_ms(first_quote, request.now_unix_ms)?;
+    let second_age_ms = quote_age_ms(second_quote, request.now_unix_ms)?;
+    let third_age_ms = quote_age_ms(third_quote, request.now_unix_ms)?;
+    let max_quote_age_ms = first_age_ms.max(second_age_ms).max(third_age_ms);
+    let fees_externally_verified = first_fee.externally_verified
+        && second_fee.externally_verified
+        && third_fee.externally_verified;
+    let score = OpportunityScore::calculate(
+        edge,
+        max_quote_age_ms,
+        request.config,
+        OpportunityRouteKind::Triangular,
+        fees_externally_verified,
+        0.0,
+    )?;
+
+    let candidate = OpportunityCandidate {
+        id: format!(
+            "opp:triangular:{}:{}-{}-{}:{}",
+            first_quote.venue.name,
+            first_quote.pair.base,
+            second_quote.pair.quote,
+            first_quote.pair.quote,
+            request.id
+        ),
+        route_kind: OpportunityRouteKind::Triangular,
+        pair: first_quote.pair.clone(),
+        legs: vec![
+            OpportunityLeg {
+                venue: first_quote.venue.clone(),
+                pair: first_quote.pair.clone(),
+                side: OpportunityLegSide::Buy,
+                price_quote: first_quote.ask.price_quote,
+                quantity_base,
+                notional_quote: first_notional_quote,
+                fee_estimate: first_fee,
+                source_quote_id: first_quote.id.clone(),
+                market_data_age_ms: first_age_ms,
+            },
+            OpportunityLeg {
+                venue: second_quote.venue.clone(),
+                pair: second_quote.pair.clone(),
+                side: OpportunityLegSide::Sell,
+                price_quote: second_quote.bid.price_quote,
+                quantity_base,
+                notional_quote: second_notional_quote,
+                fee_estimate: second_fee,
+                source_quote_id: second_quote.id.clone(),
+                market_data_age_ms: second_age_ms,
+            },
+            OpportunityLeg {
+                venue: third_quote.venue.clone(),
+                pair: third_quote.pair.clone(),
+                side: OpportunityLegSide::Sell,
+                price_quote: third_quote.bid.price_quote,
+                quantity_base: third_quantity_base,
+                notional_quote: third_notional_quote,
+                fee_estimate: third_fee,
+                source_quote_id: third_quote.id.clone(),
+                market_data_age_ms: third_age_ms,
+            },
+        ],
+        edge,
+        score,
+        liquidity_model: None,
+        transfer_risk: None,
+        discovered_at_unix_ms: request.now_unix_ms,
+        source_quote_ids: vec![
+            first_quote.id.clone(),
+            second_quote.id.clone(),
+            third_quote.id.clone(),
+        ],
+        warnings: candidate_warnings(
+            OpportunityRouteKind::Triangular,
+            fees_externally_verified,
+            None,
+        ),
+    };
+    candidate.validate()?;
+    Ok(Some(candidate))
+}
+
+fn triangular_first_leg_quantity(
+    first_quote: &NormalizedQuote,
+    second_quote: &NormalizedQuote,
+    third_quote: &NormalizedQuote,
+) -> f64 {
+    first_quote
+        .ask
+        .quantity_base
+        .min(second_quote.bid.quantity_base)
+        .min(third_quote.bid.quantity_base / second_quote.bid.price_quote)
+}
+
+fn collect_triangular_leg_violations(
+    legs: &[OpportunityLeg],
+    violations: &mut Vec<OpportunityViolation>,
+) {
+    if legs.len() != 3 {
+        return;
+    }
+
+    let first = &legs[0];
+    let second = &legs[1];
+    let third = &legs[2];
+
+    if first.side != OpportunityLegSide::Buy
+        || second.side != OpportunityLegSide::Sell
+        || third.side != OpportunityLegSide::Sell
+    {
+        violations.push(OpportunityViolation::new(
+            "OPPORTUNITY_TRIANGULAR_SIDE_SEQUENCE_INVALID",
+            "triangular candidates require buy, sell, sell leg ordering",
+        ));
+    }
+
+    if !same_venue(&first.venue, &second.venue) || !same_venue(&first.venue, &third.venue) {
+        violations.push(OpportunityViolation::new(
+            "OPPORTUNITY_TRIANGULAR_VENUE_MISMATCH",
+            "Phase 27 triangular discovery requires all legs to use one local venue",
+        ));
+    }
+
+    if first.venue.kind == VenueKind::Bridge {
+        violations.push(OpportunityViolation::new(
+            "OPPORTUNITY_TRIANGULAR_BRIDGE_UNSUPPORTED",
+            "triangular discovery must not use bridge venues",
+        ));
+    }
+
+    let first_and_second_share_base = first.pair.base == second.pair.base;
+    let second_quote_feeds_third_base = second.pair.quote == third.pair.base;
+    let third_returns_to_first_quote = third.pair.quote == first.pair.quote;
+    if !first_and_second_share_base
+        || !second_quote_feeds_third_base
+        || !third_returns_to_first_quote
+    {
+        violations.push(OpportunityViolation::new(
+            "OPPORTUNITY_TRIANGULAR_PATH_INVALID",
+            "triangular legs must form A/B buy, A/C sell, C/B sell cycle",
+        ));
+    }
+}
+
 fn rank_candidates(
     mut candidates: Vec<OpportunityCandidate>,
     max_candidates: usize,
@@ -1191,6 +1435,12 @@ fn candidate_warnings(
     ) {
         warnings.push(
             "DEX/Web3 opportunity is discovery-only; signing and broadcasts are unavailable"
+                .to_owned(),
+        );
+    }
+    if route_kind == OpportunityRouteKind::Triangular {
+        warnings.push(
+            "triangular route is discovery-only; no execution or transfers were performed"
                 .to_owned(),
         );
     }
@@ -1655,6 +1905,47 @@ mod tests {
             .warnings
             .iter()
             .any(|warning| warning.contains("no external transfer was performed")));
+    }
+
+    #[test]
+    fn discovers_same_venue_triangular_candidate_without_external_calls() {
+        let btc_usd = MarketPair::new("BTC", "USD").expect("pair should validate");
+        let btc_eth = MarketPair::new("BTC", "ETH").expect("pair should validate");
+        let eth_usd = MarketPair::new("ETH", "USD").expect("pair should validate");
+        let request = OpportunityDiscoveryRequest {
+            id: "req-triangular".to_owned(),
+            quotes: vec![
+                quote("btc-usd", "paper-a", btc_usd.clone(), 99.0, 100.0, 1.0),
+                quote("btc-eth", "paper-a", btc_eth.clone(), 3.0, 3.1, 1.0),
+                quote("eth-usd", "paper-a", eth_usd.clone(), 40.0, 41.0, 3.0),
+            ],
+            fee_schedules: vec![
+                fee("paper-a", btc_usd),
+                fee("paper-a", btc_eth),
+                fee("paper-a", eth_usd),
+            ],
+            order_books: Vec::new(),
+            inventory_limits: Vec::new(),
+            transfer_risk_profiles: Vec::new(),
+            config: OpportunityDiscoveryConfig::default(),
+            now_unix_ms: 10_000,
+        };
+
+        let candidates = DeterministicOpportunityEngine::new()
+            .discover(&request)
+            .expect("discovery should succeed");
+        let triangular = candidates
+            .iter()
+            .find(|candidate| candidate.route_kind == OpportunityRouteKind::Triangular)
+            .expect("triangular candidate should be discovered");
+
+        assert_eq!(triangular.legs.len(), 3);
+        assert_eq!(triangular.source_quote_ids.len(), 3);
+        assert!(triangular.edge.net_profit_quote > 0.0);
+        assert!(triangular
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("triangular route is discovery-only")));
     }
 
     fn quote(

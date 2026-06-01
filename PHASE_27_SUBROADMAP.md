@@ -10,7 +10,7 @@ Implemented for local deterministic opportunity-engine realism. Production, sand
 
 ## Goal
 
-Reduce the remaining local opportunity-engine gap by modeling caller-supplied order-book depth, paper inventory caps, and transfer-latency risk inside opportunity discovery without adding live trading, real exchange calls, real RPC calls, signing, broadcasts, withdrawals, bridges, custody, or secrets.
+Reduce the remaining local opportunity-engine gap by modeling caller-supplied order-book depth, paper inventory caps, transfer-latency risk, and same-venue triangular path discovery inside opportunity discovery without adding live trading, real exchange calls, real RPC calls, signing, broadcasts, withdrawals, bridges, custody, or secrets.
 
 ## Scope
 
@@ -21,8 +21,9 @@ In scope:
 - Local paper inventory caps for buy-side quote availability and sell-side base availability.
 - Optional transfer-risk profiles with sanitized evidence labels.
 - Deterministic score penalties for transfer latency/settlement risk.
+- Same-venue triangular path discovery over caller-supplied local quotes and fee schedules.
 - Candidate records that expose liquidity and transfer-risk modeling details.
-- Rust tests for depth/inventory sizing and transfer-risk scoring.
+- Rust tests for depth/inventory sizing, transfer-risk scoring, and triangular discovery.
 
 Out of scope:
 
@@ -54,10 +55,11 @@ Out of scope:
 4. Cap candidate size using supplied local paper inventory limits.
 5. Apply transfer-risk score penalties from sanitized local profiles.
 6. Preserve fail-closed validation for stale/future order books and invalid local inputs.
-7. Export new Phase 27 opportunity types.
-8. Surface the refined opportunity-engine scope in CLI status.
-9. Update governance docs, structure validation, and production gap tracking.
-10. Run the standard validation sequence.
+7. Add same-venue triangular path search from local quote and fee inputs only.
+8. Export new Phase 27 opportunity types.
+9. Surface the refined opportunity-engine scope in CLI status.
+10. Update governance docs, structure validation, and production gap tracking.
+11. Run the standard validation sequence.
 
 ## Validation
 
@@ -80,12 +82,13 @@ Met for local deterministic modeling when:
 - Candidate sizing can use supplied order-book depth.
 - Candidate sizing can be capped by supplied paper inventory.
 - Transfer-risk score penalties can be attached from sanitized local profiles.
-- Tests cover depth/inventory caps and transfer-risk penalties.
+- Same-venue triangular paths can be discovered from supplied local quotes and fee schedules.
+- Tests cover depth/inventory caps, transfer-risk penalties, and triangular discovery.
 - Standard validation passes.
 
 ## Deferred Work
 
-- Full triangular path search remains future work.
+- Broader triangular route scenario replay and false-positive validation remain future work.
 - Inventory-aware opportunity discovery must still be validated against broader scenario corpora.
 - External sandbox/live calibration evidence remains missing.
 - Production-host runtime validation remains missing.
