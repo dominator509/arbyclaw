@@ -124,6 +124,9 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 Current GitHub Actions evidence exists for pushed commits on `dominator509/arbyclaw`:
 
+- latest recorded run: `https://github.com/dominator509/arbyclaw/actions/runs/26738593650`
+- latest recorded commit: `20b39c86873ac127cbb2027116bebb828e3eee9d`
+
 - structure validation
 - Rust formatting, workspace check, tests, and clippy
 - locked release build

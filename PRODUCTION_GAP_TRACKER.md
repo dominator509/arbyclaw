@@ -33,17 +33,17 @@ The project is in Phase 26 local-audit-crash-concurrency-filesystem-disk-full-re
 
 ## Latest CI Validation Attempt
 
-2026-05-31 ArbyClaw GitHub Actions CI validation snapshot:
+2026-06-01 ArbyClaw GitHub Actions CI validation snapshot:
 
 - Repository: `dominator509/arbyclaw`
 - Branch: `main`
-- Latest validated commit: `6d374da6cd94ade226c178fe76768bddc4db3226`
-- Workflow run: `https://github.com/dominator509/arbyclaw/actions/runs/26725221694`
+- Latest validated commit: `20b39c86873ac127cbb2027116bebb828e3eee9d`
+- Workflow run: `https://github.com/dominator509/arbyclaw/actions/runs/26738593650`
 - Result: passed.
-- Completed CI steps: checkout via `actions/checkout@v6`, Rust stable toolchain install with rustfmt and clippy, `cargo fmt --check`, `cargo check --workspace`, `cargo test --workspace`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo build --release --locked`, hardening tool installation, `cargo audit`, CycloneDX SBOM generation with non-empty file checks, `python3 scripts/validate_structure.py`, example systemd-unit static plus `systemd-analyze verify` syntax validation, CodeQL Rust SAST analysis with local SARIF generation, non-empty SARIF verification, short-retention SARIF artifact upload, example container image build, Trivy image scan evidence artifact upload, fixable critical image-vulnerability enforcement, Gitleaks redacted current-tree secret-pattern scan artifact upload, lightweight hardening evidence index artifact upload, and GitHub Step Summary hardening evidence pointer generation.
-- Artifact references from that run: `hardening-evidence-index` `7320358817`, `codeql-sarif-evidence` `7320316740`, `trivy-image-scan-evidence` `7320312297`, `gitleaks-secret-scan-evidence` `7320298068`, and Docker Buildx build record `7320312514`.
+- Completed CI steps: checkout via `actions/checkout@v6`, Rust stable toolchain install with rustfmt and clippy, `cargo fmt --check`, `cargo check --workspace`, `cargo test --workspace`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo build --release --locked`, hardening tool installation, `cargo audit`, CycloneDX SBOM generation with non-empty file checks, `python3 scripts/validate_structure.py`, example systemd-unit static plus `systemd-analyze verify` syntax validation, CodeQL Rust SAST analysis with local SARIF generation, non-empty SARIF verification, short-retention SARIF artifact upload, example container image build, Trivy image scan evidence artifact upload, fixable critical image-vulnerability enforcement, Gitleaks redacted current-tree secret-pattern scan artifact upload, deployment evidence checklist artifact upload, lightweight hardening evidence index artifact upload, and GitHub Step Summary hardening/deployment evidence pointer generation.
+- Artifact references from that run: `hardening-evidence-index` `7324736114`, `codeql-sarif-evidence` `7324657593`, `deployment-evidence-checklist` `7324617207`, `trivy-image-scan-evidence` `7324646503`, `gitleaks-secret-scan-evidence` `7324617886`, and Docker Buildx build record `7324647998`.
 - Node.js 24 migration status: the workflow uses `actions/checkout@v6`.
-- This validates the pushed repository structure, formatting, compilation, tests, linting, locked release build, dependency audit, SBOM generation gate, local-SARIF CodeQL SAST gate, short-retention SAST artifact retention, example container image build, example Trivy image-scan gate, current-tree Gitleaks secret-pattern scan gate, and example systemd-unit static/syntax gate in GitHub Actions only. It does not validate production deployment, live funds, live exchange/RPC integrations, signing, broadcasts, production containers, deployment-host systemd behavior, ARM, penetration testing, load testing, rollback drills, incident drills, SBOM review, GitHub code scanning upload processing, broader external hardening, or production readiness.
+- This validates the pushed repository structure, formatting, compilation, tests, linting, locked release build, dependency audit, SBOM generation gate, local-SARIF CodeQL SAST gate, short-retention SAST artifact retention, example container image build, example Trivy image-scan gate, current-tree Gitleaks secret-pattern scan gate, deployment evidence checklist artifact generation, and example systemd-unit static/syntax gate in GitHub Actions only. It does not validate production deployment, live funds, live exchange/RPC integrations, signing, broadcasts, production containers, deployment-host systemd behavior, ARM, penetration testing, load testing, executed rollback drills, executed incident-response drills, SBOM review, GitHub code scanning upload processing, broader external hardening, or production readiness.
 
 ## Latest Gap Tracker Audit
 
