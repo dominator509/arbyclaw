@@ -131,9 +131,10 @@ pub use observability::{
 
 pub use opportunity::{
     DeterministicOpportunityEngine, OpportunityCandidate, OpportunityDiscoveryConfig,
-    OpportunityDiscoveryRequest, OpportunityEngine, OpportunityError, OpportunityLeg,
-    OpportunityLegSide, OpportunityRouteKind, OpportunityScore, OpportunityViolation,
-    OPPORTUNITY_ENGINE_VERSION,
+    OpportunityDiscoveryRequest, OpportunityEngine, OpportunityError, OpportunityInventoryLimit,
+    OpportunityLeg, OpportunityLegSide, OpportunityLiquidityModel, OpportunityRouteKind,
+    OpportunityScore, OpportunityTransferRisk, OpportunityTransferRiskProfile,
+    OpportunityViolation, OPPORTUNITY_ENGINE_VERSION,
 };
 
 pub use paper::{

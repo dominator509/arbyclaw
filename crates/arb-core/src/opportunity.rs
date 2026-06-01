@@ -5,13 +5,14 @@
 
 use crate::{
     FeeAdjustedEdge, FeeEstimate, FeeModelError, FeeSchedule, FreshnessStatus, LiquidityRole,
-    MarketPair, NormalizedQuote, VenueKind, VenueRef, DEFAULT_MARKET_DATA_FRESHNESS_MS,
+    MarketPair, NormalizedQuote, OrderBookSnapshot, PriceLevel, VenueKind, VenueRef,
+    DEFAULT_MARKET_DATA_FRESHNESS_MS,
 };
 use serde::{Deserialize, Serialize};
 use std::{cmp::Ordering, error::Error, fmt};
 
 /// Stable opportunity-engine version for audit and replay surfaces.
-pub const OPPORTUNITY_ENGINE_VERSION: &str = "phase-9-opportunity-engine-v1";
+pub const OPPORTUNITY_ENGINE_VERSION: &str = "phase-27-opportunity-risk-v1";
 
 /// Deterministic route classification for opportunity records.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
@@ -59,6 +60,10 @@ pub struct OpportunityDiscoveryConfig {
     pub cex_dex_risk_penalty_bps: f64,
     /// Maximum freshness penalty at the configured age ceiling.
     pub freshness_penalty_ceiling_bps: f64,
+    /// Default fraction of supplied paper inventory allowed per candidate.
+    pub default_inventory_fraction: f64,
+    /// Reject transfer-risk profiles above this local latency ceiling.
+    pub max_transfer_latency_ms: u64,
 }
 
 impl Default for OpportunityDiscoveryConfig {
@@ -72,6 +77,8 @@ impl Default for OpportunityDiscoveryConfig {
             dex_dex_risk_penalty_bps: 10.0,
             cex_dex_risk_penalty_bps: 15.0,
             freshness_penalty_ceiling_bps: 2.0,
+            default_inventory_fraction: 1.0,
+            max_transfer_latency_ms: 300_000,
         }
     }
 }
@@ -92,6 +99,23 @@ impl OpportunityDiscoveryConfig {
             violations.push(OpportunityViolation::new(
                 "OPPORTUNITY_MAX_CANDIDATES_ZERO",
                 "max_candidates must be positive",
+            ));
+        }
+
+        if !self.default_inventory_fraction.is_finite()
+            || self.default_inventory_fraction <= 0.0
+            || self.default_inventory_fraction > 1.0
+        {
+            violations.push(OpportunityViolation::new(
+                "OPPORTUNITY_INVENTORY_FRACTION_INVALID",
+                "default_inventory_fraction must be finite and in the interval (0, 1]",
+            ));
+        }
+
+        if self.max_transfer_latency_ms == 0 {
+            violations.push(OpportunityViolation::new(
+                "OPPORTUNITY_TRANSFER_LATENCY_LIMIT_ZERO",
+                "max_transfer_latency_ms must be positive",
             ));
         }
 
@@ -131,6 +155,12 @@ pub struct OpportunityDiscoveryRequest {
     pub quotes: Vec<NormalizedQuote>,
     /// Fee schedules supplied by a caller or paper provider.
     pub fee_schedules: Vec<FeeSchedule>,
+    /// Optional local order books used for depth-aware sizing and slippage.
+    pub order_books: Vec<OrderBookSnapshot>,
+    /// Optional local paper inventory caps used to avoid oversizing candidates.
+    pub inventory_limits: Vec<OpportunityInventoryLimit>,
+    /// Optional local transfer-latency and settlement-risk profiles.
+    pub transfer_risk_profiles: Vec<OpportunityTransferRiskProfile>,
     /// Discovery configuration.
     pub config: OpportunityDiscoveryConfig,
     /// Runtime clock in Unix milliseconds used for freshness checks.
@@ -173,6 +203,33 @@ impl OpportunityDiscoveryRequest {
             );
         }
 
+        for book in &self.order_books {
+            collect_order_book_violations(
+                book,
+                self.now_unix_ms,
+                self.config.max_market_data_age_ms,
+                &mut violations,
+            );
+        }
+
+        for limit in &self.inventory_limits {
+            if let Err(OpportunityError::ValidationFailed {
+                violations: limit_violations,
+            }) = limit.validate()
+            {
+                violations.extend(limit_violations);
+            }
+        }
+
+        for profile in &self.transfer_risk_profiles {
+            if let Err(OpportunityError::ValidationFailed {
+                violations: profile_violations,
+            }) = profile.validate(self.config.max_transfer_latency_ms)
+            {
+                violations.extend(profile_violations);
+            }
+        }
+
         for schedule in &self.fee_schedules {
             if let Err(error) = schedule.validate() {
                 collect_fee_model_error(
@@ -183,6 +240,207 @@ impl OpportunityDiscoveryRequest {
             }
         }
 
+        finish_validation(violations)
+    }
+}
+
+/// Local paper inventory available to the opportunity engine for sizing only.
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct OpportunityInventoryLimit {
+    /// Venue where the local simulated inventory is available.
+    pub venue: VenueRef,
+    /// Market pair the inventory applies to.
+    pub pair: MarketPair,
+    /// Available base units for sell-side sizing.
+    pub available_base: f64,
+    /// Available quote units for buy-side sizing.
+    pub available_quote: f64,
+    /// Optional per-limit fraction override in the interval (0, 1].
+    pub max_fraction: Option<f64>,
+}
+
+impl OpportunityInventoryLimit {
+    /// Validate local paper inventory sizing input.
+    pub fn validate(&self) -> Result<(), OpportunityError> {
+        let mut violations = Vec::new();
+        validate_venue(&self.venue, &mut violations);
+        if let Err(error) = self.pair.validate() {
+            collect_market_data_error(
+                "OPPORTUNITY_INVENTORY_PAIR_INVALID",
+                &error,
+                &mut violations,
+            );
+        }
+        if !is_non_negative_finite(self.available_base) {
+            violations.push(OpportunityViolation::new(
+                "OPPORTUNITY_INVENTORY_BASE_INVALID",
+                "available_base must be finite and non-negative",
+            ));
+        }
+        if !is_non_negative_finite(self.available_quote) {
+            violations.push(OpportunityViolation::new(
+                "OPPORTUNITY_INVENTORY_QUOTE_INVALID",
+                "available_quote must be finite and non-negative",
+            ));
+        }
+        if let Some(max_fraction) = self.max_fraction {
+            if !max_fraction.is_finite() || max_fraction <= 0.0 || max_fraction > 1.0 {
+                violations.push(OpportunityViolation::new(
+                    "OPPORTUNITY_INVENTORY_LIMIT_FRACTION_INVALID",
+                    "inventory max_fraction must be finite and in the interval (0, 1]",
+                ));
+            }
+        }
+        finish_validation(violations)
+    }
+}
+
+/// Reference-only local transfer risk used for scoring cross-venue candidates.
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct OpportunityTransferRiskProfile {
+    /// Source venue for modeled inventory movement.
+    pub from_venue: VenueRef,
+    /// Destination venue for modeled inventory movement.
+    pub to_venue: VenueRef,
+    /// Market pair this local risk profile applies to.
+    pub pair: MarketPair,
+    /// Operator-supplied local latency estimate.
+    pub estimated_latency_ms: u64,
+    /// Additional deterministic score penalty.
+    pub risk_penalty_bps: f64,
+    /// Sanitized non-secret evidence or assumption label.
+    pub evidence_label: String,
+}
+
+impl OpportunityTransferRiskProfile {
+    /// Validate transfer-risk scoring input without calling external systems.
+    pub fn validate(&self, max_latency_ms: u64) -> Result<(), OpportunityError> {
+        let mut violations = Vec::new();
+        validate_venue(&self.from_venue, &mut violations);
+        validate_venue(&self.to_venue, &mut violations);
+        if same_venue(&self.from_venue, &self.to_venue) {
+            violations.push(OpportunityViolation::new(
+                "OPPORTUNITY_TRANSFER_SAME_VENUE",
+                "transfer-risk profiles require distinct venues",
+            ));
+        }
+        if let Err(error) = self.pair.validate() {
+            collect_market_data_error("OPPORTUNITY_TRANSFER_PAIR_INVALID", &error, &mut violations);
+        }
+        if self.estimated_latency_ms == 0 || self.estimated_latency_ms > max_latency_ms {
+            violations.push(OpportunityViolation::new(
+                "OPPORTUNITY_TRANSFER_LATENCY_INVALID",
+                "estimated transfer latency must be positive and within the configured ceiling",
+            ));
+        }
+        if !is_non_negative_finite(self.risk_penalty_bps) {
+            violations.push(OpportunityViolation::new(
+                "OPPORTUNITY_TRANSFER_RISK_PENALTY_INVALID",
+                "transfer risk penalty must be finite and non-negative",
+            ));
+        }
+        validate_id(
+            "transfer risk evidence",
+            &self.evidence_label,
+            &mut violations,
+        );
+        finish_validation(violations)
+    }
+}
+
+/// Local depth and inventory sizing details attached to a candidate.
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct OpportunityLiquidityModel {
+    /// Whether full order-book depth was available for both legs.
+    pub depth_aware: bool,
+    /// Requested size before depth and inventory caps.
+    pub requested_quantity_base: f64,
+    /// Final executable local model size.
+    pub executable_quantity_base: f64,
+    /// Buy-side average price after walking local asks.
+    pub buy_average_price_quote: f64,
+    /// Sell-side average price after walking local bids.
+    pub sell_average_price_quote: f64,
+    /// Buy-side slippage relative to the top ask.
+    pub buy_slippage_bps: f64,
+    /// Sell-side slippage relative to the top bid.
+    pub sell_slippage_bps: f64,
+    /// True when supplied paper inventory reduced the candidate size.
+    pub inventory_capped: bool,
+}
+
+impl OpportunityLiquidityModel {
+    fn validate(&self) -> Result<(), OpportunityError> {
+        let mut violations = Vec::new();
+        for (field, value) in [
+            ("requested_quantity_base", self.requested_quantity_base),
+            ("executable_quantity_base", self.executable_quantity_base),
+            ("buy_average_price_quote", self.buy_average_price_quote),
+            ("sell_average_price_quote", self.sell_average_price_quote),
+        ] {
+            if !is_positive_finite(value) {
+                violations.push(OpportunityViolation::new_owned(
+                    "OPPORTUNITY_LIQUIDITY_VALUE_INVALID",
+                    format!("{field} must be positive and finite"),
+                ));
+            }
+        }
+        for (field, value) in [
+            ("buy_slippage_bps", self.buy_slippage_bps),
+            ("sell_slippage_bps", self.sell_slippage_bps),
+        ] {
+            if !is_non_negative_finite(value) {
+                violations.push(OpportunityViolation::new_owned(
+                    "OPPORTUNITY_LIQUIDITY_SLIPPAGE_INVALID",
+                    format!("{field} must be finite and non-negative"),
+                ));
+            }
+        }
+        if self.executable_quantity_base > self.requested_quantity_base {
+            violations.push(OpportunityViolation::new(
+                "OPPORTUNITY_LIQUIDITY_SIZE_INCREASED",
+                "executable quantity cannot exceed requested quantity",
+            ));
+        }
+        finish_validation(violations)
+    }
+}
+
+/// Transfer-risk scoring details attached to a cross-venue candidate.
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct OpportunityTransferRisk {
+    /// Operator-supplied local latency estimate.
+    pub estimated_latency_ms: u64,
+    /// Additional score penalty in basis points.
+    pub risk_penalty_bps: f64,
+    /// Sanitized non-secret evidence or assumption label.
+    pub evidence_label: String,
+}
+
+impl OpportunityTransferRisk {
+    fn validate(&self) -> Result<(), OpportunityError> {
+        let mut violations = Vec::new();
+        if self.estimated_latency_ms == 0 {
+            violations.push(OpportunityViolation::new(
+                "OPPORTUNITY_TRANSFER_LATENCY_INVALID",
+                "candidate transfer latency must be positive",
+            ));
+        }
+        if !is_non_negative_finite(self.risk_penalty_bps) {
+            violations.push(OpportunityViolation::new(
+                "OPPORTUNITY_TRANSFER_RISK_PENALTY_INVALID",
+                "candidate transfer risk penalty must be finite and non-negative",
+            ));
+        }
+        validate_id(
+            "transfer risk evidence",
+            &self.evidence_label,
+            &mut violations,
+        );
         finish_validation(violations)
     }
 }
@@ -284,6 +542,7 @@ impl OpportunityScore {
         config: OpportunityDiscoveryConfig,
         route_kind: OpportunityRouteKind,
         fees_externally_verified: bool,
+        extra_risk_penalty_bps: f64,
     ) -> Result<Self, OpportunityError> {
         let mut violations = Vec::new();
 
@@ -301,6 +560,13 @@ impl OpportunityScore {
             ));
         }
 
+        if !is_non_negative_finite(extra_risk_penalty_bps) {
+            violations.push(OpportunityViolation::new(
+                "OPPORTUNITY_EXTRA_RISK_PENALTY_INVALID",
+                "extra risk penalty must be finite and non-negative before scoring",
+            ));
+        }
+
         finish_validation(violations)?;
 
         let age_ratio = (max_quote_age_ms as f64 / config.max_market_data_age_ms as f64).min(1.0);
@@ -315,7 +581,7 @@ impl OpportunityScore {
         } else {
             config.unverified_fee_penalty_bps
         };
-        let risk_penalty_bps = route_penalty_bps + fee_penalty_bps;
+        let risk_penalty_bps = route_penalty_bps + fee_penalty_bps + extra_risk_penalty_bps;
         let score_bps = edge.roi_bps - freshness_penalty_bps - risk_penalty_bps;
 
         Ok(Self {
@@ -354,6 +620,192 @@ impl OpportunityScore {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+struct DepthWalk {
+    quantity_base: f64,
+    average_price_quote: f64,
+}
+
+fn build_liquidity_model(
+    buy_quote: &NormalizedQuote,
+    sell_quote: &NormalizedQuote,
+    requested_quantity_base: f64,
+    request: &OpportunityDiscoveryRequest,
+) -> Result<Option<OpportunityLiquidityModel>, OpportunityError> {
+    let inventory_capped_quantity =
+        apply_inventory_caps(buy_quote, sell_quote, requested_quantity_base, request);
+    if !is_positive_finite(inventory_capped_quantity) {
+        return Ok(None);
+    }
+
+    let buy_book = find_order_book(&request.order_books, &buy_quote.venue, &buy_quote.pair);
+    let sell_book = find_order_book(&request.order_books, &sell_quote.venue, &sell_quote.pair);
+    let depth_aware = buy_book.is_some() && sell_book.is_some();
+
+    let buy_depth = match buy_book {
+        Some(book) => walk_depth(&book.asks, inventory_capped_quantity),
+        None => Some(DepthWalk {
+            quantity_base: inventory_capped_quantity.min(buy_quote.ask.quantity_base),
+            average_price_quote: buy_quote.ask.price_quote,
+        }),
+    };
+    let sell_depth = match sell_book {
+        Some(book) => walk_depth(&book.bids, inventory_capped_quantity),
+        None => Some(DepthWalk {
+            quantity_base: inventory_capped_quantity.min(sell_quote.bid.quantity_base),
+            average_price_quote: sell_quote.bid.price_quote,
+        }),
+    };
+
+    let (Some(buy_depth), Some(sell_depth)) = (buy_depth, sell_depth) else {
+        return Ok(None);
+    };
+    let executable_quantity_base = buy_depth.quantity_base.min(sell_depth.quantity_base);
+    if !is_positive_finite(executable_quantity_base) {
+        return Ok(None);
+    }
+
+    let buy_average_price_quote = if buy_depth.quantity_base > executable_quantity_base {
+        walk_depth_average(
+            buy_book.map_or(&[buy_quote.ask][..], |book| book.asks.as_slice()),
+            executable_quantity_base,
+        )
+        .ok_or_else(|| OpportunityError::ValidationFailed {
+            violations: vec![OpportunityViolation::new(
+                "OPPORTUNITY_DEPTH_BUY_REWALK_FAILED",
+                "buy depth could not be re-walked at executable size",
+            )],
+        })?
+    } else {
+        buy_depth.average_price_quote
+    };
+    let sell_average_price_quote = if sell_depth.quantity_base > executable_quantity_base {
+        walk_depth_average(
+            sell_book.map_or(&[sell_quote.bid][..], |book| book.bids.as_slice()),
+            executable_quantity_base,
+        )
+        .ok_or_else(|| OpportunityError::ValidationFailed {
+            violations: vec![OpportunityViolation::new(
+                "OPPORTUNITY_DEPTH_SELL_REWALK_FAILED",
+                "sell depth could not be re-walked at executable size",
+            )],
+        })?
+    } else {
+        sell_depth.average_price_quote
+    };
+
+    let buy_slippage_bps = ((buy_average_price_quote - buy_quote.ask.price_quote)
+        / buy_quote.ask.price_quote)
+        .max(0.0)
+        * 10_000.0;
+    let sell_slippage_bps = ((sell_quote.bid.price_quote - sell_average_price_quote)
+        / sell_quote.bid.price_quote)
+        .max(0.0)
+        * 10_000.0;
+
+    Ok(Some(OpportunityLiquidityModel {
+        depth_aware,
+        requested_quantity_base,
+        executable_quantity_base,
+        buy_average_price_quote,
+        sell_average_price_quote,
+        buy_slippage_bps,
+        sell_slippage_bps,
+        inventory_capped: executable_quantity_base < requested_quantity_base,
+    }))
+}
+
+fn apply_inventory_caps(
+    buy_quote: &NormalizedQuote,
+    sell_quote: &NormalizedQuote,
+    requested_quantity_base: f64,
+    request: &OpportunityDiscoveryRequest,
+) -> f64 {
+    let mut capped = requested_quantity_base;
+    for limit in &request.inventory_limits {
+        if limit.pair != buy_quote.pair {
+            continue;
+        }
+        let fraction = limit
+            .max_fraction
+            .unwrap_or(request.config.default_inventory_fraction);
+        if same_venue(&limit.venue, &buy_quote.venue) {
+            capped = capped.min((limit.available_quote * fraction) / buy_quote.ask.price_quote);
+        }
+        if same_venue(&limit.venue, &sell_quote.venue) {
+            capped = capped.min(limit.available_base * fraction);
+        }
+    }
+    capped
+}
+
+fn find_order_book<'a>(
+    books: &'a [OrderBookSnapshot],
+    venue: &VenueRef,
+    pair: &MarketPair,
+) -> Option<&'a OrderBookSnapshot> {
+    books
+        .iter()
+        .find(|book| same_venue(&book.venue, venue) && &book.pair == pair)
+}
+
+fn walk_depth(levels: &[PriceLevel], requested_quantity_base: f64) -> Option<DepthWalk> {
+    let quantity_base = levels
+        .iter()
+        .map(|level| level.quantity_base)
+        .sum::<f64>()
+        .min(requested_quantity_base);
+    if !is_positive_finite(quantity_base) {
+        return None;
+    }
+    let average_price_quote = walk_depth_average(levels, quantity_base)?;
+    Some(DepthWalk {
+        quantity_base,
+        average_price_quote,
+    })
+}
+
+fn walk_depth_average(levels: &[PriceLevel], quantity_base: f64) -> Option<f64> {
+    if !is_positive_finite(quantity_base) {
+        return None;
+    }
+    let mut remaining = quantity_base;
+    let mut notional_quote = 0.0;
+    for level in levels {
+        if remaining <= 0.0 {
+            break;
+        }
+        let consumed = remaining.min(level.quantity_base);
+        notional_quote += consumed * level.price_quote;
+        remaining -= consumed;
+    }
+    if remaining > 0.000_000_01 {
+        return None;
+    }
+    Some(notional_quote / quantity_base)
+}
+
+fn find_transfer_risk(
+    request: &OpportunityDiscoveryRequest,
+    from_venue: &VenueRef,
+    to_venue: &VenueRef,
+    pair: &MarketPair,
+) -> Option<OpportunityTransferRisk> {
+    request
+        .transfer_risk_profiles
+        .iter()
+        .find(|profile| {
+            same_venue(&profile.from_venue, from_venue)
+                && same_venue(&profile.to_venue, to_venue)
+                && &profile.pair == pair
+        })
+        .map(|profile| OpportunityTransferRisk {
+            estimated_latency_ms: profile.estimated_latency_ms,
+            risk_penalty_bps: profile.risk_penalty_bps,
+            evidence_label: profile.evidence_label.clone(),
+        })
+}
+
 /// Non-executing opportunity candidate.
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -370,6 +822,10 @@ pub struct OpportunityCandidate {
     pub edge: FeeAdjustedEdge,
     /// Deterministic ranking score.
     pub score: OpportunityScore,
+    /// Depth and local inventory sizing details.
+    pub liquidity_model: Option<OpportunityLiquidityModel>,
+    /// Transfer-latency and settlement-risk scoring details.
+    pub transfer_risk: Option<OpportunityTransferRisk>,
     /// Runtime discovery timestamp.
     pub discovered_at_unix_ms: u64,
     /// Source quote ids used for deterministic replay.
@@ -429,6 +885,18 @@ impl OpportunityCandidate {
 
         if let Err(error) = self.score.validate() {
             collect_opportunity_error(error, &mut violations);
+        }
+
+        if let Some(liquidity_model) = &self.liquidity_model {
+            if let Err(error) = liquidity_model.validate() {
+                collect_opportunity_error(error, &mut violations);
+            }
+        }
+
+        if let Some(transfer_risk) = &self.transfer_risk {
+            if let Err(error) = transfer_risk.validate() {
+                collect_opportunity_error(error, &mut violations);
+            }
         }
 
         if self.discovered_at_unix_ms == 0 {
@@ -522,16 +990,22 @@ fn build_cross_venue_candidate(
     route_kind: OpportunityRouteKind,
     request: &OpportunityDiscoveryRequest,
 ) -> Result<Option<OpportunityCandidate>, OpportunityError> {
-    let quantity_base = buy_quote
+    let requested_quantity_base = buy_quote
         .ask
         .quantity_base
         .min(sell_quote.bid.quantity_base);
-    if !is_positive_finite(quantity_base) {
+    if !is_positive_finite(requested_quantity_base) {
         return Ok(None);
     }
 
-    let buy_notional_quote = buy_quote.ask.price_quote * quantity_base;
-    let sell_notional_quote = sell_quote.bid.price_quote * quantity_base;
+    let Some(sizing) =
+        build_liquidity_model(buy_quote, sell_quote, requested_quantity_base, request)?
+    else {
+        return Ok(None);
+    };
+    let quantity_base = sizing.executable_quantity_base;
+    let buy_notional_quote = sizing.buy_average_price_quote * quantity_base;
+    let sell_notional_quote = sizing.sell_average_price_quote * quantity_base;
     let gross_profit_quote = sell_notional_quote - buy_notional_quote;
 
     if gross_profit_quote <= 0.0 || !gross_profit_quote.is_finite() {
@@ -558,12 +1032,22 @@ fn build_cross_venue_candidate(
     let sell_age_ms = quote_age_ms(sell_quote, request.now_unix_ms)?;
     let max_quote_age_ms = buy_age_ms.max(sell_age_ms);
     let fees_externally_verified = buy_fee.externally_verified && sell_fee.externally_verified;
+    let transfer_risk = find_transfer_risk(
+        request,
+        &buy_quote.venue,
+        &sell_quote.venue,
+        &buy_quote.pair,
+    );
+    let extra_risk_penalty_bps = transfer_risk
+        .as_ref()
+        .map_or(0.0, |risk| risk.risk_penalty_bps);
     let score = OpportunityScore::calculate(
         edge,
         max_quote_age_ms,
         request.config,
         route_kind,
         fees_externally_verified,
+        extra_risk_penalty_bps,
     )?;
 
     let candidate = OpportunityCandidate {
@@ -582,7 +1066,7 @@ fn build_cross_venue_candidate(
                 venue: buy_quote.venue.clone(),
                 pair: buy_quote.pair.clone(),
                 side: OpportunityLegSide::Buy,
-                price_quote: buy_quote.ask.price_quote,
+                price_quote: sizing.buy_average_price_quote,
                 quantity_base,
                 notional_quote: buy_notional_quote,
                 fee_estimate: buy_fee,
@@ -593,7 +1077,7 @@ fn build_cross_venue_candidate(
                 venue: sell_quote.venue.clone(),
                 pair: sell_quote.pair.clone(),
                 side: OpportunityLegSide::Sell,
-                price_quote: sell_quote.bid.price_quote,
+                price_quote: sizing.sell_average_price_quote,
                 quantity_base,
                 notional_quote: sell_notional_quote,
                 fee_estimate: sell_fee,
@@ -603,9 +1087,11 @@ fn build_cross_venue_candidate(
         ],
         edge,
         score,
+        liquidity_model: Some(sizing),
+        transfer_risk: transfer_risk.clone(),
         discovered_at_unix_ms: request.now_unix_ms,
         source_quote_ids: vec![buy_quote.id.clone(), sell_quote.id.clone()],
-        warnings: candidate_warnings(route_kind, fees_externally_verified),
+        warnings: candidate_warnings(route_kind, fees_externally_verified, transfer_risk.as_ref()),
     };
     candidate.validate()?;
     Ok(Some(candidate))
@@ -693,6 +1179,7 @@ fn route_kind_label(route_kind: OpportunityRouteKind) -> &'static str {
 fn candidate_warnings(
     route_kind: OpportunityRouteKind,
     fees_externally_verified: bool,
+    transfer_risk: Option<&OpportunityTransferRisk>,
 ) -> Vec<String> {
     let mut warnings = Vec::new();
     if !fees_externally_verified {
@@ -706,6 +1193,12 @@ fn candidate_warnings(
             "DEX/Web3 opportunity is discovery-only; signing and broadcasts are unavailable"
                 .to_owned(),
         );
+    }
+    if let Some(transfer_risk) = transfer_risk {
+        warnings.push(format!(
+            "transfer-risk profile applied from sanitized evidence label {}; no external transfer was performed",
+            transfer_risk.evidence_label
+        ));
     }
     warnings
 }
@@ -735,6 +1228,36 @@ fn collect_quote_violations(
             violations.push(OpportunityViolation::new_owned(
                 "OPPORTUNITY_QUOTE_FUTURE_TIMESTAMP",
                 format!("quote {} is {future_by_ms} ms in the future", quote.id),
+            ));
+        }
+    }
+}
+
+fn collect_order_book_violations(
+    book: &OrderBookSnapshot,
+    now_unix_ms: u64,
+    max_age_ms: u64,
+    violations: &mut Vec<OpportunityViolation>,
+) {
+    if let Err(error) = book.validate() {
+        collect_market_data_error("OPPORTUNITY_ORDER_BOOK_INVALID", &error, violations);
+    }
+
+    match book.freshness(now_unix_ms, max_age_ms) {
+        FreshnessStatus::Fresh { .. } => {}
+        FreshnessStatus::Stale { age_ms, max_age_ms } => {
+            violations.push(OpportunityViolation::new_owned(
+                "OPPORTUNITY_ORDER_BOOK_STALE",
+                format!(
+                    "order book {} is stale: age {age_ms} ms exceeds max {max_age_ms} ms",
+                    book.id
+                ),
+            ));
+        }
+        FreshnessStatus::FutureTimestamp { future_by_ms } => {
+            violations.push(OpportunityViolation::new_owned(
+                "OPPORTUNITY_ORDER_BOOK_FUTURE_TIMESTAMP",
+                format!("order book {} is {future_by_ms} ms in the future", book.id),
             ));
         }
     }
@@ -933,9 +1456,13 @@ impl Error for OpportunityError {}
 mod tests {
     use super::{
         DeterministicOpportunityEngine, OpportunityDiscoveryConfig, OpportunityDiscoveryRequest,
-        OpportunityEngine, OpportunityRouteKind,
+        OpportunityEngine, OpportunityInventoryLimit, OpportunityRouteKind,
+        OpportunityTransferRiskProfile,
     };
-    use crate::{FeeSchedule, MarketPair, NormalizedQuote, PriceLevel, VenueKind, VenueRef};
+    use crate::{
+        FeeSchedule, MarketPair, NormalizedQuote, OrderBookSnapshot, PriceLevel, VenueKind,
+        VenueRef,
+    };
 
     #[test]
     fn discovers_fee_adjusted_cex_cex_candidate() {
@@ -947,6 +1474,9 @@ mod tests {
                 quote("sell-quote", "paper-b", pair.clone(), 105.0, 106.0, 1.0),
             ],
             fee_schedules: vec![fee("paper-a", pair.clone()), fee("paper-b", pair)],
+            order_books: Vec::new(),
+            inventory_limits: Vec::new(),
+            transfer_risk_profiles: Vec::new(),
             config: OpportunityDiscoveryConfig::default(),
             now_unix_ms: 10_000,
         };
@@ -985,6 +1515,9 @@ mod tests {
                 ),
             ],
             fee_schedules: vec![fee("paper-a", pair.clone()), fee("paper-b", pair)],
+            order_books: Vec::new(),
+            inventory_limits: Vec::new(),
+            transfer_risk_profiles: Vec::new(),
             config: OpportunityDiscoveryConfig {
                 max_market_data_age_ms: 10,
                 ..OpportunityDiscoveryConfig::default()
@@ -1016,6 +1549,9 @@ mod tests {
                 fee("paper-b", pair.clone()),
                 fee("paper-c", pair),
             ],
+            order_books: Vec::new(),
+            inventory_limits: Vec::new(),
+            transfer_risk_profiles: Vec::new(),
             config: OpportunityDiscoveryConfig::default(),
             now_unix_ms: 10_000,
         };
@@ -1025,6 +1561,100 @@ mod tests {
             .expect("discovery should succeed");
         assert!(candidates.len() >= 2);
         assert!(candidates[0].edge.net_profit_quote >= candidates[1].edge.net_profit_quote);
+    }
+
+    #[test]
+    fn applies_depth_and_inventory_caps_to_cross_venue_candidate() {
+        let pair = MarketPair::new("BTC", "USD").expect("pair should validate");
+        let request = OpportunityDiscoveryRequest {
+            id: "req-depth".to_owned(),
+            quotes: vec![
+                quote("buy-quote", "paper-a", pair.clone(), 99.0, 100.0, 3.0),
+                quote("sell-quote", "paper-b", pair.clone(), 108.0, 109.0, 3.0),
+            ],
+            fee_schedules: vec![fee("paper-a", pair.clone()), fee("paper-b", pair.clone())],
+            order_books: vec![
+                book(
+                    "book-a",
+                    "paper-a",
+                    pair.clone(),
+                    vec![(99.0, 3.0)],
+                    vec![(100.0, 1.0), (102.0, 2.0)],
+                ),
+                book(
+                    "book-b",
+                    "paper-b",
+                    pair.clone(),
+                    vec![(108.0, 1.0), (106.0, 2.0)],
+                    vec![(109.0, 3.0)],
+                ),
+            ],
+            inventory_limits: vec![OpportunityInventoryLimit {
+                venue: venue("paper-b"),
+                pair,
+                available_base: 1.5,
+                available_quote: 0.0,
+                max_fraction: Some(1.0),
+            }],
+            transfer_risk_profiles: Vec::new(),
+            config: OpportunityDiscoveryConfig::default(),
+            now_unix_ms: 10_000,
+        };
+
+        let candidates = DeterministicOpportunityEngine::new()
+            .discover(&request)
+            .expect("discovery should succeed");
+        let liquidity = candidates[0]
+            .liquidity_model
+            .as_ref()
+            .expect("liquidity model should be attached");
+
+        assert!(liquidity.depth_aware);
+        assert!(liquidity.inventory_capped);
+        assert!((liquidity.executable_quantity_base - 1.5).abs() < 0.000_000_01);
+        assert!(liquidity.buy_slippage_bps > 0.0);
+        assert!(liquidity.sell_slippage_bps > 0.0);
+    }
+
+    #[test]
+    fn applies_transfer_risk_penalty_without_external_calls() {
+        let pair = MarketPair::new("ETH", "USD").expect("pair should validate");
+        let request = OpportunityDiscoveryRequest {
+            id: "req-transfer".to_owned(),
+            quotes: vec![
+                quote("buy-quote", "paper-a", pair.clone(), 99.0, 100.0, 1.0),
+                quote("sell-quote", "paper-b", pair.clone(), 110.0, 111.0, 1.0),
+            ],
+            fee_schedules: vec![fee("paper-a", pair.clone()), fee("paper-b", pair.clone())],
+            order_books: Vec::new(),
+            inventory_limits: Vec::new(),
+            transfer_risk_profiles: vec![OpportunityTransferRiskProfile {
+                from_venue: venue("paper-a"),
+                to_venue: venue("paper-b"),
+                pair,
+                estimated_latency_ms: 15_000,
+                risk_penalty_bps: 25.0,
+                evidence_label: "local-paper-transfer-assumption".to_owned(),
+            }],
+            config: OpportunityDiscoveryConfig::default(),
+            now_unix_ms: 10_000,
+        };
+
+        let candidates = DeterministicOpportunityEngine::new()
+            .discover(&request)
+            .expect("discovery should succeed");
+
+        let risk_penalty_bps = candidates[0]
+            .transfer_risk
+            .as_ref()
+            .expect("transfer risk should be attached")
+            .risk_penalty_bps;
+        assert!((risk_penalty_bps - 25.0).abs() < 0.000_000_01);
+        assert!(candidates[0].score.risk_penalty_bps >= 30.0);
+        assert!(candidates[0]
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("no external transfer was performed")));
     }
 
     fn quote(
@@ -1075,17 +1705,52 @@ mod tests {
         }
     }
 
+    fn book(
+        id: &str,
+        venue_name: &str,
+        pair: MarketPair,
+        bids: Vec<(f64, f64)>,
+        asks: Vec<(f64, f64)>,
+    ) -> OrderBookSnapshot {
+        OrderBookSnapshot {
+            id: id.to_owned(),
+            venue: venue(venue_name),
+            pair,
+            captured_at_unix_ms: 9_500,
+            received_at_unix_ms: 9_500,
+            bids: bids
+                .into_iter()
+                .map(|(price_quote, quantity_base)| PriceLevel {
+                    price_quote,
+                    quantity_base,
+                })
+                .collect(),
+            asks: asks
+                .into_iter()
+                .map(|(price_quote, quantity_base)| PriceLevel {
+                    price_quote,
+                    quantity_base,
+                })
+                .collect(),
+            source_sequence: None,
+        }
+    }
+
     fn fee(venue_name: &str, pair: MarketPair) -> FeeSchedule {
         FeeSchedule {
-            venue: VenueRef {
-                kind: VenueKind::Cex,
-                name: venue_name.to_owned(),
-            },
+            venue: venue(venue_name),
             pair: Some(pair),
             maker_bps: 5.0,
             taker_bps: 10.0,
             network_fee_quote: 0.0,
             externally_verified: false,
+        }
+    }
+
+    fn venue(venue_name: &str) -> VenueRef {
+        VenueRef {
+            kind: VenueKind::Cex,
+            name: venue_name.to_owned(),
         }
     }
 }

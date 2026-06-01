@@ -979,6 +979,8 @@ redact_secrets = true
                 risk_penalty_bps: 0.0,
                 score_bps: edge.roi_bps,
             },
+            liquidity_model: None,
+            transfer_risk: None,
             discovered_at_unix_ms: 9_900,
             source_quote_ids: vec!["quote-a".to_owned(), "quote-b".to_owned()],
             warnings: Vec::new(),
