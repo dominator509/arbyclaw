@@ -157,10 +157,52 @@ jobs:
         run: |
           rm -f gitleaks-secret-scan.json
 
+  deployment-evidence:
+    name: deployment-evidence-checklist
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Generate deployment evidence checklist
+        run: |
+          python3 scripts/validate_deployment_evidence_checklist.py --json > deployment-evidence-checklist.json
+          python3 scripts/validate_deployment_evidence_checklist.py > deployment-evidence-checklist.txt
+          test -s deployment-evidence-checklist.json
+          test -s deployment-evidence-checklist.txt
+      - name: Write deployment evidence job summary
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          # ArbyClaw deployment evidence checklist
+
+          This summary points to a non-secret checklist artifact for remaining external deployment evidence. It is a missing-evidence index only and is not a production-readiness claim.
+
+          - Artifact: `deployment-evidence-checklist`
+          - Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          - Commit: `${{ github.sha }}`
+          - Ref: `${{ github.ref_name }}`
+
+          ## Explicit Non-Claims
+
+          This does not validate production deployment, live funds, signing, broadcasts, withdrawals, bridges, live exchange/RPC calls, production container readiness, systemd or ARM deployment, load testing, penetration testing, rollback drills, incident drills, custody review, compliance review, or production readiness.
+          EOF
+      - name: Upload deployment evidence checklist
+        uses: actions/upload-artifact@v7
+        with:
+          name: deployment-evidence-checklist
+          path: |
+            deployment-evidence-checklist.json
+            deployment-evidence-checklist.txt
+          if-no-files-found: error
+          retention-days: 14
+      - name: Remove deployment evidence checklist
+        if: always()
+        run: |
+          rm -f deployment-evidence-checklist.json deployment-evidence-checklist.txt
+
   evidence-index:
     name: hardening-evidence-index
     runs-on: ubuntu-latest
-    needs: [rust, codeql, container, secrets]
+    needs: [rust, codeql, container, secrets, deployment-evidence]
     if: always()
     steps:
       - name: Create hardening evidence index
@@ -182,6 +224,7 @@ jobs:
           | `codeql-sast` | `${{ needs.codeql.result }}` |
           | `example-container-image-scan` | `${{ needs.container.result }}` |
           | `secret-pattern-scan` | `${{ needs.secrets.result }}` |
+          | `deployment-evidence-checklist` | `${{ needs.deployment-evidence.result }}` |
 
           ## Evidence Artifacts And Gates
 
@@ -190,6 +233,7 @@ jobs:
           | `codeql-sarif-evidence` | `codeql-sast` | Local-SARIF CodeQL SAST output; GitHub code-scanning upload remains disabled/unvalidated. |
           | `trivy-image-scan-evidence` | `example-container-image-scan` | Example container image scan evidence only; not production image readiness. |
           | `gitleaks-secret-scan-evidence` | `secret-pattern-scan` | Redacted repository secret-pattern scan evidence. |
+          | `deployment-evidence-checklist` | `deployment-evidence-checklist` | Missing-or-referenced external deployment evidence checklist; not deployment or production readiness. |
           | Docker build record artifact | `example-container-image-scan` | Docker Buildx build record for the example image when emitted by the action. |
           | Example systemd unit gate | `rust-validation` | Static and `systemd-analyze verify` syntax checks for the example unit only; not service installation or deployment readiness. |
           | CycloneDX SBOM gate | `rust-validation` | Non-empty per-crate SBOM generation check; SBOM files are removed from the runner and not retained as artifacts. |
@@ -219,6 +263,7 @@ jobs:
           | `codeql-sast` | `${{ needs.codeql.result }}` |
           | `example-container-image-scan` | `${{ needs.container.result }}` |
           | `secret-pattern-scan` | `${{ needs.secrets.result }}` |
+          | `deployment-evidence-checklist` | `${{ needs.deployment-evidence.result }}` |
 
           ## Evidence Artifacts And Gates
 
@@ -228,6 +273,7 @@ jobs:
           | `codeql-sarif-evidence` | `codeql-sast` | Local-SARIF CodeQL SAST output; GitHub code-scanning upload remains disabled/unvalidated. |
           | `trivy-image-scan-evidence` | `example-container-image-scan` | Example container image scan evidence only; not production image readiness. |
           | `gitleaks-secret-scan-evidence` | `secret-pattern-scan` | Redacted repository secret-pattern scan evidence. |
+          | `deployment-evidence-checklist` | `deployment-evidence-checklist` | Missing-or-referenced external deployment evidence checklist; not deployment or production readiness. |
           | Docker build record artifact | `example-container-image-scan` | Docker Buildx build record for the example image when emitted by the action. |
           | Example systemd unit gate | `rust-validation` | Static and `systemd-analyze verify` syntax checks for the example unit only; not service installation or deployment readiness. |
           | CycloneDX SBOM gate | `rust-validation` | Non-empty per-crate SBOM generation check; SBOM files are removed from the runner and not retained as artifacts. |

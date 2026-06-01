@@ -1,6 +1,6 @@
 # STRUCTURE_MANIFEST.md
 
-Generated during Phase 26 audit/runtime crash, concurrency, filesystem, disk-full, stale-lock, lifecycle-concurrency, state-permission, graceful-shutdown, backup-restore, restart-recovery, recovery-disposition, CLI-status, container-validation, and incomplete-recovery fail-closed validation checkpoint after governance reconciliation and validation.
+Generated during Phase 26 audit/runtime crash, concurrency, filesystem, disk-full, stale-lock, lifecycle-concurrency, state-permission, graceful-shutdown, backup-restore, restart-recovery, recovery-disposition, CLI-status, container-validation, systemd-lifecycle-planning, deployment-host-runtime-reporting, rollback-drill-planning, incident-response-drill-planning, deployment-evidence-bundle-indexing, deployment-evidence-checklist validation, and incomplete-recovery fail-closed validation checkpoint after governance reconciliation and validation.
 
 Note: this manifest intentionally excludes `STRUCTURE_MANIFEST.md` itself to avoid self-referential hash drift.
 
@@ -10,13 +10,13 @@ Note: this manifest intentionally excludes `STRUCTURE_MANIFEST.md` itself to avo
 |---|---:|---|
 | `.dockerignore` | 111 | `a2c84c8891716d8656e0bb6a1035e67d600635097713fd7d84d850e75b13a446` |
 | `.env.example` | 394 | `6218acde9448522686a636404ea23487152eb2dcba981d8f73e3556c89aac8d4` |
-| `.github/workflows/ci.yml` | 10958 | `d8ab405a14990ace033babf6cfdac2383fcc34ac2aebabe8fa9fa9d0c3714ddd` |
+| `.github/workflows/ci.yml` | 13538 | `f94163f9846e40f64208fe62988ab7434f0bfce71ba6e9e175fd035480d9aefd` |
 | `.gitignore` | 376 | `bd7418845c02f540ce90d22ce54dae0de0a79c024b9b7e51b8f07bf00922ecfb` |
 | `AGENTS.md` | 12219 | `db04971f35f2a1abcfd98ccab6a48b771b49da66ae950a12bf021b484c89e79f` |
-| `ARCHITECTURE.md` | 50626 | `e306a8ab2202d212c1d49aa2a961a5562b7c3247d5cc6c6cdc2d45ab7e24b7d3` |
+| `ARCHITECTURE.md` | 52442 | `35fa54d9ab66c9e18c5a0ec1bb8d3eedc981871c3b02bec4e6b43158701cce9f` |
 | `Cargo.lock` | 10842 | `76809e96b10440767a57dcc2750919cfa35d69f00b3779570e0ac231132ff891` |
 | `Cargo.toml` | 523 | `5b9927a75c5f3eba1a71280d272714aaecb780b984f7194158d3c4b56f827348` |
-| `HANDOFF_CONTEXT.md` | 14711 | `7a669da90f4cfeb5ffb0e4bf1cbe7ffbedaa0e31daaf3175e76a4ba4c0ce6b1d` |
+| `HANDOFF_CONTEXT.md` | 16469 | `526fa3796faa75a9461440b98a3890d953c1ec3d7286039f7e82639e32c4a540` |
 | `PHASE_0_SUBROADMAP.md` | 3721 | `12eb329c53bd73740cab3715173152556132f1e911cf8c29a2bced12ae45c8b1` |
 | `PHASE_10_SUBROADMAP.md` | 4161 | `27ff0b887bef0ee745b225ce4519918972eb399953a01153f82af74148e3bdcc` |
 | `PHASE_11_SUBROADMAP.md` | 4399 | `4a449c04142be47e896a3d5435b33e463d1fccf38f76ab519f654f0c78adff3f` |
@@ -35,7 +35,7 @@ Note: this manifest intentionally excludes `STRUCTURE_MANIFEST.md` itself to avo
 | `PHASE_23_SUBROADMAP.md` | 3401 | `d9e0084dca1b53eb7968a8a874648f5ef585d1e902e494dd0d017c913527e7bf` |
 | `PHASE_24_SUBROADMAP.md` | 4665 | `c6f67cb620bbaa289655fc7319750ffb400cf61d90fb88113f2e4dfb262a55ee` |
 | `PHASE_25_SUBROADMAP.md` | 2819 | `f81b821ba74b4bc016df2225a05e09894ca7f562616c5109103a0063b945c8ef` |
-| `PHASE_26_SUBROADMAP.md` | 4923 | `635875a643dcdfa1e510c8888fa9b0a0f7152ac3408291259272e229e3251e6b` |
+| `PHASE_26_SUBROADMAP.md` | 8010 | `28bd73dbd57f9a23907313681a0cf42f8723413650af790af2c7f3a9c6f38858` |
 | `PHASE_2_SUBROADMAP.md` | 6923 | `c793744c21f34af9730d9e76934cc962fde2098d9cb4186437845dbed21b8bef` |
 | `PHASE_3_SUBROADMAP.md` | 4611 | `bc6471d324ab5fbc995ede097d27ca1c819ff56a582869e007c49eb469dac6fd` |
 | `PHASE_4_SUBROADMAP.md` | 7648 | `86b9a1f28d3161b6c291217c896bcc91b14f2ce425b5e4405560a28cd6468b1e` |
@@ -44,9 +44,9 @@ Note: this manifest intentionally excludes `STRUCTURE_MANIFEST.md` itself to avo
 | `PHASE_7_SUBROADMAP.md` | 4647 | `21513207b3fc175483ba6792a460284705dbd5ef8860f9306c5215aad14f8beb` |
 | `PHASE_8_SUBROADMAP.md` | 5452 | `60cf4359265b6ed1d1a88e66b2ebb02fa07dc07c6752d0d12ad55b80adfebfca` |
 | `PHASE_9_SUBROADMAP.md` | 4739 | `3edbc8fd4bcb5eca76db5d98f1e074054e95af1f650de6422753a6e6f973ab18` |
-| `PRODUCTION_GAP_TRACKER.md` | 231908 | `3c65b078f8a16924f143dd3582a58e92834b3c913e36287b21aba80a6a097fba` |
+| `PRODUCTION_GAP_TRACKER.md` | 244365 | `352e6a5848f4ed98f4830fdca34cf946b78340aab34a3030321427e8cbe4eb44` |
 | `README.md` | 19712 | `0fca3aad945382d9fa78dae4887af7f83379d743fc62b194c120b63d74f5493c` |
-| `ROADMAP.md` | 82148 | `96ca9c51c547a481e19f5fa345b15846e3ffb2e68849a9ac5b4a385543b5e8f8` |
+| `ROADMAP.md` | 84789 | `597297d4d75545dbb0e50416387417f96915ee9121977d3d4accfcbb5d5d0909` |
 | `SECURITY.md` | 20631 | `01ea5c6db45fb16041744f0809560b87cd44c591c26d8c79de194579c23905b3` |
 | `config.example.toml` | 758 | `0ba26b8473522e751187f0a9eee2c882bb1b1f3c3e50aec3823f72545d3022f5` |
 | `crates/arb-agent/Cargo.toml` | 319 | `682d2135fae5e1156c4041e3b192cb4d4f506c0b8721774c8dafa141b7ccd2e2` |
@@ -75,7 +75,7 @@ Note: this manifest intentionally excludes `STRUCTURE_MANIFEST.md` itself to avo
 | `crates/arb-core/src/state.rs` | 25974 | `c93c325562f44cf3fe038f3ca8678454d437bd35a76c899d41d4a61f2288f07f` |
 | `crates/arb-core/src/testing.rs` | 41706 | `2a252b35e6b70d385c3e86eb245d1b1e322cb44619186079bd8f8cb36e09adcd` |
 | `crates/arb-core/tests/sqlite_wal_crash_restart.rs` | 6014 | `759be4e185dfb8d79b644c31774274ffab3aedd83a29bb79b71420cf70657369` |
-| `deployment/README.md` | 1816 | `4024127011910278c9797c57efcea73107de3e1184a1cda591ba9ab19388a59c` |
+| `deployment/README.md` | 6317 | `7f30bacf3593bcff118664479e0b02f78ac03a804a15ff52fa9100e92d6a5951` |
 | `deployment/arm/BUILD_PROFILES.md` | 592 | `a5fae8c288efa9f804a5a72bb977c3cf48c463240a5a1903cf82e4a75478547b` |
 | `deployment/container/Containerfile.example` | 426 | `f2a376cf529e908274342bf0b159cf9d1f487d7f8e302cdeac78ac3f6055b559` |
 | `deployment/systemd/arb-agent.service.example` | 738 | `3f328f96dc154dc5473ad8969383ef3c2ef5d93aa6cbd548679815371f455d89` |
@@ -88,7 +88,13 @@ Note: this manifest intentionally excludes `STRUCTURE_MANIFEST.md` itself to avo
 | `hardening/RELEASE_REVIEW_EVIDENCE_TEMPLATE.md` | 16306 | `79e591eb42a59dab5139ce395e2f1311754584e1cc92159310a5ce46ff17020c` |
 | `rust-toolchain.toml` | 66 | `a6a0bbd29ffaa8182dc22d1d9149709f1091e47df40ed96eb8a78a711c66a4ce` |
 | `rustfmt.toml` | 56 | `307c52ac18be85742e5a4d472ca444029aa2859fad995ac2ef657e1706880bf1` |
-| `scripts/generate_structure_manifest.py` | 1901 | `573a79a1181bcc9acb194aebbbbf3f7bfe8e35a051a612daaefafb0687a2b068` |
+| `scripts/generate_structure_manifest.py` | 2102 | `87df63f7e9beda6e9ee16bd0ca8426131823842fa4029fffdd64e8ec110c2016` |
 | `scripts/validate_container_example.py` | 2226 | `9ce4ed4e915fb6b58589d96bef089f0e022a935673a39c2fe883a3ecb698cde9` |
-| `scripts/validate_structure.py` | 4315 | `80fe76e71eaf1ecb19283cb4359992f750c7c2693bf47bf4c4c59391bab4ca07` |
+| `scripts/validate_deployment_evidence_bundle.py` | 7017 | `a79f6dc6ea265d9e55d85e73b94b969cf2d782e824111c498063ac93467a8ac9` |
+| `scripts/validate_deployment_evidence_checklist.py` | 7757 | `74091e032acac7616fd7a84a277da3b592627af19abd1aebbf13f5a27481e020` |
+| `scripts/validate_deployment_host_runtime.py` | 8976 | `d041fe4838a298d6b373b91d6e04320a59af1c4a8a9b0a55baf2728effee720a` |
+| `scripts/validate_incident_response_drill.py` | 7474 | `e7ed1cdb3eae352efaba8a16829d18e136bbae9249c1a79de5af7a424a542e40` |
+| `scripts/validate_rollback_drill.py` | 6632 | `fe7a34f02fa465fc94407b6409ca2e63aeaaa18544f9eb839e8f14922c50192c` |
+| `scripts/validate_structure.py` | 4615 | `a0b027ae5f164d072e173eb55436ee81a274d8c27ce2f3a445c8db648885546d` |
 | `scripts/validate_systemd_example.py` | 7297 | `88749f5a8a2df7539a614e05e6a00f437d6df7a42c214330b33b9e5014ed5f21` |
+| `scripts/validate_systemd_lifecycle.py` | 7936 | `a9c99cf4975e75c18e5a71d20cf2ec8a51d8f3e49b3f9696dfa4ff6c13a0d9de` |

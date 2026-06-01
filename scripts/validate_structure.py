@@ -88,7 +88,13 @@ REQUIRED_FILES = [
     "handoff/FUTURE_AGENT_PROMPTS.md",
     "handoff/EXTERNAL_VALIDATION_CHECKLIST.md",
     "scripts/validate_container_example.py",
+    "scripts/validate_deployment_host_runtime.py",
+    "scripts/validate_deployment_evidence_checklist.py",
+    "scripts/validate_deployment_evidence_bundle.py",
+    "scripts/validate_incident_response_drill.py",
+    "scripts/validate_rollback_drill.py",
     "scripts/validate_systemd_example.py",
+    "scripts/validate_systemd_lifecycle.py",
 ]
 
 FORBIDDEN_SECRET_ASSIGNMENT = re.compile(

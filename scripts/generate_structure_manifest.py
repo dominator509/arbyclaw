@@ -36,7 +36,7 @@ def main() -> int:
     lines = [
         "# STRUCTURE_MANIFEST.md",
         "",
-        "Generated during Phase 26 audit/runtime crash, concurrency, filesystem, disk-full, stale-lock, lifecycle-concurrency, state-permission, graceful-shutdown, backup-restore, restart-recovery, recovery-disposition, CLI-status, container-validation, and incomplete-recovery fail-closed validation checkpoint after governance reconciliation and validation.",
+        "Generated during Phase 26 audit/runtime crash, concurrency, filesystem, disk-full, stale-lock, lifecycle-concurrency, state-permission, graceful-shutdown, backup-restore, restart-recovery, recovery-disposition, CLI-status, container-validation, systemd-lifecycle-planning, deployment-host-runtime-reporting, rollback-drill-planning, incident-response-drill-planning, deployment-evidence-bundle-indexing, deployment-evidence-checklist validation, and incomplete-recovery fail-closed validation checkpoint after governance reconciliation and validation.",
         "",
         "Note: this manifest intentionally excludes `STRUCTURE_MANIFEST.md` itself to avoid self-referential hash drift.",
         "",
