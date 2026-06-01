@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use std::{cmp::Ordering, error::Error, fmt};
 
 /// Stable opportunity-engine version for audit and replay surfaces.
-pub const OPPORTUNITY_ENGINE_VERSION: &str = "phase-27-opportunity-risk-v1";
+pub const OPPORTUNITY_ENGINE_VERSION: &str = "phase-27-opportunity-replay-v1";
 
 /// Deterministic route classification for opportunity records.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
@@ -927,6 +927,207 @@ impl OpportunityCandidate {
     }
 }
 
+/// Expected local replay outcome for one opportunity scenario.
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct OpportunityReplayExpectation {
+    /// Minimum candidates required for the scenario to pass.
+    pub min_candidates: usize,
+    /// Optional maximum candidates allowed for false-positive checks.
+    pub max_candidates: Option<usize>,
+    /// Route kinds that must appear at least once.
+    pub required_route_kinds: Vec<OpportunityRouteKind>,
+    /// Route kinds that must not appear.
+    pub forbidden_route_kinds: Vec<OpportunityRouteKind>,
+    /// Optional minimum best net profit required across emitted candidates.
+    pub min_best_net_profit_quote: Option<f64>,
+}
+
+impl OpportunityReplayExpectation {
+    /// Expect at least one candidate of the supplied route kind.
+    #[must_use]
+    pub fn require_route(route_kind: OpportunityRouteKind) -> Self {
+        Self {
+            min_candidates: 1,
+            max_candidates: None,
+            required_route_kinds: vec![route_kind],
+            forbidden_route_kinds: Vec::new(),
+            min_best_net_profit_quote: None,
+        }
+    }
+
+    /// Expect no candidates, useful for local false-positive scenarios.
+    #[must_use]
+    pub const fn no_candidates() -> Self {
+        Self {
+            min_candidates: 0,
+            max_candidates: Some(0),
+            required_route_kinds: Vec::new(),
+            forbidden_route_kinds: Vec::new(),
+            min_best_net_profit_quote: None,
+        }
+    }
+
+    /// Validate the replay expectation before replay begins.
+    pub fn validate(&self) -> Result<(), OpportunityError> {
+        let mut violations = Vec::new();
+
+        if let Some(max_candidates) = self.max_candidates {
+            if max_candidates < self.min_candidates {
+                violations.push(OpportunityViolation::new(
+                    "OPPORTUNITY_REPLAY_MAX_BELOW_MIN",
+                    "max_candidates must be greater than or equal to min_candidates",
+                ));
+            }
+        }
+
+        if let Some(min_best_net_profit_quote) = self.min_best_net_profit_quote {
+            if !is_non_negative_finite(min_best_net_profit_quote) {
+                violations.push(OpportunityViolation::new(
+                    "OPPORTUNITY_REPLAY_MIN_PROFIT_INVALID",
+                    "min_best_net_profit_quote must be finite and non-negative when supplied",
+                ));
+            }
+        }
+
+        finish_validation(violations)
+    }
+}
+
+/// One deterministic local opportunity replay scenario.
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct OpportunityReplayScenario {
+    /// Stable scenario id.
+    pub id: String,
+    /// Local discovery request to replay.
+    pub request: OpportunityDiscoveryRequest,
+    /// Expected local outcome.
+    pub expectation: OpportunityReplayExpectation,
+}
+
+/// Local replay corpus made from caller-supplied non-secret market records.
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct OpportunityReplayCorpus {
+    /// Stable corpus id.
+    pub id: String,
+    /// Scenarios to replay.
+    pub scenarios: Vec<OpportunityReplayScenario>,
+}
+
+impl OpportunityReplayCorpus {
+    /// Validate corpus structure before local replay.
+    pub fn validate(&self) -> Result<(), OpportunityError> {
+        let mut violations = Vec::new();
+        validate_id("replay corpus", &self.id, &mut violations);
+
+        if self.scenarios.is_empty() {
+            violations.push(OpportunityViolation::new(
+                "OPPORTUNITY_REPLAY_SCENARIOS_EMPTY",
+                "at least one replay scenario is required",
+            ));
+        }
+
+        for scenario in &self.scenarios {
+            validate_id("replay scenario", &scenario.id, &mut violations);
+            if let Err(OpportunityError::ValidationFailed {
+                violations: expectation_violations,
+            }) = scenario.expectation.validate()
+            {
+                violations.extend(expectation_violations);
+            }
+        }
+
+        finish_validation(violations)
+    }
+}
+
+/// Replay pass/fail status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum OpportunityReplayStatus {
+    /// Scenario or corpus met expectations.
+    Passed,
+    /// Scenario or corpus had one or more replay violations.
+    Failed,
+}
+
+/// Route-kind count emitted by one replay scenario.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct OpportunityReplayRouteCount {
+    /// Route kind.
+    pub route_kind: OpportunityRouteKind,
+    /// Number of emitted candidates with this route kind.
+    pub count: usize,
+}
+
+/// One local replay expectation violation.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct OpportunityReplayViolation {
+    /// Stable violation code.
+    pub code: String,
+    /// Sanitized human-readable message.
+    pub message: String,
+}
+
+impl OpportunityReplayViolation {
+    fn new(code: &'static str, message: impl Into<String>) -> Self {
+        Self {
+            code: code.to_owned(),
+            message: message.into(),
+        }
+    }
+}
+
+/// Per-scenario local replay report.
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct OpportunityReplayScenarioReport {
+    /// Scenario id.
+    pub scenario_id: String,
+    /// Candidate count emitted by local deterministic discovery.
+    pub candidate_count: usize,
+    /// Candidate counts by route kind.
+    pub route_counts: Vec<OpportunityReplayRouteCount>,
+    /// Highest-ranked candidate id, if any.
+    pub best_candidate_id: Option<String>,
+    /// Highest-ranked candidate score, if any.
+    pub best_score_bps: Option<f64>,
+    /// Highest-ranked candidate net profit, if any.
+    pub best_net_profit_quote: Option<f64>,
+    /// Replay status for this scenario.
+    pub status: OpportunityReplayStatus,
+    /// Expectation or local discovery violations.
+    pub violations: Vec<OpportunityReplayViolation>,
+}
+
+/// Local opportunity replay corpus report.
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct OpportunityReplayRunReport {
+    /// Corpus id.
+    pub corpus_id: String,
+    /// Number of replayed scenarios.
+    pub scenario_count: usize,
+    /// Number of scenarios that passed expectations.
+    pub passed_scenarios: usize,
+    /// Number of scenarios that failed expectations.
+    pub failed_scenarios: usize,
+    /// Total emitted candidates across all scenarios.
+    pub total_candidates: usize,
+    /// Always false; replay consumes supplied local records only.
+    pub external_calls_performed: bool,
+    /// Always false; replay never submits orders or moves funds.
+    pub live_execution_performed: bool,
+    /// Overall replay status.
+    pub status: OpportunityReplayStatus,
+    /// Per-scenario reports.
+    pub scenario_reports: Vec<OpportunityReplayScenarioReport>,
+}
+
 /// Boundary trait for future opportunity engines.
 ///
 /// Implementations must not place orders, sign transactions, withdraw funds,
@@ -951,6 +1152,52 @@ impl DeterministicOpportunityEngine {
     #[must_use]
     pub const fn new() -> Self {
         Self
+    }
+
+    /// Replay a local non-secret corpus against deterministic discovery expectations.
+    ///
+    /// This does not call exchanges or RPC endpoints, submit orders, sign, broadcast,
+    /// withdraw, bridge, or mutate balances. Discovery failures inside a scenario are
+    /// captured as failed scenario reports so false-positive/false-negative corpora
+    /// can be reviewed without hiding the remaining scenarios.
+    pub fn replay_corpus(
+        &self,
+        corpus: &OpportunityReplayCorpus,
+    ) -> Result<OpportunityReplayRunReport, OpportunityError> {
+        corpus.validate()?;
+
+        let mut scenario_reports = Vec::with_capacity(corpus.scenarios.len());
+        let mut total_candidates = 0;
+        let mut passed_scenarios = 0;
+
+        for scenario in &corpus.scenarios {
+            let report = replay_scenario(*self, scenario);
+            total_candidates += report.candidate_count;
+            if report.status == OpportunityReplayStatus::Passed {
+                passed_scenarios += 1;
+            }
+            scenario_reports.push(report);
+        }
+
+        let scenario_count = scenario_reports.len();
+        let failed_scenarios = scenario_count - passed_scenarios;
+        let status = if failed_scenarios == 0 {
+            OpportunityReplayStatus::Passed
+        } else {
+            OpportunityReplayStatus::Failed
+        };
+
+        Ok(OpportunityReplayRunReport {
+            corpus_id: corpus.id.clone(),
+            scenario_count,
+            passed_scenarios,
+            failed_scenarios,
+            total_candidates,
+            external_calls_performed: false,
+            live_execution_performed: false,
+            status,
+            scenario_reports,
+        })
     }
 }
 
@@ -1354,6 +1601,166 @@ fn rank_candidates(
     Ok(candidates)
 }
 
+fn replay_scenario(
+    engine: DeterministicOpportunityEngine,
+    scenario: &OpportunityReplayScenario,
+) -> OpportunityReplayScenarioReport {
+    match engine.discover(&scenario.request) {
+        Ok(candidates) => replay_success_report(scenario, &candidates),
+        Err(error) => replay_error_report(scenario, &error),
+    }
+}
+
+fn replay_success_report(
+    scenario: &OpportunityReplayScenario,
+    candidates: &[OpportunityCandidate],
+) -> OpportunityReplayScenarioReport {
+    let mut violations = Vec::new();
+    collect_replay_expectation_violations(scenario, candidates, &mut violations);
+
+    let best_candidate = candidates.first();
+    let status = if violations.is_empty() {
+        OpportunityReplayStatus::Passed
+    } else {
+        OpportunityReplayStatus::Failed
+    };
+
+    OpportunityReplayScenarioReport {
+        scenario_id: scenario.id.clone(),
+        candidate_count: candidates.len(),
+        route_counts: replay_route_counts(candidates),
+        best_candidate_id: best_candidate.map(|candidate| candidate.id.clone()),
+        best_score_bps: best_candidate.map(|candidate| candidate.score.score_bps),
+        best_net_profit_quote: best_candidate.map(|candidate| candidate.edge.net_profit_quote),
+        status,
+        violations,
+    }
+}
+
+fn replay_error_report(
+    scenario: &OpportunityReplayScenario,
+    error: &OpportunityError,
+) -> OpportunityReplayScenarioReport {
+    let violations = if error.violations().is_empty() {
+        vec![OpportunityReplayViolation::new(
+            "OPPORTUNITY_REPLAY_DISCOVERY_FAILED",
+            error.to_string(),
+        )]
+    } else {
+        error
+            .violations()
+            .iter()
+            .map(|violation| {
+                OpportunityReplayViolation::new(
+                    "OPPORTUNITY_REPLAY_DISCOVERY_FAILED",
+                    format!("{}: {}", violation.code(), violation.message()),
+                )
+            })
+            .collect()
+    };
+
+    OpportunityReplayScenarioReport {
+        scenario_id: scenario.id.clone(),
+        candidate_count: 0,
+        route_counts: replay_route_counts(&[]),
+        best_candidate_id: None,
+        best_score_bps: None,
+        best_net_profit_quote: None,
+        status: OpportunityReplayStatus::Failed,
+        violations,
+    }
+}
+
+fn collect_replay_expectation_violations(
+    scenario: &OpportunityReplayScenario,
+    candidates: &[OpportunityCandidate],
+    violations: &mut Vec<OpportunityReplayViolation>,
+) {
+    let expectation = &scenario.expectation;
+    if candidates.len() < expectation.min_candidates {
+        violations.push(OpportunityReplayViolation::new(
+            "OPPORTUNITY_REPLAY_MIN_CANDIDATES_UNMET",
+            format!(
+                "scenario {} emitted {} candidates, below minimum {}",
+                scenario.id,
+                candidates.len(),
+                expectation.min_candidates
+            ),
+        ));
+    }
+
+    if let Some(max_candidates) = expectation.max_candidates {
+        if candidates.len() > max_candidates {
+            violations.push(OpportunityReplayViolation::new(
+                "OPPORTUNITY_REPLAY_MAX_CANDIDATES_EXCEEDED",
+                format!(
+                    "scenario {} emitted {} candidates, above maximum {}",
+                    scenario.id,
+                    candidates.len(),
+                    max_candidates
+                ),
+            ));
+        }
+    }
+
+    for required in &expectation.required_route_kinds {
+        if !candidates
+            .iter()
+            .any(|candidate| candidate.route_kind == *required)
+        {
+            violations.push(OpportunityReplayViolation::new(
+                "OPPORTUNITY_REPLAY_REQUIRED_ROUTE_MISSING",
+                format!("scenario {} did not emit {:?}", scenario.id, required),
+            ));
+        }
+    }
+
+    for forbidden in &expectation.forbidden_route_kinds {
+        if candidates
+            .iter()
+            .any(|candidate| candidate.route_kind == *forbidden)
+        {
+            violations.push(OpportunityReplayViolation::new(
+                "OPPORTUNITY_REPLAY_FORBIDDEN_ROUTE_PRESENT",
+                format!("scenario {} emitted forbidden {:?}", scenario.id, forbidden),
+            ));
+        }
+    }
+
+    if let Some(min_profit) = expectation.min_best_net_profit_quote {
+        let best_profit = candidates
+            .first()
+            .map_or(0.0, |candidate| candidate.edge.net_profit_quote);
+        if best_profit < min_profit {
+            violations.push(OpportunityReplayViolation::new(
+                "OPPORTUNITY_REPLAY_MIN_PROFIT_UNMET",
+                format!(
+                    "scenario {} best net profit {} is below minimum {}",
+                    scenario.id, best_profit, min_profit
+                ),
+            ));
+        }
+    }
+}
+
+fn replay_route_counts(candidates: &[OpportunityCandidate]) -> Vec<OpportunityReplayRouteCount> {
+    [
+        OpportunityRouteKind::CexCex,
+        OpportunityRouteKind::DexDex,
+        OpportunityRouteKind::CexDex,
+        OpportunityRouteKind::Triangular,
+    ]
+    .into_iter()
+    .filter_map(|route_kind| {
+        let count = candidates
+            .iter()
+            .filter(|candidate| candidate.route_kind == route_kind)
+            .count();
+        (count > 0).then_some(OpportunityReplayRouteCount { route_kind, count })
+    })
+    .collect()
+}
+
 fn compare_candidates(left: &OpportunityCandidate, right: &OpportunityCandidate) -> Ordering {
     compare_f64_desc(left.score.score_bps, right.score.score_bps)
         .then_with(|| compare_f64_desc(left.edge.net_profit_quote, right.edge.net_profit_quote))
@@ -1706,8 +2113,9 @@ impl Error for OpportunityError {}
 mod tests {
     use super::{
         DeterministicOpportunityEngine, OpportunityDiscoveryConfig, OpportunityDiscoveryRequest,
-        OpportunityEngine, OpportunityInventoryLimit, OpportunityRouteKind,
-        OpportunityTransferRiskProfile,
+        OpportunityEngine, OpportunityInventoryLimit, OpportunityReplayCorpus,
+        OpportunityReplayExpectation, OpportunityReplayScenario, OpportunityReplayStatus,
+        OpportunityRouteKind, OpportunityTransferRiskProfile,
     };
     use crate::{
         FeeSchedule, MarketPair, NormalizedQuote, OrderBookSnapshot, PriceLevel, VenueKind,
@@ -1946,6 +2354,120 @@ mod tests {
             .warnings
             .iter()
             .any(|warning| warning.contains("triangular route is discovery-only")));
+    }
+
+    #[test]
+    fn replays_local_scenarios_and_checks_false_positive_expectations() {
+        let btc_usd = MarketPair::new("BTC", "USD").expect("pair should validate");
+        let eth_usd = MarketPair::new("ETH", "USD").expect("pair should validate");
+        let corpus = OpportunityReplayCorpus {
+            id: "corpus-local-opportunities".to_owned(),
+            scenarios: vec![
+                OpportunityReplayScenario {
+                    id: "cex-spread-present".to_owned(),
+                    request: OpportunityDiscoveryRequest {
+                        id: "req-replay-spread".to_owned(),
+                        quotes: vec![
+                            quote("buy-quote", "paper-a", btc_usd.clone(), 99.0, 100.0, 1.0),
+                            quote("sell-quote", "paper-b", btc_usd.clone(), 106.0, 107.0, 1.0),
+                        ],
+                        fee_schedules: vec![
+                            fee("paper-a", btc_usd.clone()),
+                            fee("paper-b", btc_usd),
+                        ],
+                        order_books: Vec::new(),
+                        inventory_limits: Vec::new(),
+                        transfer_risk_profiles: Vec::new(),
+                        config: OpportunityDiscoveryConfig::default(),
+                        now_unix_ms: 10_000,
+                    },
+                    expectation: OpportunityReplayExpectation::require_route(
+                        OpportunityRouteKind::CexCex,
+                    ),
+                },
+                OpportunityReplayScenario {
+                    id: "unprofitable-spread-absent".to_owned(),
+                    request: OpportunityDiscoveryRequest {
+                        id: "req-replay-no-spread".to_owned(),
+                        quotes: vec![
+                            quote("quote-a", "paper-a", eth_usd.clone(), 95.0, 100.0, 1.0),
+                            quote("quote-b", "paper-b", eth_usd.clone(), 94.0, 101.0, 1.0),
+                        ],
+                        fee_schedules: vec![
+                            fee("paper-a", eth_usd.clone()),
+                            fee("paper-b", eth_usd),
+                        ],
+                        order_books: Vec::new(),
+                        inventory_limits: Vec::new(),
+                        transfer_risk_profiles: Vec::new(),
+                        config: OpportunityDiscoveryConfig::default(),
+                        now_unix_ms: 10_000,
+                    },
+                    expectation: OpportunityReplayExpectation::no_candidates(),
+                },
+            ],
+        };
+
+        let report = DeterministicOpportunityEngine::new()
+            .replay_corpus(&corpus)
+            .expect("local replay should run");
+
+        assert_eq!(report.status, OpportunityReplayStatus::Passed);
+        assert_eq!(report.scenario_count, 2);
+        assert_eq!(report.passed_scenarios, 2);
+        assert!(!report.external_calls_performed);
+        assert!(!report.live_execution_performed);
+        assert!(report
+            .scenario_reports
+            .iter()
+            .any(|scenario| scenario.candidate_count == 0));
+    }
+
+    #[test]
+    fn replay_reports_false_positive_when_candidates_are_forbidden() {
+        let pair = MarketPair::new("BTC", "USD").expect("pair should validate");
+        let corpus = OpportunityReplayCorpus {
+            id: "corpus-false-positive".to_owned(),
+            scenarios: vec![OpportunityReplayScenario {
+                id: "forbid-profitable-spread".to_owned(),
+                request: OpportunityDiscoveryRequest {
+                    id: "req-forbidden-spread".to_owned(),
+                    quotes: vec![
+                        quote("buy-quote", "paper-a", pair.clone(), 99.0, 100.0, 1.0),
+                        quote("sell-quote", "paper-b", pair.clone(), 106.0, 107.0, 1.0),
+                    ],
+                    fee_schedules: vec![fee("paper-a", pair.clone()), fee("paper-b", pair)],
+                    order_books: Vec::new(),
+                    inventory_limits: Vec::new(),
+                    transfer_risk_profiles: Vec::new(),
+                    config: OpportunityDiscoveryConfig::default(),
+                    now_unix_ms: 10_000,
+                },
+                expectation: OpportunityReplayExpectation {
+                    min_candidates: 0,
+                    max_candidates: Some(0),
+                    required_route_kinds: Vec::new(),
+                    forbidden_route_kinds: vec![OpportunityRouteKind::CexCex],
+                    min_best_net_profit_quote: None,
+                },
+            }],
+        };
+
+        let report = DeterministicOpportunityEngine::new()
+            .replay_corpus(&corpus)
+            .expect("local replay should run");
+
+        assert_eq!(report.status, OpportunityReplayStatus::Failed);
+        assert_eq!(report.failed_scenarios, 1);
+        assert!(report.scenario_reports[0]
+            .violations
+            .iter()
+            .any(|violation| {
+                violation.code == "OPPORTUNITY_REPLAY_MAX_CANDIDATES_EXCEEDED"
+                    || violation.code == "OPPORTUNITY_REPLAY_FORBIDDEN_ROUTE_PRESENT"
+            }));
+        assert!(!report.external_calls_performed);
+        assert!(!report.live_execution_performed);
     }
 
     fn quote(

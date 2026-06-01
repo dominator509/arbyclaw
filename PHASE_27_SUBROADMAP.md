@@ -2,15 +2,15 @@
 
 ## Phase
 
-Phase 27 - Opportunity Depth, Inventory, and Transfer-Risk Modeling
+Phase 27 - Opportunity Depth, Inventory, Transfer-Risk, and Replay Modeling
 
 ## Status
 
-Implemented for local deterministic opportunity-engine realism. Production, sandbox, and live-market validation remain deferred.
+Implemented for local deterministic opportunity-engine realism and replay validation. Production, sandbox, and live-market validation remain deferred.
 
 ## Goal
 
-Reduce the remaining local opportunity-engine gap by modeling caller-supplied order-book depth, paper inventory caps, transfer-latency risk, and same-venue triangular path discovery inside opportunity discovery without adding live trading, real exchange calls, real RPC calls, signing, broadcasts, withdrawals, bridges, custody, or secrets.
+Reduce the remaining local opportunity-engine gap by modeling caller-supplied order-book depth, paper inventory caps, transfer-latency risk, same-venue triangular path discovery, and local replay/false-positive checks inside opportunity discovery without adding live trading, real exchange calls, real RPC calls, signing, broadcasts, withdrawals, bridges, custody, or secrets.
 
 ## Scope
 
@@ -22,8 +22,9 @@ In scope:
 - Optional transfer-risk profiles with sanitized evidence labels.
 - Deterministic score penalties for transfer latency/settlement risk.
 - Same-venue triangular path discovery over caller-supplied local quotes and fee schedules.
+- Local replay corpus records for deterministic scenario and false-positive checks.
 - Candidate records that expose liquidity and transfer-risk modeling details.
-- Rust tests for depth/inventory sizing, transfer-risk scoring, and triangular discovery.
+- Rust tests for depth/inventory sizing, transfer-risk scoring, triangular discovery, and local replay expectations.
 
 Out of scope:
 
@@ -56,10 +57,12 @@ Out of scope:
 5. Apply transfer-risk score penalties from sanitized local profiles.
 6. Preserve fail-closed validation for stale/future order books and invalid local inputs.
 7. Add same-venue triangular path search from local quote and fee inputs only.
-8. Export new Phase 27 opportunity types.
-9. Surface the refined opportunity-engine scope in CLI status.
-10. Update governance docs, structure validation, and production gap tracking.
-11. Run the standard validation sequence.
+8. Add local replay corpus, scenario, expectation, and report records.
+9. Add false-positive expectation checks without external calls or execution.
+10. Export new Phase 27 opportunity types.
+11. Surface the refined opportunity-engine scope in CLI status.
+12. Update governance docs, structure validation, and production gap tracking.
+13. Run the standard validation sequence.
 
 ## Validation
 
@@ -83,13 +86,14 @@ Met for local deterministic modeling when:
 - Candidate sizing can be capped by supplied paper inventory.
 - Transfer-risk score penalties can be attached from sanitized local profiles.
 - Same-venue triangular paths can be discovered from supplied local quotes and fee schedules.
-- Tests cover depth/inventory caps, transfer-risk penalties, and triangular discovery.
+- Local scenario replay can detect expected candidates and false positives from supplied local records.
+- Tests cover depth/inventory caps, transfer-risk penalties, triangular discovery, and local replay expectations.
 - Standard validation passes.
 
 ## Deferred Work
 
-- Broader triangular route scenario replay and false-positive validation remain future work.
-- Inventory-aware opportunity discovery must still be validated against broader scenario corpora.
+- Larger curated scenario corpora and CI-scale replay remain future work.
+- Inventory-aware opportunity discovery must still be validated against broader historical and deployment-host corpora.
 - External sandbox/live calibration evidence remains missing.
 - Production-host runtime validation remains missing.
 - Live connectors, custody, signing, broadcasts, bridges, and withdrawals remain unavailable.

@@ -37,11 +37,11 @@ The current authoritative baseline is the Phase 18 agentic handoff package snaps
 - Phase 24 — Paper Replay, Calibration, Backtest, and Runtime Validation Boundaries
 - Phase 25 — Paper Audit Journal Integration
 - Phase 26 — Audit Crash, Concurrency, Filesystem, and Disk-Full Validation
-- Phase 27 — Opportunity Depth, Inventory, and Transfer-Risk Modeling
+- Phase 27 — Opportunity Depth, Inventory, Transfer-Risk, and Replay Modeling
 
 ## Current Production Readiness
 
-96% as of Phase 27 governance. Phase 27 adds local deterministic opportunity-engine depth walking, paper inventory caps, transfer-risk penalties, and same-venue triangular path search from caller-supplied local records. Phase 26 also added local audit journal lock/sync append behavior, local crash-like truncation, tamper, concurrency, invalid-filesystem, simulated disk-full fail-closed validation probes, side-effect-free retention/rotation planning, side-effect-free stale-lock restart recheck planning, local deployment-like runtime smoke validation plus a CLI runner, manual non-mutating systemd lifecycle plan/inspect tooling, combined deployment-host runtime report tooling, non-mutating rollback-drill evidence tooling, non-mutating incident-response drill evidence tooling, non-mutating deployment evidence bundle indexing, and non-mutating deployment evidence checklist validation, but broader scenario validation, deployment-host audit validation, physical disk-full evidence, retention/rotation execution, operator-controlled service-manager lifecycle execution evidence, rollback execution evidence, incident-response execution evidence, external sandbox/live calibration evidence, and real deployment-host validation remain environment-limited. This percentage is a governance approximation only and does not imply readiness for live funds or production deployment.
+96% as of Phase 27 governance. Phase 27 adds local deterministic opportunity-engine depth walking, paper inventory caps, transfer-risk penalties, same-venue triangular path search, and local replay/false-positive reports from caller-supplied local records. Phase 26 also added local audit journal lock/sync append behavior, local crash-like truncation, tamper, concurrency, invalid-filesystem, simulated disk-full fail-closed validation probes, side-effect-free retention/rotation planning, side-effect-free stale-lock restart recheck planning, local deployment-like runtime smoke validation plus a CLI runner, manual non-mutating systemd lifecycle plan/inspect tooling, combined deployment-host runtime report tooling, non-mutating rollback-drill evidence tooling, non-mutating incident-response drill evidence tooling, non-mutating deployment evidence bundle indexing, and non-mutating deployment evidence checklist validation, but larger curated scenario-corpus validation, deployment-host audit validation, physical disk-full evidence, retention/rotation execution, operator-controlled service-manager lifecycle execution evidence, rollback execution evidence, incident-response execution evidence, external sandbox/live calibration evidence, and real deployment-host validation remain environment-limited. This percentage is a governance approximation only and does not imply readiness for live funds or production deployment.
 
 ## Non-Negotiable Safety State
 
@@ -208,6 +208,7 @@ You are continuing the ArbyClaw project. Inspect the latest repository checkout 
 - Opportunity engine advanced validation and live-data validation are incomplete.
 - Execution-plan drafts can now be persisted through a typed local checkpoint helper, but planner/adapter durable audit-state lifecycle integration and fail-closed runtime handoff are incomplete.
 - No live execution-adapter submissions.
+- No larger curated opportunity scenario-corpus or external sandbox/live calibration evidence.
 - No real outbound communications integrations or authenticated remote command channels.
 - No real dashboard hosting/authentication.
 - Observability runtime exists only as local model/trait boundaries; no exporters, metrics endpoint, log shipping, or alert delivery exist.
