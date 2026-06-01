@@ -66,7 +66,7 @@ Note: this manifest intentionally excludes `STRUCTURE_MANIFEST.md` itself to avo
 | `crates/arb-core/src/lib.rs` | 13153 | `3e3f5a6ec3ba4126a8be9bc6bc34be335e65186c59b020410c086ef990be863e` |
 | `crates/arb-core/src/market_data.rs` | 22604 | `ccdb1cdbb6c1e658d3dee3e0beeddf8673d316eaed338f60e2960f0f867bfd1a` |
 | `crates/arb-core/src/observability.rs` | 35865 | `c064de61478a66b12d0c5d4b550e92b262e881f98aa2971ca3a23216ddef4a6a` |
-| `crates/arb-core/src/opportunity.rs` | 61661 | `8a967ee8a5f1f7efdda92f87b9e8f8e9df8b2f531714a58fff4a477b8c4b84d3` |
+| `crates/arb-core/src/opportunity.rs` | 61683 | `e3ebd8cee635750696b4c251115572a7e4a5f826d6dc6f699eafbf6f3c2a1d27` |
 | `crates/arb-core/src/packaging.rs` | 35984 | `985578664aa1be60b56d5c125c336bb8fb51baaf03020f46e5d943b08b93a3b9` |
 | `crates/arb-core/src/paper.rs` | 147714 | `85a641eab6bd61e501844c3259ffbe482f13d89aca03c447e875563caa04fdc2` |
 | `crates/arb-core/src/planner.rs` | 40166 | `a4dce0a4861e647a414cac7281773e496e6fbea074b241715e1e01622249edfc` |

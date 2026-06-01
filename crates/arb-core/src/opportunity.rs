@@ -776,7 +776,7 @@ fn walk_depth_average(levels: &[PriceLevel], quantity_base: f64) -> Option<f64> 
             break;
         }
         let consumed = remaining.min(level.quantity_base);
-        notional_quote += consumed * level.price_quote;
+        notional_quote = consumed.mul_add(level.price_quote, notional_quote);
         remaining -= consumed;
     }
     if remaining > 0.000_000_01 {
