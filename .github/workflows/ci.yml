@@ -31,6 +31,8 @@ jobs:
         run: cargo run -p arb-agent -- validate-opportunity-replay
       - name: Opportunity historical fixture CLI validation
         run: cargo run -p arb-agent -- validate-opportunity-historical-fixtures
+      - name: Opportunity planner handoff CLI validation
+        run: cargo run -p arb-agent -- validate-opportunity-planner-handoff
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Locked release build

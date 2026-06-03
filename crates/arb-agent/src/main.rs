@@ -3,14 +3,14 @@
 
 use arb_core::{
     load_config_file, phase27_local_opportunity_historical_fixture_corpus,
-    phase27_local_opportunity_replay_corpus, AgentConfig, BuildIdentity, ConfigError,
-    DeterministicExecutionPlanner, DeterministicOpportunityEngine, ExecutionAdapterConfig,
-    ExecutionPlanner, ExecutionPlannerConfig, ExecutionPlannerRequest, ExecutionScope,
-    FeeAdjustedEdge, FeeEstimate, LiquidityRole, MarketPair, OpportunityCandidate, OpportunityLeg,
-    OpportunityLegSide, OpportunityReplayStatus, OpportunityRouteKind, OpportunityScore,
-    PolicyEngine, RuntimeDeploymentSmokeValidationRequest, RuntimeGracefulShutdownRequest,
-    RuntimeRestartRecoveryDisposition, VenueKind, VenueRef, AGENTIC_HANDOFF_VERSION,
-    AUDIT_DURABILITY_VALIDATION_VERSION, CEX_CONNECTOR_FRAMEWORK_VERSION,
+    phase27_local_opportunity_replay_corpus, validate_opportunity_planner_handoff, AgentConfig,
+    BuildIdentity, ConfigError, DeterministicExecutionPlanner, DeterministicOpportunityEngine,
+    ExecutionAdapterConfig, ExecutionPlanner, ExecutionPlannerConfig, ExecutionPlannerRequest,
+    ExecutionScope, FeeAdjustedEdge, FeeEstimate, LiquidityRole, MarketPair, OpportunityCandidate,
+    OpportunityLeg, OpportunityLegSide, OpportunityPlannerHandoffStatus, OpportunityReplayStatus,
+    OpportunityRouteKind, OpportunityScore, PolicyEngine, RuntimeDeploymentSmokeValidationRequest,
+    RuntimeGracefulShutdownRequest, RuntimeRestartRecoveryDisposition, VenueKind, VenueRef,
+    AGENTIC_HANDOFF_VERSION, AUDIT_DURABILITY_VALIDATION_VERSION, CEX_CONNECTOR_FRAMEWORK_VERSION,
     COMMUNICATIONS_CLI_VERSION, DASHBOARD_BOUNDARY_VERSION, DEFAULT_MARKET_DATA_FRESHNESS_MS,
     DEX_CONNECTOR_FRAMEWORK_VERSION, EXECUTION_ADAPTER_FRAMEWORK_VERSION,
     EXECUTION_PLANNER_VERSION, EXTERNAL_HARDENING_VERSION, OBSERVABILITY_RUNBOOK_VERSION,
@@ -93,6 +93,7 @@ fn run_with_args(args: impl IntoIterator<Item = String>) -> Result<(), AgentCliE
             println!("usage: arb-agent [--config <path>]");
             println!("       arb-agent validate-opportunity-replay");
             println!("       arb-agent validate-opportunity-historical-fixtures");
+            println!("       arb-agent validate-opportunity-planner-handoff");
             println!(
                 "       arb-agent validate-runtime-smoke --config <path> --workspace <fresh-dir>"
             );
@@ -107,6 +108,9 @@ fn run_with_args(args: impl IntoIterator<Item = String>) -> Result<(), AgentCliE
         Some("validate-opportunity-replay") => run_opportunity_replay_validation(),
         Some("validate-opportunity-historical-fixtures") => {
             run_opportunity_historical_fixture_validation()
+        }
+        Some("validate-opportunity-planner-handoff") => {
+            run_opportunity_planner_handoff_validation()
         }
         Some(other) => Err(ConfigError::ReadFailed {
             path: other.to_owned(),
@@ -221,6 +225,68 @@ fn run_opportunity_historical_fixture_validation() -> Result<(), AgentCliError> 
         return Err(AgentCliError::Validation(format!(
             "opportunity historical fixture replay failed windows: {failed}"
         )));
+    }
+
+    Ok(())
+}
+
+fn run_opportunity_planner_handoff_validation() -> Result<(), AgentCliError> {
+    let corpus = phase27_local_opportunity_historical_fixture_corpus()
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let policy = PolicyEngine::from_config(
+        AgentConfig::from_toml_str(PHASE27_PLANNER_HANDOFF_CONFIG)
+            .map_err(|error| AgentCliError::Validation(error.to_string()))?,
+    );
+    let report = validate_opportunity_planner_handoff(&corpus, &policy)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+
+    println!("opportunity-planner-handoff-corpus: {}", report.corpus_id);
+    println!("replay-window-count: {}", report.replay_window_count);
+    println!("replay-scenario-count: {}", report.replay_scenario_count);
+    println!(
+        "skipped-discovery-failures: {}",
+        report.skipped_discovery_failures
+    );
+    println!("discovered-candidates: {}", report.discovered_candidates);
+    println!("planned-candidates: {}", report.planned_candidates);
+    println!("draft-ready-plans: {}", report.draft_ready_plans);
+    println!("policy-denied-plans: {}", report.policy_denied_plans);
+    println!(
+        "failed-planner-handoffs: {}",
+        report.failed_planner_handoffs
+    );
+    println!("total-intents: {}", report.total_intents);
+    println!(
+        "adapter-submission-enabled: {}",
+        report.adapter_submission_enabled
+    );
+    println!(
+        "opportunity-planner-handoff-status: {}",
+        opportunity_planner_handoff_status_label(report.status)
+    );
+    println!(
+        "external-calls-performed: {}",
+        report.external_calls_performed
+    );
+    println!(
+        "live-execution-performed: {}",
+        report.live_execution_performed
+    );
+    println!("production-ready: false");
+
+    if report.adapter_submission_enabled
+        || report.external_calls_performed
+        || report.live_execution_performed
+    {
+        return Err(AgentCliError::Validation(
+            "opportunity planner handoff reported forbidden side effects".to_owned(),
+        ));
+    }
+
+    if report.status != OpportunityPlannerHandoffStatus::Passed {
+        return Err(AgentCliError::Validation(
+            "opportunity planner handoff validation failed".to_owned(),
+        ));
     }
 
     Ok(())
@@ -528,6 +594,40 @@ fn runtime_recovery_disposition_status() -> String {
     )
 }
 
+const PHASE27_PLANNER_HANDOFF_CONFIG: &str = r#"
+[runtime]
+mode = "paper"
+live_execution_enabled = false
+allow_withdrawals = false
+kill_switch_enabled = false
+
+[risk]
+max_single_trade_quote = 1_000_000.0
+max_daily_loss_quote = 100_000.0
+max_open_exposure_quote = 2_000_000.0
+slippage_bps = 100
+gas_fee_cap_quote = 1_000.0
+
+[venues]
+cex_allowlist = ["paper-a", "paper-b", "paper-c", "paper-d"]
+dex_allowlist = ["paper-dex-a", "paper-dex-b", "paper-aggregator-b"]
+chain_allowlist = ["ethereum"]
+asset_allowlist = ["BTC", "ETH", "SOL", "AVAX", "MATIC", "ATOM", "LINK", "ADA", "USD"]
+
+[secrets]
+backend = "disabled"
+exchange_credentials = { source = "disabled" }
+wallet_signer = { source = "disabled" }
+
+[communication]
+cli_enabled = true
+notify_channels = []
+
+[audit]
+enabled = true
+redact_secrets = true
+"#;
+
 #[derive(Debug)]
 enum AgentCliError {
     Config(ConfigError),
@@ -568,12 +668,23 @@ const fn opportunity_replay_status_label(status: OpportunityReplayStatus) -> &'s
     }
 }
 
+const fn opportunity_planner_handoff_status_label(
+    status: OpportunityPlannerHandoffStatus,
+) -> &'static str {
+    match status {
+        OpportunityPlannerHandoffStatus::Passed => "passed",
+        OpportunityPlannerHandoffStatus::Failed => "failed",
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        opportunity_replay_status_label, parse_runtime_smoke_options, recovery_disposition_label,
-        run_opportunity_historical_fixture_validation, run_opportunity_replay_validation,
-        runtime_recovery_disposition_status, OpportunityReplayStatus,
+        opportunity_planner_handoff_status_label, opportunity_replay_status_label,
+        parse_runtime_smoke_options, recovery_disposition_label,
+        run_opportunity_historical_fixture_validation, run_opportunity_planner_handoff_validation,
+        run_opportunity_replay_validation, runtime_recovery_disposition_status,
+        OpportunityPlannerHandoffStatus, OpportunityReplayStatus,
         RuntimeRestartRecoveryDisposition,
     };
 
@@ -634,6 +745,18 @@ mod tests {
     }
 
     #[test]
+    fn opportunity_planner_handoff_status_labels_are_operator_facing() {
+        assert_eq!(
+            opportunity_planner_handoff_status_label(OpportunityPlannerHandoffStatus::Passed),
+            "passed"
+        );
+        assert_eq!(
+            opportunity_planner_handoff_status_label(OpportunityPlannerHandoffStatus::Failed),
+            "failed"
+        );
+    }
+
+    #[test]
     fn opportunity_replay_validation_runs_local_corpus_only() {
         run_opportunity_replay_validation().expect("local opportunity replay should pass");
     }
@@ -642,5 +765,11 @@ mod tests {
     fn opportunity_historical_fixture_validation_runs_local_corpus_only() {
         run_opportunity_historical_fixture_validation()
             .expect("local opportunity historical fixtures should pass");
+    }
+
+    #[test]
+    fn opportunity_planner_handoff_validation_runs_local_corpus_only() {
+        run_opportunity_planner_handoff_validation()
+            .expect("local opportunity planner handoff should pass");
     }
 }

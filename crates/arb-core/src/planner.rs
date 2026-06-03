@@ -4,9 +4,11 @@
 #![allow(clippy::too_many_lines)]
 
 use crate::{
-    DestinationPolicy, ExecutionIntent, ExecutionIntentKind, ExecutionScope, OpportunityCandidate,
-    OpportunityError, OpportunityLeg, OpportunityLegSide, PolicyDecision, PolicyEngine,
-    StateCheckpoint, StateStore, StateStoreError, VenueKind, DEFAULT_MAX_MARKET_DATA_AGE_MS,
+    DestinationPolicy, DeterministicOpportunityEngine, ExecutionIntent, ExecutionIntentKind,
+    ExecutionScope, OpportunityCandidate, OpportunityEngine, OpportunityError,
+    OpportunityHistoricalFixtureCorpus, OpportunityLeg, OpportunityLegSide, PolicyDecision,
+    PolicyEngine, StateCheckpoint, StateStore, StateStoreError, VenueKind,
+    DEFAULT_MAX_MARKET_DATA_AGE_MS,
 };
 use serde::{Deserialize, Serialize};
 use std::{error::Error, fmt};
@@ -466,6 +468,145 @@ pub fn persist_execution_plan_draft_checkpoint(
     Ok(checkpoint)
 }
 
+/// Planner handoff validation status for local opportunity replay candidates.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum OpportunityPlannerHandoffStatus {
+    /// All discoverable local replay candidates produced draft-only plans.
+    Passed,
+    /// One or more discoverable local replay candidates failed planner handoff.
+    Failed,
+}
+
+/// Local opportunity-to-planner handoff validation report.
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct OpportunityPlannerHandoffValidationReport {
+    /// Source historical fixture corpus id.
+    pub corpus_id: String,
+    /// Number of replay windows inspected.
+    pub replay_window_count: usize,
+    /// Number of replay scenarios inspected.
+    pub replay_scenario_count: usize,
+    /// Number of discovery validation failures skipped as fail-closed replay windows.
+    pub skipped_discovery_failures: usize,
+    /// Number of opportunity candidates discovered and offered to the planner.
+    pub discovered_candidates: usize,
+    /// Number of candidates that produced draft-only plans.
+    pub planned_candidates: usize,
+    /// Number of draft plans whose policy preflight was ready.
+    pub draft_ready_plans: usize,
+    /// Number of draft plans with policy-denied metadata.
+    pub policy_denied_plans: usize,
+    /// Number of planner handoff failures.
+    pub failed_planner_handoffs: usize,
+    /// Total draft intents emitted across generated plans.
+    pub total_intents: usize,
+    /// True only if a bug enabled adapter submission.
+    pub adapter_submission_enabled: bool,
+    /// Always false; validation consumes supplied local records only.
+    pub external_calls_performed: bool,
+    /// Always false; validation never submits orders or moves funds.
+    pub live_execution_performed: bool,
+    /// Overall handoff validation status.
+    pub status: OpportunityPlannerHandoffStatus,
+}
+
+/// Validate local opportunity replay candidates can be handed to the draft planner.
+///
+/// This consumes caller-supplied local replay records only. It does not call
+/// exchanges/RPC endpoints, submit adapters, sign, broadcast, withdraw, bridge,
+/// mutate balances, or claim production readiness.
+pub fn validate_opportunity_planner_handoff(
+    corpus: &OpportunityHistoricalFixtureCorpus,
+    policy: &PolicyEngine,
+) -> Result<OpportunityPlannerHandoffValidationReport, ExecutionPlannerError> {
+    corpus
+        .validate()
+        .map_err(opportunity_error_to_planner_error)?;
+
+    let engine = DeterministicOpportunityEngine::new();
+    let planner = DeterministicExecutionPlanner::new();
+    let mut replay_scenario_count = 0;
+    let mut skipped_discovery_failures = 0;
+    let mut discovered_candidates = 0;
+    let mut planned_candidates = 0;
+    let mut draft_ready_plans = 0;
+    let mut policy_denied_plans = 0;
+    let mut failed_planner_handoffs = 0;
+    let mut total_intents = 0;
+    let mut adapter_submission_enabled = false;
+
+    for window in &corpus.replay_windows {
+        for scenario in &window.scenarios {
+            replay_scenario_count += 1;
+            let Ok(candidates) = engine.discover(&scenario.request) else {
+                skipped_discovery_failures += 1;
+                continue;
+            };
+
+            for candidate in candidates {
+                discovered_candidates += 1;
+                let request = ExecutionPlannerRequest {
+                    id: format!("phase27-planner-handoff-{discovered_candidates}"),
+                    strategy_id: "phase27-local-replay-handoff".to_owned(),
+                    candidate,
+                    config: ExecutionPlannerConfig {
+                        requested_scope: ExecutionScope::Paper,
+                        max_plan_legs: 4,
+                        max_total_notional_quote: 1_000_000.0,
+                        default_slippage_bps: 50,
+                        max_market_data_age_ms: DEFAULT_MAX_MARKET_DATA_AGE_MS,
+                        require_policy_preflight: true,
+                    },
+                    default_chain: Some("ethereum".to_owned()),
+                    now_unix_ms: 10_000,
+                };
+
+                match planner.plan(&request, policy) {
+                    Ok(plan) => {
+                        planned_candidates += 1;
+                        total_intents += plan.intents.len();
+                        adapter_submission_enabled |= plan.adapter_submission_enabled;
+                        match plan.status {
+                            ExecutionPlanStatus::DraftReady => draft_ready_plans += 1,
+                            ExecutionPlanStatus::PolicyDeniedDraft => policy_denied_plans += 1,
+                        }
+                    }
+                    Err(_) => failed_planner_handoffs += 1,
+                }
+            }
+        }
+    }
+
+    let status = if discovered_candidates > 0
+        && planned_candidates == discovered_candidates
+        && failed_planner_handoffs == 0
+        && !adapter_submission_enabled
+    {
+        OpportunityPlannerHandoffStatus::Passed
+    } else {
+        OpportunityPlannerHandoffStatus::Failed
+    };
+
+    Ok(OpportunityPlannerHandoffValidationReport {
+        corpus_id: corpus.id.clone(),
+        replay_window_count: corpus.replay_windows.len(),
+        replay_scenario_count,
+        skipped_discovery_failures,
+        discovered_candidates,
+        planned_candidates,
+        draft_ready_plans,
+        policy_denied_plans,
+        failed_planner_handoffs,
+        total_intents,
+        adapter_submission_enabled,
+        external_calls_performed: false,
+        live_execution_performed: false,
+        status,
+    })
+}
+
 /// Execution planner trait boundary.
 pub trait ExecutionPlanner {
     /// Stable planner name for diagnostics and audit records.
@@ -794,6 +935,12 @@ fn collect_opportunity_error(
     }
 }
 
+fn opportunity_error_to_planner_error(error: OpportunityError) -> ExecutionPlannerError {
+    let mut violations = Vec::new();
+    collect_opportunity_error(error, &mut violations);
+    ExecutionPlannerError::ValidationFailed { violations }
+}
+
 fn validate_id(label: &'static str, value: &str, violations: &mut Vec<ExecutionPlannerViolation>) {
     if value.trim().is_empty() {
         violations.push(ExecutionPlannerViolation::new_owned(
@@ -892,13 +1039,15 @@ impl Error for ExecutionPlannerError {}
 #[cfg(test)]
 mod tests {
     use super::{
-        persist_execution_plan_draft_checkpoint, DeterministicExecutionPlanner,
-        ExecutionPlanStatus, ExecutionPlanner, ExecutionPlannerConfig, ExecutionPlannerRequest,
+        persist_execution_plan_draft_checkpoint, validate_opportunity_planner_handoff,
+        DeterministicExecutionPlanner, ExecutionPlanStatus, ExecutionPlanner,
+        ExecutionPlannerConfig, ExecutionPlannerRequest, OpportunityPlannerHandoffStatus,
         EXECUTION_PLANNER_LAST_DRAFT_CHECKPOINT_KEY, EXECUTION_PLANNER_STATE_SUBSYSTEM,
     };
     use crate::{
-        AgentConfig, FeeAdjustedEdge, FeeEstimate, LiquidityRole, MarketPair, OpportunityCandidate,
-        OpportunityLeg, OpportunityLegSide, OpportunityRouteKind, OpportunityScore, PolicyEngine,
+        phase27_local_opportunity_historical_fixture_corpus, AgentConfig, FeeAdjustedEdge,
+        FeeEstimate, LiquidityRole, MarketPair, OpportunityCandidate, OpportunityLeg,
+        OpportunityLegSide, OpportunityRouteKind, OpportunityScore, PolicyEngine,
         SqliteWalStateStore, StateStore, VenueKind, VenueRef,
     };
     use std::{
@@ -926,6 +1075,40 @@ cex_allowlist = ["paper-a", "paper-b"]
 dex_allowlist = []
 chain_allowlist = []
 asset_allowlist = ["BTC", "USD"]
+
+[secrets]
+backend = "disabled"
+exchange_credentials = { source = "disabled" }
+wallet_signer = { source = "disabled" }
+
+[communication]
+cli_enabled = true
+notify_channels = []
+
+[audit]
+enabled = true
+redact_secrets = true
+"#;
+
+    const PHASE27_HANDOFF_CONFIG: &str = r#"
+[runtime]
+mode = "paper"
+live_execution_enabled = false
+allow_withdrawals = false
+kill_switch_enabled = false
+
+[risk]
+max_single_trade_quote = 1_000_000.0
+max_daily_loss_quote = 100_000.0
+max_open_exposure_quote = 2_000_000.0
+slippage_bps = 100
+gas_fee_cap_quote = 1_000.0
+
+[venues]
+cex_allowlist = ["paper-a", "paper-b", "paper-c", "paper-d"]
+dex_allowlist = ["paper-dex-a", "paper-dex-b", "paper-aggregator-b"]
+chain_allowlist = ["ethereum"]
+asset_allowlist = ["BTC", "ETH", "SOL", "AVAX", "MATIC", "ATOM", "LINK", "ADA", "USD"]
 
 [secrets]
 backend = "disabled"
@@ -979,6 +1162,32 @@ redact_secrets = true
             .policy_outcomes
             .iter()
             .all(|outcome| outcome.is_approved()));
+    }
+
+    #[test]
+    fn phase27_replay_candidates_handoff_to_draft_planner_without_submission() {
+        let corpus = phase27_local_opportunity_historical_fixture_corpus()
+            .expect("phase 27 local corpus should build");
+        let policy = PolicyEngine::from_config(
+            AgentConfig::from_toml_str(PHASE27_HANDOFF_CONFIG).expect("config should validate"),
+        );
+
+        let report = validate_opportunity_planner_handoff(&corpus, &policy)
+            .expect("planner handoff validation should run");
+
+        assert_eq!(report.status, OpportunityPlannerHandoffStatus::Passed);
+        assert_eq!(report.replay_window_count, 2);
+        assert_eq!(report.replay_scenario_count, 13);
+        assert_eq!(report.skipped_discovery_failures, 2);
+        assert_eq!(report.discovered_candidates, 12);
+        assert_eq!(report.planned_candidates, 12);
+        assert_eq!(report.failed_planner_handoffs, 0);
+        assert_eq!(report.policy_denied_plans, 0);
+        assert_eq!(report.draft_ready_plans, 12);
+        assert!(report.total_intents > report.planned_candidates);
+        assert!(!report.adapter_submission_enabled);
+        assert!(!report.external_calls_performed);
+        assert!(!report.live_execution_performed);
     }
 
     #[test]

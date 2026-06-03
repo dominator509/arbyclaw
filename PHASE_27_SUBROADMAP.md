@@ -24,8 +24,9 @@ In scope:
 - Same-venue triangular path discovery over caller-supplied local quotes and fee schedules.
 - Local replay corpus records and a built-in local regression corpus for deterministic route, truncation, fail-closed, and false-positive checks.
 - Local historical fixture replay corpus records that aggregate deterministic replay windows without data downloads.
+- Local opportunity-to-planner handoff validation that converts discovered replay candidates into draft-only planner records without adapter submission.
 - Candidate records that expose liquidity and transfer-risk modeling details.
-- Rust tests and local CLI validation commands for depth/inventory sizing, transfer-risk scoring, triangular discovery, DEX/DEX and CEX/DEX route classification, candidate truncation, stale-data fail-closed replay, local replay expectations, the built-in local regression corpus, and the local historical fixture corpus.
+- Rust tests and local CLI validation commands for depth/inventory sizing, transfer-risk scoring, triangular discovery, DEX/DEX and CEX/DEX route classification, candidate truncation, stale-data fail-closed replay, local replay expectations, the built-in local regression corpus, the local historical fixture corpus, and replay-candidate planner handoff.
 
 Out of scope:
 
@@ -63,8 +64,9 @@ Out of scope:
 10. Add a built-in local regression corpus covering cross-venue, no-candidate, triangular, depth/inventory, transfer-risk, DEX/DEX, CEX/DEX, truncation, and fail-closed stale-data scenarios.
 11. Add a local CLI validation command and CI gate for the built-in opportunity replay corpus.
 12. Add a local historical fixture corpus runner over deterministic replay windows and wire it into CLI/CI validation.
-13. Export new Phase 27 opportunity types.
-14. Surface the refined opportunity-engine scope in CLI status.
+13. Add a local replay-candidate planner handoff runner and wire it into CLI/CI validation.
+14. Export new Phase 27 opportunity and planner-handoff types.
+15. Surface the refined opportunity-engine scope in CLI status.
 15. Update governance docs, structure validation, and production gap tracking.
 16. Run the standard validation sequence.
 
@@ -93,9 +95,9 @@ Met for local deterministic modeling when:
 - Local scenario replay can detect expected candidates and false positives from supplied local records.
 - Built-in local regression corpus covers the core Phase 27 opportunity scenarios, route classifications, candidate truncation, and stale-data fail-closed behavior without live data or execution.
 - CLI validation can run the built-in local replay corpus and fail closed on failed scenarios or forbidden side-effect flags.
-- CLI validation can run the local historical fixture corpus and fail closed on failed replay windows or forbidden side-effect flags.
-- CI runs the local replay and local historical fixture CLI validation commands as hard gates.
-- Tests cover depth/inventory caps, transfer-risk penalties, triangular discovery, route classifications, candidate truncation, stale-data fail-closed replay, local replay expectations, the built-in local regression corpus, local historical fixture corpus aggregation, and the CLI validation paths.
+- CLI validation can run the local historical fixture corpus and local opportunity planner handoff and fail closed on failed replay windows, planner handoff failures, adapter-submission flags, or forbidden side-effect flags.
+- CI runs the local replay, local historical fixture, and local opportunity planner handoff CLI validation commands as hard gates.
+- Tests cover depth/inventory caps, transfer-risk penalties, triangular discovery, route classifications, candidate truncation, stale-data fail-closed replay, local replay expectations, the built-in local regression corpus, local historical fixture corpus aggregation, replay-candidate planner handoff, and the CLI validation paths.
 - Standard validation passes.
 
 ## Deferred Work

@@ -173,12 +173,14 @@ pub use testing::{
 };
 
 pub use planner::{
-    persist_execution_plan_draft_checkpoint, DeterministicExecutionPlanner, ExecutionPlanDraft,
-    ExecutionPlanFailureMode, ExecutionPlanStatus, ExecutionPlanStep, ExecutionPlanStepAction,
-    ExecutionPlanner, ExecutionPlannerConfig, ExecutionPlannerError, ExecutionPlannerRequest,
-    ExecutionPlannerViolation, PlannerPolicyOutcome, PlannerPolicyStatus, PlannerPolicyViolation,
-    EXECUTION_PLANNER_LAST_DRAFT_CHECKPOINT_KEY, EXECUTION_PLANNER_STATE_SUBSYSTEM,
-    EXECUTION_PLANNER_VERSION,
+    persist_execution_plan_draft_checkpoint, validate_opportunity_planner_handoff,
+    DeterministicExecutionPlanner, ExecutionPlanDraft, ExecutionPlanFailureMode,
+    ExecutionPlanStatus, ExecutionPlanStep, ExecutionPlanStepAction, ExecutionPlanner,
+    ExecutionPlannerConfig, ExecutionPlannerError, ExecutionPlannerRequest,
+    ExecutionPlannerViolation, OpportunityPlannerHandoffStatus,
+    OpportunityPlannerHandoffValidationReport, PlannerPolicyOutcome, PlannerPolicyStatus,
+    PlannerPolicyViolation, EXECUTION_PLANNER_LAST_DRAFT_CHECKPOINT_KEY,
+    EXECUTION_PLANNER_STATE_SUBSYSTEM, EXECUTION_PLANNER_VERSION,
 };
 
 pub use execution_adapter::{
