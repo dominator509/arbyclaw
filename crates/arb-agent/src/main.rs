@@ -2,14 +2,15 @@
 #![allow(clippy::module_name_repetitions)]
 
 use arb_core::{
-    load_config_file, phase27_local_opportunity_replay_corpus, AgentConfig, BuildIdentity,
-    ConfigError, DeterministicExecutionPlanner, DeterministicOpportunityEngine,
-    ExecutionAdapterConfig, ExecutionPlanner, ExecutionPlannerConfig, ExecutionPlannerRequest,
-    ExecutionScope, FeeAdjustedEdge, FeeEstimate, LiquidityRole, MarketPair, OpportunityCandidate,
-    OpportunityLeg, OpportunityLegSide, OpportunityReplayStatus, OpportunityRouteKind,
-    OpportunityScore, PolicyEngine, RuntimeDeploymentSmokeValidationRequest,
-    RuntimeGracefulShutdownRequest, RuntimeRestartRecoveryDisposition, VenueKind, VenueRef,
-    AGENTIC_HANDOFF_VERSION, AUDIT_DURABILITY_VALIDATION_VERSION, CEX_CONNECTOR_FRAMEWORK_VERSION,
+    load_config_file, phase27_local_opportunity_historical_fixture_corpus,
+    phase27_local_opportunity_replay_corpus, AgentConfig, BuildIdentity, ConfigError,
+    DeterministicExecutionPlanner, DeterministicOpportunityEngine, ExecutionAdapterConfig,
+    ExecutionPlanner, ExecutionPlannerConfig, ExecutionPlannerRequest, ExecutionScope,
+    FeeAdjustedEdge, FeeEstimate, LiquidityRole, MarketPair, OpportunityCandidate, OpportunityLeg,
+    OpportunityLegSide, OpportunityReplayStatus, OpportunityRouteKind, OpportunityScore,
+    PolicyEngine, RuntimeDeploymentSmokeValidationRequest, RuntimeGracefulShutdownRequest,
+    RuntimeRestartRecoveryDisposition, VenueKind, VenueRef, AGENTIC_HANDOFF_VERSION,
+    AUDIT_DURABILITY_VALIDATION_VERSION, CEX_CONNECTOR_FRAMEWORK_VERSION,
     COMMUNICATIONS_CLI_VERSION, DASHBOARD_BOUNDARY_VERSION, DEFAULT_MARKET_DATA_FRESHNESS_MS,
     DEX_CONNECTOR_FRAMEWORK_VERSION, EXECUTION_ADAPTER_FRAMEWORK_VERSION,
     EXECUTION_PLANNER_VERSION, EXTERNAL_HARDENING_VERSION, OBSERVABILITY_RUNBOOK_VERSION,
@@ -91,6 +92,7 @@ fn run_with_args(args: impl IntoIterator<Item = String>) -> Result<(), AgentCliE
         Some("--help" | "-h") => {
             println!("usage: arb-agent [--config <path>]");
             println!("       arb-agent validate-opportunity-replay");
+            println!("       arb-agent validate-opportunity-historical-fixtures");
             println!(
                 "       arb-agent validate-runtime-smoke --config <path> --workspace <fresh-dir>"
             );
@@ -103,6 +105,9 @@ fn run_with_args(args: impl IntoIterator<Item = String>) -> Result<(), AgentCliE
             run_runtime_smoke_validation(&options)
         }
         Some("validate-opportunity-replay") => run_opportunity_replay_validation(),
+        Some("validate-opportunity-historical-fixtures") => {
+            run_opportunity_historical_fixture_validation()
+        }
         Some(other) => Err(ConfigError::ReadFailed {
             path: other.to_owned(),
             reason: "unknown argument; use --help".to_owned(),
@@ -161,6 +166,60 @@ fn run_opportunity_replay_validation() -> Result<(), AgentCliError> {
             .join(", ");
         return Err(AgentCliError::Validation(format!(
             "opportunity replay failed scenarios: {failed}"
+        )));
+    }
+
+    Ok(())
+}
+
+fn run_opportunity_historical_fixture_validation() -> Result<(), AgentCliError> {
+    let corpus = phase27_local_opportunity_historical_fixture_corpus()
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let report = DeterministicOpportunityEngine::new()
+        .replay_historical_fixture_corpus(&corpus)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+
+    println!(
+        "opportunity-historical-fixture-corpus: {}",
+        report.corpus_id
+    );
+    println!("window-count: {}", report.window_count);
+    println!("scenario-count: {}", report.scenario_count);
+    println!("passed-windows: {}", report.passed_windows);
+    println!("failed-windows: {}", report.failed_windows);
+    println!("passed-scenarios: {}", report.passed_scenarios);
+    println!("failed-scenarios: {}", report.failed_scenarios);
+    println!("total-candidates: {}", report.total_candidates);
+    println!(
+        "opportunity-historical-fixture-status: {}",
+        opportunity_replay_status_label(report.status)
+    );
+    println!(
+        "external-calls-performed: {}",
+        report.external_calls_performed
+    );
+    println!(
+        "live-execution-performed: {}",
+        report.live_execution_performed
+    );
+    println!("production-ready: false");
+
+    if report.external_calls_performed || report.live_execution_performed {
+        return Err(AgentCliError::Validation(
+            "opportunity historical fixture replay reported forbidden side effects".to_owned(),
+        ));
+    }
+
+    if report.status != OpportunityReplayStatus::Passed {
+        let failed = report
+            .window_reports
+            .iter()
+            .filter(|window| window.status == OpportunityReplayStatus::Failed)
+            .map(|window| window.corpus_id.as_str())
+            .collect::<Vec<_>>()
+            .join(", ");
+        return Err(AgentCliError::Validation(format!(
+            "opportunity historical fixture replay failed windows: {failed}"
         )));
     }
 
@@ -513,8 +572,9 @@ const fn opportunity_replay_status_label(status: OpportunityReplayStatus) -> &'s
 mod tests {
     use super::{
         opportunity_replay_status_label, parse_runtime_smoke_options, recovery_disposition_label,
-        run_opportunity_replay_validation, runtime_recovery_disposition_status,
-        OpportunityReplayStatus, RuntimeRestartRecoveryDisposition,
+        run_opportunity_historical_fixture_validation, run_opportunity_replay_validation,
+        runtime_recovery_disposition_status, OpportunityReplayStatus,
+        RuntimeRestartRecoveryDisposition,
     };
 
     #[test]
@@ -576,5 +636,11 @@ mod tests {
     #[test]
     fn opportunity_replay_validation_runs_local_corpus_only() {
         run_opportunity_replay_validation().expect("local opportunity replay should pass");
+    }
+
+    #[test]
+    fn opportunity_historical_fixture_validation_runs_local_corpus_only() {
+        run_opportunity_historical_fixture_validation()
+            .expect("local opportunity historical fixtures should pass");
     }
 }

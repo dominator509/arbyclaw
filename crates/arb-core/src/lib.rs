@@ -130,8 +130,10 @@ pub use observability::{
 };
 
 pub use opportunity::{
-    phase27_local_opportunity_replay_corpus, DeterministicOpportunityEngine, OpportunityCandidate,
-    OpportunityDiscoveryConfig, OpportunityDiscoveryRequest, OpportunityEngine, OpportunityError,
+    phase27_local_opportunity_historical_fixture_corpus, phase27_local_opportunity_replay_corpus,
+    DeterministicOpportunityEngine, OpportunityCandidate, OpportunityDiscoveryConfig,
+    OpportunityDiscoveryRequest, OpportunityEngine, OpportunityError,
+    OpportunityHistoricalFixtureCorpus, OpportunityHistoricalFixtureRunReport,
     OpportunityInventoryLimit, OpportunityLeg, OpportunityLegSide, OpportunityLiquidityModel,
     OpportunityReplayCorpus, OpportunityReplayExpectation, OpportunityReplayRouteCount,
     OpportunityReplayRunReport, OpportunityReplayScenario, OpportunityReplayScenarioReport,

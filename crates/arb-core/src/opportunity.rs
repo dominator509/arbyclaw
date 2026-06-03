@@ -1156,6 +1156,85 @@ pub struct OpportunityReplayRunReport {
     pub scenario_reports: Vec<OpportunityReplayScenarioReport>,
 }
 
+/// Local historical fixture corpus made from replay windows.
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct OpportunityHistoricalFixtureCorpus {
+    /// Stable fixture corpus id.
+    pub id: String,
+    /// True only when fixtures are local recorded/synthetic historical records, not live downloads.
+    pub historical_fixture_replay: bool,
+    /// Replay windows in deterministic chronological order.
+    pub replay_windows: Vec<OpportunityReplayCorpus>,
+}
+
+impl OpportunityHistoricalFixtureCorpus {
+    /// Validate historical fixture replay structure before execution.
+    pub fn validate(&self) -> Result<(), OpportunityError> {
+        let mut violations = Vec::new();
+        validate_id(
+            "historical opportunity fixture corpus",
+            &self.id,
+            &mut violations,
+        );
+
+        if !self.historical_fixture_replay {
+            violations.push(OpportunityViolation::new(
+                "OPPORTUNITY_HISTORICAL_FIXTURE_REPLAY_FALSE",
+                "historical fixture corpora must be marked as local fixture replay",
+            ));
+        }
+
+        if self.replay_windows.is_empty() {
+            violations.push(OpportunityViolation::new(
+                "OPPORTUNITY_HISTORICAL_WINDOWS_EMPTY",
+                "at least one historical replay window is required",
+            ));
+        }
+
+        for window in &self.replay_windows {
+            if let Err(OpportunityError::ValidationFailed {
+                violations: window_violations,
+            }) = window.validate()
+            {
+                violations.extend(window_violations);
+            }
+        }
+
+        finish_validation(violations)
+    }
+}
+
+/// Historical opportunity fixture corpus execution report.
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct OpportunityHistoricalFixtureRunReport {
+    /// Fixture corpus id.
+    pub corpus_id: String,
+    /// Number of replay windows executed.
+    pub window_count: usize,
+    /// Number of scenario records executed across all windows.
+    pub scenario_count: usize,
+    /// Number of windows whose scenarios all passed.
+    pub passed_windows: usize,
+    /// Number of windows with at least one failed scenario.
+    pub failed_windows: usize,
+    /// Number of passed scenarios across all windows.
+    pub passed_scenarios: usize,
+    /// Number of failed scenarios across all windows.
+    pub failed_scenarios: usize,
+    /// Total emitted candidates across all windows.
+    pub total_candidates: usize,
+    /// Always false; fixture replay consumes supplied local records only.
+    pub external_calls_performed: bool,
+    /// Always false; fixture replay never submits orders or moves funds.
+    pub live_execution_performed: bool,
+    /// Overall fixture replay status.
+    pub status: OpportunityReplayStatus,
+    /// Per-window replay reports.
+    pub window_reports: Vec<OpportunityReplayRunReport>,
+}
+
 /// Build the Phase 27 local regression corpus for opportunity discovery.
 ///
 /// The corpus is deterministic, non-secret, and entirely local. It covers
@@ -1189,6 +1268,34 @@ pub fn phase27_local_opportunity_replay_corpus() -> Result<OpportunityReplayCorp
             replay_max_candidate_truncation_scenario(link_usd),
             replay_stale_fail_closed_scenario(ada_usd),
         ],
+    })
+}
+
+/// Build the Phase 27 local historical fixture replay corpus.
+///
+/// This is a deterministic local fixture runner over multiple replay windows. It
+/// does not download historical data, call exchanges/RPC endpoints, submit
+/// orders, sign, broadcast, bridge, withdraw, mutate balances, or claim
+/// production readiness.
+pub fn phase27_local_opportunity_historical_fixture_corpus(
+) -> Result<OpportunityHistoricalFixtureCorpus, OpportunityError> {
+    let full_window = phase27_local_opportunity_replay_corpus()?;
+    let mut focused_window = full_window.clone();
+    focused_window.id = "phase-27-local-opportunity-historical-focused-window".to_owned();
+    focused_window.scenarios.retain(|scenario| {
+        matches!(
+            scenario.id.as_str(),
+            "phase27-depth-inventory"
+                | "phase27-transfer-risk"
+                | "phase27-max-candidate-truncation"
+                | "phase27-stale-data-fail-closed"
+        )
+    });
+
+    Ok(OpportunityHistoricalFixtureCorpus {
+        id: "phase-27-local-opportunity-historical-fixtures".to_owned(),
+        historical_fixture_replay: true,
+        replay_windows: vec![full_window, focused_window],
     })
 }
 
@@ -1261,6 +1368,58 @@ impl DeterministicOpportunityEngine {
             live_execution_performed: false,
             status,
             scenario_reports,
+        })
+    }
+
+    /// Execute a local historical fixture replay corpus.
+    ///
+    /// This aggregates deterministic replay windows only. It does not call live
+    /// data sources or perform any execution side effects.
+    pub fn replay_historical_fixture_corpus(
+        &self,
+        corpus: &OpportunityHistoricalFixtureCorpus,
+    ) -> Result<OpportunityHistoricalFixtureRunReport, OpportunityError> {
+        corpus.validate()?;
+
+        let mut window_reports = Vec::with_capacity(corpus.replay_windows.len());
+        let mut scenario_count = 0;
+        let mut passed_windows = 0;
+        let mut passed_scenarios = 0;
+        let mut total_candidates = 0;
+
+        for window in &corpus.replay_windows {
+            let report = self.replay_corpus(window)?;
+            scenario_count += report.scenario_count;
+            passed_scenarios += report.passed_scenarios;
+            total_candidates += report.total_candidates;
+            if report.status == OpportunityReplayStatus::Passed {
+                passed_windows += 1;
+            }
+            window_reports.push(report);
+        }
+
+        let window_count = window_reports.len();
+        let failed_windows = window_count - passed_windows;
+        let failed_scenarios = scenario_count - passed_scenarios;
+        let status = if failed_windows == 0 && failed_scenarios == 0 {
+            OpportunityReplayStatus::Passed
+        } else {
+            OpportunityReplayStatus::Failed
+        };
+
+        Ok(OpportunityHistoricalFixtureRunReport {
+            corpus_id: corpus.id.clone(),
+            window_count,
+            scenario_count,
+            passed_windows,
+            failed_windows,
+            passed_scenarios,
+            failed_scenarios,
+            total_candidates,
+            external_calls_performed: false,
+            live_execution_performed: false,
+            status,
+            window_reports,
         })
     }
 }
@@ -2737,6 +2896,7 @@ impl Error for OpportunityError {}
 #[cfg(test)]
 mod tests {
     use super::{
+        phase27_local_opportunity_historical_fixture_corpus,
         phase27_local_opportunity_replay_corpus, DeterministicOpportunityEngine,
         OpportunityDiscoveryConfig, OpportunityDiscoveryRequest, OpportunityEngine,
         OpportunityInventoryLimit, OpportunityReplayCorpus, OpportunityReplayExpectation,
@@ -3144,6 +3304,35 @@ mod tests {
                     .violations
                     .iter()
                     .any(|violation| violation.code == "OPPORTUNITY_QUOTE_STALE")
+        }));
+    }
+
+    #[test]
+    fn phase27_local_historical_fixture_corpus_executes_multiple_windows() {
+        let corpus = phase27_local_opportunity_historical_fixture_corpus()
+            .expect("phase 27 local historical fixture corpus should build");
+        assert!(corpus.historical_fixture_replay);
+        assert_eq!(corpus.replay_windows.len(), 2);
+
+        let report = DeterministicOpportunityEngine::new()
+            .replay_historical_fixture_corpus(&corpus)
+            .expect("phase 27 historical fixture corpus should replay");
+
+        assert_eq!(report.status, OpportunityReplayStatus::Passed);
+        assert_eq!(report.window_count, 2);
+        assert_eq!(report.passed_windows, 2);
+        assert_eq!(report.failed_windows, 0);
+        assert_eq!(report.scenario_count, 13);
+        assert_eq!(report.passed_scenarios, 13);
+        assert_eq!(report.failed_scenarios, 0);
+        assert_eq!(report.total_candidates, 12);
+        assert!(!report.external_calls_performed);
+        assert!(!report.live_execution_performed);
+        assert!(report.window_reports.iter().any(|window| {
+            window
+                .scenario_reports
+                .iter()
+                .any(|scenario| scenario.scenario_id == "phase27-stale-data-fail-closed")
         }));
     }
 

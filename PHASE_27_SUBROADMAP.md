@@ -23,8 +23,9 @@ In scope:
 - Deterministic score penalties for transfer latency/settlement risk.
 - Same-venue triangular path discovery over caller-supplied local quotes and fee schedules.
 - Local replay corpus records and a built-in local regression corpus for deterministic route, truncation, fail-closed, and false-positive checks.
+- Local historical fixture replay corpus records that aggregate deterministic replay windows without data downloads.
 - Candidate records that expose liquidity and transfer-risk modeling details.
-- Rust tests and a local CLI validation command for depth/inventory sizing, transfer-risk scoring, triangular discovery, DEX/DEX and CEX/DEX route classification, candidate truncation, stale-data fail-closed replay, local replay expectations, and the built-in local regression corpus.
+- Rust tests and local CLI validation commands for depth/inventory sizing, transfer-risk scoring, triangular discovery, DEX/DEX and CEX/DEX route classification, candidate truncation, stale-data fail-closed replay, local replay expectations, the built-in local regression corpus, and the local historical fixture corpus.
 
 Out of scope:
 
@@ -61,10 +62,11 @@ Out of scope:
 9. Add false-positive expectation checks without external calls or execution.
 10. Add a built-in local regression corpus covering cross-venue, no-candidate, triangular, depth/inventory, transfer-risk, DEX/DEX, CEX/DEX, truncation, and fail-closed stale-data scenarios.
 11. Add a local CLI validation command and CI gate for the built-in opportunity replay corpus.
-12. Export new Phase 27 opportunity types.
-13. Surface the refined opportunity-engine scope in CLI status.
-14. Update governance docs, structure validation, and production gap tracking.
-15. Run the standard validation sequence.
+12. Add a local historical fixture corpus runner over deterministic replay windows and wire it into CLI/CI validation.
+13. Export new Phase 27 opportunity types.
+14. Surface the refined opportunity-engine scope in CLI status.
+15. Update governance docs, structure validation, and production gap tracking.
+16. Run the standard validation sequence.
 
 ## Validation
 
@@ -91,14 +93,15 @@ Met for local deterministic modeling when:
 - Local scenario replay can detect expected candidates and false positives from supplied local records.
 - Built-in local regression corpus covers the core Phase 27 opportunity scenarios, route classifications, candidate truncation, and stale-data fail-closed behavior without live data or execution.
 - CLI validation can run the built-in local replay corpus and fail closed on failed scenarios or forbidden side-effect flags.
-- CI runs the local replay CLI validation command as a hard gate.
-- Tests cover depth/inventory caps, transfer-risk penalties, triangular discovery, route classifications, candidate truncation, stale-data fail-closed replay, local replay expectations, the built-in local regression corpus, and the CLI validation path.
+- CLI validation can run the local historical fixture corpus and fail closed on failed replay windows or forbidden side-effect flags.
+- CI runs the local replay and local historical fixture CLI validation commands as hard gates.
+- Tests cover depth/inventory caps, transfer-risk penalties, triangular discovery, route classifications, candidate truncation, stale-data fail-closed replay, local replay expectations, the built-in local regression corpus, local historical fixture corpus aggregation, and the CLI validation paths.
 - Standard validation passes.
 
 ## Deferred Work
 
-- Larger historical/deployment corpora remain future work.
-- Inventory-aware opportunity discovery must still be validated against broader historical and deployment-host corpora.
+- Broader external/deployment corpora remain future work.
+- Inventory-aware opportunity discovery must still be validated against broader external historical data and deployment-host corpora.
 - External sandbox/live calibration evidence remains missing.
 - Production-host runtime validation remains missing.
 - Live connectors, custody, signing, broadcasts, bridges, and withdrawals remain unavailable.
