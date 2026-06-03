@@ -14,7 +14,7 @@ The project is in Phase 27 local deterministic opportunity-depth-inventory-trans
 - `cargo test --workspace` passed with 130 tests across 4 suites, including the local same-venue triangular opportunity discovery test, local opportunity replay/false-positive expectation tests, the built-in Phase 27 local regression corpus replay test, and the CLI opportunity replay validation test.
 - `cargo clippy --workspace --all-targets -- -D warnings` passed.
 - `python3 -m py_compile scripts/validate_structure.py scripts/generate_structure_manifest.py` passed.
-- `cargo run -p arb-agent -- validate-opportunity-replay` passed, reporting 5 scenarios, 5 passed, 0 failed, 4 candidates, `external-calls-performed: false`, `live-execution-performed: false`, and `production-ready: false`.
+- `cargo run -p arb-agent -- validate-opportunity-replay` passed, reporting 9 scenarios, 9 passed, 0 failed, 8 candidates, `external-calls-performed: false`, `live-execution-performed: false`, and `production-ready: false`.
 - `cargo run -p arb-agent -- validate-runtime-smoke --config config.example.toml --workspace target/runtime-smoke-cli-local-2` passed, creating local non-secret audit/state smoke artifacts under the ignored `target/` tree and reporting `production-ready: false`.
 - `python3 scripts/validate_container_example.py` passed after Docker became available; this rebuilt the example image, ran Trivy HIGH/CRITICAL image scanning, enforced no fixable CRITICAL image vulnerabilities, and smoke-ran the container CLI help path.
 - `python3 scripts/validate_systemd_example.py` passed; this checked the committed example systemd unit only, did not install, enable, reload, or start a service, and skipped optional `systemd-analyze verify`.
@@ -49,6 +49,14 @@ The project is in Phase 27 local deterministic opportunity-depth-inventory-trans
 
 ## Latest Gap Tracker Audit
 
+2026-06-03 ArbyClaw expanded Phase 27 local replay corpus audit:
+
+- Expanded the built-in Phase 27 local opportunity replay corpus from 5 to 9 scenarios.
+- Added deterministic local DEX/DEX and CEX/DEX route-classification scenarios, a max-candidate truncation scenario, and a stale-market-data fail-closed scenario.
+- Added replay expectations for expected validation codes so fail-closed stale-data scenarios can pass only when the expected validation rejection occurs.
+- Strengthened the corpus unit test to require all four route kinds, candidate truncation, stale-data violation evidence, and no external calls or live execution.
+- This closes the next built-in local corpus breadth gap only. Larger historical/deployment corpora, external sandbox/live calibration evidence, live exchange/RPC validation, custody/signing, and production-readiness blockers remain open.
+
 2026-06-03 ArbyClaw Phase 27 CI opportunity replay gate audit:
 
 - Added `cargo run -p arb-agent -- validate-opportunity-replay` to the `rust-validation` GitHub Actions job after workspace tests and before clippy/build/hardening gates.
@@ -67,7 +75,7 @@ The project is in Phase 27 local deterministic opportunity-depth-inventory-trans
 
 - Added a built-in Phase 27 local opportunity replay corpus covering profitable CEX/CEX spread discovery, explicit no-candidate false-positive checks, same-venue triangular discovery, depth/inventory sizing, and transfer-risk scoring.
 - Exported replay corpus/report types and the corpus builder from `arb-core`.
-- Added a unit test that replays the built-in corpus through the deterministic opportunity engine and verifies all five scenarios pass without external calls or live execution.
+- Added a unit test that replays the built-in corpus through the deterministic opportunity engine and verifies the original five scenarios pass without external calls or live execution; the corpus has since been expanded to nine scenarios.
 - This closes the local built-in regression corpus gap only. Larger historical/deployment corpora, CI-scale replay, external sandbox/live calibration evidence, live exchange/RPC validation, custody/signing, and production-readiness blockers remain open.
 
 2026-06-01 ArbyClaw Phase 27 local opportunity replay audit:

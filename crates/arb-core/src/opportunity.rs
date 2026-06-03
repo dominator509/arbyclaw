@@ -941,6 +941,8 @@ pub struct OpportunityReplayExpectation {
     pub forbidden_route_kinds: Vec<OpportunityRouteKind>,
     /// Optional minimum best net profit required across emitted candidates.
     pub min_best_net_profit_quote: Option<f64>,
+    /// Validation codes expected when a fail-closed scenario is supposed to reject discovery.
+    pub expected_violation_codes: Vec<String>,
 }
 
 impl OpportunityReplayExpectation {
@@ -953,6 +955,7 @@ impl OpportunityReplayExpectation {
             required_route_kinds: vec![route_kind],
             forbidden_route_kinds: Vec::new(),
             min_best_net_profit_quote: None,
+            expected_violation_codes: Vec::new(),
         }
     }
 
@@ -965,6 +968,20 @@ impl OpportunityReplayExpectation {
             required_route_kinds: Vec::new(),
             forbidden_route_kinds: Vec::new(),
             min_best_net_profit_quote: None,
+            expected_violation_codes: Vec::new(),
+        }
+    }
+
+    /// Expect discovery validation to fail closed with the supplied violation codes.
+    #[must_use]
+    pub fn expect_validation_codes(codes: &[&str]) -> Self {
+        Self {
+            min_candidates: 0,
+            max_candidates: Some(0),
+            required_route_kinds: Vec::new(),
+            forbidden_route_kinds: Vec::new(),
+            min_best_net_profit_quote: None,
+            expected_violation_codes: codes.iter().map(|code| (*code).to_owned()).collect(),
         }
     }
 
@@ -988,6 +1005,10 @@ impl OpportunityReplayExpectation {
                     "min_best_net_profit_quote must be finite and non-negative when supplied",
                 ));
             }
+        }
+
+        for code in &self.expected_violation_codes {
+            validate_id("expected replay violation", code, &mut violations);
         }
 
         finish_validation(violations)
@@ -1080,6 +1101,13 @@ impl OpportunityReplayViolation {
             message: message.into(),
         }
     }
+
+    fn new_owned(code: String, message: impl Into<String>) -> Self {
+        Self {
+            code,
+            message: message.into(),
+        }
+    }
 }
 
 /// Per-scenario local replay report.
@@ -1132,8 +1160,10 @@ pub struct OpportunityReplayRunReport {
 ///
 /// The corpus is deterministic, non-secret, and entirely local. It covers
 /// profitable cross-venue discovery, explicit no-candidate false-positive
-/// checks, same-venue triangular discovery, depth/inventory sizing, and
-/// transfer-risk scoring without live data, external calls, or execution.
+/// checks, same-venue triangular discovery, depth/inventory sizing,
+/// transfer-risk scoring, DEX/DEX and CEX/DEX route classification, candidate
+/// truncation, and stale-data fail-closed behavior without live data, external
+/// calls, or execution.
 pub fn phase27_local_opportunity_replay_corpus() -> Result<OpportunityReplayCorpus, OpportunityError>
 {
     let btc_usd = replay_pair("BTC", "USD")?;
@@ -1141,6 +1171,10 @@ pub fn phase27_local_opportunity_replay_corpus() -> Result<OpportunityReplayCorp
     let btc_eth = replay_pair("BTC", "ETH")?;
     let sol_usd = replay_pair("SOL", "USD")?;
     let avax_usd = replay_pair("AVAX", "USD")?;
+    let matic_usd = replay_pair("MATIC", "USD")?;
+    let atom_usd = replay_pair("ATOM", "USD")?;
+    let link_usd = replay_pair("LINK", "USD")?;
+    let ada_usd = replay_pair("ADA", "USD")?;
 
     Ok(OpportunityReplayCorpus {
         id: "phase-27-local-opportunity-regression".to_owned(),
@@ -1150,6 +1184,10 @@ pub fn phase27_local_opportunity_replay_corpus() -> Result<OpportunityReplayCorp
             replay_triangular_scenario(btc_usd, btc_eth, eth_usd),
             replay_depth_inventory_scenario(sol_usd),
             replay_transfer_risk_scenario(avax_usd),
+            replay_dex_dex_scenario(matic_usd),
+            replay_cex_dex_scenario(atom_usd),
+            replay_max_candidate_truncation_scenario(link_usd),
+            replay_stale_fail_closed_scenario(ada_usd),
         ],
     })
 }
@@ -1677,12 +1715,23 @@ fn replay_error_report(
             .violations()
             .iter()
             .map(|violation| {
-                OpportunityReplayViolation::new(
-                    "OPPORTUNITY_REPLAY_DISCOVERY_FAILED",
-                    format!("{}: {}", violation.code(), violation.message()),
+                OpportunityReplayViolation::new_owned(
+                    violation.code().to_owned(),
+                    violation.message().to_owned(),
                 )
             })
             .collect()
+    };
+    let expected_codes = &scenario.expectation.expected_violation_codes;
+    let status = if !expected_codes.is_empty()
+        && expected_codes.iter().all(|expected| {
+            violations
+                .iter()
+                .any(|violation| &violation.code == expected)
+        }) {
+        OpportunityReplayStatus::Passed
+    } else {
+        OpportunityReplayStatus::Failed
     };
 
     OpportunityReplayScenarioReport {
@@ -1692,7 +1741,7 @@ fn replay_error_report(
         best_candidate_id: None,
         best_score_bps: None,
         best_net_profit_quote: None,
-        status: OpportunityReplayStatus::Failed,
+        status,
         violations,
     }
 }
@@ -1703,6 +1752,16 @@ fn collect_replay_expectation_violations(
     violations: &mut Vec<OpportunityReplayViolation>,
 ) {
     let expectation = &scenario.expectation;
+    if !expectation.expected_violation_codes.is_empty() {
+        violations.push(OpportunityReplayViolation::new(
+            "OPPORTUNITY_REPLAY_EXPECTED_VALIDATION_NOT_TRIGGERED",
+            format!(
+                "scenario {} expected validation codes {:?} but discovery succeeded",
+                scenario.id, expectation.expected_violation_codes
+            ),
+        ));
+    }
+
     if candidates.len() < expectation.min_candidates {
         violations.push(OpportunityReplayViolation::new(
             "OPPORTUNITY_REPLAY_MIN_CANDIDATES_UNMET",
@@ -1980,7 +2039,194 @@ fn replay_transfer_risk_scenario(pair: MarketPair) -> OpportunityReplayScenario 
             required_route_kinds: vec![OpportunityRouteKind::CexCex],
             forbidden_route_kinds: Vec::new(),
             min_best_net_profit_quote: Some(2.0),
+            expected_violation_codes: Vec::new(),
         },
+    }
+}
+
+fn replay_dex_dex_scenario(pair: MarketPair) -> OpportunityReplayScenario {
+    OpportunityReplayScenario {
+        id: "phase27-dex-dex-route".to_owned(),
+        request: OpportunityDiscoveryRequest {
+            id: "phase27-dex-dex-route-request".to_owned(),
+            quotes: vec![
+                replay_quote_with_kind(
+                    "phase27-dex-buy",
+                    "paper-dex-a",
+                    VenueKind::Dex,
+                    pair.clone(),
+                    49.0,
+                    50.0,
+                    2.0,
+                ),
+                replay_quote_with_kind(
+                    "phase27-dex-sell",
+                    "paper-aggregator-b",
+                    VenueKind::Aggregator,
+                    pair.clone(),
+                    57.0,
+                    58.0,
+                    2.0,
+                ),
+            ],
+            fee_schedules: vec![
+                replay_fee_schedule_with_kind("paper-dex-a", VenueKind::Dex, pair.clone()),
+                replay_fee_schedule_with_kind("paper-aggregator-b", VenueKind::Aggregator, pair),
+            ],
+            order_books: Vec::new(),
+            inventory_limits: Vec::new(),
+            transfer_risk_profiles: Vec::new(),
+            config: OpportunityDiscoveryConfig::default(),
+            now_unix_ms: 10_000,
+        },
+        expectation: OpportunityReplayExpectation::require_route(OpportunityRouteKind::DexDex),
+    }
+}
+
+fn replay_cex_dex_scenario(pair: MarketPair) -> OpportunityReplayScenario {
+    OpportunityReplayScenario {
+        id: "phase27-cex-dex-route".to_owned(),
+        request: OpportunityDiscoveryRequest {
+            id: "phase27-cex-dex-route-request".to_owned(),
+            quotes: vec![
+                replay_quote(
+                    "phase27-cex-dex-buy",
+                    "paper-a",
+                    pair.clone(),
+                    20.0,
+                    21.0,
+                    1.5,
+                ),
+                replay_quote_with_kind(
+                    "phase27-cex-dex-sell",
+                    "paper-dex-b",
+                    VenueKind::Dex,
+                    pair.clone(),
+                    26.0,
+                    27.0,
+                    1.5,
+                ),
+            ],
+            fee_schedules: vec![
+                replay_fee_schedule("paper-a", pair.clone()),
+                replay_fee_schedule_with_kind("paper-dex-b", VenueKind::Dex, pair),
+            ],
+            order_books: Vec::new(),
+            inventory_limits: Vec::new(),
+            transfer_risk_profiles: Vec::new(),
+            config: OpportunityDiscoveryConfig::default(),
+            now_unix_ms: 10_000,
+        },
+        expectation: OpportunityReplayExpectation::require_route(OpportunityRouteKind::CexDex),
+    }
+}
+
+fn replay_max_candidate_truncation_scenario(pair: MarketPair) -> OpportunityReplayScenario {
+    OpportunityReplayScenario {
+        id: "phase27-max-candidate-truncation".to_owned(),
+        request: OpportunityDiscoveryRequest {
+            id: "phase27-max-candidate-truncation-request".to_owned(),
+            quotes: vec![
+                replay_quote(
+                    "phase27-truncate-buy-a",
+                    "paper-a",
+                    pair.clone(),
+                    9.0,
+                    10.0,
+                    1.0,
+                ),
+                replay_quote(
+                    "phase27-truncate-buy-b",
+                    "paper-b",
+                    pair.clone(),
+                    9.5,
+                    10.5,
+                    1.0,
+                ),
+                replay_quote(
+                    "phase27-truncate-sell-c",
+                    "paper-c",
+                    pair.clone(),
+                    13.0,
+                    14.0,
+                    1.0,
+                ),
+                replay_quote(
+                    "phase27-truncate-sell-d",
+                    "paper-d",
+                    pair.clone(),
+                    12.5,
+                    13.5,
+                    1.0,
+                ),
+            ],
+            fee_schedules: vec![
+                replay_fee_schedule("paper-a", pair.clone()),
+                replay_fee_schedule("paper-b", pair.clone()),
+                replay_fee_schedule("paper-c", pair.clone()),
+                replay_fee_schedule("paper-d", pair),
+            ],
+            order_books: Vec::new(),
+            inventory_limits: Vec::new(),
+            transfer_risk_profiles: Vec::new(),
+            config: OpportunityDiscoveryConfig {
+                max_candidates: 2,
+                ..OpportunityDiscoveryConfig::default()
+            },
+            now_unix_ms: 10_000,
+        },
+        expectation: OpportunityReplayExpectation {
+            min_candidates: 2,
+            max_candidates: Some(2),
+            required_route_kinds: vec![OpportunityRouteKind::CexCex],
+            forbidden_route_kinds: Vec::new(),
+            min_best_net_profit_quote: Some(2.0),
+            expected_violation_codes: Vec::new(),
+        },
+    }
+}
+
+fn replay_stale_fail_closed_scenario(pair: MarketPair) -> OpportunityReplayScenario {
+    OpportunityReplayScenario {
+        id: "phase27-stale-data-fail-closed".to_owned(),
+        request: OpportunityDiscoveryRequest {
+            id: "phase27-stale-data-fail-closed-request".to_owned(),
+            quotes: vec![
+                replay_quote_with_time(
+                    "phase27-stale-buy",
+                    "paper-a",
+                    pair.clone(),
+                    19.0,
+                    20.0,
+                    1.0,
+                    1_000,
+                ),
+                replay_quote_with_time(
+                    "phase27-stale-sell",
+                    "paper-b",
+                    pair.clone(),
+                    25.0,
+                    26.0,
+                    1.0,
+                    1_000,
+                ),
+            ],
+            fee_schedules: vec![
+                replay_fee_schedule("paper-a", pair.clone()),
+                replay_fee_schedule("paper-b", pair),
+            ],
+            order_books: Vec::new(),
+            inventory_limits: Vec::new(),
+            transfer_risk_profiles: Vec::new(),
+            config: OpportunityDiscoveryConfig {
+                max_market_data_age_ms: 10,
+                ..OpportunityDiscoveryConfig::default()
+            },
+            now_unix_ms: 10_000,
+        },
+        expectation: OpportunityReplayExpectation::expect_validation_codes(&[
+            "OPPORTUNITY_QUOTE_STALE",
+        ]),
     }
 }
 
@@ -2001,20 +2247,83 @@ fn replay_quote(
     ask_price: f64,
     quantity_base: f64,
 ) -> NormalizedQuote {
-    NormalizedQuote {
-        id: id.to_owned(),
-        venue: replay_venue(venue_name),
+    replay_quote_with_kind(
+        id,
+        venue_name,
+        VenueKind::Cex,
         pair,
-        bid: PriceLevel {
+        bid_price,
+        ask_price,
+        quantity_base,
+    )
+}
+
+fn replay_quote_with_kind(
+    id: &str,
+    venue_name: &str,
+    venue_kind: VenueKind,
+    pair: MarketPair,
+    bid_price: f64,
+    ask_price: f64,
+    quantity_base: f64,
+) -> NormalizedQuote {
+    replay_quote_from_parts(
+        id,
+        replay_venue_with_kind(venue_name, venue_kind),
+        pair,
+        PriceLevel {
             price_quote: bid_price,
             quantity_base,
         },
-        ask: PriceLevel {
+        PriceLevel {
             price_quote: ask_price,
             quantity_base,
         },
-        captured_at_unix_ms: 9_500,
-        received_at_unix_ms: 9_500,
+        9_500,
+    )
+}
+
+fn replay_quote_with_time(
+    id: &str,
+    venue_name: &str,
+    pair: MarketPair,
+    bid_price: f64,
+    ask_price: f64,
+    quantity_base: f64,
+    received_at_unix_ms: u64,
+) -> NormalizedQuote {
+    replay_quote_from_parts(
+        id,
+        replay_venue(venue_name),
+        pair,
+        PriceLevel {
+            price_quote: bid_price,
+            quantity_base,
+        },
+        PriceLevel {
+            price_quote: ask_price,
+            quantity_base,
+        },
+        received_at_unix_ms,
+    )
+}
+
+fn replay_quote_from_parts(
+    id: &str,
+    venue: VenueRef,
+    pair: MarketPair,
+    bid: PriceLevel,
+    ask: PriceLevel,
+    received_at_unix_ms: u64,
+) -> NormalizedQuote {
+    NormalizedQuote {
+        id: id.to_owned(),
+        venue,
+        pair,
+        bid,
+        ask,
+        captured_at_unix_ms: received_at_unix_ms,
+        received_at_unix_ms,
     }
 }
 
@@ -2048,8 +2357,16 @@ fn replay_levels(levels: Vec<(f64, f64)>) -> Vec<PriceLevel> {
 }
 
 fn replay_fee_schedule(venue_name: &str, pair: MarketPair) -> FeeSchedule {
+    replay_fee_schedule_with_kind(venue_name, VenueKind::Cex, pair)
+}
+
+fn replay_fee_schedule_with_kind(
+    venue_name: &str,
+    venue_kind: VenueKind,
+    pair: MarketPair,
+) -> FeeSchedule {
     FeeSchedule {
-        venue: replay_venue(venue_name),
+        venue: replay_venue_with_kind(venue_name, venue_kind),
         pair: Some(pair),
         maker_bps: 5.0,
         taker_bps: 10.0,
@@ -2059,8 +2376,12 @@ fn replay_fee_schedule(venue_name: &str, pair: MarketPair) -> FeeSchedule {
 }
 
 fn replay_venue(venue_name: &str) -> VenueRef {
+    replay_venue_with_kind(venue_name, VenueKind::Cex)
+}
+
+fn replay_venue_with_kind(venue_name: &str, venue_kind: VenueKind) -> VenueRef {
     VenueRef {
-        kind: VenueKind::Cex,
+        kind: venue_kind,
         name: venue_name.to_owned(),
     }
 }
@@ -2754,6 +3075,7 @@ mod tests {
                     required_route_kinds: Vec::new(),
                     forbidden_route_kinds: vec![OpportunityRouteKind::CexCex],
                     min_best_net_profit_quote: None,
+                    expected_violation_codes: Vec::new(),
                 },
             }],
         };
@@ -2779,15 +3101,15 @@ mod tests {
     fn phase27_local_regression_corpus_replays_core_opportunity_scenarios() {
         let corpus = phase27_local_opportunity_replay_corpus()
             .expect("phase 27 local corpus should be buildable");
-        assert_eq!(corpus.scenarios.len(), 5);
+        assert_eq!(corpus.scenarios.len(), 9);
 
         let report = DeterministicOpportunityEngine::new()
             .replay_corpus(&corpus)
             .expect("phase 27 local corpus should replay");
 
         assert_eq!(report.status, OpportunityReplayStatus::Passed);
-        assert_eq!(report.scenario_count, 5);
-        assert_eq!(report.passed_scenarios, 5);
+        assert_eq!(report.scenario_count, 9);
+        assert_eq!(report.passed_scenarios, 9);
         assert_eq!(report.failed_scenarios, 0);
         assert!(!report.external_calls_performed);
         assert!(!report.live_execution_performed);
@@ -2800,6 +3122,28 @@ mod tests {
                 .route_counts
                 .iter()
                 .any(|count| count.route_kind == OpportunityRouteKind::Triangular)
+        }));
+        for route_kind in [
+            OpportunityRouteKind::CexCex,
+            OpportunityRouteKind::DexDex,
+            OpportunityRouteKind::CexDex,
+            OpportunityRouteKind::Triangular,
+        ] {
+            assert!(report.scenario_reports.iter().any(|scenario| scenario
+                .route_counts
+                .iter()
+                .any(|count| count.route_kind == route_kind)));
+        }
+        assert!(report.scenario_reports.iter().any(|scenario| {
+            scenario.scenario_id == "phase27-max-candidate-truncation"
+                && scenario.candidate_count == 2
+        }));
+        assert!(report.scenario_reports.iter().any(|scenario| {
+            scenario.scenario_id == "phase27-stale-data-fail-closed"
+                && scenario
+                    .violations
+                    .iter()
+                    .any(|violation| violation.code == "OPPORTUNITY_QUOTE_STALE")
         }));
     }
 

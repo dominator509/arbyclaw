@@ -22,9 +22,9 @@ In scope:
 - Optional transfer-risk profiles with sanitized evidence labels.
 - Deterministic score penalties for transfer latency/settlement risk.
 - Same-venue triangular path discovery over caller-supplied local quotes and fee schedules.
-- Local replay corpus records and a built-in local regression corpus for deterministic scenario and false-positive checks.
+- Local replay corpus records and a built-in local regression corpus for deterministic route, truncation, fail-closed, and false-positive checks.
 - Candidate records that expose liquidity and transfer-risk modeling details.
-- Rust tests and a local CLI validation command for depth/inventory sizing, transfer-risk scoring, triangular discovery, local replay expectations, and the built-in local regression corpus.
+- Rust tests and a local CLI validation command for depth/inventory sizing, transfer-risk scoring, triangular discovery, DEX/DEX and CEX/DEX route classification, candidate truncation, stale-data fail-closed replay, local replay expectations, and the built-in local regression corpus.
 
 Out of scope:
 
@@ -59,7 +59,7 @@ Out of scope:
 7. Add same-venue triangular path search from local quote and fee inputs only.
 8. Add local replay corpus, scenario, expectation, and report records.
 9. Add false-positive expectation checks without external calls or execution.
-10. Add a built-in local regression corpus covering cross-venue, no-candidate, triangular, depth/inventory, and transfer-risk scenarios.
+10. Add a built-in local regression corpus covering cross-venue, no-candidate, triangular, depth/inventory, transfer-risk, DEX/DEX, CEX/DEX, truncation, and fail-closed stale-data scenarios.
 11. Add a local CLI validation command and CI gate for the built-in opportunity replay corpus.
 12. Export new Phase 27 opportunity types.
 13. Surface the refined opportunity-engine scope in CLI status.
@@ -89,10 +89,10 @@ Met for local deterministic modeling when:
 - Transfer-risk score penalties can be attached from sanitized local profiles.
 - Same-venue triangular paths can be discovered from supplied local quotes and fee schedules.
 - Local scenario replay can detect expected candidates and false positives from supplied local records.
-- Built-in local regression corpus covers the core Phase 27 opportunity scenarios without live data or execution.
+- Built-in local regression corpus covers the core Phase 27 opportunity scenarios, route classifications, candidate truncation, and stale-data fail-closed behavior without live data or execution.
 - CLI validation can run the built-in local replay corpus and fail closed on failed scenarios or forbidden side-effect flags.
 - CI runs the local replay CLI validation command as a hard gate.
-- Tests cover depth/inventory caps, transfer-risk penalties, triangular discovery, local replay expectations, the built-in local regression corpus, and the CLI validation path.
+- Tests cover depth/inventory caps, transfer-risk penalties, triangular discovery, route classifications, candidate truncation, stale-data fail-closed replay, local replay expectations, the built-in local regression corpus, and the CLI validation path.
 - Standard validation passes.
 
 ## Deferred Work

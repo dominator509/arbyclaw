@@ -469,7 +469,7 @@ Phase 9 implementation status:
 - Ranking is deterministic and fee-aware.
 - Same-venue triangular arbitrage search is implemented over supplied local quotes and fee schedules only.
 - Local opportunity replay reports can check expected route presence, no-candidate false-positive scenarios, and forbidden route kinds against supplied non-secret records.
-- The built-in local regression corpus exercises cross-venue, no-candidate, triangular, depth/inventory, and transfer-risk scenarios without live data or execution.
+- The built-in local regression corpus exercises cross-venue, no-candidate, triangular, depth/inventory, transfer-risk, DEX/DEX, CEX/DEX, candidate-truncation, and stale-data fail-closed scenarios without live data or execution.
 - `arb-agent validate-opportunity-replay` runs the built-in local corpus and fails closed on failed scenarios or forbidden side-effect flags; CI runs the same command as a hard local replay gate.
 
 Boundaries:
