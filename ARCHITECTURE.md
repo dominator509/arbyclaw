@@ -470,7 +470,7 @@ Phase 9 implementation status:
 - Same-venue triangular arbitrage search is implemented over supplied local quotes and fee schedules only.
 - Local opportunity replay reports can check expected route presence, no-candidate false-positive scenarios, and forbidden route kinds against supplied non-secret records.
 - The built-in local regression corpus exercises cross-venue, no-candidate, triangular, depth/inventory, and transfer-risk scenarios without live data or execution.
-- `arb-agent validate-opportunity-replay` runs the built-in local corpus and fails closed on failed scenarios or forbidden side-effect flags.
+- `arb-agent validate-opportunity-replay` runs the built-in local corpus and fails closed on failed scenarios or forbidden side-effect flags; CI runs the same command as a hard local replay gate.
 
 Boundaries:
 
@@ -971,7 +971,7 @@ Every phase must preserve rollback safety by:
 - Audit journal has local paper report/ledger mutation append/replay wiring, local crash/concurrency/filesystem/simulated-disk-full validation probes, side-effect-free retention planning, and side-effect-free stale-lock restart recheck planning, but deployment-host audit validation, physical disk-full behavior, retention/rotation execution, and service-manager restart execution evidence are missing
 - CEX framework is not connected to real REST/WebSocket APIs or sandboxes
 - DEX/Web3 framework is not connected to real RPC, router, aggregator, signer, simulation, or broadcast adapters
-- Opportunity engine has current workspace Rust validation evidence and now models local caller-supplied order-book depth, paper inventory caps, transfer-risk penalties, same-venue triangular path discovery, local replay/false-positive reports, a built-in local regression corpus, and a local replay CLI validation command, but larger historical/deployment scenario-corpus validation and external sandbox/live calibration remain missing
+- Opportunity engine has current workspace Rust validation evidence and now models local caller-supplied order-book depth, paper inventory caps, transfer-risk penalties, same-venue triangular path discovery, local replay/false-positive reports, a built-in local regression corpus, and a local replay CLI validation command wired into CI, but larger historical/deployment scenario-corpus validation and external sandbox/live calibration remain missing
 - Execution planner and execution-adapter framework have current workspace Rust validation evidence and local audit/state lifecycle wiring, and paper execution has local replay/backtest/audit-journal wiring, but production runtime validation and live/sandbox adapter integration remain missing
 - No runtime deployment validation
 - No production container, systemd, ARM, rollback-drill, or incident-response drill validation

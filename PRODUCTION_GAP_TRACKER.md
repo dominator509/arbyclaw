@@ -49,6 +49,12 @@ The project is in Phase 27 local deterministic opportunity-depth-inventory-trans
 
 ## Latest Gap Tracker Audit
 
+2026-06-03 ArbyClaw Phase 27 CI opportunity replay gate audit:
+
+- Added `cargo run -p arb-agent -- validate-opportunity-replay` to the `rust-validation` GitHub Actions job after workspace tests and before clippy/build/hardening gates.
+- This makes the built-in local opportunity replay corpus a CI-enforced gate for pushed commits and pull requests.
+- This closes the CI-scale gate for the built-in local replay corpus only. Larger historical/deployment corpora, external sandbox/live calibration evidence, live exchange/RPC validation, custody/signing, and production-readiness blockers remain open.
+
 2026-06-01 ArbyClaw Phase 27 opportunity replay CLI audit:
 
 - Added `arb-agent validate-opportunity-replay` to run the built-in Phase 27 local opportunity replay corpus from the CLI.

@@ -60,7 +60,7 @@ Out of scope:
 8. Add local replay corpus, scenario, expectation, and report records.
 9. Add false-positive expectation checks without external calls or execution.
 10. Add a built-in local regression corpus covering cross-venue, no-candidate, triangular, depth/inventory, and transfer-risk scenarios.
-11. Add a local CLI validation command for the built-in opportunity replay corpus.
+11. Add a local CLI validation command and CI gate for the built-in opportunity replay corpus.
 12. Export new Phase 27 opportunity types.
 13. Surface the refined opportunity-engine scope in CLI status.
 14. Update governance docs, structure validation, and production gap tracking.
@@ -91,12 +91,13 @@ Met for local deterministic modeling when:
 - Local scenario replay can detect expected candidates and false positives from supplied local records.
 - Built-in local regression corpus covers the core Phase 27 opportunity scenarios without live data or execution.
 - CLI validation can run the built-in local replay corpus and fail closed on failed scenarios or forbidden side-effect flags.
+- CI runs the local replay CLI validation command as a hard gate.
 - Tests cover depth/inventory caps, transfer-risk penalties, triangular discovery, local replay expectations, the built-in local regression corpus, and the CLI validation path.
 - Standard validation passes.
 
 ## Deferred Work
 
-- Larger historical/deployment corpora and CI-scale replay remain future work.
+- Larger historical/deployment corpora remain future work.
 - Inventory-aware opportunity discovery must still be validated against broader historical and deployment-host corpora.
 - External sandbox/live calibration evidence remains missing.
 - Production-host runtime validation remains missing.

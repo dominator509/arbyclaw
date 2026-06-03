@@ -27,6 +27,8 @@ jobs:
         run: cargo check --workspace
       - name: Tests
         run: cargo test --workspace
+      - name: Opportunity replay CLI validation
+        run: cargo run -p arb-agent -- validate-opportunity-replay
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Locked release build
