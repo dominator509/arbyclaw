@@ -3,23 +3,25 @@
 
 use arb_core::{
     load_config_file, phase27_local_opportunity_historical_fixture_corpus,
-    phase27_local_opportunity_replay_corpus, validate_opportunity_planner_handoff, AgentConfig,
-    BuildIdentity, ConfigError, DeterministicExecutionPlanner, DeterministicOpportunityEngine,
-    ExecutionAdapterConfig, ExecutionPlanner, ExecutionPlannerConfig, ExecutionPlannerRequest,
-    ExecutionScope, FeeAdjustedEdge, FeeEstimate, LiquidityRole, MarketPair, OpportunityCandidate,
-    OpportunityLeg, OpportunityLegSide, OpportunityPlannerHandoffStatus, OpportunityReplayStatus,
-    OpportunityRouteKind, OpportunityScore, PolicyEngine, RuntimeDeploymentSmokeValidationRequest,
-    RuntimeGracefulShutdownRequest, RuntimeRestartRecoveryDisposition, VenueKind, VenueRef,
-    AGENTIC_HANDOFF_VERSION, AUDIT_DURABILITY_VALIDATION_VERSION, CEX_CONNECTOR_FRAMEWORK_VERSION,
-    COMMUNICATIONS_CLI_VERSION, DASHBOARD_BOUNDARY_VERSION, DEFAULT_MARKET_DATA_FRESHNESS_MS,
-    DEX_CONNECTOR_FRAMEWORK_VERSION, EXECUTION_ADAPTER_FRAMEWORK_VERSION,
-    EXECUTION_PLANNER_VERSION, EXTERNAL_HARDENING_VERSION, OBSERVABILITY_RUNBOOK_VERSION,
-    OPPORTUNITY_ENGINE_VERSION, PACKAGING_DEPLOYMENT_VERSION, PAPER_AUDIT_INTEGRATION_VERSION,
-    PAPER_BALANCE_LEDGER_VERSION, PAPER_CONNECTOR_VERSION, PAPER_REALISM_VALIDATION_VERSION,
-    PAPER_REALISTIC_FILL_MODEL_VERSION, RUNTIME_BACKUP_RESTORE_VALIDATION_VERSION,
-    RUNTIME_DEPLOYMENT_SMOKE_VALIDATION_VERSION, RUNTIME_GRACEFUL_SHUTDOWN_VERSION,
-    RUNTIME_LIFECYCLE_VERSION, RUNTIME_RESTART_RECOVERY_VALIDATION_VERSION,
-    SQLITE_WAL_DURABILITY_VERSION, TESTING_BACKTESTING_VERSION,
+    phase27_local_opportunity_replay_corpus, validate_opportunity_planner_handoff_with_trace,
+    AgentConfig, AppendOnlyAuditJournal, BuildIdentity, ConfigError, DeterministicExecutionPlanner,
+    DeterministicOpportunityEngine, ExecutionAdapterConfig, ExecutionPlanner,
+    ExecutionPlannerConfig, ExecutionPlannerRequest, ExecutionScope, FeeAdjustedEdge, FeeEstimate,
+    LiquidityRole, MarketPair, OpportunityCandidate, OpportunityLeg, OpportunityLegSide,
+    OpportunityPlannerHandoffStatus, OpportunityReplayStatus, OpportunityRouteKind,
+    OpportunityScore, PolicyEngine, RuntimeDeploymentSmokeValidationRequest,
+    RuntimeGracefulShutdownRequest, RuntimeRestartRecoveryDisposition, SqliteWalStateStore,
+    VenueKind, VenueRef, AGENTIC_HANDOFF_VERSION, AUDIT_DURABILITY_VALIDATION_VERSION,
+    CEX_CONNECTOR_FRAMEWORK_VERSION, COMMUNICATIONS_CLI_VERSION, DASHBOARD_BOUNDARY_VERSION,
+    DEFAULT_MARKET_DATA_FRESHNESS_MS, DEX_CONNECTOR_FRAMEWORK_VERSION,
+    EXECUTION_ADAPTER_FRAMEWORK_VERSION, EXECUTION_PLANNER_VERSION, EXTERNAL_HARDENING_VERSION,
+    OBSERVABILITY_RUNBOOK_VERSION, OPPORTUNITY_ENGINE_VERSION, PACKAGING_DEPLOYMENT_VERSION,
+    PAPER_AUDIT_INTEGRATION_VERSION, PAPER_BALANCE_LEDGER_VERSION, PAPER_CONNECTOR_VERSION,
+    PAPER_REALISM_VALIDATION_VERSION, PAPER_REALISTIC_FILL_MODEL_VERSION,
+    RUNTIME_BACKUP_RESTORE_VALIDATION_VERSION, RUNTIME_DEPLOYMENT_SMOKE_VALIDATION_VERSION,
+    RUNTIME_GRACEFUL_SHUTDOWN_VERSION, RUNTIME_LIFECYCLE_VERSION,
+    RUNTIME_RESTART_RECOVERY_VALIDATION_VERSION, SQLITE_WAL_DURABILITY_VERSION,
+    TESTING_BACKTESTING_VERSION,
 };
 use std::{
     env,
@@ -237,8 +239,29 @@ fn run_opportunity_planner_handoff_validation() -> Result<(), AgentCliError> {
         AgentConfig::from_toml_str(PHASE27_PLANNER_HANDOFF_CONFIG)
             .map_err(|error| AgentCliError::Validation(error.to_string()))?,
     );
-    let report = validate_opportunity_planner_handoff(&corpus, &policy)
-        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let trace_workspace = opportunity_planner_trace_workspace()?;
+    fs::create_dir_all(&trace_workspace).map_err(|error| {
+        AgentCliError::Validation(format!(
+            "failed to create local opportunity planner trace workspace: {error}"
+        ))
+    })?;
+    let trace_result = (|| {
+        let audit_path = trace_workspace.join("opportunity-candidate-trace.audit.jsonl");
+        let state_path = trace_workspace.join("opportunity-candidate-trace.sqlite3");
+        let mut journal = AppendOnlyAuditJournal::open(&audit_path)
+            .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+        let mut store = SqliteWalStateStore::open(&state_path)
+            .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+        validate_opportunity_planner_handoff_with_trace(&corpus, &policy, &mut journal, &mut store)
+            .map_err(|error| AgentCliError::Validation(error.to_string()))
+    })();
+    let cleanup_result = fs::remove_dir_all(&trace_workspace);
+    let report = trace_result?;
+    cleanup_result.map_err(|error| {
+        AgentCliError::Validation(format!(
+            "failed to remove local opportunity planner trace workspace: {error}"
+        ))
+    })?;
 
     println!("opportunity-planner-handoff-corpus: {}", report.corpus_id);
     println!("replay-window-count: {}", report.replay_window_count);
@@ -254,6 +277,14 @@ fn run_opportunity_planner_handoff_validation() -> Result<(), AgentCliError> {
     println!(
         "failed-planner-handoffs: {}",
         report.failed_planner_handoffs
+    );
+    println!(
+        "candidate-trace-audit-records: {}",
+        report.candidate_trace_audit_records
+    );
+    println!(
+        "candidate-trace-checkpoints: {}",
+        report.candidate_trace_checkpoints
     );
     println!("total-intents: {}", report.total_intents);
     println!(
@@ -280,6 +311,14 @@ fn run_opportunity_planner_handoff_validation() -> Result<(), AgentCliError> {
     {
         return Err(AgentCliError::Validation(
             "opportunity planner handoff reported forbidden side effects".to_owned(),
+        ));
+    }
+
+    if report.candidate_trace_audit_records != report.discovered_candidates
+        || report.candidate_trace_checkpoints != report.discovered_candidates
+    {
+        return Err(AgentCliError::Validation(
+            "opportunity planner handoff did not trace every discovered candidate".to_owned(),
         ));
     }
 
@@ -584,6 +623,16 @@ fn current_unix_ms() -> Result<u64, AgentCliError> {
         .map_err(|error| AgentCliError::Validation(format!("system clock error: {error}")))?;
     u64::try_from(duration.as_millis())
         .map_err(|_| AgentCliError::Validation("system clock value is too large".to_owned()))
+}
+
+fn opportunity_planner_trace_workspace() -> Result<PathBuf, AgentCliError> {
+    let mut path = env::temp_dir();
+    path.push(format!(
+        "arbyclaw-opportunity-planner-trace-{}-{}",
+        std::process::id(),
+        current_unix_ms()?
+    ));
+    Ok(path)
 }
 
 fn runtime_recovery_disposition_status() -> String {

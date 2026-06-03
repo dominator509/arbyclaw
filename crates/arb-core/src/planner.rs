@@ -4,11 +4,11 @@
 #![allow(clippy::too_many_lines)]
 
 use crate::{
-    DestinationPolicy, DeterministicOpportunityEngine, ExecutionIntent, ExecutionIntentKind,
-    ExecutionScope, OpportunityCandidate, OpportunityEngine, OpportunityError,
-    OpportunityHistoricalFixtureCorpus, OpportunityLeg, OpportunityLegSide, PolicyDecision,
-    PolicyEngine, StateCheckpoint, StateStore, StateStoreError, VenueKind,
-    DEFAULT_MAX_MARKET_DATA_AGE_MS,
+    AppendOnlyAuditJournal, AuditEvent, AuditEventKind, AuditRecord, AuditValue, DestinationPolicy,
+    DeterministicOpportunityEngine, ExecutionIntent, ExecutionIntentKind, ExecutionScope,
+    OpportunityCandidate, OpportunityEngine, OpportunityError, OpportunityHistoricalFixtureCorpus,
+    OpportunityLeg, OpportunityLegSide, PolicyDecision, PolicyEngine, StateCheckpoint, StateStore,
+    StateStoreError, VenueKind, DEFAULT_MAX_MARKET_DATA_AGE_MS,
 };
 use serde::{Deserialize, Serialize};
 use std::{error::Error, fmt};
@@ -21,6 +21,12 @@ pub const EXECUTION_PLANNER_STATE_SUBSYSTEM: &str = "execution-planner";
 
 /// State-store key for the latest deterministic execution-plan draft.
 pub const EXECUTION_PLANNER_LAST_DRAFT_CHECKPOINT_KEY: &str = "execution-planner:last-draft";
+
+/// State checkpoint key prefix for local opportunity candidate trace records.
+pub const OPPORTUNITY_CANDIDATE_TRACE_CHECKPOINT_KEY_PREFIX: &str = "opportunity-candidate-trace";
+
+/// State-store subsystem name for local opportunity candidate trace checkpoints.
+pub const OPPORTUNITY_CANDIDATE_TRACE_STATE_SUBSYSTEM: &str = "opportunity-candidate-trace";
 
 /// Conservative execution-planner settings.
 #[derive(Debug, Clone, Copy, PartialEq, Deserialize, Serialize)]
@@ -468,6 +474,153 @@ pub fn persist_execution_plan_draft_checkpoint(
     Ok(checkpoint)
 }
 
+/// Local audit/state trace for one discovered opportunity candidate before planner handoff.
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct OpportunityCandidateTraceRecord {
+    /// Stable trace id.
+    pub id: String,
+    /// Strategy that will receive the planner draft request.
+    pub strategy_id: String,
+    /// Planner request id associated with this candidate handoff.
+    pub planner_request_id: String,
+    /// Candidate captured before planner handoff.
+    pub candidate: OpportunityCandidate,
+    /// Local audit journal sequence for the trace event.
+    pub audit_sequence: u64,
+    /// Local audit journal hash for replay verification.
+    pub audit_record_hash: String,
+    /// Trace timestamp in Unix milliseconds.
+    pub traced_at_unix_ms: u64,
+    /// Always false; this trace never submits to adapters.
+    pub adapter_submission_enabled: bool,
+    /// Always false; this trace consumes supplied local records only.
+    pub external_calls_performed: bool,
+    /// Always false; this trace never submits orders or moves funds.
+    pub live_execution_performed: bool,
+}
+
+/// Local persistence outcome for an opportunity candidate trace.
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct OpportunityCandidateTracePersistence {
+    /// Trace record persisted into state.
+    pub trace: OpportunityCandidateTraceRecord,
+    /// Audit record appended before state checkpoint persistence.
+    pub audit_record: AuditRecord,
+    /// State checkpoint containing the trace record.
+    pub checkpoint: StateCheckpoint,
+}
+
+/// Opportunity candidate trace persistence failure.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OpportunityCandidateTraceError {
+    /// Trace input validation failed.
+    ValidationFailed {
+        /// Validation violations.
+        violations: Vec<ExecutionPlannerViolation>,
+    },
+    /// Audit append failed before state persistence.
+    AuditJournalFailed {
+        /// Sanitized reason.
+        reason: String,
+    },
+    /// State checkpoint persistence failed after audit append.
+    StateStoreFailed {
+        /// Sanitized reason.
+        reason: String,
+    },
+}
+
+/// Persist a local opportunity candidate trace to audit and state before planner handoff.
+///
+/// This writes only caller-supplied local candidate metadata. It never submits
+/// adapters, places orders, calls exchanges/RPCs, signs payloads, broadcasts
+/// transactions, withdraws funds, bridges assets, or stores secrets.
+pub fn persist_opportunity_candidate_trace(
+    journal: &mut AppendOnlyAuditJournal,
+    store: &mut impl StateStore,
+    candidate: &OpportunityCandidate,
+    strategy_id: &str,
+    planner_request_id: &str,
+    occurred_at_unix_ms: u64,
+) -> Result<OpportunityCandidateTracePersistence, OpportunityCandidateTraceError> {
+    validate_candidate_trace_input(
+        candidate,
+        strategy_id,
+        planner_request_id,
+        occurred_at_unix_ms,
+    )?;
+
+    let mut event = AuditEvent::new(
+        format!("opportunity-candidate-trace-{}", candidate.id),
+        AuditEventKind::IntentLifecycle,
+        OPPORTUNITY_CANDIDATE_TRACE_STATE_SUBSYSTEM,
+        "opportunity-planner-handoff",
+        "opportunity candidate traced before draft planner handoff",
+    );
+    event.occurred_at_unix_ms = occurred_at_unix_ms;
+    event = event
+        .with_metadata("candidate_id", AuditValue::Text(candidate.id.clone()))
+        .with_metadata("strategy_id", AuditValue::Text(strategy_id.to_owned()))
+        .with_metadata(
+            "planner_request_id",
+            AuditValue::Text(planner_request_id.to_owned()),
+        )
+        .with_metadata(
+            "route_kind",
+            AuditValue::Text(format!("{:?}", candidate.route_kind)),
+        )
+        .with_metadata(
+            "leg_count",
+            AuditValue::Unsigned(candidate.legs.len() as u64),
+        )
+        .with_metadata("adapter_submission_enabled", AuditValue::Bool(false))
+        .with_metadata("external_calls_performed", AuditValue::Bool(false))
+        .with_metadata("live_execution_performed", AuditValue::Bool(false));
+
+    let audit_record = journal.append_event(event).map_err(|error| {
+        OpportunityCandidateTraceError::AuditJournalFailed {
+            reason: error.to_string(),
+        }
+    })?;
+
+    let trace = OpportunityCandidateTraceRecord {
+        id: opportunity_candidate_trace_key(candidate, planner_request_id),
+        strategy_id: strategy_id.to_owned(),
+        planner_request_id: planner_request_id.to_owned(),
+        candidate: candidate.clone(),
+        audit_sequence: audit_record.sequence,
+        audit_record_hash: audit_record.record_hash.clone(),
+        traced_at_unix_ms: occurred_at_unix_ms,
+        adapter_submission_enabled: false,
+        external_calls_performed: false,
+        live_execution_performed: false,
+    };
+
+    let checkpoint = StateCheckpoint {
+        key: trace.id.clone(),
+        subsystem: OPPORTUNITY_CANDIDATE_TRACE_STATE_SUBSYSTEM.to_owned(),
+        value: serde_json::to_string(&trace).map_err(|error| {
+            OpportunityCandidateTraceError::StateStoreFailed {
+                reason: format!("failed to serialize opportunity candidate trace: {error}"),
+            }
+        })?,
+        updated_at_unix_ms: occurred_at_unix_ms,
+    };
+    store.put_checkpoint(checkpoint.clone()).map_err(|error| {
+        OpportunityCandidateTraceError::StateStoreFailed {
+            reason: error.to_string(),
+        }
+    })?;
+
+    Ok(OpportunityCandidateTracePersistence {
+        trace,
+        audit_record,
+        checkpoint,
+    })
+}
+
 /// Planner handoff validation status for local opportunity replay candidates.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -500,6 +653,10 @@ pub struct OpportunityPlannerHandoffValidationReport {
     pub policy_denied_plans: usize,
     /// Number of planner handoff failures.
     pub failed_planner_handoffs: usize,
+    /// Number of local candidate trace audit records appended before planning.
+    pub candidate_trace_audit_records: usize,
+    /// Number of local candidate trace checkpoints persisted before planning.
+    pub candidate_trace_checkpoints: usize,
     /// Total draft intents emitted across generated plans.
     pub total_intents: usize,
     /// True only if a bug enabled adapter submission.
@@ -521,6 +678,36 @@ pub fn validate_opportunity_planner_handoff(
     corpus: &OpportunityHistoricalFixtureCorpus,
     policy: &PolicyEngine,
 ) -> Result<OpportunityPlannerHandoffValidationReport, ExecutionPlannerError> {
+    validate_opportunity_planner_handoff_internal::<crate::InMemoryStateStore>(corpus, policy, None)
+}
+
+/// Validate local opportunity replay candidates with caller-supplied audit/state trace sinks.
+///
+/// This traced variant appends a local candidate audit event and persists a
+/// local state checkpoint before each draft-only planner handoff.
+pub fn validate_opportunity_planner_handoff_with_trace(
+    corpus: &OpportunityHistoricalFixtureCorpus,
+    policy: &PolicyEngine,
+    journal: &mut AppendOnlyAuditJournal,
+    store: &mut impl StateStore,
+) -> Result<OpportunityPlannerHandoffValidationReport, ExecutionPlannerError> {
+    validate_opportunity_planner_handoff_internal(
+        corpus,
+        policy,
+        Some(OpportunityPlannerTraceSinks { journal, store }),
+    )
+}
+
+struct OpportunityPlannerTraceSinks<'a, S: StateStore> {
+    journal: &'a mut AppendOnlyAuditJournal,
+    store: &'a mut S,
+}
+
+fn validate_opportunity_planner_handoff_internal<S: StateStore>(
+    corpus: &OpportunityHistoricalFixtureCorpus,
+    policy: &PolicyEngine,
+    mut trace_sinks: Option<OpportunityPlannerTraceSinks<'_, S>>,
+) -> Result<OpportunityPlannerHandoffValidationReport, ExecutionPlannerError> {
     corpus
         .validate()
         .map_err(opportunity_error_to_planner_error)?;
@@ -534,6 +721,8 @@ pub fn validate_opportunity_planner_handoff(
     let mut draft_ready_plans = 0;
     let mut policy_denied_plans = 0;
     let mut failed_planner_handoffs = 0;
+    let mut candidate_trace_audit_records = 0;
+    let mut candidate_trace_checkpoints = 0;
     let mut total_intents = 0;
     let mut adapter_submission_enabled = false;
 
@@ -547,9 +736,28 @@ pub fn validate_opportunity_planner_handoff(
 
             for candidate in candidates {
                 discovered_candidates += 1;
+                let planner_request_id = format!("phase27-planner-handoff-{discovered_candidates}");
+                let strategy_id = "phase27-local-replay-handoff";
+                if let Some(sinks) = trace_sinks.as_mut() {
+                    let persisted = persist_opportunity_candidate_trace(
+                        sinks.journal,
+                        sinks.store,
+                        &candidate,
+                        strategy_id,
+                        &planner_request_id,
+                        10_000,
+                    )
+                    .map_err(trace_error_to_planner_error)?;
+                    candidate_trace_audit_records +=
+                        usize::from(persisted.audit_record.sequence > 0);
+                    candidate_trace_checkpoints += usize::from(
+                        persisted.checkpoint.subsystem
+                            == OPPORTUNITY_CANDIDATE_TRACE_STATE_SUBSYSTEM,
+                    );
+                }
                 let request = ExecutionPlannerRequest {
-                    id: format!("phase27-planner-handoff-{discovered_candidates}"),
-                    strategy_id: "phase27-local-replay-handoff".to_owned(),
+                    id: planner_request_id,
+                    strategy_id: strategy_id.to_owned(),
                     candidate,
                     config: ExecutionPlannerConfig {
                         requested_scope: ExecutionScope::Paper,
@@ -599,6 +807,8 @@ pub fn validate_opportunity_planner_handoff(
         draft_ready_plans,
         policy_denied_plans,
         failed_planner_handoffs,
+        candidate_trace_audit_records,
+        candidate_trace_checkpoints,
         total_intents,
         adapter_submission_enabled,
         external_calls_performed: false,
@@ -941,6 +1151,51 @@ fn opportunity_error_to_planner_error(error: OpportunityError) -> ExecutionPlann
     ExecutionPlannerError::ValidationFailed { violations }
 }
 
+fn trace_error_to_planner_error(error: OpportunityCandidateTraceError) -> ExecutionPlannerError {
+    let message = error.to_string();
+    ExecutionPlannerError::ValidationFailed {
+        violations: vec![ExecutionPlannerViolation::new_owned(
+            "OPPORTUNITY_CANDIDATE_TRACE_FAILED",
+            message,
+        )],
+    }
+}
+
+fn validate_candidate_trace_input(
+    candidate: &OpportunityCandidate,
+    strategy_id: &str,
+    planner_request_id: &str,
+    occurred_at_unix_ms: u64,
+) -> Result<(), OpportunityCandidateTraceError> {
+    let mut violations = Vec::new();
+    if let Err(error) = candidate.validate() {
+        collect_opportunity_error(error, &mut violations);
+    }
+    validate_id("strategy_id", strategy_id, &mut violations);
+    validate_id("planner_request_id", planner_request_id, &mut violations);
+    if occurred_at_unix_ms == 0 {
+        violations.push(ExecutionPlannerViolation::new(
+            "OPPORTUNITY_CANDIDATE_TRACE_TIME_ZERO",
+            "candidate trace timestamp must be non-zero",
+        ));
+    }
+    if violations.is_empty() {
+        Ok(())
+    } else {
+        Err(OpportunityCandidateTraceError::ValidationFailed { violations })
+    }
+}
+
+fn opportunity_candidate_trace_key(
+    candidate: &OpportunityCandidate,
+    planner_request_id: &str,
+) -> String {
+    format!(
+        "{}:{}:{}",
+        OPPORTUNITY_CANDIDATE_TRACE_CHECKPOINT_KEY_PREFIX, candidate.id, planner_request_id
+    )
+}
+
 fn validate_id(label: &'static str, value: &str, violations: &mut Vec<ExecutionPlannerViolation>) {
     if value.trim().is_empty() {
         violations.push(ExecutionPlannerViolation::new_owned(
@@ -1036,18 +1291,48 @@ impl fmt::Display for ExecutionPlannerError {
 
 impl Error for ExecutionPlannerError {}
 
+impl fmt::Display for OpportunityCandidateTraceError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::ValidationFailed { violations } => {
+                write!(
+                    formatter,
+                    "opportunity candidate trace validation failed with {} violation(s)",
+                    violations.len()
+                )
+            }
+            Self::AuditJournalFailed { reason } => {
+                write!(
+                    formatter,
+                    "opportunity candidate trace audit failed: {reason}"
+                )
+            }
+            Self::StateStoreFailed { reason } => {
+                write!(
+                    formatter,
+                    "opportunity candidate trace state failed: {reason}"
+                )
+            }
+        }
+    }
+}
+
+impl Error for OpportunityCandidateTraceError {}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        persist_execution_plan_draft_checkpoint, validate_opportunity_planner_handoff,
+        persist_execution_plan_draft_checkpoint, persist_opportunity_candidate_trace,
+        validate_opportunity_planner_handoff, validate_opportunity_planner_handoff_with_trace,
         DeterministicExecutionPlanner, ExecutionPlanStatus, ExecutionPlanner,
-        ExecutionPlannerConfig, ExecutionPlannerRequest, OpportunityPlannerHandoffStatus,
-        EXECUTION_PLANNER_LAST_DRAFT_CHECKPOINT_KEY, EXECUTION_PLANNER_STATE_SUBSYSTEM,
+        ExecutionPlannerConfig, ExecutionPlannerRequest, OpportunityCandidateTraceRecord,
+        OpportunityPlannerHandoffStatus, EXECUTION_PLANNER_LAST_DRAFT_CHECKPOINT_KEY,
+        EXECUTION_PLANNER_STATE_SUBSYSTEM, OPPORTUNITY_CANDIDATE_TRACE_STATE_SUBSYSTEM,
     };
     use crate::{
-        phase27_local_opportunity_historical_fixture_corpus, AgentConfig, FeeAdjustedEdge,
-        FeeEstimate, LiquidityRole, MarketPair, OpportunityCandidate, OpportunityLeg,
-        OpportunityLegSide, OpportunityRouteKind, OpportunityScore, PolicyEngine,
+        phase27_local_opportunity_historical_fixture_corpus, AgentConfig, AppendOnlyAuditJournal,
+        FeeAdjustedEdge, FeeEstimate, LiquidityRole, MarketPair, OpportunityCandidate,
+        OpportunityLeg, OpportunityLegSide, OpportunityRouteKind, OpportunityScore, PolicyEngine,
         SqliteWalStateStore, StateStore, VenueKind, VenueRef,
     };
     use std::{
@@ -1182,12 +1467,115 @@ redact_secrets = true
         assert_eq!(report.discovered_candidates, 12);
         assert_eq!(report.planned_candidates, 12);
         assert_eq!(report.failed_planner_handoffs, 0);
+        assert_eq!(report.candidate_trace_audit_records, 0);
+        assert_eq!(report.candidate_trace_checkpoints, 0);
         assert_eq!(report.policy_denied_plans, 0);
         assert_eq!(report.draft_ready_plans, 12);
         assert!(report.total_intents > report.planned_candidates);
         assert!(!report.adapter_submission_enabled);
         assert!(!report.external_calls_performed);
         assert!(!report.live_execution_performed);
+    }
+
+    #[test]
+    fn opportunity_candidate_trace_persists_audit_then_state() {
+        let audit_path = unique_audit_path("candidate-trace");
+        let state_path = unique_state_path("candidate-trace");
+        let candidate = candidate();
+        let trace_key;
+
+        {
+            let mut journal = AppendOnlyAuditJournal::open(&audit_path).expect("journal opens");
+            let mut store = SqliteWalStateStore::open(&state_path).expect("sqlite opens");
+            let persisted = persist_opportunity_candidate_trace(
+                &mut journal,
+                &mut store,
+                &candidate,
+                "strategy-basic-arb",
+                "planner-request-1",
+                10_000,
+            )
+            .expect("candidate trace should persist");
+
+            assert_eq!(persisted.audit_record.sequence, 1);
+            assert_eq!(
+                persisted.checkpoint.subsystem,
+                OPPORTUNITY_CANDIDATE_TRACE_STATE_SUBSYSTEM
+            );
+            assert_eq!(persisted.trace.candidate, candidate);
+            assert!(!persisted.trace.adapter_submission_enabled);
+            assert!(!persisted.trace.external_calls_performed);
+            assert!(!persisted.trace.live_execution_performed);
+            trace_key = persisted.checkpoint.key.clone();
+        }
+
+        {
+            let journal = AppendOnlyAuditJournal::open(&audit_path).expect("journal replays");
+            assert_eq!(journal.next_sequence(), 2);
+            let store = SqliteWalStateStore::open(&state_path).expect("sqlite reopens");
+            let checkpoint = store
+                .get_checkpoint(&trace_key)
+                .expect("checkpoint should read")
+                .expect("trace checkpoint should exist");
+            let restored: OpportunityCandidateTraceRecord =
+                serde_json::from_str(&checkpoint.value).expect("trace json should parse");
+            assert_eq!(restored.candidate, candidate);
+            assert_eq!(restored.audit_sequence, 1);
+        }
+
+        cleanup_audit_files(&audit_path);
+        cleanup_state_files(&state_path);
+    }
+
+    #[test]
+    fn phase27_traced_replay_candidates_persist_before_draft_planner_handoff() {
+        let audit_path = unique_audit_path("phase27-traced-handoff");
+        let state_path = unique_state_path("phase27-traced-handoff");
+        let corpus = phase27_local_opportunity_historical_fixture_corpus()
+            .expect("phase 27 local corpus should build");
+        let policy = PolicyEngine::from_config(
+            AgentConfig::from_toml_str(PHASE27_HANDOFF_CONFIG).expect("config should validate"),
+        );
+
+        {
+            let mut journal = AppendOnlyAuditJournal::open(&audit_path).expect("journal opens");
+            let mut store = SqliteWalStateStore::open(&state_path).expect("sqlite opens");
+            let report = validate_opportunity_planner_handoff_with_trace(
+                &corpus,
+                &policy,
+                &mut journal,
+                &mut store,
+            )
+            .expect("traced planner handoff should run");
+
+            assert_eq!(report.status, OpportunityPlannerHandoffStatus::Passed);
+            assert_eq!(report.discovered_candidates, 12);
+            assert_eq!(report.planned_candidates, 12);
+            assert_eq!(report.candidate_trace_audit_records, 12);
+            assert_eq!(report.candidate_trace_checkpoints, 12);
+            assert!(!report.adapter_submission_enabled);
+            assert!(!report.external_calls_performed);
+            assert!(!report.live_execution_performed);
+        }
+
+        {
+            let journal = AppendOnlyAuditJournal::open(&audit_path).expect("journal replays");
+            assert_eq!(journal.next_sequence(), 13);
+            let store = SqliteWalStateStore::open(&state_path).expect("sqlite reopens");
+            let checkpoint = store
+                .get_checkpoint(
+                    "opportunity-candidate-trace:opp:cex-cex:BTC/USD:paper-a:paper-b:phase27-cex-spread-request:phase27-planner-handoff-1",
+                )
+                .expect("checkpoint should read")
+                .expect("first trace checkpoint should exist");
+            let restored: OpportunityCandidateTraceRecord =
+                serde_json::from_str(&checkpoint.value).expect("trace json should parse");
+            assert_eq!(restored.planner_request_id, "phase27-planner-handoff-1");
+            assert_eq!(restored.audit_sequence, 1);
+        }
+
+        cleanup_audit_files(&audit_path);
+        cleanup_state_files(&state_path);
     }
 
     #[test]
@@ -1333,9 +1721,27 @@ redact_secrets = true
         path
     }
 
+    fn unique_audit_path(label: &str) -> PathBuf {
+        let mut path = env::temp_dir();
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system clock should be after unix epoch")
+            .as_nanos();
+        path.push(format!(
+            "arbyclaw-planner-{label}-{}-{nanos}.audit.jsonl",
+            process::id()
+        ));
+        path
+    }
+
     fn cleanup_state_files(path: &Path) {
         for suffix in ["", "-wal", "-shm"] {
             let _ = fs::remove_file(PathBuf::from(format!("{}{suffix}", path.display())));
         }
+    }
+
+    fn cleanup_audit_files(path: &Path) {
+        let _ = fs::remove_file(path);
+        let _ = fs::remove_file(PathBuf::from(format!("{}.lock", path.display())));
     }
 }

@@ -173,14 +173,18 @@ pub use testing::{
 };
 
 pub use planner::{
-    persist_execution_plan_draft_checkpoint, validate_opportunity_planner_handoff,
+    persist_execution_plan_draft_checkpoint, persist_opportunity_candidate_trace,
+    validate_opportunity_planner_handoff, validate_opportunity_planner_handoff_with_trace,
     DeterministicExecutionPlanner, ExecutionPlanDraft, ExecutionPlanFailureMode,
     ExecutionPlanStatus, ExecutionPlanStep, ExecutionPlanStepAction, ExecutionPlanner,
     ExecutionPlannerConfig, ExecutionPlannerError, ExecutionPlannerRequest,
-    ExecutionPlannerViolation, OpportunityPlannerHandoffStatus,
-    OpportunityPlannerHandoffValidationReport, PlannerPolicyOutcome, PlannerPolicyStatus,
-    PlannerPolicyViolation, EXECUTION_PLANNER_LAST_DRAFT_CHECKPOINT_KEY,
-    EXECUTION_PLANNER_STATE_SUBSYSTEM, EXECUTION_PLANNER_VERSION,
+    ExecutionPlannerViolation, OpportunityCandidateTraceError,
+    OpportunityCandidateTracePersistence, OpportunityCandidateTraceRecord,
+    OpportunityPlannerHandoffStatus, OpportunityPlannerHandoffValidationReport,
+    PlannerPolicyOutcome, PlannerPolicyStatus, PlannerPolicyViolation,
+    EXECUTION_PLANNER_LAST_DRAFT_CHECKPOINT_KEY, EXECUTION_PLANNER_STATE_SUBSYSTEM,
+    EXECUTION_PLANNER_VERSION, OPPORTUNITY_CANDIDATE_TRACE_CHECKPOINT_KEY_PREFIX,
+    OPPORTUNITY_CANDIDATE_TRACE_STATE_SUBSYSTEM,
 };
 
 pub use execution_adapter::{
