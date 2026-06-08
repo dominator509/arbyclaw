@@ -3,15 +3,23 @@
 
 use crate::{
     persist_execution_adapter_run_checkpoint, persist_execution_plan_draft_checkpoint,
-    validate_audit_journal_durability, AppendOnlyAuditJournal, AuditError, AuditEvent,
-    AuditEventKind, AuditValue, DeterministicExecutionAdapterBoundary, ExecutionAdapter,
-    ExecutionAdapterConfig, ExecutionAdapterError, ExecutionAdapterRequest,
-    ExecutionAdapterRunRecord, ExecutionPlanDraft, ExecutionScope, PolicyEngine,
-    SqliteWalStateStore, StateCheckpoint, StateStore, StateStoreError,
-    EXECUTION_ADAPTER_LAST_RUN_CHECKPOINT_KEY, EXECUTION_PLANNER_LAST_DRAFT_CHECKPOINT_KEY,
+    phase27_local_opportunity_historical_fixture_corpus, validate_audit_journal_durability,
+    validate_opportunity_candidate_trace_restart_recovery, AppendOnlyAuditJournal, AuditError,
+    AuditEvent, AuditEventKind, AuditValue, DeterministicExecutionAdapterBoundary,
+    ExecutionAdapter, ExecutionAdapterConfig, ExecutionAdapterError, ExecutionAdapterRequest,
+    ExecutionAdapterRunRecord, ExecutionPlanDraft, ExecutionScope,
+    OpportunityCandidateTraceRecoveryReport, PolicyEngine, SqliteWalStateStore, StateCheckpoint,
+    StateStore, StateStoreError, EXECUTION_ADAPTER_LAST_RUN_CHECKPOINT_KEY,
+    EXECUTION_PLANNER_LAST_DRAFT_CHECKPOINT_KEY,
 };
 use serde::{Deserialize, Serialize};
-use std::{error::Error, fmt, fs, path::Path};
+use std::{
+    error::Error,
+    fmt, fs,
+    path::{Path, PathBuf},
+    process,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 /// Stable runtime lifecycle version for audit, state, and handoff surfaces.
 pub const RUNTIME_LIFECYCLE_VERSION: &str = "phase-runtime-local-lifecycle-v1";
@@ -261,8 +269,32 @@ pub struct RuntimeRestartRecoveryValidationReport {
     pub external_submission_performed: bool,
     /// Whether any live execution was performed. Always false in this boundary.
     pub live_execution_performed: bool,
+    /// Optional local opportunity candidate trace recovery summary from a phase-27 corpus replay.
+    pub opportunity_trace_recovery: Option<RuntimeOpportunityTraceRecoverySummary>,
     /// Whether this local validation approves production readiness.
     pub production_ready: bool,
+}
+
+/// Runtime opportunity trace recovery summary.
+///
+/// This summary records only local recovered-checkpoint accounting and avoids
+/// filesystem paths, audit payloads, checkpoint values, secrets, and embedded
+/// evidence artifacts.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RuntimeOpportunityTraceRecoverySummary {
+    /// Local opportunity corpus id used for this trace recovery pass.
+    pub corpus_id: String,
+    /// Number of discovered trace checkpoints expected.
+    pub discovered_candidates: u64,
+    /// Number of trace audit records replayed.
+    pub audit_trace_records_replayed: u64,
+    /// Number of trace checkpoints recovered from local state.
+    pub recovered_trace_checkpoints: u64,
+    /// Number of trace checkpoints still missing from local state.
+    pub missing_trace_checkpoints: u64,
+    /// Whether all expected trace recovery checks passed.
+    pub trace_recovery_validated: bool,
 }
 
 /// Non-secret result of a local deployment-like runtime smoke validation pass.
@@ -289,6 +321,8 @@ pub struct RuntimeDeploymentSmokeValidationReport {
     pub restart_audit_records_replayed: u64,
     /// Number of audit records replayed from backup/restore validation.
     pub backup_audit_records_replayed: u64,
+    /// Opportunity trace recovery summary from a phase-27 local corpus replay.
+    pub opportunity_trace_recovery: Option<RuntimeOpportunityTraceRecoverySummary>,
     /// Local recovery disposition for operator review.
     pub recovery_disposition: RuntimeRestartRecoveryDisposition,
     /// Whether any service manager action was performed. Always false here.
@@ -376,6 +410,42 @@ impl RuntimeRestartRecoveryValidationReport {
                 reason: "runtime restart recovery validation must not perform external submission or live execution".to_owned(),
             });
         }
+        if let Some(opportunity_trace_recovery) = &self.opportunity_trace_recovery {
+            if !opportunity_trace_recovery.trace_recovery_validated {
+                return Err(RuntimeLifecycleError::ValidationFailed {
+                    reason:
+                        "runtime restart recovery requires valid opportunity trace recovery summary"
+                            .to_owned(),
+                });
+            }
+            if opportunity_trace_recovery.discovered_candidates == 0 {
+                return Err(RuntimeLifecycleError::ValidationFailed {
+                    reason:
+                        "runtime restart recovery requires non-empty opportunity trace recovery"
+                            .to_owned(),
+                });
+            }
+            if opportunity_trace_recovery.recovered_trace_checkpoints
+                > opportunity_trace_recovery.discovered_candidates
+            {
+                return Err(RuntimeLifecycleError::ValidationFailed {
+                    reason:
+                        "opportunity trace recovery cannot recover more checkpoints than discovered"
+                            .to_owned(),
+                });
+            }
+            if opportunity_trace_recovery
+                .recovered_trace_checkpoints
+                .saturating_add(opportunity_trace_recovery.missing_trace_checkpoints)
+                != opportunity_trace_recovery.discovered_candidates
+            {
+                return Err(RuntimeLifecycleError::ValidationFailed {
+                    reason:
+                        "opportunity trace recovery must account for all discovered checkpoints"
+                            .to_owned(),
+                });
+            }
+        }
         if self.production_ready {
             return Err(RuntimeLifecycleError::ValidationFailed {
                 reason: "runtime restart recovery validation must not approve production readiness"
@@ -429,6 +499,23 @@ impl RuntimeDeploymentSmokeValidationReport {
             return Err(RuntimeLifecycleError::ValidationFailed {
                 reason: "runtime deployment smoke must not approve production readiness".to_owned(),
             });
+        }
+        match &self.opportunity_trace_recovery {
+            Some(trace_recovery) => {
+                if !trace_recovery.trace_recovery_validated {
+                    return Err(RuntimeLifecycleError::ValidationFailed {
+                        reason:
+                            "runtime deployment smoke requires opportunity trace recovery validation"
+                                .to_owned(),
+                    });
+                }
+            }
+            None => {
+                return Err(RuntimeLifecycleError::ValidationFailed {
+                    reason: "runtime deployment smoke requires opportunity trace recovery summary"
+                        .to_owned(),
+                });
+            }
         }
         Ok(())
     }
@@ -817,12 +904,87 @@ pub fn validate_local_runtime_restart_recovery(
         graceful_shutdown_checkpoint_recovered,
         recovery_disposition,
         local_review_ready: plan_checkpoint_recovered && adapter_checkpoint_recovered,
+        opportunity_trace_recovery: None,
         external_submission_performed: false,
         live_execution_performed: false,
         production_ready: false,
     };
     report.validate()?;
     Ok(report)
+}
+
+fn runtime_opportunity_trace_recovery_summary(
+    report: OpportunityCandidateTraceRecoveryReport,
+) -> Result<RuntimeOpportunityTraceRecoverySummary, RuntimeLifecycleError> {
+    let discovered_candidates = u64::try_from(report.handoff_report.discovered_candidates)
+        .map_err(|_| RuntimeLifecycleError::ValidationFailed {
+            reason: "opportunity trace recovery discovered candidates count overflowed".to_owned(),
+        })?;
+    let audit_trace_records_replayed =
+        u64::try_from(report.audit_replay_records).map_err(|_| {
+            RuntimeLifecycleError::ValidationFailed {
+                reason: "opportunity trace audit replay records count overflowed".to_owned(),
+            }
+        })?;
+    let recovered_trace_checkpoints =
+        u64::try_from(report.recovered_trace_checkpoints).map_err(|_| {
+            RuntimeLifecycleError::ValidationFailed {
+                reason: "opportunity trace recovered checkpoint count overflowed".to_owned(),
+            }
+        })?;
+    let missing_trace_checkpoints =
+        u64::try_from(report.missing_trace_checkpoints.len()).map_err(|_| {
+            RuntimeLifecycleError::ValidationFailed {
+                reason: "opportunity trace missing checkpoint count overflowed".to_owned(),
+            }
+        })?;
+
+    Ok(RuntimeOpportunityTraceRecoverySummary {
+        corpus_id: report.corpus_id,
+        discovered_candidates,
+        audit_trace_records_replayed,
+        recovered_trace_checkpoints,
+        missing_trace_checkpoints,
+        trace_recovery_validated: report.trace_recovery_validated,
+    })
+}
+
+fn validate_runtime_opportunity_trace_recovery(
+    audit_path: &Path,
+    state_path: &Path,
+    policy: &PolicyEngine,
+) -> Result<RuntimeOpportunityTraceRecoverySummary, RuntimeLifecycleError> {
+    let corpus = phase27_local_opportunity_historical_fixture_corpus().map_err(|error| {
+        RuntimeLifecycleError::ValidationFailed {
+            reason: format!("failed to load local opportunity trace recovery corpus: {error}"),
+        }
+    })?;
+    let trace_report = validate_opportunity_candidate_trace_restart_recovery(
+        &corpus, policy, audit_path, state_path,
+    )
+    .map_err(|error| RuntimeLifecycleError::ValidationFailed {
+        reason: format!("opportunity trace recovery validation failed: {error}"),
+    })?;
+    runtime_opportunity_trace_recovery_summary(trace_report)
+}
+
+fn runtime_temp_path(prefix: &str) -> Result<PathBuf, RuntimeLifecycleError> {
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|error| RuntimeLifecycleError::ValidationFailed {
+            reason: format!("failed to construct temporary trace-recovery path: {error}"),
+        })?
+        .as_nanos();
+    Ok(std::env::temp_dir().join(format!("{prefix}-{}-{nanos}", process::id())))
+}
+
+fn cleanup_runtime_trace_recovery_paths(audit_path: &Path, state_path: &Path) {
+    let _ = fs::remove_file(audit_path);
+    let _ = fs::remove_file(state_path);
+    for suffix in ["", "-wal", "-shm"] {
+        let related = format!("{}{}", state_path.display(), suffix);
+        let _ = fs::remove_file(related);
+    }
 }
 
 /// Run a local deployment-like runtime smoke validation sequence.
@@ -876,7 +1038,22 @@ pub fn validate_local_runtime_deployment_smoke(
         backup_audit_path,
         backup_state_path,
     )?;
-    let restart_report = validate_local_runtime_restart_recovery(audit_path, state_path)?;
+    let mut restart_report = validate_local_runtime_restart_recovery(audit_path, state_path)?;
+    let opportunity_trace_audit_path =
+        runtime_temp_path("arbyclaw-runtime-opportunity-trace-recovery-audit")?;
+    let opportunity_trace_state_path =
+        runtime_temp_path("arbyclaw-runtime-opportunity-trace-state")?;
+    let opportunity_trace_recovery = validate_runtime_opportunity_trace_recovery(
+        &opportunity_trace_audit_path,
+        &opportunity_trace_state_path,
+        policy,
+    )?;
+    restart_report.opportunity_trace_recovery = Some(opportunity_trace_recovery);
+    restart_report.validate()?;
+    cleanup_runtime_trace_recovery_paths(
+        &opportunity_trace_audit_path,
+        &opportunity_trace_state_path,
+    );
     let audit_report = validate_audit_journal_durability(
         audit_validation_workspace,
         request.validated_at_unix_ms,
@@ -904,6 +1081,7 @@ pub fn validate_local_runtime_deployment_smoke(
             && audit_report.disk_full_failure_validated,
         restart_audit_records_replayed: restart_report.audit_records_replayed,
         backup_audit_records_replayed: backup_report.audit_records_replayed,
+        opportunity_trace_recovery: restart_report.opportunity_trace_recovery.clone(),
         recovery_disposition: restart_report.recovery_disposition,
         service_manager_action_performed: false,
         external_submission_performed: false,
@@ -1618,6 +1796,16 @@ redact_secrets = true
         assert!(report.audit_durability_validated);
         assert_eq!(report.restart_audit_records_replayed, 5);
         assert_eq!(report.backup_audit_records_replayed, 5);
+        let opportunity_trace_recovery = report
+            .opportunity_trace_recovery
+            .expect("runtime smoke should include opportunity trace recovery");
+        assert!(opportunity_trace_recovery.trace_recovery_validated);
+        assert!(opportunity_trace_recovery.discovered_candidates > 0);
+        assert_eq!(
+            opportunity_trace_recovery.discovered_candidates,
+            opportunity_trace_recovery.recovered_trace_checkpoints
+                + opportunity_trace_recovery.missing_trace_checkpoints
+        );
         assert_eq!(
             report.recovery_disposition,
             RuntimeRestartRecoveryDisposition::ReadyForLocalReview
