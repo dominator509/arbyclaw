@@ -22,6 +22,11 @@ Introduce a fail-closed execution-adapter framework that consumes Phase 10 `Exec
 - Execution-adapter trait boundary.
 - Deterministic no-network adapter boundary implementation.
 - Policy revalidation before any modeled adapter action.
+- Durable adapter-attempt policy-revalidation evidence and local kill-switch denial coverage.
+- Duplicate planner/adapter lifecycle identifier rejection before local audit or checkpoint persistence.
+- Reconciliation replay before modeled-fill paper ledger settlement.
+- Duplicate modeled-fill settlement rejection after local ledger checkpoint reopen.
+- Local partial/no-fill recovery planning with sanitized audit and SQLite WAL checkpoint persistence, without submitting cancels, hedges, orders, swaps, transactions, broadcasts, withdrawals, or bridges.
 - Fail-closed rejection of live scope and adapter submission.
 - Structure validator update requiring Phase 11 files.
 - Governance documentation updates.
@@ -73,7 +78,12 @@ Introduce a fail-closed execution-adapter framework that consumes Phase 10 `Exec
 - Adapter records must explicitly show external submission is disabled.
 - Live scope must be rejected fail-closed.
 - Policy must be re-evaluated at adapter boundary.
+- Adapter attempts must record policy revalidation before local audit or checkpoint persistence.
 - Planner policy outcomes must not be blindly trusted.
+- Duplicate draft intent/policy-outcome ids and duplicate adapter attempt/fill/reconciliation ids must be rejected fail-closed.
+- Modeled fills must match reconciled adapter records before local paper ledger mutation.
+- Replaying the same adapter-run modeled fills into a restored local paper ledger must fail closed before new ledger or audit mutation.
+- Partial/no-fill recovery plans must remain local metadata only, require operator review where exposure remains, and record no external submission or live execution.
 - DEX/Web3 intents must not be signed or broadcast.
 - No secrets may be added to code, docs, config, logs, test fixtures, or audit-like records.
 - Reconciliation records are deterministic model records only.
@@ -93,6 +103,7 @@ Required externally because Cargo is not available in this environment:
 cargo fmt --check
 cargo check --workspace
 cargo test --workspace
+cargo run -p arb-agent -- validate-execution-adapter-audit --workspace target/ci-execution-adapter-audit
 cargo clippy --workspace --all-targets -- -D warnings
 ```
 
@@ -104,6 +115,12 @@ cargo clippy --workspace --all-targets -- -D warnings
 - Execution-adapter framework consumes `ExecutionPlanDraft` records only.
 - Execution-adapter framework produces deterministic attempt, fill, and reconciliation records.
 - Execution-adapter framework revalidates policy.
+- Adapter attempts preserve durable policy-revalidation evidence and local kill-switch denial remains covered.
+- Duplicate local lifecycle identifiers are rejected before checkpoint or audit persistence.
+- Adapter reconciliation records are replayed and checked before modeled paper fill settlement.
+- Duplicate modeled-fill settlement after local ledger checkpoint reopen is rejected before mutation.
+- Partial/no-fill adapter outcomes produce local recovery-plan records with audit/checkpoint persistence and no external side effects.
+- `arb-agent validate-execution-adapter-audit --workspace <fresh-dir>` replays adapter-run and recovery-plan audit records, recovers SQLite WAL checkpoints, and proves invalid audit/state-write paths fail closed.
 - Live scope and external adapter submission remain unavailable.
 - Governance docs and gap tracker reflect Phase 11 state.
 

@@ -34,6 +34,9 @@ In scope:
 - Operator notification model.
 - Deterministic notification publisher trait and implementation.
 - Local dispatch records with outbound network disabled.
+- Local authenticated channel-adapter validation records connecting ready remote envelopes to local dispatch records without delivery.
+- Local mocked platform command-ingress validation records connecting sanitized platform command metadata to ready remote envelopes without platform calls.
+- Local audit-journal and SQLite WAL checkpoint helpers for sanitized command-route and notification-dispatch outcomes.
 - Secret-like text detection, redaction, and truncation helpers.
 - Structure validator update.
 - Governance documentation updates.
@@ -62,6 +65,7 @@ Owns:
 
 - Operator command parsing and routing models.
 - Notification payload and dispatch-record models.
+- Authenticated local channel-adapter validation models.
 - Secret-safe message constraints.
 - Local-only deterministic dispatch records.
 
@@ -112,6 +116,18 @@ Remain draft-only and external-submission-disabled. Phase 12 cannot invoke them 
 - Add redaction/truncation helper for operator-facing text.
 - Reject notification payloads that look like they contain secrets.
 
+### Task 12.4a - Local Authenticated Channel Adapter Validation
+
+- Add local channel-adapter validation records for ready remote envelopes and local dispatch records.
+- Block replayed, unauthenticated, unauthorized, rate-limited, outage-marked, outbound-delivery, network, and message-delivery side-effect cases.
+- Add audit-journal and SQLite WAL checkpoint helpers for local adapter validation reports.
+
+### Task 12.4b - Local Mocked Platform Command Ingress Validation
+
+- Add local platform command-ingress records for sanitized command metadata, token-reference presence, raw-token-material denial, platform-signature verification, platform identity authorization, channel permission, replay nonce reuse, freshness, provider rate-limit/outage, and side-effect flags.
+- Convert ready local platform command-ingress records into remote envelope validation input without storing platform tokens, calling platform APIs, delivering messages, or enabling remote commands.
+- Add audit-journal and SQLite WAL checkpoint helpers for sanitized platform command-ingress reports.
+
 ### Task 12.5 — Exports and CLI Status Surface
 
 - Export Phase 12 communication/CLI types from `arb-core`.
@@ -131,6 +147,11 @@ Remain draft-only and external-submission-disabled. Phase 12 cannot invoke them 
 - The structure validator requires Phase 12 files and passes.
 - Command routing rejects unsafe live-action commands.
 - Notification records never use outbound network delivery.
+- Command-route and notification-dispatch outcomes can be locally journaled and checkpointed, then recovered after audit/SQLite reopen.
+- Channel-adapter validation outcomes can be locally journaled and checkpointed, then recovered after audit/SQLite reopen.
+- Channel-session validation outcomes can be locally journaled and checkpointed, then recovered after audit/SQLite reopen.
+- Platform command-ingress outcomes can be locally journaled and checkpointed, then recovered after audit/SQLite reopen.
+- `arb-agent validate-communications-runtime --workspace <fresh-dir>` recovers route, remote-review, platform-ingress, remote-envelope, channel-adapter, channel-session, platform-adapter review, and notification records locally.
 - Secret-like notification text is rejected before dispatch.
 - Documentation clearly states that real communication integrations and live execution remain unavailable.
 
@@ -176,4 +197,4 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 ## Completion Notes
 
-Phase 12 is complete for ChatGPT Project Mode framework scope only. Real messaging adapters, authentication, channel-token storage, durable notification audit/state integration, external adapter validation, and runtime operator UX validation remain future work.
+Phase 12 is complete for ChatGPT Project Mode framework scope only, including local sanitized command/notification audit journal records, local remote-command security review records, local mocked platform command-ingress validation records, local remote-command envelope validation records with command-injection marker detection, local channel-adapter validation records, local channel-session validation summaries for accepted/unauthenticated/replay/provider-unavailable outcomes, local platform-adapter control reviews for token-reference metadata, raw-token-material denial, platform identity authorization, channel permission, command-injection blocking, token revocation, provider rate-limit, and provider outage outcomes, SQLite WAL checkpoint helpers, caller-supplied local notification rate-limit/outage gating, repeatable `validate-communications-runtime` CLI audit/SQLite reopen validation, and deployment-host runtime report wrapper support. Real messaging adapters, real platform authentication/authorization, channel-token storage, provider-side platform rate-limit reconciliation, real outage detection, external adapter validation, production runtime orchestration, and runtime operator UX validation remain future work.

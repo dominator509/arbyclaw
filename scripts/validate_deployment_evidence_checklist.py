@@ -22,6 +22,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 SCHEMA = "arbyclaw.deployment_evidence_checklist.v1"
 BUNDLE_SCHEMA = "arbyclaw.deployment_evidence_bundle.v1"
+BUNDLE_TIMEOUT_SECONDS = 360
 
 CATEGORIES: dict[str, str] = {
     "service-lifecycle": "operator-controlled service lifecycle execution evidence",
@@ -104,6 +105,7 @@ def load_bundle_report() -> dict[str, Any]:
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
+        timeout=BUNDLE_TIMEOUT_SECONDS,
     )
     if completed.returncode != 0:
         raise RuntimeError("deployment evidence bundle validation did not pass")
@@ -160,6 +162,9 @@ def build_checklist(bundle: dict[str, Any], references: dict[str, str]) -> dict[
             "all_components_passed": bundle.get("all_components_passed"),
             "component_names": [component.get("name") for component in components],
         },
+        "bounded_timeouts": {
+            "bundle_seconds": BUNDLE_TIMEOUT_SECONDS,
+        },
         "checklist": checklist,
         "remaining_missing_categories": missing,
         "all_external_evidence_referenced": not missing,
@@ -178,6 +183,7 @@ def print_text_report(report: dict[str, Any]) -> None:
     print("deployment evidence checklist validation report")
     print(f"bundle schema: {report['bundle_index']['schema']}")
     print(f"bundle components passed: {str(report['bundle_index']['all_components_passed']).lower()}")
+    print(f"bundle timeout seconds: {report['bounded_timeouts']['bundle_seconds']}")
     print(f"all external evidence referenced: {str(report['all_external_evidence_referenced']).lower()}")
     print(f"production readiness claimed: {str(report['production_readiness_claimed']).lower()}")
     print(f"artifact contents embedded: {str(report['artifact_contents_embedded']).lower()}")
@@ -196,6 +202,8 @@ def main() -> int:
         references = parse_evidence(args.evidence)
         bundle = load_bundle_report()
         report = build_checklist(bundle, references)
+    except subprocess.TimeoutExpired as error:
+        return fail(f"deployment evidence bundle timed out after {error.timeout} seconds")
     except (OSError, RuntimeError, ValueError) as error:
         return fail(str(error))
 

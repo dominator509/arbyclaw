@@ -26,6 +26,7 @@ Create framework-only DEX/Web3 connector boundaries that future on-chain adapter
 - Transaction simulation request/response models.
 - DEX policy gate for paper/simulation-scoped swap intent validation.
 - Connector trait boundaries for future quote and simulation adapters.
+- Local quote/simulation lifecycle reconciliation records with audit/state recovery and duplicate intent-id rejection.
 - CLI status text showing DEX/Web3 framework availability.
 - Structure validator update to require Phase 8 files.
 - Roadmap and gap tracker updates.
@@ -84,6 +85,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 - Fail closed for observe-scoped swap submission attempts.
 - Require chain, router, token, and venue profile validation before policy evaluation.
 - Keep transaction simulation request models non-broadcasting and non-signing.
+- Keep local quote/simulation lifecycle reconciliation non-RPC, non-signing, non-broadcasting, non-bridging, and local-only.
 - Do not store secrets, private keys, mnemonics, seed phrases, wallet tokens, RPC provider tokens, or exchange/API credentials.
 - Do not accept arbitrary contract calls as executable adapter actions.
 - Do not add network dependencies or connector implementations.
@@ -99,6 +101,9 @@ Phase 8 may be marked complete for ChatGPT Project Mode only when:
 - Structure validator passes.
 - Roadmap and production gap tracker are updated.
 - All live RPC/signing/broadcast/bridge behavior remains absent and deferred.
+- Local quote/simulation lifecycle reconciliation records are audit-replayable and SQLite-recoverable without RPC, signing, broadcasts, or bridges.
+- Local quote/simulation lifecycle reconciliation is covered by `arb-agent validate-connector-lifecycle-audit --workspace <fresh-dir>` together with the local/mock CEX lifecycle path, without exchange calls, RPC calls, signing, broadcasts, bridges, live execution, or production-readiness claims.
+- Local signer request and signer secret-scope records are audit-replayable and SQLite-recoverable through `arb-agent validate-signer-boundary-audit --workspace <fresh-dir>` without loading keys, decrypting plaintext, signing, broadcasting, calling RPC, or claiming custody readiness.
 
 ## Rollback Plan
 
@@ -114,9 +119,9 @@ Phase 8 may be marked complete for ChatGPT Project Mode only when:
 - Keep Rust/Cargo validation current after future changes.
 - Real chain RPC adapters.
 - Testnet/mainnet transaction simulation integrations.
-- Signer boundary and custody implementation.
+- Custody-backed signer implementation.
 - Approval/spender management with durable audit records.
 - Router-specific fee, slippage, gas, and MEV-risk validation.
 - Bridge/route support after elevated risk review.
-- Audit/state lifecycle integration for on-chain route planning.
+- External audit/state lifecycle integration for on-chain route planning, RPC responses, signer responses, broadcasts, confirmations, and nonce tracking beyond the local quote/simulation lifecycle boundary.
 - Legal, tax, jurisdiction, terms-of-service, and protocol risk review.

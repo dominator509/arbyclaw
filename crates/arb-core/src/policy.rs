@@ -2,7 +2,11 @@
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::too_many_lines)]
 
-use crate::{AgentConfig, RuntimeMode, SecretBackend, LIVE_ACKNOWLEDGEMENT};
+use crate::{
+    AgentConfig, AppendOnlyAuditJournal, ApprovedDestinationEntry, AuditError, AuditEvent,
+    AuditEventKind, AuditRecord, AuditValue, RuntimeMode, SecretBackend, StateCheckpoint,
+    StateStore, StateStoreError, LIVE_ACKNOWLEDGEMENT,
+};
 use serde::{Deserialize, Serialize};
 
 /// Phase 3 trust-contract identifier.
@@ -10,6 +14,12 @@ pub const TRUST_CONTRACT_VERSION: &str = "phase-3-deny-by-default-v1";
 
 /// Default quote freshness ceiling for policy approval.
 pub const DEFAULT_MAX_MARKET_DATA_AGE_MS: u64 = 5_000;
+
+/// Owning subsystem label for local policy decision checkpoints.
+pub const POLICY_STATE_SUBSYSTEM: &str = "policy";
+
+/// Stable checkpoint key for the latest local policy decision summary.
+pub const POLICY_LAST_DECISION_CHECKPOINT_KEY: &str = "policy:last-decision";
 
 /// Deterministic policy engine.
 ///
@@ -384,6 +394,20 @@ impl PolicyEngine {
                         format!("destination chain {chain} is not allowlisted"),
                     ));
                 }
+
+                if !self
+                    .context
+                    .destination_allowlist
+                    .iter()
+                    .any(|entry| entry.matches_policy_destination(chain, label))
+                {
+                    violations.push(PolicyViolation::new_owned(
+                        "DESTINATION_NOT_APPROVED",
+                        format!(
+                            "destination label {label} on chain {chain} is not in the approved destination allowlist"
+                        ),
+                    ));
+                }
             }
             DestinationPolicy::UnknownAddress { .. } => violations.push(PolicyViolation::new(
                 "UNKNOWN_DESTINATION_DENIED",
@@ -418,7 +442,7 @@ impl PolicyEngine {
 }
 
 /// Dynamic policy inputs that must not be stored as static strategy config.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PolicyContext {
     /// Emergency stop state. When true, executable intents are denied.
     pub kill_switch_engaged: bool,
@@ -426,6 +450,8 @@ pub struct PolicyContext {
     pub max_market_data_age_ms: u64,
     /// Whether later phases have enabled a live execution runtime.
     pub live_execution_runtime_available: bool,
+    /// Local approved external destination labels.
+    pub destination_allowlist: Vec<ApprovedDestinationEntry>,
 }
 
 impl Default for PolicyContext {
@@ -434,6 +460,7 @@ impl Default for PolicyContext {
             kill_switch_engaged: false,
             max_market_data_age_ms: DEFAULT_MAX_MARKET_DATA_AGE_MS,
             live_execution_runtime_available: false,
+            destination_allowlist: Vec::new(),
         }
     }
 }
@@ -598,6 +625,222 @@ impl PolicyDecision {
     }
 }
 
+/// Non-secret durable summary of one local policy decision.
+///
+/// This is a decision record only. It never authorizes live submission, signs
+/// transactions, embeds secrets, or replaces future production custody checks.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct PolicyDecisionRecord {
+    /// Trust-contract version that produced the decision.
+    pub trust_contract_version: String,
+    /// Stable intent id evaluated by policy.
+    pub intent_id: String,
+    /// Strategy profile id that produced the intent.
+    pub strategy_id: String,
+    /// Intent type.
+    pub intent_kind: ExecutionIntentKind,
+    /// Requested execution scope.
+    pub requested_scope: ExecutionScope,
+    /// Non-secret venue reference.
+    pub venue: VenueRef,
+    /// True when the policy decision approved the intent.
+    pub approved: bool,
+    /// Approved scope for approvals only.
+    pub approved_scope: Option<ExecutionScope>,
+    /// Stable denial codes for denied decisions.
+    pub violation_codes: Vec<String>,
+    /// Number of policy violations observed.
+    pub violation_count: u64,
+    /// Whether live scope was requested by the intent.
+    pub live_scope_requested: bool,
+    /// Whether the intent could move funds or create market exposure.
+    pub funds_movement_requested: bool,
+    /// Whether the intent requested signing.
+    pub signing_requested: bool,
+    /// Local decision recording never performs external submission.
+    pub external_submission_performed: bool,
+    /// Local decision recording never records secret material.
+    pub secret_material_recorded: bool,
+    /// Operator-supplied non-secret decision record timestamp.
+    pub recorded_at_unix_ms: u64,
+}
+
+impl PolicyDecisionRecord {
+    /// Build a non-secret decision summary from one evaluated intent.
+    #[must_use]
+    pub fn from_decision(
+        intent: &ExecutionIntent,
+        decision: &PolicyDecision,
+        recorded_at_unix_ms: u64,
+    ) -> Self {
+        let (approved, approved_scope, violation_codes) = match decision {
+            PolicyDecision::Approved { approval } => (true, Some(approval.approved_scope), vec![]),
+            PolicyDecision::Denied { violations } => (
+                false,
+                None,
+                violations
+                    .iter()
+                    .map(|violation| violation.code().to_owned())
+                    .collect(),
+            ),
+        };
+
+        Self {
+            trust_contract_version: TRUST_CONTRACT_VERSION.to_owned(),
+            intent_id: intent.id.clone(),
+            strategy_id: intent.strategy_id.clone(),
+            intent_kind: intent.kind,
+            requested_scope: intent.scope,
+            venue: intent.venue.clone(),
+            approved,
+            approved_scope,
+            violation_count: u64::try_from(violation_codes.len()).unwrap_or(u64::MAX),
+            violation_codes,
+            live_scope_requested: intent.scope == ExecutionScope::Live,
+            funds_movement_requested: intent.kind.requires_funds_movement(),
+            signing_requested: intent.requires_signing,
+            external_submission_performed: false,
+            secret_material_recorded: false,
+            recorded_at_unix_ms,
+        }
+    }
+
+    /// Validate that the record is coherent and contains no execution side effects.
+    pub fn validate(&self) -> Result<(), StateStoreError> {
+        if self.trust_contract_version != TRUST_CONTRACT_VERSION {
+            return Err(StateStoreError::ValidationFailed {
+                reason: "policy decision trust-contract version mismatch".to_owned(),
+            });
+        }
+        if self.intent_id.trim().is_empty() {
+            return Err(StateStoreError::ValidationFailed {
+                reason: "policy decision intent id is required".to_owned(),
+            });
+        }
+        if self.strategy_id.trim().is_empty() {
+            return Err(StateStoreError::ValidationFailed {
+                reason: "policy decision strategy id is required".to_owned(),
+            });
+        }
+        if self.recorded_at_unix_ms == 0 {
+            return Err(StateStoreError::ValidationFailed {
+                reason: "policy decision record timestamp is required".to_owned(),
+            });
+        }
+        if self.external_submission_performed || self.secret_material_recorded {
+            return Err(StateStoreError::ValidationFailed {
+                reason:
+                    "policy decision records must not contain submission or secret side effects"
+                        .to_owned(),
+            });
+        }
+        if self.approved {
+            if self.approved_scope.is_none()
+                || self.violation_count != 0
+                || !self.violation_codes.is_empty()
+            {
+                return Err(StateStoreError::ValidationFailed {
+                    reason: "approved policy decisions must not include denial violations"
+                        .to_owned(),
+                });
+            }
+        } else if self.approved_scope.is_some()
+            || self.violation_count == 0
+            || self.violation_count != u64::try_from(self.violation_codes.len()).unwrap_or(u64::MAX)
+        {
+            return Err(StateStoreError::ValidationFailed {
+                reason: "denied policy decisions require coherent violation codes".to_owned(),
+            });
+        }
+
+        Ok(())
+    }
+}
+
+/// Persist the latest local policy decision through the typed state boundary.
+pub fn persist_policy_decision_checkpoint(
+    store: &mut impl StateStore,
+    record: &PolicyDecisionRecord,
+) -> Result<StateCheckpoint, StateStoreError> {
+    record.validate()?;
+    let checkpoint = StateCheckpoint {
+        key: POLICY_LAST_DECISION_CHECKPOINT_KEY.to_owned(),
+        subsystem: POLICY_STATE_SUBSYSTEM.to_owned(),
+        value: serde_json::to_string(record).map_err(|error| StateStoreError::BackendFailed {
+            reason: format!("failed to serialize policy decision record: {error}"),
+        })?,
+        updated_at_unix_ms: record.recorded_at_unix_ms,
+    };
+    store.put_checkpoint(checkpoint.clone())?;
+    Ok(checkpoint)
+}
+
+/// Append one local policy decision summary to the append-only audit journal.
+pub fn append_policy_decision_audit(
+    journal: &mut AppendOnlyAuditJournal,
+    record: &PolicyDecisionRecord,
+) -> Result<AuditRecord, AuditError> {
+    record
+        .validate()
+        .map_err(|error| AuditError::ValidationFailed {
+            violations: vec![crate::AuditViolation::new_owned(
+                "POLICY_DECISION_RECORD_INVALID",
+                error.to_string(),
+            )],
+        })?;
+
+    let event = AuditEvent::new(
+        format!("policy-decision-{}", record.intent_id),
+        AuditEventKind::PolicyDecision,
+        POLICY_STATE_SUBSYSTEM,
+        "policy-engine",
+        "local policy decision recorded without execution side effects",
+    )
+    .with_metadata(
+        "trust_contract_version",
+        AuditValue::Text(record.trust_contract_version.clone()),
+    )
+    .with_metadata("intent_id", AuditValue::Text(record.intent_id.clone()))
+    .with_metadata("strategy_id", AuditValue::Text(record.strategy_id.clone()))
+    .with_metadata(
+        "intent_kind",
+        AuditValue::Text(format!("{:?}", record.intent_kind)),
+    )
+    .with_metadata(
+        "requested_scope",
+        AuditValue::Text(format!("{:?}", record.requested_scope)),
+    )
+    .with_metadata("venue", AuditValue::Text(record.venue.name.clone()))
+    .with_metadata("approved", AuditValue::Bool(record.approved))
+    .with_metadata(
+        "violation_count",
+        AuditValue::Unsigned(record.violation_count),
+    )
+    .with_metadata(
+        "live_scope_requested",
+        AuditValue::Bool(record.live_scope_requested),
+    )
+    .with_metadata(
+        "funds_movement_requested",
+        AuditValue::Bool(record.funds_movement_requested),
+    )
+    .with_metadata(
+        "signing_requested",
+        AuditValue::Bool(record.signing_requested),
+    )
+    .with_metadata(
+        "external_submission_performed",
+        AuditValue::Bool(record.external_submission_performed),
+    )
+    .with_metadata(
+        "sensitive_material_recorded",
+        AuditValue::Bool(record.secret_material_recorded),
+    );
+
+    journal.append_event(event)
+}
+
 /// One deterministic policy violation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PolicyViolation {
@@ -651,10 +894,22 @@ fn is_non_negative_finite(value: f64) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        DestinationPolicy, ExecutionIntent, ExecutionIntentKind, ExecutionScope, PolicyContext,
-        PolicyEngine, VenueKind, VenueRef,
+        append_policy_decision_audit, persist_policy_decision_checkpoint, DestinationPolicy,
+        ExecutionIntent, ExecutionIntentKind, ExecutionScope, PolicyContext, PolicyDecisionRecord,
+        PolicyEngine, VenueKind, VenueRef, POLICY_LAST_DECISION_CHECKPOINT_KEY,
     };
-    use crate::{AgentConfig, LIVE_ACKNOWLEDGEMENT};
+    use crate::{
+        AgentConfig, AppendOnlyAuditJournal, AuditValue, SqliteWalStateStore, StateStore,
+        LIVE_ACKNOWLEDGEMENT,
+    };
+    use std::{
+        env, fs,
+        path::PathBuf,
+        sync::atomic::{AtomicU64, Ordering},
+        time::{SystemTime, UNIX_EPOCH},
+    };
+
+    static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
     const BASE_CONFIG: &str = r#"
 [runtime]
@@ -752,6 +1007,21 @@ redact_secrets = true
     }
 
     #[test]
+    fn approved_address_requires_destination_allowlist_entry() {
+        let engine = PolicyEngine::from_config(config(BASE_CONFIG));
+        let mut intent = paper_intent();
+        intent.destination = DestinationPolicy::ApprovedAddress {
+            chain: "ethereum".to_owned(),
+            label: "ops-vault".to_owned(),
+        };
+        let decision = engine.evaluate(&intent);
+        assert!(decision
+            .violations()
+            .iter()
+            .any(|violation| violation.code() == "DESTINATION_NOT_APPROVED"));
+    }
+
+    #[test]
     fn stale_market_data_is_denied() {
         let engine = PolicyEngine::from_config(config(BASE_CONFIG));
         let mut intent = paper_intent();
@@ -819,5 +1089,104 @@ redact_secrets = true
             .violations()
             .iter()
             .any(|violation| violation.code() == "KILL_SWITCH_ENGAGED"));
+    }
+
+    #[test]
+    fn approved_policy_decision_audits_and_persists_locally() {
+        let engine = PolicyEngine::from_config(config(BASE_CONFIG));
+        let intent = paper_intent();
+        let decision = engine.evaluate(&intent);
+        let record = PolicyDecisionRecord::from_decision(&intent, &decision, 1_719_000_000_001);
+
+        assert!(record.approved);
+        assert_eq!(record.violation_count, 0);
+        assert!(!record.external_submission_performed);
+        assert!(!record.secret_material_recorded);
+
+        let audit_path = unique_temp_path("approved-policy-decision", "jsonl");
+        let state_path = unique_temp_path("approved-policy-decision", "sqlite");
+        let mut journal = AppendOnlyAuditJournal::open(&audit_path).expect("audit journal opens");
+        let mut store = SqliteWalStateStore::open(&state_path).expect("sqlite store opens");
+
+        let audit_record =
+            append_policy_decision_audit(&mut journal, &record).expect("audit append succeeds");
+        let checkpoint =
+            persist_policy_decision_checkpoint(&mut store, &record).expect("checkpoint persists");
+
+        assert_eq!(audit_record.sequence, 1);
+        assert_eq!(checkpoint.key, POLICY_LAST_DECISION_CHECKPOINT_KEY);
+
+        let reopened_journal =
+            AppendOnlyAuditJournal::open(&audit_path).expect("audit journal replays");
+        assert_eq!(reopened_journal.next_sequence(), 2);
+
+        let reopened_store = SqliteWalStateStore::open(&state_path).expect("sqlite store reopens");
+        let checkpoint = reopened_store
+            .get_checkpoint(POLICY_LAST_DECISION_CHECKPOINT_KEY)
+            .expect("checkpoint lookup succeeds")
+            .expect("checkpoint exists");
+        let recovered: PolicyDecisionRecord =
+            serde_json::from_str(&checkpoint.value).expect("policy record deserializes");
+        assert_eq!(recovered, record);
+
+        let _ = fs::remove_file(audit_path);
+        let _ = fs::remove_file(state_path);
+    }
+
+    #[test]
+    fn denied_policy_decision_audits_violation_summary_without_side_effects() {
+        let engine = PolicyEngine::from_config(config(BASE_CONFIG));
+        let mut intent = paper_intent();
+        intent.scope = ExecutionScope::Live;
+        intent.requires_signing = true;
+        let decision = engine.evaluate(&intent);
+        let record = PolicyDecisionRecord::from_decision(&intent, &decision, 1_719_000_000_002);
+
+        assert!(!record.approved);
+        assert!(record.live_scope_requested);
+        assert!(record.signing_requested);
+        assert!(record.violation_count > 0);
+        assert!(record
+            .violation_codes
+            .iter()
+            .any(|code| code == "PAPER_MODE_DENIES_LIVE_SCOPE"));
+        assert!(!record.external_submission_performed);
+        assert!(!record.secret_material_recorded);
+
+        let audit_path = unique_temp_path("denied-policy-decision", "jsonl");
+        let mut journal = AppendOnlyAuditJournal::open(&audit_path).expect("audit journal opens");
+        let audit_record =
+            append_policy_decision_audit(&mut journal, &record).expect("audit append succeeds");
+
+        assert_eq!(audit_record.sequence, 1);
+        assert!(matches!(
+            audit_record
+                .event
+                .metadata
+                .get("external_submission_performed"),
+            Some(AuditValue::Bool(false))
+        ));
+        assert!(matches!(
+            audit_record
+                .event
+                .metadata
+                .get("sensitive_material_recorded"),
+            Some(AuditValue::Bool(false))
+        ));
+
+        let reopened_journal =
+            AppendOnlyAuditJournal::open(&audit_path).expect("audit journal replays");
+        assert_eq!(reopened_journal.next_sequence(), 2);
+
+        let _ = fs::remove_file(audit_path);
+    }
+
+    fn unique_temp_path(label: &str, extension: &str) -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time after epoch")
+            .as_nanos();
+        let n = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
+        env::temp_dir().join(format!("arbyclaw-policy-{label}-{nanos}-{n}.{extension}"))
     }
 }

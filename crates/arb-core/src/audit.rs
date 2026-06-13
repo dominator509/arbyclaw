@@ -24,6 +24,14 @@ pub const AUDIT_JOURNAL_FORMAT_VERSION: &str = "audit-jsonl-hash-chain-v1";
 pub const AUDIT_DURABILITY_VALIDATION_VERSION: &str =
     "phase-26-audit-crash-concurrency-filesystem-disk-full-stale-lock-v1";
 
+/// Current local deployment disk-full transcript validation version.
+pub const AUDIT_DEPLOYMENT_DISK_FULL_TRANSCRIPT_VERSION: &str =
+    "phase51-audit-deployment-disk-full-transcript-local-v1";
+
+/// Current local deployment retention/rotation transcript validation version.
+pub const AUDIT_DEPLOYMENT_RETENTION_TRANSCRIPT_VERSION: &str =
+    "phase52-audit-deployment-retention-transcript-local-v1";
+
 const AUDIT_LOCK_RETRY_COUNT: usize = 200;
 const AUDIT_LOCK_RETRY_DELAY: Duration = Duration::from_millis(5);
 
@@ -200,6 +208,358 @@ pub struct AuditDurabilityValidationReport {
     pub validated_at_unix_ms: u64,
 }
 
+/// Local validation status for sanitized deployment-host disk-full transcripts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum AuditDeploymentDiskFullTranscriptStatus {
+    /// Transcript has enough non-secret references for external review.
+    ReadyForExternalReview,
+    /// Transcript is missing physical-host evidence or required fail-closed proof.
+    Blocked,
+}
+
+/// Sanitized deployment-host disk-full evidence transcript.
+///
+/// This records only operator-supplied reference presence and outcome flags. It
+/// must not embed host paths, logs, filesystem dumps, secrets, audit payloads,
+/// checkpoint values, or command output.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct AuditDeploymentDiskFullTranscript {
+    /// Stable transcript id.
+    pub transcript_id: String,
+    /// Non-secret deployment-host or runner label.
+    pub host_label: String,
+    /// Whether evidence came from a physical/deployment-like host, not only a local simulation.
+    pub physical_host_evidence: bool,
+    /// Whether audit append failed closed under disk-full conditions.
+    pub audit_append_failed_closed: bool,
+    /// Whether SQLite/state writes failed closed under disk-full conditions.
+    pub state_write_failed_closed: bool,
+    /// Whether the runtime quiesced or degraded without live execution.
+    pub runtime_quiesced_or_degraded: bool,
+    /// Whether audit replay/reopen was validated after freeing capacity.
+    pub audit_replay_after_recovery_validated: bool,
+    /// Whether SQLite reopen/integrity was validated after freeing capacity.
+    pub sqlite_reopen_after_recovery_validated: bool,
+    /// Whether recovery/runbook reference is present.
+    pub recovery_runbook_reference_present: bool,
+    /// Count of non-secret evidence references.
+    pub non_secret_reference_count: u64,
+    /// Whether operator approval/reference is present.
+    pub operator_approved: bool,
+    /// Whether this validator filled a disk. Must be false.
+    pub disk_filled_by_validator: bool,
+    /// Whether this validator mutated production paths. Must be false.
+    pub production_path_mutated_by_validator: bool,
+    /// Whether live execution occurred. Must be false.
+    pub live_execution_performed: bool,
+    /// Whether this transcript attempts to claim production readiness. Must be false.
+    pub production_ready_claimed: bool,
+    /// Validation timestamp in Unix milliseconds.
+    pub validated_at_unix_ms: u64,
+}
+
+/// Non-secret local validation report for deployment-host disk-full evidence.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct AuditDeploymentDiskFullTranscriptReport {
+    /// Validation version.
+    pub validation_version: String,
+    /// Stable transcript id.
+    pub transcript_id: String,
+    /// Non-secret deployment-host or runner label.
+    pub host_label: String,
+    /// Whether physical/deployment-like host evidence is present.
+    pub physical_host_evidence: bool,
+    /// Whether audit append fail-closed evidence is present.
+    pub audit_append_failed_closed: bool,
+    /// Whether state write fail-closed evidence is present.
+    pub state_write_failed_closed: bool,
+    /// Whether runtime quiesce/degrade evidence is present.
+    pub runtime_quiesced_or_degraded: bool,
+    /// Whether audit recovery validation evidence is present.
+    pub audit_replay_after_recovery_validated: bool,
+    /// Whether SQLite recovery validation evidence is present.
+    pub sqlite_reopen_after_recovery_validated: bool,
+    /// Whether recovery/runbook reference is present.
+    pub recovery_runbook_reference_present: bool,
+    /// Count of non-secret references.
+    pub non_secret_reference_count: u64,
+    /// Whether operator approval/reference is present.
+    pub operator_approved: bool,
+    /// Validation status.
+    pub status: AuditDeploymentDiskFullTranscriptStatus,
+    /// Non-secret blocker codes.
+    pub blocker_codes: Vec<String>,
+    /// Whether this validator filled a disk. Always false.
+    pub disk_filled_by_validator: bool,
+    /// Whether this validator mutated production paths. Always false.
+    pub production_path_mutated_by_validator: bool,
+    /// Whether live execution occurred. Always false.
+    pub live_execution_performed: bool,
+    /// Whether this report approves production readiness. Always false.
+    pub production_ready: bool,
+    /// Validation timestamp in Unix milliseconds.
+    pub validated_at_unix_ms: u64,
+}
+
+impl AuditDeploymentDiskFullTranscript {
+    /// Validate sanitized deployment disk-full transcript input.
+    pub fn validate(&self) -> Result<(), AuditError> {
+        if self.transcript_id.trim().is_empty() {
+            return Err(AuditError::ValidationHarnessFailed {
+                reason: "deployment disk-full transcript id is required".to_owned(),
+            });
+        }
+        if self.host_label.trim().is_empty() {
+            return Err(AuditError::ValidationHarnessFailed {
+                reason: "deployment disk-full host label is required".to_owned(),
+            });
+        }
+        if self.validated_at_unix_ms == 0 {
+            return Err(AuditError::ValidationHarnessFailed {
+                reason: "deployment disk-full transcript timestamp must be non-zero".to_owned(),
+            });
+        }
+        if self.disk_filled_by_validator
+            || self.production_path_mutated_by_validator
+            || self.live_execution_performed
+        {
+            return Err(AuditError::ValidationHarnessFailed {
+                reason: "deployment disk-full transcript validator must not fill disks, mutate production paths, or perform live execution".to_owned(),
+            });
+        }
+        if self.production_ready_claimed {
+            return Err(AuditError::ValidationHarnessFailed {
+                reason: "deployment disk-full transcript must not claim production readiness"
+                    .to_owned(),
+            });
+        }
+        Ok(())
+    }
+}
+
+impl AuditDeploymentDiskFullTranscriptReport {
+    /// Validate deployment disk-full transcript report invariants.
+    pub fn validate(&self) -> Result<(), AuditError> {
+        if self.validation_version != AUDIT_DEPLOYMENT_DISK_FULL_TRANSCRIPT_VERSION {
+            return Err(AuditError::ValidationHarnessFailed {
+                reason: format!(
+                    "validation_version must be {AUDIT_DEPLOYMENT_DISK_FULL_TRANSCRIPT_VERSION}"
+                ),
+            });
+        }
+        if self.transcript_id.trim().is_empty() || self.host_label.trim().is_empty() {
+            return Err(AuditError::ValidationHarnessFailed {
+                reason: "deployment disk-full report requires id and host label".to_owned(),
+            });
+        }
+        if self.disk_filled_by_validator
+            || self.production_path_mutated_by_validator
+            || self.live_execution_performed
+            || self.production_ready
+        {
+            return Err(AuditError::ValidationHarnessFailed {
+                reason: "deployment disk-full report must not contain validator side effects or production readiness".to_owned(),
+            });
+        }
+        if self.status == AuditDeploymentDiskFullTranscriptStatus::ReadyForExternalReview
+            && !self.blocker_codes.is_empty()
+        {
+            return Err(AuditError::ValidationHarnessFailed {
+                reason: "ready deployment disk-full report must not contain blockers".to_owned(),
+            });
+        }
+        if self.status == AuditDeploymentDiskFullTranscriptStatus::Blocked
+            && self.blocker_codes.is_empty()
+        {
+            return Err(AuditError::ValidationHarnessFailed {
+                reason: "blocked deployment disk-full report requires blocker codes".to_owned(),
+            });
+        }
+        Ok(())
+    }
+}
+
+/// Local validation status for sanitized deployment-host retention transcripts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum AuditDeploymentRetentionTranscriptStatus {
+    /// Transcript has enough non-secret references for external review.
+    ReadyForExternalReview,
+    /// Transcript is missing deployment-host retention or recovery proof.
+    Blocked,
+}
+
+/// Sanitized deployment-host audit retention/rotation evidence transcript.
+///
+/// This records only operator-supplied reference presence and outcome flags. It
+/// must not embed host paths, logs, filesystem dumps, secrets, audit payloads,
+/// checkpoint values, or command output.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct AuditDeploymentRetentionTranscript {
+    /// Stable transcript id.
+    pub transcript_id: String,
+    /// Non-secret deployment-host or runner label.
+    pub host_label: String,
+    /// Whether evidence came from a physical/deployment-like host.
+    pub physical_host_evidence: bool,
+    /// Whether active audit journal rotation was observed.
+    pub active_rotation_observed: bool,
+    /// Whether retained archive evidence was observed.
+    pub archive_retention_observed: bool,
+    /// Whether expired archive deletion evidence was observed.
+    pub expired_archive_deletion_observed: bool,
+    /// Whether appending after rotation was validated.
+    pub post_rotation_append_validated: bool,
+    /// Whether audit replay after rotation was validated.
+    pub audit_replay_after_rotation_validated: bool,
+    /// Whether a retention policy reference is present.
+    pub retention_policy_reference_present: bool,
+    /// Whether a recovery/runbook reference is present.
+    pub recovery_runbook_reference_present: bool,
+    /// Count of non-secret evidence references.
+    pub non_secret_reference_count: u64,
+    /// Whether operator approval/reference is present.
+    pub operator_approved: bool,
+    /// Whether this validator performed rotation. Must be false.
+    pub rotation_performed_by_validator: bool,
+    /// Whether this validator mutated production paths. Must be false.
+    pub production_path_mutated_by_validator: bool,
+    /// Whether live execution occurred. Must be false.
+    pub live_execution_performed: bool,
+    /// Whether this transcript attempts to claim production readiness. Must be false.
+    pub production_ready_claimed: bool,
+    /// Validation timestamp in Unix milliseconds.
+    pub validated_at_unix_ms: u64,
+}
+
+/// Non-secret local validation report for deployment-host retention evidence.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct AuditDeploymentRetentionTranscriptReport {
+    /// Validation version.
+    pub validation_version: String,
+    /// Stable transcript id.
+    pub transcript_id: String,
+    /// Non-secret deployment-host or runner label.
+    pub host_label: String,
+    /// Whether physical/deployment-like host evidence is present.
+    pub physical_host_evidence: bool,
+    /// Whether active rotation evidence is present.
+    pub active_rotation_observed: bool,
+    /// Whether archive retention evidence is present.
+    pub archive_retention_observed: bool,
+    /// Whether expired archive deletion evidence is present.
+    pub expired_archive_deletion_observed: bool,
+    /// Whether post-rotation append validation evidence is present.
+    pub post_rotation_append_validated: bool,
+    /// Whether audit replay after rotation evidence is present.
+    pub audit_replay_after_rotation_validated: bool,
+    /// Whether retention policy reference is present.
+    pub retention_policy_reference_present: bool,
+    /// Whether recovery/runbook reference is present.
+    pub recovery_runbook_reference_present: bool,
+    /// Count of non-secret references.
+    pub non_secret_reference_count: u64,
+    /// Whether operator approval/reference is present.
+    pub operator_approved: bool,
+    /// Validation status.
+    pub status: AuditDeploymentRetentionTranscriptStatus,
+    /// Non-secret blocker codes.
+    pub blocker_codes: Vec<String>,
+    /// Whether this validator performed rotation. Always false.
+    pub rotation_performed_by_validator: bool,
+    /// Whether this validator mutated production paths. Always false.
+    pub production_path_mutated_by_validator: bool,
+    /// Whether live execution occurred. Always false.
+    pub live_execution_performed: bool,
+    /// Whether this report approves production readiness. Always false.
+    pub production_ready: bool,
+    /// Validation timestamp in Unix milliseconds.
+    pub validated_at_unix_ms: u64,
+}
+
+impl AuditDeploymentRetentionTranscript {
+    /// Validate sanitized deployment retention transcript input.
+    pub fn validate(&self) -> Result<(), AuditError> {
+        if self.transcript_id.trim().is_empty() {
+            return Err(AuditError::ValidationHarnessFailed {
+                reason: "deployment retention transcript id is required".to_owned(),
+            });
+        }
+        if self.host_label.trim().is_empty() {
+            return Err(AuditError::ValidationHarnessFailed {
+                reason: "deployment retention host label is required".to_owned(),
+            });
+        }
+        if self.validated_at_unix_ms == 0 {
+            return Err(AuditError::ValidationHarnessFailed {
+                reason: "deployment retention transcript timestamp must be non-zero".to_owned(),
+            });
+        }
+        if self.rotation_performed_by_validator
+            || self.production_path_mutated_by_validator
+            || self.live_execution_performed
+        {
+            return Err(AuditError::ValidationHarnessFailed {
+                reason: "deployment retention transcript validator must not rotate logs, mutate production paths, or perform live execution".to_owned(),
+            });
+        }
+        if self.production_ready_claimed {
+            return Err(AuditError::ValidationHarnessFailed {
+                reason: "deployment retention transcript must not claim production readiness"
+                    .to_owned(),
+            });
+        }
+        Ok(())
+    }
+}
+
+impl AuditDeploymentRetentionTranscriptReport {
+    /// Validate deployment retention transcript report invariants.
+    pub fn validate(&self) -> Result<(), AuditError> {
+        if self.validation_version != AUDIT_DEPLOYMENT_RETENTION_TRANSCRIPT_VERSION {
+            return Err(AuditError::ValidationHarnessFailed {
+                reason: format!(
+                    "validation_version must be {AUDIT_DEPLOYMENT_RETENTION_TRANSCRIPT_VERSION}"
+                ),
+            });
+        }
+        if self.transcript_id.trim().is_empty() || self.host_label.trim().is_empty() {
+            return Err(AuditError::ValidationHarnessFailed {
+                reason: "deployment retention report requires id and host label".to_owned(),
+            });
+        }
+        if self.rotation_performed_by_validator
+            || self.production_path_mutated_by_validator
+            || self.live_execution_performed
+            || self.production_ready
+        {
+            return Err(AuditError::ValidationHarnessFailed {
+                reason: "deployment retention report must not contain validator side effects or production readiness".to_owned(),
+            });
+        }
+        if self.status == AuditDeploymentRetentionTranscriptStatus::ReadyForExternalReview
+            && !self.blocker_codes.is_empty()
+        {
+            return Err(AuditError::ValidationHarnessFailed {
+                reason: "ready deployment retention report must not contain blockers".to_owned(),
+            });
+        }
+        if self.status == AuditDeploymentRetentionTranscriptStatus::Blocked
+            && self.blocker_codes.is_empty()
+        {
+            return Err(AuditError::ValidationHarnessFailed {
+                reason: "blocked deployment retention report requires blocker codes".to_owned(),
+            });
+        }
+        Ok(())
+    }
+}
+
 /// Local audit retention and rotation policy.
 ///
 /// This model plans retention decisions only. It never deletes files, renames
@@ -246,6 +606,56 @@ pub struct AuditRetentionPlan {
     /// Whether this model changed the filesystem.
     pub filesystem_mutated: bool,
     /// Whether this plan approves production readiness.
+    pub production_ready: bool,
+}
+
+/// Local sandbox-only audit retention execution request.
+///
+/// This validator may rotate/delete only explicit files that are already inside
+/// `workspace_dir`. It is for local test/smoke validation only and must not be
+/// pointed at production audit paths.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct AuditRetentionExecutionRequest {
+    /// Sandbox workspace that bounds every mutation.
+    pub workspace_dir: PathBuf,
+    /// Retention/rotation policy to execute locally.
+    pub policy: AuditRetentionPolicy,
+    /// Caller-supplied metadata for local journal files.
+    pub files: Vec<AuditJournalFileMetadata>,
+    /// Execution timestamp in Unix milliseconds.
+    pub now_unix_ms: u64,
+}
+
+/// Local sandbox-only audit retention execution report.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct AuditRetentionExecutionReport {
+    /// Whether active journal rotation was requested by the plan.
+    pub rotate_active_requested: bool,
+    /// Original active journal path when rotation occurred.
+    pub rotated_active_from: Option<String>,
+    /// New archive path for the rotated active journal.
+    pub rotated_active_to: Option<String>,
+    /// Whether a new empty active journal was created after rotation.
+    pub new_active_created: bool,
+    /// Archive files retained by the execution.
+    pub retained_archives: Vec<String>,
+    /// Archive files deleted by the execution.
+    pub expired_archives_deleted: Vec<String>,
+    /// Number of files removed from the sandbox.
+    pub deleted_file_count: u64,
+    /// Whether any file deletion was performed.
+    pub deletion_performed: bool,
+    /// Whether any filesystem mutation was performed.
+    pub filesystem_mutated: bool,
+    /// Whether any path outside the sandbox was touched. Always false on success.
+    pub out_of_workspace_path_touched: bool,
+    /// Whether live network access was used. Always false in this boundary.
+    pub live_network_used: bool,
+    /// Whether external execution was performed. Always false in this boundary.
+    pub external_execution_performed: bool,
+    /// Whether this report approves production use. Always false.
     pub production_ready: bool,
 }
 
@@ -363,6 +773,161 @@ pub fn plan_audit_journal_retention(
         expired_archives,
         deletion_performed: false,
         filesystem_mutated: false,
+        production_ready: false,
+    })
+}
+
+/// Validate sanitized deployment-host disk-full evidence metadata.
+///
+/// This function consumes operator-owned reference metadata only. It does not
+/// fill disks, mount filesystems, mutate production paths, inspect host logs,
+/// call networks, perform live execution, or claim production readiness.
+pub fn validate_deployment_disk_full_transcript(
+    transcript: AuditDeploymentDiskFullTranscript,
+) -> Result<AuditDeploymentDiskFullTranscriptReport, AuditError> {
+    transcript.validate()?;
+    let blocker_codes = deployment_disk_full_blockers(&transcript);
+    let status = if blocker_codes.is_empty() {
+        AuditDeploymentDiskFullTranscriptStatus::ReadyForExternalReview
+    } else {
+        AuditDeploymentDiskFullTranscriptStatus::Blocked
+    };
+    let report = AuditDeploymentDiskFullTranscriptReport {
+        validation_version: AUDIT_DEPLOYMENT_DISK_FULL_TRANSCRIPT_VERSION.to_owned(),
+        transcript_id: transcript.transcript_id,
+        host_label: transcript.host_label,
+        physical_host_evidence: transcript.physical_host_evidence,
+        audit_append_failed_closed: transcript.audit_append_failed_closed,
+        state_write_failed_closed: transcript.state_write_failed_closed,
+        runtime_quiesced_or_degraded: transcript.runtime_quiesced_or_degraded,
+        audit_replay_after_recovery_validated: transcript.audit_replay_after_recovery_validated,
+        sqlite_reopen_after_recovery_validated: transcript.sqlite_reopen_after_recovery_validated,
+        recovery_runbook_reference_present: transcript.recovery_runbook_reference_present,
+        non_secret_reference_count: transcript.non_secret_reference_count,
+        operator_approved: transcript.operator_approved,
+        status,
+        blocker_codes,
+        disk_filled_by_validator: false,
+        production_path_mutated_by_validator: false,
+        live_execution_performed: false,
+        production_ready: false,
+        validated_at_unix_ms: transcript.validated_at_unix_ms,
+    };
+    report.validate()?;
+    Ok(report)
+}
+
+/// Validate sanitized deployment-host retention/rotation evidence metadata.
+///
+/// This function consumes operator-owned reference metadata only. It does not
+/// rotate logs, delete deployment archives, mutate production paths, inspect
+/// host logs, call networks, perform live execution, or claim production
+/// readiness.
+pub fn validate_deployment_retention_transcript(
+    transcript: AuditDeploymentRetentionTranscript,
+) -> Result<AuditDeploymentRetentionTranscriptReport, AuditError> {
+    transcript.validate()?;
+    let blocker_codes = deployment_retention_blockers(&transcript);
+    let status = if blocker_codes.is_empty() {
+        AuditDeploymentRetentionTranscriptStatus::ReadyForExternalReview
+    } else {
+        AuditDeploymentRetentionTranscriptStatus::Blocked
+    };
+    let report = AuditDeploymentRetentionTranscriptReport {
+        validation_version: AUDIT_DEPLOYMENT_RETENTION_TRANSCRIPT_VERSION.to_owned(),
+        transcript_id: transcript.transcript_id,
+        host_label: transcript.host_label,
+        physical_host_evidence: transcript.physical_host_evidence,
+        active_rotation_observed: transcript.active_rotation_observed,
+        archive_retention_observed: transcript.archive_retention_observed,
+        expired_archive_deletion_observed: transcript.expired_archive_deletion_observed,
+        post_rotation_append_validated: transcript.post_rotation_append_validated,
+        audit_replay_after_rotation_validated: transcript.audit_replay_after_rotation_validated,
+        retention_policy_reference_present: transcript.retention_policy_reference_present,
+        recovery_runbook_reference_present: transcript.recovery_runbook_reference_present,
+        non_secret_reference_count: transcript.non_secret_reference_count,
+        operator_approved: transcript.operator_approved,
+        status,
+        blocker_codes,
+        rotation_performed_by_validator: false,
+        production_path_mutated_by_validator: false,
+        live_execution_performed: false,
+        production_ready: false,
+        validated_at_unix_ms: transcript.validated_at_unix_ms,
+    };
+    report.validate()?;
+    Ok(report)
+}
+
+/// Execute audit retention/rotation against an explicit local sandbox only.
+///
+/// This validates the mechanics of rotation and archive deletion using
+/// caller-supplied local files. It refuses paths outside `workspace_dir`, does
+/// not recurse, does not inspect deployment state, does not remove production
+/// logs, and never approves production readiness.
+pub fn execute_local_audit_retention(
+    request: &AuditRetentionExecutionRequest,
+) -> Result<AuditRetentionExecutionReport, AuditError> {
+    let workspace = canonical_workspace(&request.workspace_dir)?;
+    if request.files.is_empty() {
+        return Err(AuditError::ValidationHarnessFailed {
+            reason: "audit retention execution requires at least one journal file".to_owned(),
+        });
+    }
+    for file in &request.files {
+        let path = PathBuf::from(&file.path);
+        ensure_file_inside_workspace(&workspace, &path)?;
+    }
+
+    let plan = plan_audit_journal_retention(&request.policy, &request.files, request.now_unix_ms)?;
+    let active_path = PathBuf::from(&plan.active_path);
+    let mut rotated_active_to = None;
+    let mut new_active_created = false;
+    let mut filesystem_mutated = false;
+
+    if plan.rotate_active {
+        let rotated_path = rotated_audit_path(&active_path, request.now_unix_ms)?;
+        ensure_parent_inside_workspace(&workspace, &rotated_path)?;
+        if rotated_path.exists() {
+            return Err(AuditError::ValidationHarnessFailed {
+                reason: "audit retention rotated archive path already exists".to_owned(),
+            });
+        }
+        fs::rename(&active_path, &rotated_path)
+            .map_err(|source| audit_io_error(&active_path, source))?;
+        File::create(&active_path).map_err(|source| audit_io_error(&active_path, source))?;
+        rotated_active_to = Some(rotated_path.display().to_string());
+        new_active_created = true;
+        filesystem_mutated = true;
+    }
+
+    let mut expired_archives_deleted = Vec::new();
+    for expired in &plan.expired_archives {
+        let expired_path = PathBuf::from(expired);
+        ensure_file_inside_workspace(&workspace, &expired_path)?;
+        fs::remove_file(&expired_path).map_err(|source| audit_io_error(&expired_path, source))?;
+        expired_archives_deleted.push(expired.clone());
+        filesystem_mutated = true;
+    }
+
+    let deleted_file_count = u64::try_from(expired_archives_deleted.len()).map_err(|_| {
+        AuditError::ValidationHarnessFailed {
+            reason: "audit retention deleted file count overflowed".to_owned(),
+        }
+    })?;
+    Ok(AuditRetentionExecutionReport {
+        rotate_active_requested: plan.rotate_active,
+        rotated_active_from: plan.rotate_active.then_some(plan.active_path),
+        rotated_active_to,
+        new_active_created,
+        retained_archives: plan.retained_archives,
+        expired_archives_deleted,
+        deleted_file_count,
+        deletion_performed: deleted_file_count > 0,
+        filesystem_mutated,
+        out_of_workspace_path_touched: false,
+        live_network_used: false,
+        external_execution_performed: false,
         production_ready: false,
     })
 }
@@ -964,6 +1529,133 @@ fn audit_io_error(path: &Path, source: IoError) -> AuditError {
     }
 }
 
+fn canonical_workspace(workspace: &Path) -> Result<PathBuf, AuditError> {
+    if workspace.as_os_str().is_empty() {
+        return Err(AuditError::ValidationHarnessFailed {
+            reason: "audit retention execution workspace is required".to_owned(),
+        });
+    }
+    let canonical = fs::canonicalize(workspace).map_err(|source| AuditError::Io {
+        path: workspace.display().to_string(),
+        reason: source.to_string(),
+    })?;
+    if !canonical.is_dir() {
+        return Err(AuditError::ValidationHarnessFailed {
+            reason: "audit retention execution workspace must be a directory".to_owned(),
+        });
+    }
+    Ok(canonical)
+}
+
+fn ensure_file_inside_workspace(workspace: &Path, path: &Path) -> Result<PathBuf, AuditError> {
+    let canonical = fs::canonicalize(path).map_err(|source| AuditError::Io {
+        path: path.display().to_string(),
+        reason: source.to_string(),
+    })?;
+    if !canonical.is_file() || !canonical.starts_with(workspace) {
+        return Err(AuditError::ValidationHarnessFailed {
+            reason: "audit retention execution path must be a file inside the workspace".to_owned(),
+        });
+    }
+    Ok(canonical)
+}
+
+fn ensure_parent_inside_workspace(workspace: &Path, path: &Path) -> Result<(), AuditError> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| AuditError::ValidationHarnessFailed {
+            reason: "audit retention execution path must have a parent directory".to_owned(),
+        })?;
+    let canonical_parent = fs::canonicalize(parent).map_err(|source| AuditError::Io {
+        path: parent.display().to_string(),
+        reason: source.to_string(),
+    })?;
+    if !canonical_parent.starts_with(workspace) {
+        return Err(AuditError::ValidationHarnessFailed {
+            reason: "audit retention execution destination must remain inside the workspace"
+                .to_owned(),
+        });
+    }
+    Ok(())
+}
+
+fn rotated_audit_path(active_path: &Path, now_unix_ms: u64) -> Result<PathBuf, AuditError> {
+    let file_name = active_path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .ok_or_else(|| AuditError::ValidationHarnessFailed {
+            reason: "audit retention active path must have a UTF-8 file name".to_owned(),
+        })?;
+    Ok(active_path.with_file_name(format!("{file_name}.rotated-{now_unix_ms}")))
+}
+
+fn deployment_disk_full_blockers(transcript: &AuditDeploymentDiskFullTranscript) -> Vec<String> {
+    let mut blockers = Vec::new();
+    if !transcript.physical_host_evidence {
+        blockers.push("missing-physical-host-evidence".to_owned());
+    }
+    if !transcript.audit_append_failed_closed {
+        blockers.push("missing-audit-append-fail-closed-evidence".to_owned());
+    }
+    if !transcript.state_write_failed_closed {
+        blockers.push("missing-state-write-fail-closed-evidence".to_owned());
+    }
+    if !transcript.runtime_quiesced_or_degraded {
+        blockers.push("missing-runtime-quiesce-or-degrade-evidence".to_owned());
+    }
+    if !transcript.audit_replay_after_recovery_validated {
+        blockers.push("missing-audit-replay-recovery-evidence".to_owned());
+    }
+    if !transcript.sqlite_reopen_after_recovery_validated {
+        blockers.push("missing-sqlite-reopen-recovery-evidence".to_owned());
+    }
+    if !transcript.recovery_runbook_reference_present {
+        blockers.push("missing-recovery-runbook-reference".to_owned());
+    }
+    if transcript.non_secret_reference_count < 3 {
+        blockers.push("insufficient-non-secret-references".to_owned());
+    }
+    if !transcript.operator_approved {
+        blockers.push("missing-operator-approval".to_owned());
+    }
+    blockers
+}
+
+fn deployment_retention_blockers(transcript: &AuditDeploymentRetentionTranscript) -> Vec<String> {
+    let mut blockers = Vec::new();
+    if !transcript.physical_host_evidence {
+        blockers.push("missing-physical-host-evidence".to_owned());
+    }
+    if !transcript.active_rotation_observed {
+        blockers.push("missing-active-rotation-evidence".to_owned());
+    }
+    if !transcript.archive_retention_observed {
+        blockers.push("missing-archive-retention-evidence".to_owned());
+    }
+    if !transcript.expired_archive_deletion_observed {
+        blockers.push("missing-expired-archive-deletion-evidence".to_owned());
+    }
+    if !transcript.post_rotation_append_validated {
+        blockers.push("missing-post-rotation-append-validation".to_owned());
+    }
+    if !transcript.audit_replay_after_rotation_validated {
+        blockers.push("missing-audit-replay-after-rotation-evidence".to_owned());
+    }
+    if !transcript.retention_policy_reference_present {
+        blockers.push("missing-retention-policy-reference".to_owned());
+    }
+    if !transcript.recovery_runbook_reference_present {
+        blockers.push("missing-recovery-runbook-reference".to_owned());
+    }
+    if transcript.non_secret_reference_count < 4 {
+        blockers.push("insufficient-non-secret-references".to_owned());
+    }
+    if !transcript.operator_approved {
+        blockers.push("missing-operator-approval".to_owned());
+    }
+    blockers
+}
+
 fn is_disk_full_error(source: &IoError, reason: &str) -> bool {
     matches!(source.raw_os_error(), Some(28 | 39 | 112))
         || reason.contains("No space left")
@@ -1148,11 +1840,17 @@ fn validation_event(id: impl Into<String>) -> AuditEvent {
 #[cfg(test)]
 mod tests {
     use super::{
-        plan_audit_journal_retention, plan_audit_stale_lock_recheck,
-        validate_audit_journal_durability, validate_disk_full_failure_probe,
-        AppendOnlyAuditJournal, AuditAppendFault, AuditError, AuditEvent, AuditEventKind,
-        AuditJournalFileMetadata, AuditLockFileMetadata, AuditRetentionPolicy,
-        AuditStaleLockPolicy, AuditValue, AUDIT_DURABILITY_VALIDATION_VERSION, AUDIT_GENESIS_HASH,
+        execute_local_audit_retention, plan_audit_journal_retention, plan_audit_stale_lock_recheck,
+        validate_audit_journal_durability, validate_deployment_disk_full_transcript,
+        validate_deployment_retention_transcript, validate_disk_full_failure_probe,
+        AppendOnlyAuditJournal, AuditAppendFault, AuditDeploymentDiskFullTranscript,
+        AuditDeploymentDiskFullTranscriptStatus, AuditDeploymentRetentionTranscript,
+        AuditDeploymentRetentionTranscriptStatus, AuditError, AuditEvent, AuditEventKind,
+        AuditJournalFileMetadata, AuditLockFileMetadata, AuditRetentionExecutionRequest,
+        AuditRetentionPolicy, AuditStaleLockPolicy, AuditValue,
+        AUDIT_DEPLOYMENT_DISK_FULL_TRANSCRIPT_VERSION,
+        AUDIT_DEPLOYMENT_RETENTION_TRANSCRIPT_VERSION, AUDIT_DURABILITY_VALIDATION_VERSION,
+        AUDIT_GENESIS_HASH,
     };
     use std::{env, fs, fs::OpenOptions, io::Write, process};
 
@@ -1181,6 +1879,57 @@ mod tests {
             "policy decision recorded",
         )
         .with_metadata("intent_id", AuditValue::Text("intent-1".to_owned()))
+    }
+
+    fn deployment_disk_full_transcript(complete: bool) -> AuditDeploymentDiskFullTranscript {
+        AuditDeploymentDiskFullTranscript {
+            transcript_id: if complete {
+                "deployment-disk-full-ready".to_owned()
+            } else {
+                "deployment-disk-full-blocked".to_owned()
+            },
+            host_label: "deployment-host-a".to_owned(),
+            physical_host_evidence: complete,
+            audit_append_failed_closed: true,
+            state_write_failed_closed: complete,
+            runtime_quiesced_or_degraded: complete,
+            audit_replay_after_recovery_validated: complete,
+            sqlite_reopen_after_recovery_validated: complete,
+            recovery_runbook_reference_present: complete,
+            non_secret_reference_count: if complete { 5 } else { 1 },
+            operator_approved: complete,
+            disk_filled_by_validator: false,
+            production_path_mutated_by_validator: false,
+            live_execution_performed: false,
+            production_ready_claimed: false,
+            validated_at_unix_ms: 1_700_000_002_000,
+        }
+    }
+
+    fn deployment_retention_transcript(complete: bool) -> AuditDeploymentRetentionTranscript {
+        AuditDeploymentRetentionTranscript {
+            transcript_id: if complete {
+                "deployment-retention-ready".to_owned()
+            } else {
+                "deployment-retention-blocked".to_owned()
+            },
+            host_label: "deployment-host-a".to_owned(),
+            physical_host_evidence: complete,
+            active_rotation_observed: complete,
+            archive_retention_observed: complete,
+            expired_archive_deletion_observed: complete,
+            post_rotation_append_validated: complete,
+            audit_replay_after_rotation_validated: complete,
+            retention_policy_reference_present: complete,
+            recovery_runbook_reference_present: complete,
+            non_secret_reference_count: if complete { 6 } else { 1 },
+            operator_approved: complete,
+            rotation_performed_by_validator: false,
+            production_path_mutated_by_validator: false,
+            live_execution_performed: false,
+            production_ready_claimed: false,
+            validated_at_unix_ms: 1_700_000_003_000,
+        }
     }
 
     #[test]
@@ -1266,6 +2015,143 @@ mod tests {
             validate_disk_full_failure_probe(&workspace).expect("disk-full probe should complete")
         );
         let _ = fs::remove_dir_all(workspace);
+    }
+
+    #[test]
+    fn deployment_disk_full_transcript_validates_physical_host_evidence_shape() {
+        let report =
+            validate_deployment_disk_full_transcript(deployment_disk_full_transcript(true))
+                .expect("complete deployment disk-full transcript should validate");
+
+        assert_eq!(
+            report.validation_version,
+            AUDIT_DEPLOYMENT_DISK_FULL_TRANSCRIPT_VERSION
+        );
+        assert_eq!(
+            report.status,
+            AuditDeploymentDiskFullTranscriptStatus::ReadyForExternalReview
+        );
+        assert!(report.physical_host_evidence);
+        assert!(report.audit_append_failed_closed);
+        assert!(report.state_write_failed_closed);
+        assert!(report.runtime_quiesced_or_degraded);
+        assert!(report.audit_replay_after_recovery_validated);
+        assert!(report.sqlite_reopen_after_recovery_validated);
+        assert!(report.recovery_runbook_reference_present);
+        assert_eq!(report.non_secret_reference_count, 5);
+        assert!(report.operator_approved);
+        assert!(report.blocker_codes.is_empty());
+        assert!(!report.disk_filled_by_validator);
+        assert!(!report.production_path_mutated_by_validator);
+        assert!(!report.live_execution_performed);
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn deployment_disk_full_transcript_blocks_simulation_only_evidence() {
+        let report =
+            validate_deployment_disk_full_transcript(deployment_disk_full_transcript(false))
+                .expect("incomplete deployment disk-full transcript should produce blocked report");
+
+        assert_eq!(
+            report.status,
+            AuditDeploymentDiskFullTranscriptStatus::Blocked
+        );
+        assert!(!report.physical_host_evidence);
+        assert!(!report.state_write_failed_closed);
+        assert!(report
+            .blocker_codes
+            .iter()
+            .any(|code| code == "missing-physical-host-evidence"));
+        assert!(report
+            .blocker_codes
+            .iter()
+            .any(|code| code == "missing-state-write-fail-closed-evidence"));
+        assert!(report
+            .blocker_codes
+            .iter()
+            .any(|code| code == "insufficient-non-secret-references"));
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn deployment_disk_full_transcript_rejects_validator_disk_fill() {
+        let mut transcript = deployment_disk_full_transcript(true);
+        transcript.disk_filled_by_validator = true;
+
+        let error = validate_deployment_disk_full_transcript(transcript)
+            .expect_err("validator disk-fill action must fail closed");
+
+        assert!(error.to_string().contains("must not fill disks"));
+    }
+
+    #[test]
+    fn deployment_retention_transcript_validates_rotation_evidence_shape() {
+        let report =
+            validate_deployment_retention_transcript(deployment_retention_transcript(true))
+                .expect("complete deployment retention transcript should validate");
+
+        assert_eq!(
+            report.validation_version,
+            AUDIT_DEPLOYMENT_RETENTION_TRANSCRIPT_VERSION
+        );
+        assert_eq!(
+            report.status,
+            AuditDeploymentRetentionTranscriptStatus::ReadyForExternalReview
+        );
+        assert!(report.physical_host_evidence);
+        assert!(report.active_rotation_observed);
+        assert!(report.archive_retention_observed);
+        assert!(report.expired_archive_deletion_observed);
+        assert!(report.post_rotation_append_validated);
+        assert!(report.audit_replay_after_rotation_validated);
+        assert!(report.retention_policy_reference_present);
+        assert!(report.recovery_runbook_reference_present);
+        assert_eq!(report.non_secret_reference_count, 6);
+        assert!(report.operator_approved);
+        assert!(report.blocker_codes.is_empty());
+        assert!(!report.rotation_performed_by_validator);
+        assert!(!report.production_path_mutated_by_validator);
+        assert!(!report.live_execution_performed);
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn deployment_retention_transcript_blocks_missing_host_rotation_evidence() {
+        let report =
+            validate_deployment_retention_transcript(deployment_retention_transcript(false))
+                .expect("incomplete deployment retention transcript should produce blocked report");
+
+        assert_eq!(
+            report.status,
+            AuditDeploymentRetentionTranscriptStatus::Blocked
+        );
+        assert!(!report.physical_host_evidence);
+        assert!(!report.active_rotation_observed);
+        assert!(report
+            .blocker_codes
+            .iter()
+            .any(|code| code == "missing-physical-host-evidence"));
+        assert!(report
+            .blocker_codes
+            .iter()
+            .any(|code| code == "missing-active-rotation-evidence"));
+        assert!(report
+            .blocker_codes
+            .iter()
+            .any(|code| code == "insufficient-non-secret-references"));
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn deployment_retention_transcript_rejects_validator_rotation() {
+        let mut transcript = deployment_retention_transcript(true);
+        transcript.rotation_performed_by_validator = true;
+
+        let error = validate_deployment_retention_transcript(transcript)
+            .expect_err("validator rotation action must fail closed");
+
+        assert!(error.to_string().contains("must not rotate logs"));
     }
 
     #[test]
@@ -1402,6 +2288,127 @@ mod tests {
         assert_eq!(plan.expired_archives, vec!["older.jsonl"]);
         assert!(!plan.deletion_performed);
         assert!(!plan.filesystem_mutated);
+    }
+
+    #[test]
+    fn retention_execution_rotates_and_deletes_only_inside_local_workspace() {
+        let workspace = temp_dir("audit-retention-execution");
+        fs::create_dir_all(&workspace).expect("workspace should be created");
+        let active = workspace.join("active.jsonl");
+        let retained = workspace.join("retained.jsonl");
+        let expired = workspace.join("expired.jsonl");
+        fs::write(&active, "active audit record\n").expect("active journal writes");
+        fs::write(&retained, "retained audit record\n").expect("retained archive writes");
+        fs::write(&expired, "expired audit record\n").expect("expired archive writes");
+
+        let report = execute_local_audit_retention(&AuditRetentionExecutionRequest {
+            workspace_dir: workspace.clone(),
+            policy: AuditRetentionPolicy {
+                max_active_bytes: 1,
+                max_archived_files: 1,
+                retention_window_ms: 1_000,
+            },
+            files: vec![
+                AuditJournalFileMetadata {
+                    path: active.display().to_string(),
+                    size_bytes: 20,
+                    modified_at_unix_ms: 10_000,
+                    active: true,
+                },
+                AuditJournalFileMetadata {
+                    path: retained.display().to_string(),
+                    size_bytes: 10,
+                    modified_at_unix_ms: 9_900,
+                    active: false,
+                },
+                AuditJournalFileMetadata {
+                    path: expired.display().to_string(),
+                    size_bytes: 10,
+                    modified_at_unix_ms: 8_000,
+                    active: false,
+                },
+            ],
+            now_unix_ms: 10_000,
+        })
+        .expect("local retention execution should succeed inside workspace");
+
+        assert!(report.rotate_active_requested);
+        assert_eq!(
+            report.rotated_active_from.as_deref(),
+            Some(active.to_str().unwrap())
+        );
+        let rotated = report
+            .rotated_active_to
+            .as_ref()
+            .expect("rotation target should be reported");
+        assert!(rotated.ends_with("active.jsonl.rotated-10000"));
+        assert!(std::path::Path::new(rotated).exists());
+        assert!(active.exists());
+        assert_eq!(
+            fs::read_to_string(&active).expect("new active reads"),
+            String::new()
+        );
+        assert_eq!(
+            report.retained_archives,
+            vec![retained.display().to_string()]
+        );
+        assert_eq!(
+            report.expired_archives_deleted,
+            vec![expired.display().to_string()]
+        );
+        assert!(!expired.exists());
+        assert!(retained.exists());
+        assert_eq!(report.deleted_file_count, 1);
+        assert!(report.deletion_performed);
+        assert!(report.filesystem_mutated);
+        assert!(!report.out_of_workspace_path_touched);
+        assert!(!report.live_network_used);
+        assert!(!report.external_execution_performed);
+        assert!(!report.production_ready);
+
+        let _ = fs::remove_dir_all(workspace);
+    }
+
+    #[test]
+    fn retention_execution_rejects_paths_outside_workspace_before_mutation() {
+        let workspace = temp_dir("audit-retention-execution-blocked");
+        fs::create_dir_all(&workspace).expect("workspace should be created");
+        let active = workspace.join("active.jsonl");
+        let outside = temp_path("audit-retention-outside");
+        fs::write(&active, "active audit record\n").expect("active journal writes");
+        fs::write(&outside, "outside audit record\n").expect("outside archive writes");
+
+        let error = execute_local_audit_retention(&AuditRetentionExecutionRequest {
+            workspace_dir: workspace.clone(),
+            policy: AuditRetentionPolicy {
+                max_active_bytes: 1_000,
+                max_archived_files: 0,
+                retention_window_ms: 1_000,
+            },
+            files: vec![
+                AuditJournalFileMetadata {
+                    path: active.display().to_string(),
+                    size_bytes: 10,
+                    modified_at_unix_ms: 10_000,
+                    active: true,
+                },
+                AuditJournalFileMetadata {
+                    path: outside.display().to_string(),
+                    size_bytes: 10,
+                    modified_at_unix_ms: 8_000,
+                    active: false,
+                },
+            ],
+            now_unix_ms: 10_000,
+        })
+        .expect_err("out-of-workspace archive must fail closed");
+
+        assert!(matches!(error, AuditError::ValidationHarnessFailed { .. }));
+        assert!(active.exists());
+        assert!(outside.exists());
+
+        let _ = fs::remove_dir_all(workspace);
+        let _ = fs::remove_file(outside);
     }
 
     #[test]

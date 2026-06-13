@@ -2,11 +2,21 @@
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::too_many_lines)]
 
+use crate::{
+    AppendOnlyAuditJournal, AuditEvent, AuditEventKind, AuditRecord, AuditValue, StateCheckpoint,
+    StateStore,
+};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, error::Error, fmt};
 
 /// Stable agentic handoff boundary version for audit and continuation surfaces.
 pub const AGENTIC_HANDOFF_VERSION: &str = "phase-18-agentic-handoff-v1";
+
+/// State-store subsystem name for local handoff review checkpoints.
+pub const AGENTIC_HANDOFF_STATE_SUBSYSTEM: &str = "agentic-handoff";
+
+/// Checkpoint key for the latest local handoff review record.
+pub const AGENTIC_HANDOFF_LAST_REVIEW_CHECKPOINT_KEY: &str = "agentic_handoff.last_review";
 
 /// Conservative Phase 18 handoff settings.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -616,6 +626,146 @@ impl AgenticHandoffReviewRecord {
             violations,
         }
     }
+
+    /// Validate local handoff review record invariants before audit/state persistence.
+    pub fn validate(&self) -> Result<(), AgenticHandoffError> {
+        let mut violations = Vec::new();
+        if self.package_id.trim().is_empty() {
+            violations.push(AgenticHandoffViolation::new(
+                "HANDOFF_REVIEW_PACKAGE_ID_EMPTY",
+                "handoff review package_id must be non-empty",
+            ));
+        }
+        if looks_like_secret_assignment(&self.package_id) {
+            violations.push(AgenticHandoffViolation::new(
+                "HANDOFF_REVIEW_PACKAGE_ID_SECRET_LIKE",
+                "handoff review package_id contains secret-like text",
+            ));
+        }
+        if self.status == AgenticHandoffReviewStatus::ReadyForExternalReview
+            && (self.artifact_count == 0
+                || self.unresolved_gap_count == 0
+                || self.live_funds_blocker_count == 0
+                || !self.violations.is_empty())
+        {
+            violations.push(AgenticHandoffViolation::new(
+                "HANDOFF_REVIEW_READY_COUNTS_INVALID",
+                "ready handoff reviews must preserve artifacts, gaps, blockers, and no violations",
+            ));
+        }
+        if self.status == AgenticHandoffReviewStatus::Rejected && self.violations.is_empty() {
+            violations.push(AgenticHandoffViolation::new(
+                "HANDOFF_REVIEW_REJECTED_VIOLATIONS_REQUIRED",
+                "rejected handoff reviews must include validation violations",
+            ));
+        }
+        if self.external_agents_executed
+            || self.external_validation_claimed
+            || self.production_ready
+            || self.live_funds_approved
+            || self.public_exposure_approved
+            || self.secret_material_recorded
+        {
+            violations.push(AgenticHandoffViolation::new(
+                "HANDOFF_REVIEW_FORBIDDEN_SIDE_EFFECT",
+                "handoff review records must not execute agents, claim validation/readiness, approve exposure/funds, or record secrets",
+            ));
+        }
+
+        finish_validation(violations)
+    }
+}
+
+/// Persist the latest local handoff review through state.
+pub fn persist_agentic_handoff_review_checkpoint(
+    store: &mut impl StateStore,
+    record: &AgenticHandoffReviewRecord,
+    updated_at_unix_ms: u64,
+) -> Result<StateCheckpoint, AgenticHandoffError> {
+    record.validate()?;
+    let checkpoint = StateCheckpoint {
+        key: AGENTIC_HANDOFF_LAST_REVIEW_CHECKPOINT_KEY.to_owned(),
+        subsystem: AGENTIC_HANDOFF_STATE_SUBSYSTEM.to_owned(),
+        value: serde_json::to_string(record).map_err(|error| {
+            AgenticHandoffError::BoundaryFailed {
+                reason: format!("failed to serialize handoff review checkpoint: {error}"),
+            }
+        })?,
+        updated_at_unix_ms,
+    };
+    store.put_checkpoint(checkpoint.clone()).map_err(|error| {
+        AgenticHandoffError::BoundaryFailed {
+            reason: format!("failed to persist handoff review checkpoint: {error}"),
+        }
+    })?;
+    Ok(checkpoint)
+}
+
+/// Append one local handoff review record to the audit journal.
+pub fn append_agentic_handoff_review_audit(
+    journal: &mut AppendOnlyAuditJournal,
+    record: &AgenticHandoffReviewRecord,
+    occurred_at_unix_ms: u64,
+) -> Result<AuditRecord, AgenticHandoffError> {
+    record.validate()?;
+    let mut event = AuditEvent::new(
+        format!("agentic-handoff-review-{}", record.package_id),
+        AuditEventKind::RuntimeLifecycle,
+        AGENTIC_HANDOFF_STATE_SUBSYSTEM,
+        "agentic-handoff-review",
+        "Agentic handoff review recorded",
+    );
+    event.occurred_at_unix_ms = occurred_at_unix_ms;
+    event = event
+        .with_metadata(
+            "agentic_handoff_version",
+            AuditValue::Text(AGENTIC_HANDOFF_VERSION.to_owned()),
+        )
+        .with_metadata("package_id", AuditValue::Text(record.package_id.clone()))
+        .with_metadata("status", AuditValue::Text(format!("{:?}", record.status)))
+        .with_metadata(
+            "artifact_count",
+            AuditValue::Unsigned(u64::try_from(record.artifact_count).unwrap_or(u64::MAX)),
+        )
+        .with_metadata(
+            "unresolved_gap_count",
+            AuditValue::Unsigned(u64::try_from(record.unresolved_gap_count).unwrap_or(u64::MAX)),
+        )
+        .with_metadata(
+            "live_funds_blocker_count",
+            AuditValue::Unsigned(
+                u64::try_from(record.live_funds_blocker_count).unwrap_or(u64::MAX),
+            ),
+        )
+        .with_metadata(
+            "external_agents_executed",
+            AuditValue::Bool(record.external_agents_executed),
+        )
+        .with_metadata(
+            "external_validation_claimed",
+            AuditValue::Bool(record.external_validation_claimed),
+        )
+        .with_metadata(
+            "production_ready",
+            AuditValue::Bool(record.production_ready),
+        )
+        .with_metadata(
+            "live_funds_approved",
+            AuditValue::Bool(record.live_funds_approved),
+        )
+        .with_metadata(
+            "public_exposure_approved",
+            AuditValue::Bool(record.public_exposure_approved),
+        )
+        .with_metadata(
+            "sensitive_material_recorded",
+            AuditValue::Bool(record.secret_material_recorded),
+        );
+    journal
+        .append_event(event)
+        .map_err(|error| AgenticHandoffError::BoundaryFailed {
+            reason: format!("failed to append handoff review audit record: {error}"),
+        })
 }
 
 /// Phase 18 handoff package boundary.
@@ -662,6 +812,9 @@ impl AgenticHandoffPackager for DeterministicAgenticHandoffPackager {
             Err(AgenticHandoffError::ValidationFailed { violations }) => Ok(
                 AgenticHandoffReviewRecord::rejected(request.package.package_id, violations),
             ),
+            Err(AgenticHandoffError::BoundaryFailed { reason }) => {
+                Err(AgenticHandoffError::BoundaryFailed { reason })
+            }
         }
     }
 }
@@ -695,6 +848,11 @@ pub enum AgenticHandoffError {
         /// Collected validation violations.
         violations: Vec<AgenticHandoffViolation>,
     },
+    /// Local audit or state boundary failed.
+    BoundaryFailed {
+        /// Non-secret failure reason.
+        reason: String,
+    },
 }
 
 impl fmt::Display for AgenticHandoffError {
@@ -706,6 +864,9 @@ impl fmt::Display for AgenticHandoffError {
                     write!(f, "; {}: {}", violation.code, violation.message)?;
                 }
                 Ok(())
+            }
+            Self::BoundaryFailed { reason } => {
+                write!(f, "agentic handoff boundary failed: {reason}")
             }
         }
     }
@@ -779,10 +940,13 @@ fn looks_like_secret_assignment(value: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
+        append_agentic_handoff_review_audit, persist_agentic_handoff_review_checkpoint,
         AgenticHandoffBoundaryConfig, AgenticHandoffError, AgenticHandoffPackage,
-        AgenticHandoffPackager, AgenticHandoffReviewRequest, AgenticHandoffReviewStatus,
-        DeterministicAgenticHandoffPackager,
+        AgenticHandoffPackager, AgenticHandoffReviewRecord, AgenticHandoffReviewRequest,
+        AgenticHandoffReviewStatus, DeterministicAgenticHandoffPackager,
+        AGENTIC_HANDOFF_LAST_REVIEW_CHECKPOINT_KEY, AGENTIC_HANDOFF_STATE_SUBSYSTEM,
     };
+    use crate::{AppendOnlyAuditJournal, InMemoryStateStore, StateStore};
 
     #[test]
     fn conservative_handoff_package_is_ready_for_external_review() {
@@ -866,6 +1030,75 @@ mod tests {
             AgenticHandoffError::ValidationFailed { violations } => assert!(violations
                 .iter()
                 .any(|violation| violation.code == "HANDOFF_EXTERNAL_AGENT_EXECUTION_DENIED")),
+            AgenticHandoffError::BoundaryFailed { reason } => {
+                panic!("unexpected boundary failure: {reason}");
+            }
         }
+    }
+
+    #[test]
+    fn handoff_review_audit_and_state_reopen_locally() {
+        let packager = DeterministicAgenticHandoffPackager;
+        let record = packager
+            .review_package(AgenticHandoffReviewRequest::conservative(
+                "phase-18-handoff-audit-state",
+                "local-operator",
+            ))
+            .expect("conservative handoff package should be valid");
+
+        let audit_path = unique_temp_path("handoff-review-audit", "jsonl");
+        let mut journal = AppendOnlyAuditJournal::open(&audit_path).expect("journal opens");
+        let audit_record =
+            append_agentic_handoff_review_audit(&mut journal, &record, 1_700_000_070)
+                .expect("audit append should succeed");
+        assert_eq!(
+            audit_record.event.subsystem,
+            AGENTIC_HANDOFF_STATE_SUBSYSTEM
+        );
+        assert_eq!(audit_record.event.actor, "agentic-handoff-review");
+
+        let next_sequence = journal.next_sequence();
+        let mut invalid = record.clone();
+        invalid.external_agents_executed = true;
+        assert!(
+            append_agentic_handoff_review_audit(&mut journal, &invalid, 1_700_000_071).is_err()
+        );
+        assert_eq!(journal.next_sequence(), next_sequence);
+
+        let mut store = InMemoryStateStore::new();
+        let checkpoint =
+            persist_agentic_handoff_review_checkpoint(&mut store, &record, 1_700_000_072)
+                .expect("checkpoint persist should succeed");
+        assert_eq!(checkpoint.key, AGENTIC_HANDOFF_LAST_REVIEW_CHECKPOINT_KEY);
+
+        let recovered = store
+            .get_checkpoint(AGENTIC_HANDOFF_LAST_REVIEW_CHECKPOINT_KEY)
+            .expect("state read should succeed")
+            .expect("checkpoint should exist");
+        let recovered_record: AgenticHandoffReviewRecord =
+            serde_json::from_str(&recovered.value).expect("checkpoint JSON should decode");
+        assert_eq!(recovered_record, record);
+        assert_eq!(
+            recovered_record.status,
+            AgenticHandoffReviewStatus::ReadyForExternalReview
+        );
+        assert!(!recovered_record.external_agents_executed);
+        assert!(!recovered_record.production_ready);
+        assert!(!recovered_record.secret_material_recorded);
+    }
+
+    fn unique_temp_path(label: &str, extension: &str) -> std::path::PathBuf {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static COUNTER: AtomicU64 = AtomicU64::new(0);
+
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system clock should be after Unix epoch")
+            .as_nanos();
+        let n = COUNTER.fetch_add(1, Ordering::Relaxed);
+        std::env::temp_dir().join(format!(
+            "arbyclaw-handoff-{label}-{}-{nanos}-{n}.{extension}",
+            std::process::id()
+        ))
     }
 }

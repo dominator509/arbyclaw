@@ -2,11 +2,13 @@
 #![allow(clippy::missing_errors_doc)]
 
 use crate::{
-    AppendOnlyAuditJournal, AuditEvent, AuditEventKind, AuditRecord, AuditValue, ExecutionIntent,
-    ExecutionScope, FeeAdjustedEdge, FeeModelError, FeeProvider, FeeSchedule, LiquidityRole,
-    MarketDataCapabilities, MarketDataError, MarketDataProvider, MarketDataRequest, MarketPair,
-    NormalizedQuote, OrderBookSnapshot, PolicyDecision, PolicyEngine, PolicyViolation, PriceLevel,
-    StateCheckpoint, StateStore, StateStoreError, VenueRef,
+    AppendOnlyAuditJournal, AuditEvent, AuditEventKind, AuditRecord, AuditValue,
+    ExecutionAdapterRunRecord, ExecutionFillRecord, ExecutionFillStatus, ExecutionIntent,
+    ExecutionPlanDraft, ExecutionReconciliationStatus, ExecutionScope, FeeAdjustedEdge,
+    FeeModelError, FeeProvider, FeeSchedule, LiquidityRole, MarketDataCapabilities,
+    MarketDataError, MarketDataProvider, MarketDataRequest, MarketPair, NormalizedQuote,
+    OrderBookSnapshot, PolicyDecision, PolicyEngine, PolicyViolation, PriceLevel, StateCheckpoint,
+    StateStore, StateStoreError, VenueRef,
 };
 use serde::{Deserialize, Serialize};
 use std::{error::Error, fmt};
@@ -1627,6 +1629,34 @@ pub struct PaperAuditJournalWriteReport {
     pub audited_at_unix_ms: u64,
 }
 
+/// Local adapter-run paper ledgering summary.
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct PaperAdapterRunLedgerReport {
+    /// Source execution-adapter run id.
+    pub adapter_run_id: String,
+    /// Source execution-plan id.
+    pub plan_id: String,
+    /// Number of modeled paper fills settled into the ledger.
+    pub modeled_fills_settled: usize,
+    /// Number of adapter reconciliation records replayed against modeled fills.
+    pub reconciliations_replayed: usize,
+    /// Number of ledger entries written by this settlement.
+    pub ledger_entries_written: usize,
+    /// Number of paper ledger audit records appended.
+    pub audit_records_appended: usize,
+    /// Whether a final paper ledger checkpoint was persisted.
+    pub ledger_checkpoint_persisted: bool,
+    /// State-store key for the final paper ledger checkpoint.
+    pub ledger_checkpoint_key: String,
+    /// Whether external adapter submission occurred. Always false here.
+    pub external_submission_performed: bool,
+    /// Whether live execution occurred. Always false here.
+    pub live_execution_performed: bool,
+    /// Whether this local report claims production readiness. Always false.
+    pub production_ready: bool,
+}
+
 /// Paper ledgered execution paired with append-only audit journal records.
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -1914,6 +1944,280 @@ pub fn append_paper_ledgered_execution_audit(
         live_network_used: false,
         external_execution_performed: false,
         audited_at_unix_ms,
+    })
+}
+
+/// Settle local modeled execution-adapter fills into a paper balance ledger.
+///
+/// This helper accepts only paper-scope deterministic adapter records. It writes
+/// local paper ledger audit records and a final ledger checkpoint, and never
+/// submits orders, calls exchanges/RPCs, signs payloads, broadcasts
+/// transactions, withdraws funds, bridges assets, or claims production
+/// readiness.
+pub fn ledger_execution_adapter_run_paper_fills(
+    journal: &mut AppendOnlyAuditJournal,
+    store: &mut impl StateStore,
+    ledger: &mut PaperBalanceLedger,
+    plan: &ExecutionPlanDraft,
+    run: &ExecutionAdapterRunRecord,
+    settled_at_unix_ms: u64,
+) -> Result<PaperAdapterRunLedgerReport, PaperConnectorError> {
+    validate_adapter_run_ledger_inputs(plan, run, settled_at_unix_ms)?;
+
+    let mut modeled_fills_settled = 0usize;
+    let mut reconciliations_replayed = 0usize;
+    let mut ledger_entries_written = 0usize;
+    let mut audit_records_appended = 0usize;
+
+    for fill in run
+        .fills
+        .iter()
+        .filter(|fill| fill.status == ExecutionFillStatus::ModeledFilled)
+    {
+        let report_id = adapter_fill_paper_report_id(run, fill);
+        if ledger
+            .entries
+            .iter()
+            .any(|entry| entry.report_id.as_deref() == Some(report_id.as_str()))
+        {
+            return Err(PaperConnectorError::InvalidPaperLedger {
+                reason: format!(
+                    "adapter-run paper ledger refuses duplicate modeled fill report {report_id}"
+                ),
+            });
+        }
+    }
+
+    for fill in run
+        .fills
+        .iter()
+        .filter(|fill| fill.status == ExecutionFillStatus::ModeledFilled)
+    {
+        let intent = plan_intent_for_fill(plan, fill)?;
+        validate_reconciliation_for_fill(run, fill)?;
+        let reserve_entry = ledger.reserve_for_intent(intent, settled_at_unix_ms)?;
+        let report = adapter_fill_paper_report(plan, run, intent, fill)?;
+        let settlement_entry =
+            ledger.settle_report(&report, settled_at_unix_ms.saturating_add(1))?;
+        let audit_report = append_paper_ledgered_execution_audit(
+            journal,
+            &PaperLedgeredExecution {
+                report,
+                reserve_entry,
+                settlement_entry,
+            },
+            settled_at_unix_ms.saturating_add(2),
+        )?;
+        modeled_fills_settled = modeled_fills_settled.saturating_add(1);
+        reconciliations_replayed = reconciliations_replayed.saturating_add(1);
+        ledger_entries_written = ledger_entries_written.saturating_add(2);
+        audit_records_appended =
+            audit_records_appended.saturating_add(audit_report.records_appended);
+    }
+
+    if modeled_fills_settled == 0 {
+        return Err(PaperConnectorError::InvalidPaperLedger {
+            reason: "adapter run did not contain modeled paper fills to ledger".to_owned(),
+        });
+    }
+
+    let checkpoint = persist_paper_balance_ledger_checkpoint(
+        store,
+        ledger,
+        settled_at_unix_ms.saturating_add(3),
+    )
+    .map_err(|source| PaperConnectorError::InvalidPaperLedger {
+        reason: format!("adapter-run paper ledger checkpoint failed: {source}"),
+    })?;
+
+    Ok(PaperAdapterRunLedgerReport {
+        adapter_run_id: run.id.clone(),
+        plan_id: plan.id.clone(),
+        modeled_fills_settled,
+        reconciliations_replayed,
+        ledger_entries_written,
+        audit_records_appended,
+        ledger_checkpoint_persisted: true,
+        ledger_checkpoint_key: checkpoint.key,
+        external_submission_performed: false,
+        live_execution_performed: false,
+        production_ready: false,
+    })
+}
+
+fn adapter_fill_paper_report_id(
+    run: &ExecutionAdapterRunRecord,
+    fill: &ExecutionFillRecord,
+) -> String {
+    format!("paper-adapter-run:{}:{}", run.id, fill.id)
+}
+
+fn validate_reconciliation_for_fill(
+    run: &ExecutionAdapterRunRecord,
+    fill: &ExecutionFillRecord,
+) -> Result<(), PaperConnectorError> {
+    let reconciliation = run
+        .reconciliations
+        .iter()
+        .find(|reconciliation| reconciliation.intent_id == fill.intent_id)
+        .ok_or_else(|| PaperConnectorError::InvalidPaperLedger {
+            reason: format!(
+                "adapter-run paper ledger fill {} has no matching reconciliation",
+                fill.id
+            ),
+        })?;
+    if reconciliation.status != ExecutionReconciliationStatus::Reconciled {
+        return Err(PaperConnectorError::InvalidPaperLedger {
+            reason: format!(
+                "adapter-run paper ledger fill {} requires reconciled status",
+                fill.id
+            ),
+        });
+    }
+    if (reconciliation.observed_notional_quote - fill.filled_notional_quote).abs() > 0.000_000_1 {
+        return Err(PaperConnectorError::InvalidPaperLedger {
+            reason: format!(
+                "adapter-run paper ledger fill {} does not match reconciled notional",
+                fill.id
+            ),
+        });
+    }
+    if reconciliation.difference_quote.abs() > 0.000_000_1 {
+        return Err(PaperConnectorError::InvalidPaperLedger {
+            reason: format!(
+                "adapter-run paper ledger fill {} has non-zero reconciliation difference",
+                fill.id
+            ),
+        });
+    }
+    Ok(())
+}
+
+fn validate_adapter_run_ledger_inputs(
+    plan: &ExecutionPlanDraft,
+    run: &ExecutionAdapterRunRecord,
+    settled_at_unix_ms: u64,
+) -> Result<(), PaperConnectorError> {
+    if settled_at_unix_ms == 0 {
+        return Err(PaperConnectorError::InvalidPaperLedger {
+            reason: "adapter-run paper ledger timestamp must be non-zero".to_owned(),
+        });
+    }
+    plan.validate()
+        .map_err(|error| PaperConnectorError::InvalidPaperLedger {
+            reason: format!("adapter-run paper ledger plan validation failed: {error}"),
+        })?;
+    run.validate()
+        .map_err(|error| PaperConnectorError::InvalidPaperLedger {
+            reason: format!("adapter-run paper ledger run validation failed: {error}"),
+        })?;
+    if plan.scope != ExecutionScope::Paper || run.scope != ExecutionScope::Paper {
+        return Err(PaperConnectorError::NonPaperScope { scope: run.scope });
+    }
+    if run.plan_id != plan.id {
+        return Err(PaperConnectorError::InvalidPaperLedger {
+            reason: "adapter-run paper ledger requires matching plan id".to_owned(),
+        });
+    }
+    if run.external_submission_enabled
+        || run
+            .attempts
+            .iter()
+            .any(|attempt| attempt.submitted_to_external_adapter)
+    {
+        return Err(PaperConnectorError::InvalidPaperLedger {
+            reason: "adapter-run paper ledger refuses external submission records".to_owned(),
+        });
+    }
+    Ok(())
+}
+
+fn plan_intent_for_fill<'a>(
+    plan: &'a ExecutionPlanDraft,
+    fill: &ExecutionFillRecord,
+) -> Result<&'a ExecutionIntent, PaperConnectorError> {
+    plan.intents
+        .iter()
+        .find(|intent| intent.id == fill.intent_id)
+        .ok_or_else(|| PaperConnectorError::InvalidPaperLedger {
+            reason: format!(
+                "adapter-run paper ledger fill {} has no matching plan intent",
+                fill.id
+            ),
+        })
+}
+
+fn adapter_fill_paper_report(
+    plan: &ExecutionPlanDraft,
+    run: &ExecutionAdapterRunRecord,
+    intent: &ExecutionIntent,
+    fill: &ExecutionFillRecord,
+) -> Result<PaperExecutionReport, PaperConnectorError> {
+    if fill.status != ExecutionFillStatus::ModeledFilled {
+        return Err(PaperConnectorError::InvalidPaperLedger {
+            reason: "adapter-run paper ledger accepts modeled fills only".to_owned(),
+        });
+    }
+    if (fill.filled_notional_quote - intent.notional_quote).abs() > 0.000_000_1 {
+        return Err(PaperConnectorError::InvalidPaperLedger {
+            reason: "adapter-run modeled fill notional must match source intent notional"
+                .to_owned(),
+        });
+    }
+    let net_profit_quote = intent.expected_profit_quote - fill.fee_quote;
+    let roi_bps = if intent.notional_quote.abs() <= f64::EPSILON {
+        0.0
+    } else {
+        (net_profit_quote / intent.notional_quote) * 10_000.0
+    };
+    Ok(PaperExecutionReport {
+        id: adapter_fill_paper_report_id(run, fill),
+        adapter: run.adapter_id.clone(),
+        connector_version: PAPER_CONNECTOR_VERSION.to_owned(),
+        fill_model_version: PAPER_CONNECTOR_VERSION.to_owned(),
+        intent_id: intent.id.clone(),
+        strategy_id: intent.strategy_id.clone(),
+        trust_contract_version: plan
+            .policy_outcomes
+            .iter()
+            .find(|outcome| outcome.intent_id == intent.id)
+            .and_then(|outcome| outcome.trust_contract_version.as_deref())
+            .unwrap_or("phase-11-adapter-policy-revalidation")
+            .to_owned(),
+        status: PaperExecutionStatus::Filled,
+        scope: intent.scope,
+        venue: intent.venue.clone(),
+        base_asset: intent.base_asset.clone(),
+        quote_asset: intent.quote_asset.clone(),
+        notional_quote: intent.notional_quote,
+        filled_notional_quote: fill.filled_notional_quote,
+        unfilled_notional_quote: 0.0,
+        average_fill_price_quote: 0.0,
+        gross_profit_quote: intent.expected_profit_quote,
+        total_fees_quote: fill.fee_quote,
+        adverse_selection_quote: 0.0,
+        calibration_adjustment_quote: 0.0,
+        net_profit_quote,
+        roi_bps,
+        liquidity_role: LiquidityRole::Taker,
+        fill_simulation: PaperFillSimulationReport {
+            fill_model_version: PAPER_CONNECTOR_VERSION.to_owned(),
+            status: PaperFillSimulationStatus::Filled,
+            side: PaperFillSide::BuyBase,
+            requested_notional_quote: intent.notional_quote,
+            filled_notional_quote: fill.filled_notional_quote,
+            unfilled_notional_quote: 0.0,
+            filled_base_quantity: 0.0,
+            average_fill_price_quote: 0.0,
+            reference_price_quote: 0.0,
+            worst_fill_price_quote: 0.0,
+            slippage_bps: f64::from(intent.slippage_bps),
+            consumed_levels: 0,
+            latency_ms: 0,
+            queue_position_bps: 0,
+            filled_at_unix_ms: fill.filled_at_unix_ms,
+            reason: "local execution-adapter modeled fill settled into paper ledger".to_owned(),
+        },
     })
 }
 
@@ -2961,21 +3265,26 @@ fn validate_non_secret_reference(
 #[cfg(test)]
 mod tests {
     use super::{
-        persist_paper_balance_ledger_checkpoint, persist_paper_execution_report_checkpoint,
-        validate_paper_runtime, PaperAdverseSelectionConfig, PaperAssetBalance,
-        PaperBacktestCorpus, PaperBacktestScenario, PaperBacktestStep, PaperBalanceLedger,
-        PaperExchangeMatchingProfile, PaperExecutionAdapter, PaperExecutionStatus,
-        PaperFeeProvider, PaperFillModelConfig, PaperFillSide, PaperFillSimulationRequest,
-        PaperFillSimulationStatus, PaperLedgerEntryKind, PaperMarketDataProvider,
-        PaperRuntimeValidationRequest, PaperVenueCalibrationRecord, PaperVenueRealismRequest,
-        PAPER_BALANCE_LEDGER_CHECKPOINT_KEY, PAPER_EXECUTION_LAST_REPORT_CHECKPOINT_KEY,
-        PAPER_EXECUTION_STATE_SUBSYSTEM, PAPER_REALISM_VALIDATION_VERSION,
+        ledger_execution_adapter_run_paper_fills, persist_paper_balance_ledger_checkpoint,
+        persist_paper_execution_report_checkpoint, validate_paper_runtime,
+        PaperAdverseSelectionConfig, PaperAssetBalance, PaperBacktestCorpus, PaperBacktestScenario,
+        PaperBacktestStep, PaperBalanceLedger, PaperExchangeMatchingProfile, PaperExecutionAdapter,
+        PaperExecutionStatus, PaperFeeProvider, PaperFillModelConfig, PaperFillSide,
+        PaperFillSimulationRequest, PaperFillSimulationStatus, PaperLedgerEntryKind,
+        PaperMarketDataProvider, PaperRuntimeValidationRequest, PaperVenueCalibrationRecord,
+        PaperVenueRealismRequest, PAPER_BALANCE_LEDGER_CHECKPOINT_KEY,
+        PAPER_EXECUTION_LAST_REPORT_CHECKPOINT_KEY, PAPER_EXECUTION_STATE_SUBSYSTEM,
+        PAPER_REALISM_VALIDATION_VERSION,
     };
     use crate::{
-        AgentConfig, AppendOnlyAuditJournal, DestinationPolicy, ExecutionIntent,
-        ExecutionIntentKind, ExecutionScope, FeeProvider, FeeSchedule, LiquidityRole,
-        MarketDataProvider, MarketDataRequest, MarketPair, OrderBookSnapshot, PolicyEngine,
-        PriceLevel, SqliteWalStateStore, StateStore, VenueKind, VenueRef,
+        AgentConfig, AppendOnlyAuditJournal, DestinationPolicy,
+        DeterministicExecutionAdapterBoundary, DeterministicExecutionPlanner, ExecutionAdapter,
+        ExecutionAdapterConfig, ExecutionAdapterRequest, ExecutionIntent, ExecutionIntentKind,
+        ExecutionPlanner, ExecutionPlannerConfig, ExecutionPlannerRequest, ExecutionScope,
+        FeeAdjustedEdge, FeeEstimate, FeeProvider, FeeSchedule, LiquidityRole, MarketDataProvider,
+        MarketDataRequest, MarketPair, OpportunityCandidate, OpportunityLeg, OpportunityLegSide,
+        OpportunityRouteKind, OpportunityScore, OrderBookSnapshot, PolicyEngine, PriceLevel,
+        SqliteWalStateStore, StateStore, VenueKind, VenueRef,
     };
     use std::{
         env, fs,
@@ -3080,6 +3389,66 @@ redact_secrets = true
             market_data_age_ms: 1_000,
             destination: DestinationPolicy::InternalAccount,
             requires_signing: false,
+        }
+    }
+
+    fn adapter_ledger_candidate() -> OpportunityCandidate {
+        let pair = pair();
+        let edge = FeeAdjustedEdge::calculate(2.0, 0.20, 50.0).expect("edge should validate");
+        OpportunityCandidate {
+            id: "opp-adapter-ledger-btc-usdc".to_owned(),
+            route_kind: OpportunityRouteKind::CexCex,
+            pair: pair.clone(),
+            legs: vec![
+                opportunity_leg(
+                    "quote-ledger-a",
+                    pair.clone(),
+                    OpportunityLegSide::Buy,
+                    25.0,
+                ),
+                opportunity_leg("quote-ledger-b", pair, OpportunityLegSide::Sell, 25.0),
+            ],
+            edge,
+            score: OpportunityScore {
+                roi_bps: edge.roi_bps,
+                freshness_penalty_bps: 0.0,
+                risk_penalty_bps: 0.0,
+                score_bps: edge.roi_bps,
+            },
+            liquidity_model: None,
+            transfer_risk: None,
+            discovered_at_unix_ms: 1_700_000_000_900,
+            source_quote_ids: vec!["quote-ledger-a".to_owned(), "quote-ledger-b".to_owned()],
+            warnings: Vec::new(),
+        }
+    }
+
+    fn opportunity_leg(
+        source_quote_id: &str,
+        pair: MarketPair,
+        side: OpportunityLegSide,
+        notional_quote: f64,
+    ) -> OpportunityLeg {
+        OpportunityLeg {
+            venue: venue(),
+            pair: pair.clone(),
+            side,
+            price_quote: 100.0,
+            quantity_base: notional_quote / 100.0,
+            notional_quote,
+            fee_estimate: FeeEstimate {
+                venue: venue(),
+                pair: Some(pair),
+                notional_quote,
+                liquidity_role: LiquidityRole::Taker,
+                fee_bps: 10.0,
+                venue_fee_quote: 0.10,
+                network_fee_quote: 0.0,
+                total_fee_quote: 0.10,
+                externally_verified: true,
+            },
+            source_quote_id: source_quote_id.to_owned(),
+            market_data_age_ms: 100,
         }
     }
 
@@ -3748,6 +4117,246 @@ redact_secrets = true
         }
 
         cleanup_state_files(&path);
+    }
+
+    #[test]
+    fn adapter_run_paper_fills_settle_ledger_audit_and_state_locally() {
+        let audit_path = unique_audit_path("adapter-run-paper-ledger");
+        let state_path = unique_state_path("adapter-run-paper-ledger");
+        cleanup_state_files(&state_path);
+        let mut journal = AppendOnlyAuditJournal::open(&audit_path).expect("journal opens");
+        let mut store = SqliteWalStateStore::open(&state_path).expect("sqlite store opens");
+        let policy = PolicyEngine::from_config(
+            AgentConfig::from_toml_str(PAPER_CONFIG).expect("config should validate"),
+        );
+        let plan = DeterministicExecutionPlanner::new()
+            .plan(
+                &ExecutionPlannerRequest {
+                    id: "adapter-ledger-planner-request".to_owned(),
+                    strategy_id: "strategy-paper".to_owned(),
+                    candidate: adapter_ledger_candidate(),
+                    config: ExecutionPlannerConfig::default(),
+                    default_chain: None,
+                    now_unix_ms: 1_700_000_001_000,
+                },
+                &policy,
+            )
+            .expect("planner should create paper draft");
+        let run = DeterministicExecutionAdapterBoundary::new()
+            .evaluate_plan(
+                &ExecutionAdapterRequest {
+                    id: "adapter-ledger-request".to_owned(),
+                    plan: plan.clone(),
+                    config: ExecutionAdapterConfig::default(),
+                    now_unix_ms: 1_700_000_001_100,
+                },
+                &policy,
+            )
+            .expect("adapter should model paper fills");
+        let mut ledger =
+            PaperBalanceLedger::new(
+                vec![PaperAssetBalance::available(venue(), "USDC", 1_000.0)
+                    .expect("balance validates")],
+                1_700_000_001_200,
+            )
+            .expect("ledger validates");
+
+        let report = ledger_execution_adapter_run_paper_fills(
+            &mut journal,
+            &mut store,
+            &mut ledger,
+            &plan,
+            &run,
+            1_700_000_001_300,
+        )
+        .expect("adapter fills settle into paper ledger");
+
+        assert_eq!(report.modeled_fills_settled, 2);
+        assert_eq!(report.reconciliations_replayed, 2);
+        assert_eq!(report.ledger_entries_written, 4);
+        assert_eq!(report.audit_records_appended, 6);
+        assert!(report.ledger_checkpoint_persisted);
+        assert_eq!(
+            report.ledger_checkpoint_key,
+            PAPER_BALANCE_LEDGER_CHECKPOINT_KEY
+        );
+        assert!(!report.external_submission_performed);
+        assert!(!report.live_execution_performed);
+        assert!(!report.production_ready);
+        assert_eq!(journal.next_sequence(), 7);
+        assert!(ledger.reserved_balance(&venue(), "USDC").abs() < f64::EPSILON);
+        let replay = ledger
+            .validate_replay(1_700_000_001_400)
+            .expect("ledger replay validates");
+        assert_eq!(replay.reserve_entries, 2);
+        assert_eq!(replay.settlement_entries, 2);
+        assert!(replay.balanced);
+        drop(store);
+        drop(journal);
+
+        let reopened_journal = AppendOnlyAuditJournal::open(&audit_path).expect("journal reopens");
+        assert_eq!(reopened_journal.next_sequence(), 7);
+        let reopened_state = SqliteWalStateStore::open(&state_path).expect("sqlite store reopens");
+        let checkpoint = reopened_state
+            .get_checkpoint(PAPER_BALANCE_LEDGER_CHECKPOINT_KEY)
+            .expect("checkpoint reads")
+            .expect("checkpoint exists");
+        let restored: PaperBalanceLedger =
+            serde_json::from_str(&checkpoint.value).expect("ledger checkpoint decodes");
+        assert_eq!(restored, ledger);
+
+        let _ = fs::remove_file(audit_path);
+        cleanup_state_files(&state_path);
+    }
+
+    #[test]
+    fn adapter_run_paper_fill_replay_rejects_duplicate_settlement_after_reopen() {
+        let audit_path = unique_audit_path("adapter-run-paper-ledger-idempotency");
+        let state_path = unique_state_path("adapter-run-paper-ledger-idempotency");
+        cleanup_state_files(&state_path);
+        let policy = PolicyEngine::from_config(
+            AgentConfig::from_toml_str(PAPER_CONFIG).expect("config should validate"),
+        );
+        let plan = DeterministicExecutionPlanner::new()
+            .plan(
+                &ExecutionPlannerRequest {
+                    id: "adapter-ledger-idempotency-planner-request".to_owned(),
+                    strategy_id: "strategy-paper".to_owned(),
+                    candidate: adapter_ledger_candidate(),
+                    config: ExecutionPlannerConfig::default(),
+                    default_chain: None,
+                    now_unix_ms: 1_700_000_002_000,
+                },
+                &policy,
+            )
+            .expect("planner should create paper draft");
+        let run = DeterministicExecutionAdapterBoundary::new()
+            .evaluate_plan(
+                &ExecutionAdapterRequest {
+                    id: "adapter-ledger-idempotency-request".to_owned(),
+                    plan: plan.clone(),
+                    config: ExecutionAdapterConfig::default(),
+                    now_unix_ms: 1_700_000_002_100,
+                },
+                &policy,
+            )
+            .expect("adapter should model paper fills");
+        let mut ledger =
+            PaperBalanceLedger::new(
+                vec![PaperAssetBalance::available(venue(), "USDC", 1_000.0)
+                    .expect("balance validates")],
+                1_700_000_002_200,
+            )
+            .expect("ledger validates");
+
+        {
+            let mut journal = AppendOnlyAuditJournal::open(&audit_path).expect("journal opens");
+            let mut store = SqliteWalStateStore::open(&state_path).expect("sqlite store opens");
+            ledger_execution_adapter_run_paper_fills(
+                &mut journal,
+                &mut store,
+                &mut ledger,
+                &plan,
+                &run,
+                1_700_000_002_300,
+            )
+            .expect("first adapter fill settlement succeeds");
+        }
+
+        let mut journal = AppendOnlyAuditJournal::open(&audit_path).expect("journal reopens");
+        let mut store = SqliteWalStateStore::open(&state_path).expect("sqlite store reopens");
+        let checkpoint = store
+            .get_checkpoint(PAPER_BALANCE_LEDGER_CHECKPOINT_KEY)
+            .expect("checkpoint reads")
+            .expect("checkpoint exists");
+        let mut restored: PaperBalanceLedger =
+            serde_json::from_str(&checkpoint.value).expect("ledger checkpoint decodes");
+        let original_entries = restored.entries.len();
+        let original_next_sequence = journal.next_sequence();
+
+        let error = ledger_execution_adapter_run_paper_fills(
+            &mut journal,
+            &mut store,
+            &mut restored,
+            &plan,
+            &run,
+            1_700_000_002_400,
+        )
+        .expect_err("duplicate restart replay settlement must fail closed");
+
+        assert!(error
+            .to_string()
+            .contains("refuses duplicate modeled fill report"));
+        assert_eq!(restored.entries.len(), original_entries);
+        assert_eq!(journal.next_sequence(), original_next_sequence);
+
+        let _ = fs::remove_file(audit_path);
+        cleanup_state_files(&state_path);
+    }
+
+    #[test]
+    fn adapter_run_paper_fill_reconciliation_mismatch_fails_before_mutation() {
+        let audit_path = unique_audit_path("adapter-run-paper-ledger-reconciliation");
+        let state_path = unique_state_path("adapter-run-paper-ledger-reconciliation");
+        cleanup_state_files(&state_path);
+        let mut journal = AppendOnlyAuditJournal::open(&audit_path).expect("journal opens");
+        let mut store = SqliteWalStateStore::open(&state_path).expect("sqlite store opens");
+        let policy = PolicyEngine::from_config(
+            AgentConfig::from_toml_str(PAPER_CONFIG).expect("config should validate"),
+        );
+        let plan = DeterministicExecutionPlanner::new()
+            .plan(
+                &ExecutionPlannerRequest {
+                    id: "adapter-ledger-reconciliation-planner-request".to_owned(),
+                    strategy_id: "strategy-paper".to_owned(),
+                    candidate: adapter_ledger_candidate(),
+                    config: ExecutionPlannerConfig::default(),
+                    default_chain: None,
+                    now_unix_ms: 1_700_000_003_000,
+                },
+                &policy,
+            )
+            .expect("planner should create paper draft");
+        let mut run = DeterministicExecutionAdapterBoundary::new()
+            .evaluate_plan(
+                &ExecutionAdapterRequest {
+                    id: "adapter-ledger-reconciliation-request".to_owned(),
+                    plan: plan.clone(),
+                    config: ExecutionAdapterConfig::default(),
+                    now_unix_ms: 1_700_000_003_100,
+                },
+                &policy,
+            )
+            .expect("adapter should model paper fills");
+        run.reconciliations[0].observed_notional_quote += 1.0;
+        run.reconciliations[0].difference_quote = 1.0;
+        let mut ledger =
+            PaperBalanceLedger::new(
+                vec![PaperAssetBalance::available(venue(), "USDC", 1_000.0)
+                    .expect("balance validates")],
+                1_700_000_003_200,
+            )
+            .expect("ledger validates");
+        let initial_entries = ledger.entries.len();
+
+        let error = ledger_execution_adapter_run_paper_fills(
+            &mut journal,
+            &mut store,
+            &mut ledger,
+            &plan,
+            &run,
+            1_700_000_003_300,
+        )
+        .expect_err("reconciliation mismatch must fail before settlement");
+
+        assert!(error
+            .to_string()
+            .contains("does not match reconciled notional"));
+        assert_eq!(ledger.entries.len(), initial_entries);
+        assert_eq!(journal.next_sequence(), 1);
+
+        let _ = fs::remove_file(audit_path);
+        cleanup_state_files(&state_path);
     }
 
     fn unique_state_path(label: &str) -> PathBuf {

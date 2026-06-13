@@ -95,6 +95,13 @@ cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 ```
 
+Additional local no-network audit/state gate now available:
+
+```bash
+cargo run -p arb-agent -- validate-market-data-boundary-audit --workspace <fresh-dir>
+cargo run -p arb-agent -- validate-fee-boundary-audit --workspace <fresh-dir>
+```
+
 Additional future validation required:
 
 - property tests for market-pair normalization
@@ -128,17 +135,17 @@ No secrets, wallets, exchange accounts, runtime state, network integrations, or 
 
 ## Environment Limitations
 
-- Rust/Cargo validation is unavailable in the current ChatGPT Project Mode environment.
+- Rust/Cargo validation now has local and GitHub Actions evidence for the current workspace state, and must be rerun after future changes.
 - Real exchange, DEX, and paid-provider data cannot be validated here.
 - Real latency, WebSocket, REST, rate-limit, and data-quality behavior cannot be validated here.
 - ARM-device runtime behavior cannot be validated here.
 
 ## Expected Unresolved Gaps
 
-- Rust/Cargo validation deferred.
+- Rust/Cargo validation is current for the workspace state and must be refreshed after future changes.
 - No live market-data providers implemented.
-- No rate-limit handling.
-- No WebSocket reconnect logic.
+- Local rate-limit/outage/stale/latency provider preflight, local reconnect/backoff plan validation, `arb-agent validate-market-data-boundary-audit --workspace <fresh-dir>`, local fee verification records, and `arb-agent validate-fee-boundary-audit --workspace <fresh-dir>` now exist for caller-supplied no-network/no-credential observations; provider-side market-data reconciliation and external account/provider fee verification remain future work.
+- No live WebSocket reconnect implementation.
 - No paid market-data provider integration.
 - No historical data persistence.
 - No market-data quality scoring.

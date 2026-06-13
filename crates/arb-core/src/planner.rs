@@ -7,11 +7,13 @@ use crate::{
     AppendOnlyAuditJournal, AuditEvent, AuditEventKind, AuditRecord, AuditValue, DestinationPolicy,
     DeterministicOpportunityEngine, ExecutionIntent, ExecutionIntentKind, ExecutionScope,
     OpportunityCandidate, OpportunityEngine, OpportunityError, OpportunityHistoricalFixtureCorpus,
-    OpportunityLeg, OpportunityLegSide, PolicyDecision, PolicyEngine, StateCheckpoint, StateStore,
-    StateStoreError, VenueKind, DEFAULT_MAX_MARKET_DATA_AGE_MS,
+    OpportunityLeg, OpportunityLegSide, OpportunityRouteKind, PolicyDecision, PolicyEngine,
+    SqliteWalStateStore, StateCheckpoint, StateStore, StateStoreError,
+    StrategyPolicyConstraintReport, StrategyPolicyConstraintStatus, StrategyProfile, VenueKind,
+    DEFAULT_MAX_MARKET_DATA_AGE_MS,
 };
 use serde::{Deserialize, Serialize};
-use std::{error::Error, fmt};
+use std::{collections::HashSet, error::Error, fmt, path::Path};
 
 /// Stable planner version for audit, replay, and handoff surfaces.
 pub const EXECUTION_PLANNER_VERSION: &str = "phase-10-execution-planner-v1";
@@ -355,6 +357,100 @@ pub struct ExecutionPlanDraft {
     pub warnings: Vec<String>,
 }
 
+/// Strategy-constrained planner output.
+///
+/// This report composes the draft-only planner with the typed local strategy
+/// profile boundary. It does not submit adapters, place orders, sign,
+/// broadcast, withdraw, bridge, call exchanges/RPCs, or claim readiness.
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct StrategyConstrainedExecutionPlanDraft {
+    /// Draft plan produced by the deterministic planner.
+    pub draft: ExecutionPlanDraft,
+    /// One local strategy constraint report per generated intent.
+    pub strategy_constraint_reports: Vec<StrategyPolicyConstraintReport>,
+    /// Number of generated intents rejected by strategy constraints.
+    pub strategy_rejected_intents: usize,
+    /// Whether any adapter submission occurred. Always false in this boundary.
+    pub adapter_submission_performed: bool,
+    /// Whether any live execution occurred. Always false in this boundary.
+    pub live_execution_performed: bool,
+    /// Whether signing or broadcasting occurred. Always false in this boundary.
+    pub signing_or_broadcast_performed: bool,
+    /// Production readiness is never claimed by this local boundary.
+    pub production_ready: bool,
+}
+
+impl StrategyConstrainedExecutionPlanDraft {
+    /// Validate local strategy-constrained planner invariants.
+    pub fn validate(&self) -> Result<(), ExecutionPlannerError> {
+        let mut violations = Vec::new();
+
+        if let Err(ExecutionPlannerError::ValidationFailed {
+            violations: draft_violations,
+        }) = self.draft.validate()
+        {
+            violations.extend(draft_violations);
+        }
+
+        if self.strategy_constraint_reports.len() != self.draft.intents.len() {
+            violations.push(ExecutionPlannerViolation::new(
+                "PLANNER_STRATEGY_REPORT_COUNT_MISMATCH",
+                "strategy-constrained plans must include one constraint report per intent",
+            ));
+        }
+
+        let rejected = self
+            .strategy_constraint_reports
+            .iter()
+            .filter(|report| report.status == StrategyPolicyConstraintStatus::Rejected)
+            .count();
+        if rejected != self.strategy_rejected_intents {
+            violations.push(ExecutionPlannerViolation::new(
+                "PLANNER_STRATEGY_REJECTED_COUNT_MISMATCH",
+                "strategy rejected intent count must match rejected reports",
+            ));
+        }
+
+        if self.strategy_rejected_intents > 0
+            && self.draft.status != ExecutionPlanStatus::PolicyDeniedDraft
+        {
+            violations.push(ExecutionPlannerViolation::new(
+                "PLANNER_STRATEGY_REJECTION_NOT_FAIL_CLOSED",
+                "strategy rejections must leave the draft in a denied state",
+            ));
+        }
+
+        if self.adapter_submission_performed
+            || self.live_execution_performed
+            || self.signing_or_broadcast_performed
+            || self.production_ready
+        {
+            violations.push(ExecutionPlannerViolation::new(
+                "PLANNER_STRATEGY_SIDE_EFFECT_RECORDED",
+                "strategy-constrained planner reports must not record side effects or readiness",
+            ));
+        }
+
+        for report in &self.strategy_constraint_reports {
+            if report.execution_performed
+                || report.signing_or_broadcast_performed
+                || report.live_network_used
+            {
+                violations.push(ExecutionPlannerViolation::new_owned(
+                    "PLANNER_STRATEGY_REPORT_SIDE_EFFECT",
+                    format!(
+                        "strategy constraint report for intent {} recorded a side effect",
+                        report.intent_id
+                    ),
+                ));
+            }
+        }
+
+        finish_validation(violations)
+    }
+}
+
 impl ExecutionPlanDraft {
     /// Validate draft-only invariants.
     pub fn validate(&self) -> Result<(), ExecutionPlannerError> {
@@ -429,7 +525,14 @@ impl ExecutionPlanDraft {
             ));
         }
 
+        let mut intent_ids = HashSet::new();
         for intent in &self.intents {
+            if !intent_ids.insert(intent.id.as_str()) {
+                violations.push(ExecutionPlannerViolation::new_owned(
+                    "PLAN_DUPLICATE_INTENT_ID",
+                    format!("plan contains duplicate intent id {}", intent.id),
+                ));
+            }
             if intent.scope != self.scope {
                 violations.push(ExecutionPlannerViolation::new_owned(
                     "PLAN_INTENT_SCOPE_MISMATCH",
@@ -440,6 +543,28 @@ impl ExecutionPlanDraft {
                 violations.push(ExecutionPlannerViolation::new_owned(
                     "PLAN_INTENT_LIVE_SCOPE_DENIED",
                     format!("intent {} uses live scope", intent.id),
+                ));
+            }
+        }
+
+        let mut policy_outcome_intent_ids = HashSet::new();
+        for outcome in &self.policy_outcomes {
+            if !policy_outcome_intent_ids.insert(outcome.intent_id.as_str()) {
+                violations.push(ExecutionPlannerViolation::new_owned(
+                    "PLAN_DUPLICATE_POLICY_OUTCOME_INTENT_ID",
+                    format!(
+                        "plan contains duplicate policy outcome for intent {}",
+                        outcome.intent_id
+                    ),
+                ));
+            }
+            if !intent_ids.contains(outcome.intent_id.as_str()) {
+                violations.push(ExecutionPlannerViolation::new_owned(
+                    "PLAN_POLICY_OUTCOME_UNKNOWN_INTENT",
+                    format!(
+                        "policy outcome references unknown intent {}",
+                        outcome.intent_id
+                    ),
                 ));
             }
         }
@@ -498,6 +623,26 @@ pub struct OpportunityCandidateTraceRecord {
     pub external_calls_performed: bool,
     /// Always false; this trace never submits orders or moves funds.
     pub live_execution_performed: bool,
+}
+
+/// Non-secret summary of one recovered opportunity candidate trace checkpoint.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RecoveredOpportunityTraceSummary {
+    /// Stable trace checkpoint id.
+    pub trace_id: String,
+    /// Strategy that received the planner draft request.
+    pub strategy_id: String,
+    /// Planner request id associated with this candidate handoff.
+    pub planner_request_id: String,
+    /// Local audit journal sequence for the recovered trace event.
+    pub audit_sequence: u64,
+    /// Trace timestamp in Unix milliseconds.
+    pub traced_at_unix_ms: u64,
+    /// Route kind for the recovered candidate.
+    pub route_kind: OpportunityRouteKind,
+    /// Number of candidate legs summarized without embedding the full candidate.
+    pub leg_count: u64,
 }
 
 /// Local persistence outcome for an opportunity candidate trace.
@@ -669,6 +814,32 @@ pub struct OpportunityPlannerHandoffValidationReport {
     pub status: OpportunityPlannerHandoffStatus,
 }
 
+/// Local restart/reopen recovery report for opportunity candidate traces.
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct OpportunityCandidateTraceRecoveryReport {
+    /// Source historical fixture corpus id.
+    pub corpus_id: String,
+    /// Planner handoff report produced before reopening audit/state stores.
+    pub handoff_report: OpportunityPlannerHandoffValidationReport,
+    /// Number of audit records replayed after reopening the local journal.
+    pub audit_replay_records: usize,
+    /// Number of expected trace checkpoints recovered after reopening SQLite WAL state.
+    pub recovered_trace_checkpoints: usize,
+    /// Non-secret summaries for recovered trace checkpoints after reopen.
+    pub recovered_trace_summaries: Vec<RecoveredOpportunityTraceSummary>,
+    /// Expected trace checkpoint ids missing after reopen.
+    pub missing_trace_checkpoints: Vec<String>,
+    /// True when reopened audit/state records cover every traced candidate.
+    pub trace_recovery_validated: bool,
+    /// Always false; recovery validation consumes supplied local records only.
+    pub external_calls_performed: bool,
+    /// Always false; recovery validation never submits orders or moves funds.
+    pub live_execution_performed: bool,
+    /// Overall recovery validation status.
+    pub status: OpportunityPlannerHandoffStatus,
+}
+
 /// Validate local opportunity replay candidates can be handed to the draft planner.
 ///
 /// This consumes caller-supplied local replay records only. It does not call
@@ -696,6 +867,131 @@ pub fn validate_opportunity_planner_handoff_with_trace(
         policy,
         Some(OpportunityPlannerTraceSinks { journal, store }),
     )
+}
+
+/// Validate local opportunity candidate traces survive audit/state reopen.
+///
+/// The supplied paths are local non-secret evidence paths. This function writes
+/// candidate traces through the regular traced planner handoff path, drops those
+/// handles, reopens the audit journal and SQLite WAL state, and verifies every
+/// expected trace checkpoint can be recovered. It does not start services,
+/// submit adapters, call exchanges/RPCs, sign, broadcast, withdraw, bridge, or
+/// claim production readiness.
+pub fn validate_opportunity_candidate_trace_restart_recovery(
+    corpus: &OpportunityHistoricalFixtureCorpus,
+    policy: &PolicyEngine,
+    audit_path: &Path,
+    state_path: &Path,
+) -> Result<OpportunityCandidateTraceRecoveryReport, ExecutionPlannerError> {
+    if audit_path.as_os_str().is_empty() || state_path.as_os_str().is_empty() {
+        return Err(planner_validation_error(
+            "OPPORTUNITY_CANDIDATE_TRACE_RECOVERY_PATH_REQUIRED",
+            "audit and state paths are required",
+        ));
+    }
+    if audit_path == state_path {
+        return Err(planner_validation_error(
+            "OPPORTUNITY_CANDIDATE_TRACE_RECOVERY_PATH_CONFLICT",
+            "audit and state paths must be different",
+        ));
+    }
+
+    let handoff_report = {
+        let mut journal = AppendOnlyAuditJournal::open(audit_path)
+            .map_err(audit_error_to_trace_recovery_error)?;
+        let mut store =
+            SqliteWalStateStore::open(state_path).map_err(state_error_to_trace_recovery_error)?;
+        validate_opportunity_planner_handoff_with_trace(corpus, policy, &mut journal, &mut store)?
+    };
+
+    let reopened_journal =
+        AppendOnlyAuditJournal::open(audit_path).map_err(audit_error_to_trace_recovery_error)?;
+    let audit_replay_records = usize::try_from(reopened_journal.next_sequence().saturating_sub(1))
+        .map_err(|_| {
+            planner_validation_error(
+                "OPPORTUNITY_CANDIDATE_TRACE_RECOVERY_COUNT_OVERFLOW",
+                "audit replay count exceeds usize",
+            )
+        })?;
+
+    let reopened_store =
+        SqliteWalStateStore::open(state_path).map_err(state_error_to_trace_recovery_error)?;
+    reopened_store
+        .integrity_check()
+        .map_err(state_error_to_trace_recovery_error)?;
+    reopened_store
+        .wal_checkpoint_truncate()
+        .map_err(state_error_to_trace_recovery_error)?;
+
+    let expected_trace_keys = expected_candidate_trace_keys(corpus)?;
+    let mut recovered_trace_checkpoints = 0;
+    let mut recovered_trace_summaries = Vec::new();
+    let mut missing_trace_checkpoints = Vec::new();
+    let mut forbidden_side_effects = false;
+
+    for expected_key in &expected_trace_keys {
+        match reopened_store
+            .get_checkpoint(expected_key)
+            .map_err(state_error_to_trace_recovery_error)?
+        {
+            Some(checkpoint) => {
+                let trace: OpportunityCandidateTraceRecord =
+                    serde_json::from_str(&checkpoint.value).map_err(|error| {
+                        planner_validation_error_owned(
+                            "OPPORTUNITY_CANDIDATE_TRACE_RECOVERY_PARSE_FAILED",
+                            format!(
+                                "failed to parse recovered candidate trace checkpoint: {error}"
+                            ),
+                        )
+                    })?;
+                if trace.id != *expected_key
+                    || trace.adapter_submission_enabled
+                    || trace.external_calls_performed
+                    || trace.live_execution_performed
+                {
+                    forbidden_side_effects = true;
+                }
+                recovered_trace_summaries.push(RecoveredOpportunityTraceSummary {
+                    trace_id: trace.id,
+                    strategy_id: trace.strategy_id,
+                    planner_request_id: trace.planner_request_id,
+                    audit_sequence: trace.audit_sequence,
+                    traced_at_unix_ms: trace.traced_at_unix_ms,
+                    route_kind: trace.candidate.route_kind,
+                    leg_count: trace.candidate.legs.len() as u64,
+                });
+                recovered_trace_checkpoints += 1;
+            }
+            None => missing_trace_checkpoints.push(expected_key.clone()),
+        }
+    }
+
+    let trace_recovery_validated = handoff_report.status == OpportunityPlannerHandoffStatus::Passed
+        && audit_replay_records == handoff_report.candidate_trace_audit_records
+        && recovered_trace_checkpoints == handoff_report.discovered_candidates
+        && missing_trace_checkpoints.is_empty()
+        && !forbidden_side_effects
+        && !handoff_report.adapter_submission_enabled
+        && !handoff_report.external_calls_performed
+        && !handoff_report.live_execution_performed;
+    let status = if trace_recovery_validated {
+        OpportunityPlannerHandoffStatus::Passed
+    } else {
+        OpportunityPlannerHandoffStatus::Failed
+    };
+
+    Ok(OpportunityCandidateTraceRecoveryReport {
+        corpus_id: corpus.id.clone(),
+        handoff_report,
+        audit_replay_records,
+        recovered_trace_checkpoints,
+        recovered_trace_summaries,
+        missing_trace_checkpoints,
+        trace_recovery_validated,
+        external_calls_performed: false,
+        live_execution_performed: false,
+        status,
+    })
 }
 
 struct OpportunityPlannerTraceSinks<'a, S: StateStore> {
@@ -839,6 +1135,73 @@ impl DeterministicExecutionPlanner {
     #[must_use]
     pub const fn new() -> Self {
         Self
+    }
+
+    /// Plan through the typed local strategy profile constraint boundary.
+    ///
+    /// This composes deterministic draft planning, policy preflight, and
+    /// strategy-profile intent constraints without submitting adapters or
+    /// performing live side effects.
+    pub fn plan_with_strategy_profile(
+        &self,
+        request: &ExecutionPlannerRequest,
+        policy: &PolicyEngine,
+        strategy_profile: &StrategyProfile,
+    ) -> Result<StrategyConstrainedExecutionPlanDraft, ExecutionPlannerError> {
+        strategy_profile.validate().map_err(|error| {
+            let violations = error
+                .violations()
+                .iter()
+                .map(|violation| {
+                    ExecutionPlannerViolation::new_owned(
+                        "PLANNER_STRATEGY_PROFILE_INVALID",
+                        format!("{}: {}", violation.code(), violation.message()),
+                    )
+                })
+                .collect();
+            ExecutionPlannerError::ValidationFailed { violations }
+        })?;
+
+        if request.strategy_id != strategy_profile.id {
+            return Err(planner_validation_error_owned(
+                "PLANNER_STRATEGY_PROFILE_MISMATCH",
+                format!(
+                    "planner request strategy {} does not match strategy profile {}",
+                    request.strategy_id, strategy_profile.id
+                ),
+            ));
+        }
+
+        let mut draft = self.plan(request, policy)?;
+        let strategy_constraint_reports = draft
+            .intents
+            .iter()
+            .map(|intent| strategy_profile.constrain_intent(intent))
+            .collect::<Vec<_>>();
+        let strategy_rejected_intents = strategy_constraint_reports
+            .iter()
+            .filter(|report| report.status == StrategyPolicyConstraintStatus::Rejected)
+            .count();
+
+        if strategy_rejected_intents > 0 {
+            draft.status = ExecutionPlanStatus::PolicyDeniedDraft;
+            draft.warnings.push(format!(
+                "{strategy_rejected_intents} draft intent(s) rejected by strategy profile constraints"
+            ));
+            draft.validate()?;
+        }
+
+        let report = StrategyConstrainedExecutionPlanDraft {
+            draft,
+            strategy_constraint_reports,
+            strategy_rejected_intents,
+            adapter_submission_performed: false,
+            live_execution_performed: false,
+            signing_or_broadcast_performed: false,
+            production_ready: false,
+        };
+        report.validate()?;
+        Ok(report)
     }
 }
 
@@ -1161,6 +1524,60 @@ fn trace_error_to_planner_error(error: OpportunityCandidateTraceError) -> Execut
     }
 }
 
+fn audit_error_to_trace_recovery_error(error: crate::AuditError) -> ExecutionPlannerError {
+    planner_validation_error_owned(
+        "OPPORTUNITY_CANDIDATE_TRACE_RECOVERY_AUDIT_FAILED",
+        error.to_string(),
+    )
+}
+
+fn state_error_to_trace_recovery_error(error: StateStoreError) -> ExecutionPlannerError {
+    planner_validation_error_owned(
+        "OPPORTUNITY_CANDIDATE_TRACE_RECOVERY_STATE_FAILED",
+        error.to_string(),
+    )
+}
+
+fn expected_candidate_trace_keys(
+    corpus: &OpportunityHistoricalFixtureCorpus,
+) -> Result<Vec<String>, ExecutionPlannerError> {
+    corpus
+        .validate()
+        .map_err(opportunity_error_to_planner_error)?;
+    let engine = DeterministicOpportunityEngine::new();
+    let mut expected_trace_keys = Vec::new();
+    let mut discovered_candidates = 0;
+
+    for window in &corpus.replay_windows {
+        for scenario in &window.scenarios {
+            let Ok(candidates) = engine.discover(&scenario.request) else {
+                continue;
+            };
+
+            for candidate in candidates {
+                discovered_candidates += 1;
+                let planner_request_id = format!("phase27-planner-handoff-{discovered_candidates}");
+                expected_trace_keys.push(opportunity_candidate_trace_key(
+                    &candidate,
+                    &planner_request_id,
+                ));
+            }
+        }
+    }
+
+    Ok(expected_trace_keys)
+}
+
+fn planner_validation_error(code: &'static str, message: &'static str) -> ExecutionPlannerError {
+    planner_validation_error_owned(code, message.to_owned())
+}
+
+fn planner_validation_error_owned(code: &'static str, message: String) -> ExecutionPlannerError {
+    ExecutionPlannerError::ValidationFailed {
+        violations: vec![ExecutionPlannerViolation::new_owned(code, message)],
+    }
+}
+
 fn validate_candidate_trace_input(
     candidate: &OpportunityCandidate,
     strategy_id: &str,
@@ -1323,6 +1740,7 @@ impl Error for OpportunityCandidateTraceError {}
 mod tests {
     use super::{
         persist_execution_plan_draft_checkpoint, persist_opportunity_candidate_trace,
+        validate_opportunity_candidate_trace_restart_recovery,
         validate_opportunity_planner_handoff, validate_opportunity_planner_handoff_with_trace,
         DeterministicExecutionPlanner, ExecutionPlanStatus, ExecutionPlanner,
         ExecutionPlannerConfig, ExecutionPlannerRequest, OpportunityCandidateTraceRecord,
@@ -1333,7 +1751,8 @@ mod tests {
         phase27_local_opportunity_historical_fixture_corpus, AgentConfig, AppendOnlyAuditJournal,
         FeeAdjustedEdge, FeeEstimate, LiquidityRole, MarketPair, OpportunityCandidate,
         OpportunityLeg, OpportunityLegSide, OpportunityRouteKind, OpportunityScore, PolicyEngine,
-        SqliteWalStateStore, StateStore, VenueKind, VenueRef,
+        SqliteWalStateStore, StateStore, StrategyPolicyConstraintStatus, StrategyProfile,
+        VenueKind, VenueRef,
     };
     use std::{
         env, fs,
@@ -1447,6 +1866,102 @@ redact_secrets = true
             .policy_outcomes
             .iter()
             .all(|outcome| outcome.is_approved()));
+    }
+
+    #[test]
+    fn planner_applies_strategy_profile_constraints_before_adapter_boundary() {
+        let policy = PolicyEngine::from_config(
+            AgentConfig::from_toml_str(BASE_CONFIG).expect("config should validate"),
+        );
+        let request = ExecutionPlannerRequest {
+            id: "planner-request-strategy".to_owned(),
+            strategy_id: "strategy-basic-arb".to_owned(),
+            candidate: candidate(),
+            config: ExecutionPlannerConfig::default(),
+            default_chain: None,
+            now_unix_ms: 10_000,
+        };
+        let profile = strategy_profile();
+
+        let report = DeterministicExecutionPlanner::new()
+            .plan_with_strategy_profile(&request, &policy, &profile)
+            .expect("strategy-constrained plan should be created");
+
+        assert_eq!(report.draft.status, ExecutionPlanStatus::DraftReady);
+        assert_eq!(
+            report.strategy_constraint_reports.len(),
+            report.draft.intents.len()
+        );
+        assert_eq!(report.strategy_rejected_intents, 0);
+        assert!(report
+            .strategy_constraint_reports
+            .iter()
+            .all(|strategy_report| {
+                strategy_report.status == StrategyPolicyConstraintStatus::Satisfied
+                    && !strategy_report.execution_performed
+                    && !strategy_report.signing_or_broadcast_performed
+                    && !strategy_report.live_network_used
+            }));
+        assert!(!report.adapter_submission_performed);
+        assert!(!report.live_execution_performed);
+        assert!(!report.signing_or_broadcast_performed);
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn planner_fails_closed_when_strategy_profile_rejects_generated_intents() {
+        let policy = PolicyEngine::from_config(
+            AgentConfig::from_toml_str(BASE_CONFIG).expect("config should validate"),
+        );
+        let request = ExecutionPlannerRequest {
+            id: "planner-request-strategy-rejected".to_owned(),
+            strategy_id: "strategy-basic-arb".to_owned(),
+            candidate: candidate(),
+            config: ExecutionPlannerConfig::default(),
+            default_chain: None,
+            now_unix_ms: 10_000,
+        };
+        let mut profile = strategy_profile();
+        profile.opportunity.min_net_profit_abs = 1_000.0;
+
+        let report = DeterministicExecutionPlanner::new()
+            .plan_with_strategy_profile(&request, &policy, &profile)
+            .expect("strategy rejection should produce a denied draft report");
+
+        assert_eq!(report.draft.status, ExecutionPlanStatus::PolicyDeniedDraft);
+        assert_eq!(report.strategy_rejected_intents, report.draft.intents.len());
+        assert!(report
+            .strategy_constraint_reports
+            .iter()
+            .all(|strategy_report| strategy_report.status
+                == StrategyPolicyConstraintStatus::Rejected));
+        assert!(report.draft.warnings.iter().any(|warning| {
+            warning.contains("draft intent(s) rejected by strategy profile constraints")
+        }));
+        assert!(!report.adapter_submission_performed);
+        assert!(!report.live_execution_performed);
+        assert!(!report.signing_or_broadcast_performed);
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn planner_draft_rejects_duplicate_intent_and_policy_outcome_ids() {
+        let mut plan = plan();
+        plan.intents[1].id = plan.intents[0].id.clone();
+        plan.policy_outcomes[1].intent_id = plan.policy_outcomes[0].intent_id.clone();
+
+        let error = plan
+            .validate()
+            .expect_err("duplicate draft identifiers must be rejected");
+
+        assert!(error
+            .violations()
+            .iter()
+            .any(|violation| violation.code() == "PLAN_DUPLICATE_INTENT_ID"));
+        assert!(error
+            .violations()
+            .iter()
+            .any(|violation| { violation.code() == "PLAN_DUPLICATE_POLICY_OUTCOME_INTENT_ID" }));
     }
 
     #[test]
@@ -1579,6 +2094,44 @@ redact_secrets = true
     }
 
     #[test]
+    fn phase27_candidate_trace_restart_recovery_reopens_audit_and_state() {
+        let audit_path = unique_audit_path("phase27-trace-recovery");
+        let state_path = unique_state_path("phase27-trace-recovery");
+        let corpus = phase27_local_opportunity_historical_fixture_corpus()
+            .expect("phase 27 local corpus should build");
+        let policy = PolicyEngine::from_config(
+            AgentConfig::from_toml_str(PHASE27_HANDOFF_CONFIG).expect("config should validate"),
+        );
+
+        let report = validate_opportunity_candidate_trace_restart_recovery(
+            &corpus,
+            &policy,
+            &audit_path,
+            &state_path,
+        )
+        .expect("candidate trace recovery should validate");
+
+        assert_eq!(report.status, OpportunityPlannerHandoffStatus::Passed);
+        assert!(report.trace_recovery_validated);
+        assert_eq!(report.handoff_report.discovered_candidates, 12);
+        assert_eq!(report.audit_replay_records, 12);
+        assert_eq!(report.recovered_trace_checkpoints, 12);
+        assert_eq!(report.recovered_trace_summaries.len(), 12);
+        assert_eq!(
+            report.recovered_trace_summaries[0].planner_request_id,
+            "phase27-planner-handoff-1"
+        );
+        assert_eq!(report.recovered_trace_summaries[0].audit_sequence, 1);
+        assert!(report.recovered_trace_summaries[0].leg_count > 0);
+        assert!(report.missing_trace_checkpoints.is_empty());
+        assert!(!report.external_calls_performed);
+        assert!(!report.live_execution_performed);
+
+        cleanup_audit_files(&audit_path);
+        cleanup_state_files(&state_path);
+    }
+
+    #[test]
     fn planner_draft_persists_as_state_checkpoint() {
         let plan = plan();
         let mut store = crate::InMemoryStateStore::new();
@@ -1669,6 +2222,13 @@ redact_secrets = true
             source_quote_ids: vec!["quote-a".to_owned(), "quote-b".to_owned()],
             warnings: Vec::new(),
         }
+    }
+
+    fn strategy_profile() -> StrategyProfile {
+        let mut profile = StrategyProfile::conservative_paper("strategy-basic-arb", "USD");
+        profile.venues.allowed_exchanges = vec!["paper-a".to_owned(), "paper-b".to_owned()];
+        profile.venues.allowed_assets = vec!["BTC".to_owned(), "USD".to_owned()];
+        profile
     }
 
     fn leg(

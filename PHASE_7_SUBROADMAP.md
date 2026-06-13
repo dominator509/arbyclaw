@@ -18,6 +18,7 @@ Phase 7 deliberately does **not** add exchange-specific REST/WebSocket implement
 - CEX order side/type/time-in-force enums
 - CEX policy-gate validator
 - CEX connector trait boundaries
+- Local/mock CEX lifecycle response reconciliation for status transitions, fill totals, lifecycle audit/state recovery, and duplicate client-order-id rejection
 - Public exports from `arb-core`
 - CLI status text update
 - Structure validator update
@@ -94,7 +95,7 @@ Future connector validation:
 - sandbox order tests where available
 - fee-schedule verification
 - jurisdiction/terms review
-- credential-scope verification
+- external credential/account validation
 
 ## Rollback Strategy
 
@@ -127,20 +128,21 @@ Rust/Cargo, exchange sandboxes, network calls, live API credentials, CI executio
 ## Expected Unresolved Gaps
 
 - Rust validation remains deferred.
-- No real CEX REST/WebSocket connector exists.
+- No real CEX REST/WebSocket connector exists; local Binance/Coinbase/Kraken-shaped fixture matching, mocked order-book transcript parsing, rate-limit validation, and credential/API-scope review exist only for deterministic no-network validation.
 - No sandbox exchange validation exists.
-- No credential-scope validation exists.
-- No exchange-specific fee/rate-limit verification exists.
+- No external credential/account validation exists.
+- No provider-backed exchange-specific fee/rate-limit verification exists; local reference-only fee metadata and local rate-limit observations exist.
 - CEX framework is not integrated with runtime orchestration.
-- CEX framework is not integrated with durable audit/state writes.
+- CEX framework is integrated with durable local validation, local exchange fixture matching, mocked order-book transcript parsing, local rate-limit validation, local credential/API-scope review, local/mock lifecycle audit/state writes, and `arb-agent validate-connector-lifecycle-audit --workspace <fresh-dir>` only; real exchange-specific adapter response persistence remains future work.
 
 ## Expected Future Continuation Tasks
 
 - Implement read-only REST/WebSocket adapters per exchange.
+- Keep local Binance/Coinbase/Kraken fixture matching, mocked transcript parsing, rate-limit validation, and credential/API-scope review tests passing as the no-network exchange-shape regression baseline.
 - Add sandbox adapters where supported by exchanges.
 - Add authenticated balance read boundaries.
 - Add connector-specific rate-limit controllers.
 - Add audit-before-action integration for every order request.
-- Add order lifecycle state machine.
+- Add exchange-specific live/sandbox order lifecycle state machine.
 - Add external exchange terms/jurisdiction review checklist.
 - Add eventual live order adapters only after policy, audit, state, secrets, and signer/custody phases are validated.

@@ -39,7 +39,7 @@ Current production readiness entering Phase 14: 76% governance estimate only.
 
 ## Phase Goal
 
-Add deterministic observability and runbook model/trait boundaries without starting telemetry services, exposing metrics endpoints, sending alerts, or capturing secrets.
+Add deterministic observability and runbook model/trait boundaries, including local operations review records for retention and alert-route controls, endpoint/exporter preflight records for loopback/auth/transport/redaction/alert-route/backpressure accounting, ephemeral numeric-loopback bind validation records, authenticated metrics scrape preflight records, and one-shot loopback metrics endpoint validation, without starting long-lived telemetry services, exposing public metrics endpoints, sending alerts, exporting telemetry, or capturing secrets.
 
 ## In Scope
 
@@ -51,6 +51,11 @@ Add deterministic observability and runbook model/trait boundaries without start
 - Operator runbook models.
 - Observability snapshot and collection request/record models.
 - Deterministic local collector trait implementation.
+- Local audit-journal and SQLite WAL checkpoint helpers for sanitized collection outcomes.
+- Local non-network metrics/export and alert-route dry-run records.
+- Local alert-route dispatch review records wired through the deterministic communications notification boundary, with audit/state checkpointing and no outbound delivery.
+- Local ephemeral numeric-loopback bind validation that opens and closes a listener without serving requests.
+- Local authenticated metrics scrape preflight over rendered metric lines plus one-shot authenticated loopback socket scrape validation.
 - Secret-like text detection and redaction before records are returned.
 - CLI status text indicating observability boundary availability.
 - Structure validator update for Phase 14 files.
@@ -101,6 +106,8 @@ Phase 14 may add only:
 - `ObservabilitySnapshot`
 - `ObservabilityCollectionRequest`
 - `ObservabilityRecord`
+- `ObservabilityExportDryRunRequest`
+- `ObservabilityExportDryRunReport`
 - `ObservabilityCollector`
 - `DeterministicObservabilityCollector`
 
@@ -147,6 +154,7 @@ Phase 14 is complete for ChatGPT Project Mode when:
 - `arb-agent` reports the observability boundary without starting endpoints.
 - Metrics endpoint exposure is denied in the model boundary.
 - Outbound alert delivery is denied in the model boundary.
+- Observability collection outcomes can be locally journaled and checkpointed, then recovered after audit/SQLite reopen.
 - Secret-like observability text is redacted before records are returned.
 - Structure validator passes.
 - Gap tracker records deferred Rust validation and real observability runtime work.
@@ -164,16 +172,15 @@ To rollback Phase 14:
 
 ## Completion Status
 
-Completed for ChatGPT Project Mode after Phase 14 implementation and validation.
+Completed for ChatGPT Project Mode after Phase 14 implementation and validation, including local sanitized collection, operations review, sandbox-only observability log retention/rotation execution, export dry-run, endpoint/exporter preflight, ephemeral loopback bind validation, authenticated metrics scrape preflight, one-shot loopback metrics endpoint validation, scoped local tracing subscriber capture, scoped panic-hook, runtime failure-capture audit/state boundaries, and a repeatable local `validate-observability-runtime` CLI gate.
 
 ## Deferred Work
 
 - Keep Rust/Cargo validation current after future changes.
-- Real tracing/logging subscriber integration.
-- Prometheus/OpenTelemetry exporter implementation.
-- Metrics endpoint authentication and loopback binding validation.
-- Alert routing through authenticated communications adapters.
-- Log retention, rotation, and privacy policies.
-- Panic/failure capture hardening.
+- Daemon-wide/deployment-host tracing/logging subscriber installation beyond the scoped local capture.
+- Prometheus/OpenTelemetry exporter session implementation beyond local dry-run rendering.
+- Daemon-hosted metrics endpoint authentication, long-running scrape behavior, and deployment-host endpoint serving validation.
+- Real alert delivery through authenticated communications adapters beyond the local deterministic notification-boundary bridge.
+- Deployment-host log retention/rotation execution and privacy policy validation beyond sandbox-only local execution.
+- Deployment-host/runtime panic-hook integration and failure-capture hardening under real service orchestration beyond the local panic-hook helpers.
 - Production runbook exercises and incident drills.
-- Audit/state persistence integration for observability records.

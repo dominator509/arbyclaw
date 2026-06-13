@@ -37,21 +37,26 @@ Add deterministic packaging and deployment planning boundaries that document how
 
 - Add packaging/deployment model and trait boundaries.
 - Add local deployment plan records.
+- Add local rollback validation records with audit/state recovery while preserving no-execution semantics.
 - Add package target and hardening metadata.
-- Add container, systemd, ARM, and deployment documentation templates.
-- Add a local example-container validation script for Docker build, Trivy image scan, critical-vulnerability enforcement, and CLI smoke checks.
+- Add container, systemd, ARM, and deployment documentation templates with static validation for ARM target/command/no-claim profile notes.
+- Add an unsigned local/CI release-artifact packaging script that produces and verifies a copied release binary plus SHA-256 manifest and unsigned provenance record with bounded build/smoke/metadata helper commands and without signing, attestation upload, publishing, or deployment claims.
+- Add a local example-container validation script for Docker build, Trivy image scan, critical-vulnerability enforcement, bounded Docker command timeouts, fail-closed unavailable-Docker reporting, and CLI smoke checks.
+- Add a production-intent container recipe and validation script for local/CI build, Trivy image scan, critical-vulnerability enforcement, bounded Docker command timeouts, fail-closed unavailable-Docker reporting, inert CLI smoke checks, and hardened read-only/no-network smoke checks without deployment or readiness claims.
+- Add an ARM cross-target check script and CI gate for `cargo check --workspace --target aarch64-unknown-linux-gnu --locked` with bounded `rustup`/Cargo command timeouts, without executing ARM binaries or claiming target-class readiness.
 - Update CLI status text to expose the Phase 16 boundary.
 - Update the structure validator for Phase 16 files.
 - Update roadmap, architecture, security, handoff, manifest, README, AGENTS, and gap tracker.
 
 ## Out of Scope
 
-- Building production container images.
+- Pushing production container images to registries.
 - Installing systemd units.
 - Starting daemons or services.
 - Public network exposure.
 - Production cloud deployment.
 - Production release signing.
+- Publishing release artifacts.
 - Live exchange/RPC calls.
 - Live trading, signing, withdrawals, bridges, or broadcasts.
 - Real secrets, credentials, provider tokens, or key material.
@@ -78,6 +83,7 @@ Add deterministic packaging and deployment planning boundaries that document how
 - `crates/arb-core/src/packaging.rs` exists and is exported.
 - Packaging plans are model-only and deterministic.
 - Deployment records explicitly state that no deployment was performed.
+- Rollback validation records explicitly state that no rollback, service-manager action, file mutation, external call, live execution, or production readiness approval occurred.
 - Public exposure, live trading, embedded secrets, and production claims fail closed.
 - Container/systemd/ARM docs exist but do not claim execution.
 - Structure validator passes.
@@ -105,10 +111,12 @@ Additional external Phase 16 validation required:
 
 ```bash
 cargo build --release --locked
+python3 scripts/validate_release_artifact.py
 cargo build --target aarch64-unknown-linux-gnu --release --locked
-container build validation in an approved local/CI runtime
+production-intent container build and scan validation in an approved local/CI runtime
+cargo check --workspace --target aarch64-unknown-linux-gnu --locked
 systemd unit linting in a Linux host or container
-read-only filesystem and non-root runtime validation
+read-only filesystem and non-root runtime validation, with local static example hardening checks and bounded optional config smoke now covered by `scripts/validate_deployment_static_hardening.py`
 rollback drill validation
 ```
 
@@ -135,4 +143,4 @@ rollback drill validation
 
 Completed for ChatGPT Project Mode after Phase 16 patch and available validation.
 
-Rust, Cargo, example-container, and CI validation now have repeatable local/CI paths where the required tools are available. Production container, systemd, ARM, deployment, rollback, and security hardening validation remain external unless explicitly run in a capable environment.
+Rust, Cargo, unsigned release-artifact packaging/provenance with bounded build/smoke/metadata helper commands, example-container, production-intent container with hardened local smoke and fail-closed Docker timeout reporting, static deployment hardening with bounded optional config smoke, ARM cross-target check with bounded prerequisite/check commands, and CI validation now have repeatable local/CI paths where the required tools are available. Signing, attestation upload, release publishing, systemd, ARM device/runtime, deployment, rollback, service lifecycle, and broader security hardening validation remain external unless explicitly run in a capable environment.

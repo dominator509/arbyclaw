@@ -6,6 +6,9 @@ use crate::{RuntimeMode, SecretRef};
 use serde::{Deserialize, Serialize};
 use std::{fmt, fs, path::Path};
 
+/// Stable config schema version for local compatibility checks.
+pub const CONFIG_SCHEMA_VERSION: &str = "phase-2-config-v1";
+
 /// Exact acknowledgement required before a config file may select live mode.
 pub const LIVE_ACKNOWLEDGEMENT: &str = "I UNDERSTAND LIVE CRYPTO TRADING RISK";
 
@@ -184,6 +187,123 @@ impl AgentConfig {
     }
 }
 
+/// Local config migration status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ConfigMigrationStatus {
+    /// Input already matched the current schema and validated.
+    AlreadyCurrent,
+    /// Input was migrated from a known local legacy shape and validated.
+    Migrated,
+}
+
+/// Local config migration report.
+///
+/// This records schema compatibility actions only. It does not read secret
+/// material, call providers, perform live execution, or claim readiness.
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ConfigMigrationReport {
+    /// Schema version after migration.
+    pub target_schema_version: String,
+    /// Migration status.
+    pub status: ConfigMigrationStatus,
+    /// Sanitized action codes applied while migrating.
+    pub action_codes: Vec<String>,
+    /// Migrated config text in the current schema.
+    pub migrated_toml: String,
+    /// Validated migrated/current config.
+    pub config: AgentConfig,
+    /// Whether live execution was enabled by the resulting config.
+    pub live_execution_enabled: bool,
+    /// Whether secret material was loaded. Always false here.
+    pub secret_material_loaded: bool,
+    /// Production readiness is never claimed by config migration.
+    pub production_ready: bool,
+}
+
+/// Migrate a local non-secret config TOML string to the current schema.
+///
+/// Known legacy aliases are upgraded:
+/// - `[markets]` becomes `[venues]`
+/// - `[notifications]` becomes `[communication]`
+/// - missing `risk.gas_fee_cap_quote` is filled with `0.0`
+/// - missing `[secrets]` is filled with disabled secret references
+pub fn migrate_config_toml_to_current(text: &str) -> Result<ConfigMigrationReport, ConfigError> {
+    if let Ok(config) = AgentConfig::from_toml_str(text) {
+        let migrated_toml =
+            toml::to_string(&config).map_err(|source| ConfigError::ParseFailed {
+                reason: format!("failed to serialize current config: {source}"),
+            })?;
+        return Ok(ConfigMigrationReport {
+            target_schema_version: CONFIG_SCHEMA_VERSION.to_owned(),
+            status: ConfigMigrationStatus::AlreadyCurrent,
+            action_codes: Vec::new(),
+            migrated_toml,
+            live_execution_enabled: config.runtime.mode.permits_live_execution(),
+            secret_material_loaded: false,
+            production_ready: false,
+            config,
+        });
+    }
+
+    let mut value = text
+        .parse::<toml::Value>()
+        .map_err(|source| ConfigError::ParseFailed {
+            reason: source.to_string(),
+        })?;
+    let table = value
+        .as_table_mut()
+        .ok_or_else(|| ConfigError::ParseFailed {
+            reason: "config root must be a TOML table".to_owned(),
+        })?;
+    let mut action_codes = Vec::new();
+
+    if let Some(markets) = table.remove("markets") {
+        let venues = migrate_markets_to_venues(markets)?;
+        table.insert("venues".to_owned(), venues);
+        action_codes.push("CONFIG_MIGRATED_MARKETS_TO_VENUES".to_owned());
+    }
+
+    if let Some(notifications) = table.remove("notifications") {
+        let communication = migrate_notifications_to_communication(notifications)?;
+        table.insert("communication".to_owned(), communication);
+        action_codes.push("CONFIG_MIGRATED_NOTIFICATIONS_TO_COMMUNICATION".to_owned());
+    }
+
+    if ensure_risk_gas_cap(table)? {
+        action_codes.push("CONFIG_DEFAULTED_RISK_GAS_FEE_CAP".to_owned());
+    }
+
+    if ensure_disabled_secrets(table) {
+        action_codes.push("CONFIG_DEFAULTED_DISABLED_SECRET_REFERENCES".to_owned());
+    }
+
+    if ensure_communication(table) {
+        action_codes.push("CONFIG_DEFAULTED_COMMUNICATION".to_owned());
+    }
+
+    if ensure_audit(table) {
+        action_codes.push("CONFIG_DEFAULTED_AUDIT".to_owned());
+    }
+
+    let migrated_toml = toml::to_string(&value).map_err(|source| ConfigError::ParseFailed {
+        reason: format!("failed to serialize migrated config: {source}"),
+    })?;
+    let config = AgentConfig::from_toml_str(&migrated_toml)?;
+
+    Ok(ConfigMigrationReport {
+        target_schema_version: CONFIG_SCHEMA_VERSION.to_owned(),
+        status: ConfigMigrationStatus::Migrated,
+        action_codes,
+        migrated_toml,
+        live_execution_enabled: config.runtime.mode.permits_live_execution(),
+        secret_material_loaded: false,
+        production_ready: false,
+        config,
+    })
+}
+
 /// Runtime lifecycle and mode gates.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -274,6 +394,130 @@ pub struct AuditConfig {
     pub redact_secrets: Option<bool>,
 }
 
+fn migrate_markets_to_venues(markets: toml::Value) -> Result<toml::Value, ConfigError> {
+    let markets = markets.as_table().ok_or_else(|| ConfigError::ParseFailed {
+        reason: "legacy markets section must be a table".to_owned(),
+    })?;
+    let mut venues = toml::map::Map::new();
+    venues.insert(
+        "cex_allowlist".to_owned(),
+        markets
+            .get("allowed_exchanges")
+            .cloned()
+            .unwrap_or_else(|| toml::Value::Array(Vec::new())),
+    );
+    venues.insert(
+        "dex_allowlist".to_owned(),
+        markets
+            .get("allowed_dexes")
+            .cloned()
+            .unwrap_or_else(|| toml::Value::Array(Vec::new())),
+    );
+    venues.insert(
+        "chain_allowlist".to_owned(),
+        markets
+            .get("allowed_chains")
+            .cloned()
+            .unwrap_or_else(|| toml::Value::Array(Vec::new())),
+    );
+    venues.insert(
+        "asset_allowlist".to_owned(),
+        markets
+            .get("allowed_assets")
+            .cloned()
+            .unwrap_or_else(|| toml::Value::Array(Vec::new())),
+    );
+    Ok(toml::Value::Table(venues))
+}
+
+fn migrate_notifications_to_communication(
+    notifications: toml::Value,
+) -> Result<toml::Value, ConfigError> {
+    let notifications = notifications
+        .as_table()
+        .ok_or_else(|| ConfigError::ParseFailed {
+            reason: "legacy notifications section must be a table".to_owned(),
+        })?;
+    let mut communication = toml::map::Map::new();
+    communication.insert("cli_enabled".to_owned(), toml::Value::Boolean(true));
+    communication.insert(
+        "notify_channels".to_owned(),
+        notifications
+            .get("notify_channels")
+            .cloned()
+            .unwrap_or_else(|| toml::Value::Array(Vec::new())),
+    );
+    Ok(toml::Value::Table(communication))
+}
+
+fn ensure_risk_gas_cap(
+    table: &mut toml::map::Map<String, toml::Value>,
+) -> Result<bool, ConfigError> {
+    let risk = table
+        .get_mut("risk")
+        .and_then(toml::Value::as_table_mut)
+        .ok_or_else(|| ConfigError::ParseFailed {
+            reason: "config risk section is required for migration".to_owned(),
+        })?;
+    if risk.contains_key("gas_fee_cap_quote") {
+        return Ok(false);
+    }
+    risk.insert("gas_fee_cap_quote".to_owned(), toml::Value::Float(0.0));
+    Ok(true)
+}
+
+fn ensure_disabled_secrets(table: &mut toml::map::Map<String, toml::Value>) -> bool {
+    if table.contains_key("secrets") {
+        return false;
+    }
+    let mut secrets = toml::map::Map::new();
+    secrets.insert(
+        "backend".to_owned(),
+        toml::Value::String("disabled".to_owned()),
+    );
+    secrets.insert(
+        "exchange_credentials".to_owned(),
+        disabled_secret_reference(),
+    );
+    secrets.insert("wallet_signer".to_owned(), disabled_secret_reference());
+    table.insert("secrets".to_owned(), toml::Value::Table(secrets));
+    true
+}
+
+fn disabled_secret_reference() -> toml::Value {
+    let mut reference = toml::map::Map::new();
+    reference.insert(
+        "source".to_owned(),
+        toml::Value::String("disabled".to_owned()),
+    );
+    toml::Value::Table(reference)
+}
+
+fn ensure_communication(table: &mut toml::map::Map<String, toml::Value>) -> bool {
+    if table.contains_key("communication") {
+        return false;
+    }
+    let mut communication = toml::map::Map::new();
+    communication.insert("cli_enabled".to_owned(), toml::Value::Boolean(true));
+    communication.insert("notify_channels".to_owned(), toml::Value::Array(Vec::new()));
+    table.insert(
+        "communication".to_owned(),
+        toml::Value::Table(communication),
+    );
+    true
+}
+
+fn ensure_audit(table: &mut toml::map::Map<String, toml::Value>) -> bool {
+    if table.contains_key("audit") {
+        return false;
+    }
+    let mut audit = toml::map::Map::new();
+    audit.insert("enabled".to_owned(), toml::Value::Boolean(true));
+    audit.insert("redact_secrets".to_owned(), toml::Value::Boolean(true));
+    table.insert("audit".to_owned(), toml::Value::Table(audit));
+    true
+}
+
 /// One deterministic validation violation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConfigViolation {
@@ -349,7 +593,10 @@ impl std::error::Error for ConfigError {}
 
 #[cfg(test)]
 mod tests {
-    use super::{AgentConfig, ConfigError, LIVE_ACKNOWLEDGEMENT};
+    use super::{
+        migrate_config_toml_to_current, AgentConfig, ConfigError, ConfigMigrationStatus,
+        LIVE_ACKNOWLEDGEMENT,
+    };
 
     const OBSERVE_CONFIG: &str = r#"
 [runtime]
@@ -390,6 +637,73 @@ redact_secrets = true
         let config =
             AgentConfig::from_toml_str(OBSERVE_CONFIG).expect("observe config should parse");
         assert!(!config.runtime.mode.permits_live_execution());
+    }
+
+    #[test]
+    fn config_migration_reports_already_current_schema_without_side_effects() {
+        let report =
+            migrate_config_toml_to_current(OBSERVE_CONFIG).expect("current config should migrate");
+
+        assert_eq!(report.status, ConfigMigrationStatus::AlreadyCurrent);
+        assert!(report.action_codes.is_empty());
+        assert!(!report.live_execution_enabled);
+        assert!(!report.secret_material_loaded);
+        assert!(!report.production_ready);
+        assert!(report.migrated_toml.contains("[runtime]"));
+    }
+
+    #[test]
+    fn config_migration_upgrades_legacy_local_markets_and_notifications() {
+        let legacy = r#"
+[runtime]
+mode = "observe"
+live_execution_enabled = false
+allow_withdrawals = false
+kill_switch_enabled = true
+
+[risk]
+max_single_trade_quote = 10.0
+max_daily_loss_quote = 2.0
+max_open_exposure_quote = 20.0
+slippage_bps = 50
+
+[markets]
+allowed_exchanges = ["coinbase", "kraken"]
+allowed_dexes = []
+allowed_chains = []
+allowed_assets = ["BTC", "ETH", "USDC"]
+
+[notifications]
+notify_channels = []
+"#;
+
+        let report = migrate_config_toml_to_current(legacy)
+            .expect("legacy local config should migrate and validate");
+
+        assert_eq!(report.status, ConfigMigrationStatus::Migrated);
+        assert!(report
+            .action_codes
+            .iter()
+            .any(|code| code == "CONFIG_MIGRATED_MARKETS_TO_VENUES"));
+        assert!(report
+            .action_codes
+            .iter()
+            .any(|code| code == "CONFIG_MIGRATED_NOTIFICATIONS_TO_COMMUNICATION"));
+        assert!(report
+            .action_codes
+            .iter()
+            .any(|code| code == "CONFIG_DEFAULTED_RISK_GAS_FEE_CAP"));
+        assert!(report
+            .action_codes
+            .iter()
+            .any(|code| code == "CONFIG_DEFAULTED_DISABLED_SECRET_REFERENCES"));
+        assert_eq!(report.config.venues.cex_allowlist.len(), 2);
+        assert!(report.config.risk.gas_fee_cap_quote.abs() < f64::EPSILON);
+        assert!(!report.live_execution_enabled);
+        assert!(!report.secret_material_loaded);
+        assert!(!report.production_ready);
+        assert!(!report.migrated_toml.contains("[markets]"));
+        assert!(report.migrated_toml.contains("[venues]"));
     }
 
     #[test]

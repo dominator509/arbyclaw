@@ -18,6 +18,7 @@ from typing import Any
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
+COMPONENT_TIMEOUT_SECONDS = 300
 
 COMPONENT_COMMANDS = [
     (
@@ -38,6 +39,20 @@ COMPONENT_COMMANDS = [
     (
         "deployment-host-runtime-plan",
         [sys.executable, "scripts/validate_deployment_host_runtime.py", "--json"],
+        True,
+    ),
+    (
+        "deployment-host-retention-preflight",
+        [
+            sys.executable,
+            "scripts/validate_deployment_host_runtime.py",
+            "--run-retention-preflight",
+            "--retention-active-path",
+            "deployment/audit.jsonl",
+            "--retention-archive-dir",
+            "deployment",
+            "--json",
+        ],
         True,
     ),
     (
@@ -83,6 +98,7 @@ def run_component(name: str, command: list[str], expects_json: bool) -> dict[str
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
+        timeout=COMPONENT_TIMEOUT_SECONDS,
     )
     summary: dict[str, Any] = {
         "name": name,
@@ -90,6 +106,7 @@ def run_component(name: str, command: list[str], expects_json: bool) -> dict[str
         "passed": completed.returncode == 0,
         "stdout_line_count": len(completed.stdout.splitlines()),
         "json_report": expects_json,
+        "timeout_seconds": COMPONENT_TIMEOUT_SECONDS,
     }
     if expects_json and completed.returncode == 0:
         try:
@@ -135,6 +152,9 @@ def build_report() -> dict[str, Any]:
         "schema": "arbyclaw.deployment_evidence_bundle.v1",
         "components": components,
         "component_count": len(components),
+        "bounded_timeouts": {
+            "component_seconds": COMPONENT_TIMEOUT_SECONDS,
+        },
         "failed_components": failed,
         "all_components_passed": not failed,
         "unsafe_flags": unsafe_flags,
@@ -161,6 +181,7 @@ def build_report() -> dict[str, Any]:
 def print_text_report(report: dict[str, Any]) -> None:
     print("deployment evidence bundle validation report")
     print(f"components: {report['component_count']}")
+    print(f"component timeout seconds: {report['bounded_timeouts']['component_seconds']}")
     print(f"all components passed: {str(report['all_components_passed']).lower()}")
     print(f"service actions performed: {str(report['service_actions_performed']).lower()}")
     print(f"files changed: {str(report['files_changed']).lower()}")
@@ -184,6 +205,8 @@ def main() -> int:
     args = parse_args()
     try:
         report = build_report()
+    except subprocess.TimeoutExpired as error:
+        return fail(f"bundle component timed out after {error.timeout} seconds")
     except (OSError, RuntimeError) as error:
         return fail(str(error))
 

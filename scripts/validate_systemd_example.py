@@ -21,6 +21,7 @@ import tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 UNIT_PATH = ROOT / "deployment/systemd/arb-agent.service.example"
+SYSTEMD_ANALYZE_TIMEOUT_SECONDS = 60
 
 FORBIDDEN_DIRECTIVES = {
     "Environment",
@@ -170,14 +171,20 @@ def run_systemd_analyze_if_requested(enabled: bool, required: bool) -> str:
             "/etc/systemd/system/arb-agent.service",
         ]
         print(f"+ {' '.join(command)}", flush=True)
-        completed = subprocess.run(
-            command,
-            check=False,
-            encoding="utf-8",
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-        )
+        try:
+            completed = subprocess.run(
+                command,
+                check=False,
+                encoding="utf-8",
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                timeout=SYSTEMD_ANALYZE_TIMEOUT_SECONDS,
+            )
+        except subprocess.TimeoutExpired as error:
+            raise RuntimeError(
+                f"systemd-analyze verify timed out after {SYSTEMD_ANALYZE_TIMEOUT_SECONDS}s"
+            ) from error
     if completed.stdout:
         print(completed.stdout, end="")
     if completed.returncode != 0:

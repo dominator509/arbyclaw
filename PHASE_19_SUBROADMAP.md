@@ -24,17 +24,21 @@ In scope:
 - Local graceful-shutdown audit/state checkpoint records without stopping services.
 - Local runtime audit/SQLite backup-restore validation records without deployment actions.
 - Local runtime restart recovery validation records without service resume or deployment actions.
+- Local adapter recovery-plan audit/state checkpointing wired into lifecycle, backup/restore, restart recovery, concurrent lifecycle, deployment-smoke, and CLI reporting.
 - Local restart recovery dispositions for ready-for-local-review versus needs-operator-review.
+- Local deployment-like runtime smoke records and repeated-iteration load/latency aggregates, including local adapter recovery-plan, communications command-route, remote-command review, platform command-ingress, remote-command envelope, channel-adapter validation, channel-session validation, platform-adapter review, notification-dispatch, dashboard render, hosted-security review, hosted-request preflight, one-shot hosted-request validation, observability collection, operations review, export dry-run, alert-route dispatch, endpoint preflight, loopback bind, metrics scrape, one-shot metrics endpoint, scoped tracing capture, validation-run, property-check, and paper execution report/ledger checkpoint recovery for paper-scoped plans, without service-manager actions.
 - CLI status text for local restart recovery dispositions without loading secrets or resuming services.
 - Tests proving in-memory and SQLite WAL-backed checkpoint persistence.
 - Tests proving concurrent local runtime lifecycle access over shared audit and SQLite WAL paths.
 - Tests proving local state permission failure stops the lifecycle before adapter evaluation.
 - Tests proving graceful-shutdown audit/state checkpoints reopen locally.
 - Tests proving copied local audit and SQLite state artifacts reopen with runtime checkpoints.
-- Tests proving local restart recovery replays audit and reopens SQLite runtime checkpoints.
+- Tests proving local restart recovery replays audit and reopens SQLite runtime checkpoints, including adapter recovery-plan checkpoints.
 - Tests proving local restart recovery marks missing graceful-shutdown checkpoints as needs-operator-review.
 - Tests proving CLI status labels expose the restart recovery dispositions as local operator-review states.
 - Tests proving local restart recovery fails closed when audit exists but required SQLite checkpoints are missing.
+- Tests proving local deployment-smoke preflight rejects pre-existing state artifacts before audit, backup, or audit-durability workspace creation.
+- Tests proving local runtime smoke load/latency aggregate reports require valid local-only smoke iterations.
 - Tests proving live-scope lifecycle requests are rejected before audit/state mutation.
 
 Out of scope:
@@ -76,7 +80,10 @@ The local lifecycle must:
 12. Validate local restart recovery summaries without service resume, deployment actions, or production-readiness claims.
 13. Classify locally coherent restart recovery as ready-for-local-review or needs-operator-review.
 14. Surface those dispositions in CLI status text as local operator-review states only.
-15. Fail closed when restart recovery sees incomplete local lifecycle checkpoint state.
+15. Recover adapter recovery-plan checkpoints during local restart/smoke validation.
+16. Fail closed when restart recovery sees incomplete local lifecycle checkpoint state.
+16. Aggregate repeated local runtime-smoke iteration latency, audit replay, backup replay, communications route/review/platform-ingress/envelope/channel-adapter/channel-session/platform-adapter/notification recovery, dashboard render/hosted-security/hosted-request recovery, observability operations/export/endpoint/metrics/tracing recovery, and opportunity-trace recovery counts without service-manager, external-submission, live-execution, outbound-network, public dashboard hosting, telemetry export, alert delivery, or production-readiness side effects.
+17. Fail closed during deployment-smoke preflight when runtime audit/state/backup/workspace paths are blocked or not fresh.
 
 Any audit, state, planner, adapter, or lifecycle validation failure must stop the lifecycle before subsequent steps.
 
@@ -101,7 +108,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 - Real outbound communications integration.
 - Live/sandbox exchange and RPC validation.
 - Custody, signer, encrypted keystore, and external adapter submission phases.
-- Penetration, load, rollback, incident-drill, deployment, systemd, ARM, and production-readiness validation.
+- Production load/latency/resource profiling, penetration, rollback, incident-drill, deployment, systemd, ARM, and production-readiness validation.
 
 ## Rollback Plan
 

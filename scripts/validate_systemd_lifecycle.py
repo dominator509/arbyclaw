@@ -24,6 +24,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 DEFAULT_UNIT = "arb-agent.service"
 UNIT_NAME_PATTERN = re.compile(r"^[A-Za-z0-9_.@-]+\.service$")
 EXPECTED_TEMPLATE = ROOT / "deployment/systemd/arb-agent.service.example"
+SYSTEMCTL_SHOW_TIMEOUT_SECONDS = 30
 
 PLAN_STEPS = [
     "validate repository structure and Rust workspace on the candidate commit",
@@ -112,6 +113,9 @@ def build_plan_report(unit: str) -> dict[str, Any]:
         {
             "host_inspected": False,
             "systemctl_used": False,
+            "bounded_timeouts": {
+                "systemctl_show_seconds": SYSTEMCTL_SHOW_TIMEOUT_SECONDS,
+            },
             "operator_steps": PLAN_STEPS,
             "remaining_external_evidence": [
                 "deployment-host unit installation evidence",
@@ -146,6 +150,7 @@ def run_read_only_systemctl(unit: str) -> dict[str, Any]:
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
+        timeout=SYSTEMCTL_SHOW_TIMEOUT_SECONDS,
     )
 
     properties: dict[str, str] = {}
@@ -161,6 +166,7 @@ def run_read_only_systemctl(unit: str) -> dict[str, Any]:
         "returncode": completed.returncode,
         "properties": properties,
         "raw_output_line_count": len(completed.stdout.splitlines()),
+        "timeout_seconds": SYSTEMCTL_SHOW_TIMEOUT_SECONDS,
     }
 
 
@@ -177,6 +183,9 @@ def build_inspect_report(unit: str) -> dict[str, Any]:
             "systemctl_used": True,
             "systemctl_show": systemctl_report,
             "inspection_passed": systemctl_report["returncode"] == 0,
+            "bounded_timeouts": {
+                "systemctl_show_seconds": SYSTEMCTL_SHOW_TIMEOUT_SECONDS,
+            },
             "remaining_external_evidence": [
                 "operator-controlled service start/shutdown/restart results",
                 "runtime smoke validation output from the deployment host",
@@ -205,6 +214,7 @@ def print_text_report(report: dict[str, Any]) -> None:
         show = report["systemctl_show"]
         print(f"systemctl show returncode: {show['returncode']}")
         print(f"systemctl output lines: {show['raw_output_line_count']}")
+        print(f"systemctl timeout seconds: {show['timeout_seconds']}")
         for key, value in sorted(show["properties"].items()):
             print(f"{key}: {value}")
 
@@ -219,6 +229,8 @@ def main() -> int:
     try:
         validate_unit_name(args.unit)
         report = build_plan_report(args.unit) if args.mode == "plan" else build_inspect_report(args.unit)
+    except subprocess.TimeoutExpired as error:
+        return fail(f"read-only systemctl show timed out after {error.timeout} seconds")
     except (OSError, RuntimeError, ValueError) as error:
         return fail(str(error))
 

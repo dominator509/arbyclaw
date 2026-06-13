@@ -123,6 +123,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 - Phase 15 module exists and is exported.
 - Validation harness is deterministic and local-only.
 - Fuzzing and backtesting are represented as model/fixture boundaries only.
+- Local validation run records can be appended to the audit journal and checkpointed through SQLite WAL state for replay/reopen recovery.
 - Unsafe toggles fail closed.
 - No live network, external fuzzer process, real exchange/RPC, signing, broadcast, bridge, withdrawal, or adapter-submission path exists.
 - Governance docs and gap tracker reflect Phase 15 status and remaining risks.
@@ -139,4 +140,4 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 ## Final Status
 
-Completed for ChatGPT Project Mode scope as a deterministic testing, fuzzing, fixture, and backtesting boundary. Phase 24 adds local paper backtest execution over caller-supplied historical fixtures. Real property-test runners, fuzzing engines, broader fixture corpus expansion, CI-scale market replay validation, load tests, penetration tests, and production deployment tests remain deferred.
+Completed for ChatGPT Project Mode scope as a deterministic testing, fuzzing, fixture, and backtesting boundary with local validation-run, local property-check, local fuzz-corpus replay, local validation-corpus, and local paper-backtest corpus audit journal plus SQLite WAL checkpoint helpers. The local property-check runner validates fixture-reference integrity, non-empty local fuzz corpora, local-only backtest datasets, and side-effect flags without external tooling, the local fuzz-corpus replay runner validates deterministic local seed metadata and target/seed accounting without external fuzzers, the local validation-corpus runner aggregates multiple deterministic plans through the same local validation/property-check boundaries, and `arb-agent validate-local-paper-backtest-corpus --workspace <fresh-dir>` executes a local BTC/USD paper backtest corpus with filled, partial, and unfilled modeled outcomes plus audit/state reopen checks. Phase 24 adds local paper backtest execution over caller-supplied historical fixtures. External property-test frameworks, fuzzing engines, broader external fixture corpus expansion, production-scale market replay validation beyond the local deterministic corpus gates, load tests, penetration tests, and production deployment tests remain deferred.

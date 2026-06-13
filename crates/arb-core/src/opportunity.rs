@@ -4,8 +4,9 @@
 #![allow(clippy::too_many_lines)]
 
 use crate::{
-    FeeAdjustedEdge, FeeEstimate, FeeModelError, FeeSchedule, FreshnessStatus, LiquidityRole,
-    MarketPair, NormalizedQuote, OrderBookSnapshot, PriceLevel, VenueKind, VenueRef,
+    FeeAdjustedEdge, FeeEstimate, FeeModelError, FeeProvider, FeeSchedule, FreshnessStatus,
+    LiquidityRole, MarketDataError, MarketDataProvider, MarketDataRequest, MarketPair,
+    NormalizedQuote, OrderBookSnapshot, PriceLevel, VenueKind, VenueRef,
     DEFAULT_MARKET_DATA_FRESHNESS_MS,
 };
 use serde::{Deserialize, Serialize};
@@ -167,6 +168,57 @@ pub struct OpportunityDiscoveryRequest {
     pub now_unix_ms: u64,
 }
 
+/// Local-only provider ingestion request for opportunity discovery.
+///
+/// This boundary consumes provider traits only when the market-data provider is
+/// declared as non-REST and non-WebSocket. It exists to test provider-to-engine
+/// wiring with fixtures/mocks, not live REST/WebSocket connectors.
+pub struct OpportunityProviderIngestionRequest<'a> {
+    /// Request id for audit and deterministic replay.
+    pub id: String,
+    /// Read-only local/mock market-data provider.
+    pub market_data_provider: &'a dyn MarketDataProvider,
+    /// Read-only local/mock fee provider.
+    pub fee_provider: &'a dyn FeeProvider,
+    /// Venues to query from the local provider.
+    pub venues: Vec<VenueRef>,
+    /// Pairs to query from the local provider.
+    pub pairs: Vec<MarketPair>,
+    /// Whether to ingest local order-book snapshots in addition to top-of-book quotes.
+    pub include_order_books: bool,
+    /// Discovery configuration.
+    pub config: OpportunityDiscoveryConfig,
+    /// Runtime clock in Unix milliseconds used for freshness checks.
+    pub now_unix_ms: u64,
+}
+
+/// Local-only provider ingestion result for opportunity discovery.
+#[derive(Debug, Clone, PartialEq)]
+pub struct OpportunityProviderIngestionReport {
+    /// Request id that produced this report.
+    pub request_id: String,
+    /// Market-data provider label.
+    pub market_data_provider_name: String,
+    /// Fee provider label.
+    pub fee_provider_name: String,
+    /// Number of top-of-book quotes ingested.
+    pub quotes_ingested: usize,
+    /// Number of order books ingested.
+    pub order_books_ingested: usize,
+    /// Number of fee schedules ingested.
+    pub fee_schedules_ingested: usize,
+    /// Number of candidates discovered from ingested local provider records.
+    pub candidates_discovered: usize,
+    /// Discovered deterministic candidates.
+    pub candidates: Vec<OpportunityCandidate>,
+    /// True only if the ingestion boundary invoked external/provider network calls.
+    pub external_calls_performed: bool,
+    /// True only if the ingestion boundary performed live execution.
+    pub live_execution_performed: bool,
+    /// Production readiness is intentionally never claimed by this local boundary.
+    pub production_ready: bool,
+}
+
 impl OpportunityDiscoveryRequest {
     /// Validate request structure, quote freshness, and supplied fee schedules.
     pub fn validate(&self) -> Result<(), OpportunityError> {
@@ -242,6 +294,141 @@ impl OpportunityDiscoveryRequest {
 
         finish_validation(violations)
     }
+}
+
+/// Build and run opportunity discovery from local/mock provider traits.
+///
+/// Providers declaring REST or WebSocket capability are rejected before any
+/// provider method is called. This keeps the boundary suitable for local fixture
+/// providers while preserving the no-live-calls contract.
+pub fn discover_opportunities_from_local_providers(
+    request: &OpportunityProviderIngestionRequest<'_>,
+) -> Result<OpportunityProviderIngestionReport, OpportunityError> {
+    let mut violations = Vec::new();
+    validate_id("provider ingestion request", &request.id, &mut violations);
+
+    if request.venues.is_empty() {
+        violations.push(OpportunityViolation::new(
+            "OPPORTUNITY_PROVIDER_VENUES_EMPTY",
+            "provider ingestion requires at least one venue",
+        ));
+    }
+
+    if request.pairs.is_empty() {
+        violations.push(OpportunityViolation::new(
+            "OPPORTUNITY_PROVIDER_PAIRS_EMPTY",
+            "provider ingestion requires at least one market pair",
+        ));
+    }
+
+    for venue in &request.venues {
+        validate_venue(venue, &mut violations);
+    }
+
+    for pair in &request.pairs {
+        if let Err(error) = pair.validate() {
+            collect_market_data_error("OPPORTUNITY_PROVIDER_PAIR_INVALID", &error, &mut violations);
+        }
+    }
+
+    if let Err(OpportunityError::ValidationFailed {
+        violations: config_violations,
+    }) = request.config.validate()
+    {
+        violations.extend(config_violations);
+    }
+
+    let capabilities = request.market_data_provider.capabilities();
+    if capabilities.rest || capabilities.websocket {
+        violations.push(OpportunityViolation::new(
+            "OPPORTUNITY_PROVIDER_LIVE_CAPABILITY_BLOCKED",
+            "local provider ingestion rejects REST/WebSocket market-data capabilities",
+        ));
+    }
+
+    if !capabilities.top_of_book {
+        violations.push(OpportunityViolation::new(
+            "OPPORTUNITY_PROVIDER_TOP_OF_BOOK_UNAVAILABLE",
+            "local provider ingestion requires top-of-book capability",
+        ));
+    }
+
+    finish_validation(violations)?;
+
+    let mut quotes = Vec::new();
+    let mut order_books = Vec::new();
+    let mut fee_schedules = Vec::new();
+
+    for venue in &request.venues {
+        for pair in &request.pairs {
+            let market_request = MarketDataRequest {
+                venue: venue.clone(),
+                pair: pair.clone(),
+                max_age_ms: request.config.max_market_data_age_ms,
+            };
+            market_request.validate().map_err(|error| {
+                opportunity_error_from_market_data(
+                    "OPPORTUNITY_PROVIDER_MARKET_REQUEST_INVALID",
+                    &error,
+                )
+            })?;
+
+            let quote = request
+                .market_data_provider
+                .top_of_book(&market_request)
+                .map_err(|error| {
+                    opportunity_error_from_market_data("OPPORTUNITY_PROVIDER_QUOTE_ERROR", &error)
+                })?;
+            quotes.push(quote);
+
+            if request.include_order_books && capabilities.order_book {
+                let book = request
+                    .market_data_provider
+                    .order_book(&market_request)
+                    .map_err(|error| {
+                        opportunity_error_from_market_data(
+                            "OPPORTUNITY_PROVIDER_BOOK_ERROR",
+                            &error,
+                        )
+                    })?;
+                order_books.push(book);
+            }
+
+            let schedule = request
+                .fee_provider
+                .fee_schedule(venue, Some(pair))
+                .map_err(|error| {
+                    opportunity_error_from_fee_model("OPPORTUNITY_PROVIDER_FEE_ERROR", &error)
+                })?;
+            fee_schedules.push(schedule);
+        }
+    }
+
+    let discovery_request = OpportunityDiscoveryRequest {
+        id: format!("{}:discovery", request.id),
+        quotes,
+        fee_schedules,
+        order_books,
+        inventory_limits: Vec::new(),
+        transfer_risk_profiles: Vec::new(),
+        config: request.config,
+        now_unix_ms: request.now_unix_ms,
+    };
+    let candidates = DeterministicOpportunityEngine::new().discover(&discovery_request)?;
+
+    Ok(OpportunityProviderIngestionReport {
+        request_id: request.id.clone(),
+        market_data_provider_name: request.market_data_provider.provider_name().to_owned(),
+        fee_provider_name: request.fee_provider.provider_name().to_owned(),
+        quotes_ingested: discovery_request.quotes.len(),
+        order_books_ingested: discovery_request.order_books.len(),
+        fee_schedules_ingested: discovery_request.fee_schedules.len(),
+        candidates_discovered: candidates.len(),
+        candidates,
+        external_calls_performed: false,
+        live_execution_performed: false,
+        production_ready: false,
+    })
 }
 
 /// Local paper inventory available to the opportunity engine for sizing only.
@@ -1156,6 +1343,111 @@ pub struct OpportunityReplayRunReport {
     pub scenario_reports: Vec<OpportunityReplayScenarioReport>,
 }
 
+/// One measured local opportunity replay iteration.
+///
+/// This record carries only a local iteration label, elapsed wall-clock time in
+/// milliseconds, and the sanitized replay report. It intentionally omits
+/// fixture payloads, paths, raw market-data artifacts, secrets, and embedded
+/// evidence contents.
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct OpportunityReplayLoadIteration {
+    /// Local iteration identifier.
+    pub iteration_id: String,
+    /// Measured local wall-clock elapsed time in milliseconds.
+    pub elapsed_ms: u64,
+    /// Sanitized local opportunity replay report.
+    pub report: OpportunityReplayRunReport,
+}
+
+/// Aggregate local load/latency summary for repeated opportunity replay passes.
+///
+/// This is deterministic local replay evidence only. It does not download
+/// market data, call exchange/RPC endpoints, submit orders, sign, broadcast,
+/// withdraw, bridge, or claim production readiness.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct OpportunityReplayLoadReport {
+    /// Corpus id shared by every replay iteration.
+    pub corpus_id: String,
+    /// Number of local replay iterations attempted.
+    pub iterations_attempted: u64,
+    /// Number of local replay iterations that passed.
+    pub iterations_passed: u64,
+    /// Fastest local replay iteration wall-clock duration.
+    pub min_elapsed_ms: u64,
+    /// Slowest local replay iteration wall-clock duration.
+    pub max_elapsed_ms: u64,
+    /// Integer average local replay iteration wall-clock duration.
+    pub average_elapsed_ms: u64,
+    /// Total local replay iteration wall-clock duration.
+    pub total_elapsed_ms: u64,
+    /// Total replayed scenarios across all iterations.
+    pub total_scenarios_replayed: u64,
+    /// Total passed scenarios across all iterations.
+    pub total_passed_scenarios: u64,
+    /// Total failed scenarios across all iterations.
+    pub total_failed_scenarios: u64,
+    /// Total emitted candidates across all iterations.
+    pub total_candidates: u64,
+    /// Whether any external calls were performed. Always false here.
+    pub external_calls_performed: bool,
+    /// Whether any live execution was performed. Always false here.
+    pub live_execution_performed: bool,
+    /// Whether this aggregate approves production readiness. Always false here.
+    pub production_ready: bool,
+}
+
+/// Local quote-ingestion load/backpressure request.
+///
+/// This request describes a deterministic synthetic local fixture. It does not
+/// load files, download data, open sockets, call exchanges/RPC endpoints, or
+/// carry secrets.
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct OpportunityQuoteIngestionLoadRequest {
+    /// Stable local run id.
+    pub id: String,
+    /// Number of synthetic venue pairs to generate.
+    pub venue_pairs: usize,
+    /// Maximum accepted candidates used to model deterministic backpressure.
+    pub max_candidates: usize,
+    /// Local validation timestamp in Unix milliseconds.
+    pub now_unix_ms: u64,
+}
+
+/// Local quote-ingestion load/backpressure report.
+///
+/// The report summarizes generated local quote volume, candidate discovery,
+/// deterministic candidate truncation, and side-effect denials without storing
+/// raw fixture payloads or claiming production readiness.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct OpportunityQuoteIngestionLoadReport {
+    /// Stable local run id.
+    pub run_id: String,
+    /// Number of generated local normalized quotes.
+    pub quotes_ingested: u64,
+    /// Number of generated local fee schedules.
+    pub fee_schedules_ingested: u64,
+    /// Number of local candidate slots configured.
+    pub max_candidates: u64,
+    /// Number of candidates returned after deterministic ranking/truncation.
+    pub candidates_returned: u64,
+    /// Whether returned candidates reached the configured cap.
+    pub candidate_backpressure_applied: bool,
+    /// Number of candidate opportunities known to be dropped by cap pressure.
+    pub truncated_candidate_lower_bound: u64,
+    /// Whether external market data was downloaded. Always false here.
+    pub external_data_downloaded: bool,
+    /// Whether external calls were performed. Always false here.
+    pub external_calls_performed: bool,
+    /// Whether live execution was performed. Always false here.
+    pub live_execution_performed: bool,
+    /// Whether this report approves production readiness. Always false here.
+    pub production_ready: bool,
+}
+
 /// Local historical fixture corpus made from replay windows.
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -1201,6 +1493,227 @@ impl OpportunityHistoricalFixtureCorpus {
             }
         }
 
+        finish_validation(violations)
+    }
+}
+
+impl OpportunityReplayLoadIteration {
+    /// Validate one measured replay iteration before aggregation.
+    pub fn validate(&self) -> Result<(), OpportunityError> {
+        let mut violations = Vec::new();
+        validate_id(
+            "opportunity replay load iteration",
+            &self.iteration_id,
+            &mut violations,
+        );
+        if self.report.status != OpportunityReplayStatus::Passed
+            || self.report.failed_scenarios != 0
+        {
+            violations.push(OpportunityViolation::new(
+                "OPPORTUNITY_REPLAY_LOAD_ITERATION_FAILED",
+                "opportunity replay load iterations must pass before aggregation",
+            ));
+        }
+        if self.report.external_calls_performed || self.report.live_execution_performed {
+            violations.push(OpportunityViolation::new(
+                "OPPORTUNITY_REPLAY_LOAD_SIDE_EFFECT",
+                "opportunity replay load iterations must not perform external calls or live execution",
+            ));
+        }
+        finish_validation(violations)
+    }
+}
+
+impl OpportunityReplayLoadReport {
+    /// Build and validate a local opportunity replay load/latency aggregate.
+    pub fn from_iterations(
+        iterations: Vec<OpportunityReplayLoadIteration>,
+    ) -> Result<Self, OpportunityError> {
+        let Some(first) = iterations.first() else {
+            return Err(OpportunityError::ValidationFailed {
+                violations: vec![OpportunityViolation::new(
+                    "OPPORTUNITY_REPLAY_LOAD_EMPTY",
+                    "at least one replay load iteration is required",
+                )],
+            });
+        };
+        for iteration in &iterations {
+            iteration.validate()?;
+            if iteration.report.corpus_id != first.report.corpus_id {
+                return Err(OpportunityError::ValidationFailed {
+                    violations: vec![OpportunityViolation::new(
+                        "OPPORTUNITY_REPLAY_LOAD_CORPUS_MISMATCH",
+                        "all replay load iterations must use the same corpus id",
+                    )],
+                });
+            }
+        }
+
+        let iterations_attempted = iterations.len() as u64;
+        let total_elapsed_ms: u64 = iterations
+            .iter()
+            .map(|iteration| iteration.elapsed_ms)
+            .sum();
+        let min_elapsed_ms = iterations
+            .iter()
+            .map(|iteration| iteration.elapsed_ms)
+            .min()
+            .unwrap_or(0);
+        let max_elapsed_ms = iterations
+            .iter()
+            .map(|iteration| iteration.elapsed_ms)
+            .max()
+            .unwrap_or(0);
+        let report = Self {
+            corpus_id: first.report.corpus_id.clone(),
+            iterations_attempted,
+            iterations_passed: iterations_attempted,
+            min_elapsed_ms,
+            max_elapsed_ms,
+            average_elapsed_ms: total_elapsed_ms / iterations_attempted,
+            total_elapsed_ms,
+            total_scenarios_replayed: iterations
+                .iter()
+                .map(|iteration| iteration.report.scenario_count as u64)
+                .sum(),
+            total_passed_scenarios: iterations
+                .iter()
+                .map(|iteration| iteration.report.passed_scenarios as u64)
+                .sum(),
+            total_failed_scenarios: iterations
+                .iter()
+                .map(|iteration| iteration.report.failed_scenarios as u64)
+                .sum(),
+            total_candidates: iterations
+                .iter()
+                .map(|iteration| iteration.report.total_candidates as u64)
+                .sum(),
+            external_calls_performed: iterations
+                .iter()
+                .any(|iteration| iteration.report.external_calls_performed),
+            live_execution_performed: iterations
+                .iter()
+                .any(|iteration| iteration.report.live_execution_performed),
+            production_ready: false,
+        };
+        report.validate()?;
+        Ok(report)
+    }
+
+    /// Validate local replay load aggregate invariants.
+    pub fn validate(&self) -> Result<(), OpportunityError> {
+        let mut violations = Vec::new();
+        validate_id(
+            "opportunity replay load corpus",
+            &self.corpus_id,
+            &mut violations,
+        );
+        if self.iterations_attempted == 0 || self.iterations_passed != self.iterations_attempted {
+            violations.push(OpportunityViolation::new(
+                "OPPORTUNITY_REPLAY_LOAD_ITERATION_COUNT",
+                "all replay load iterations must pass",
+            ));
+        }
+        if self.max_elapsed_ms < self.min_elapsed_ms {
+            violations.push(OpportunityViolation::new(
+                "OPPORTUNITY_REPLAY_LOAD_LATENCY_RANGE",
+                "max replay elapsed time must be greater than or equal to min elapsed time",
+            ));
+        }
+        if self.total_scenarios_replayed == 0
+            || self.total_passed_scenarios != self.total_scenarios_replayed
+            || self.total_failed_scenarios != 0
+            || self.total_candidates == 0
+        {
+            violations.push(OpportunityViolation::new(
+                "OPPORTUNITY_REPLAY_LOAD_COUNTS_INVALID",
+                "replay load aggregate requires passed scenarios and emitted candidates",
+            ));
+        }
+        if self.external_calls_performed || self.live_execution_performed || self.production_ready {
+            violations.push(OpportunityViolation::new(
+                "OPPORTUNITY_REPLAY_LOAD_FORBIDDEN_SIDE_EFFECT",
+                "replay load aggregate must remain local-only and not approve production readiness",
+            ));
+        }
+        finish_validation(violations)
+    }
+}
+
+impl OpportunityQuoteIngestionLoadRequest {
+    /// Validate local quote-ingestion load request invariants.
+    pub fn validate(&self) -> Result<(), OpportunityError> {
+        let mut violations = Vec::new();
+        validate_id(
+            "opportunity quote ingestion load",
+            &self.id,
+            &mut violations,
+        );
+        if self.venue_pairs == 0 {
+            violations.push(OpportunityViolation::new(
+                "OPPORTUNITY_QUOTE_LOAD_VENUES_EMPTY",
+                "at least one synthetic venue pair is required",
+            ));
+        }
+        if self.max_candidates == 0 {
+            violations.push(OpportunityViolation::new(
+                "OPPORTUNITY_QUOTE_LOAD_MAX_CANDIDATES_ZERO",
+                "max_candidates must be positive",
+            ));
+        }
+        if self.now_unix_ms == 0 {
+            violations.push(OpportunityViolation::new(
+                "OPPORTUNITY_QUOTE_LOAD_TIMESTAMP_ZERO",
+                "quote ingestion load timestamp must be non-zero",
+            ));
+        }
+        finish_validation(violations)
+    }
+}
+
+impl OpportunityQuoteIngestionLoadReport {
+    /// Validate local quote-ingestion load report invariants.
+    pub fn validate(&self) -> Result<(), OpportunityError> {
+        let mut violations = Vec::new();
+        validate_id(
+            "opportunity quote ingestion load report",
+            &self.run_id,
+            &mut violations,
+        );
+        if self.quotes_ingested == 0 || self.fee_schedules_ingested == 0 {
+            violations.push(OpportunityViolation::new(
+                "OPPORTUNITY_QUOTE_LOAD_EMPTY",
+                "quote ingestion load report requires local quotes and fee schedules",
+            ));
+        }
+        if self.max_candidates == 0 || self.candidates_returned == 0 {
+            violations.push(OpportunityViolation::new(
+                "OPPORTUNITY_QUOTE_LOAD_CANDIDATES_EMPTY",
+                "quote ingestion load report requires configured and returned candidates",
+            ));
+        }
+        if self.candidates_returned > self.max_candidates {
+            violations.push(OpportunityViolation::new(
+                "OPPORTUNITY_QUOTE_LOAD_CAP_EXCEEDED",
+                "returned candidates must not exceed the configured cap",
+            ));
+        }
+        if self.candidate_backpressure_applied && self.truncated_candidate_lower_bound == 0 {
+            violations.push(OpportunityViolation::new(
+                "OPPORTUNITY_QUOTE_LOAD_TRUNCATION_MISSING",
+                "candidate backpressure must report a non-zero truncation lower bound",
+            ));
+        }
+        if self.external_data_downloaded
+            || self.external_calls_performed
+            || self.live_execution_performed
+            || self.production_ready
+        {
+            violations.push(OpportunityViolation::new(
+                "OPPORTUNITY_QUOTE_LOAD_FORBIDDEN_SIDE_EFFECT",
+                "quote ingestion load report must remain local-only and not approve production readiness",
+            ));
+        }
         finish_validation(violations)
     }
 }
@@ -1297,6 +1810,144 @@ pub fn phase27_local_opportunity_historical_fixture_corpus(
         historical_fixture_replay: true,
         replay_windows: vec![full_window, focused_window],
     })
+}
+
+/// Execute a deterministic local quote-ingestion load/backpressure probe.
+///
+/// This synthesizes normalized local quote and fee records, runs the existing
+/// opportunity discovery path, and reports candidate cap pressure. It never
+/// downloads market data, calls exchanges/RPC endpoints, submits orders, signs,
+/// broadcasts, withdraws, bridges, mutates balances, or claims production
+/// readiness.
+pub fn validate_local_opportunity_quote_ingestion_load(
+    request: OpportunityQuoteIngestionLoadRequest,
+) -> Result<OpportunityQuoteIngestionLoadReport, OpportunityError> {
+    request.validate()?;
+
+    let pair = MarketPair::new("BTC", "USD").map_err(|error| {
+        let mut violations = Vec::new();
+        collect_market_data_error(
+            "OPPORTUNITY_QUOTE_LOAD_PAIR_INVALID",
+            &error,
+            &mut violations,
+        );
+        OpportunityError::ValidationFailed { violations }
+    })?;
+    let mut quotes = Vec::with_capacity(request.venue_pairs.saturating_mul(2));
+    let mut fee_schedules = Vec::with_capacity(request.venue_pairs.saturating_mul(2));
+
+    for index in 0..request.venue_pairs {
+        let base_price = 100.0 + index as f64;
+        let buy_venue = format!("load-buy-{index}");
+        let sell_venue = format!("load-sell-{index}");
+        quotes.push(local_quote_load_quote(
+            &format!("load-buy-quote-{index}"),
+            &buy_venue,
+            pair.clone(),
+            base_price - 1.0,
+            base_price,
+            1.0,
+            request.now_unix_ms,
+        ));
+        quotes.push(local_quote_load_quote(
+            &format!("load-sell-quote-{index}"),
+            &sell_venue,
+            pair.clone(),
+            base_price + 8.0,
+            base_price + 9.0,
+            1.0,
+            request.now_unix_ms,
+        ));
+        fee_schedules.push(local_quote_load_fee(&buy_venue, pair.clone()));
+        fee_schedules.push(local_quote_load_fee(&sell_venue, pair.clone()));
+    }
+
+    let discovery_request = OpportunityDiscoveryRequest {
+        id: format!("{}-discovery", request.id),
+        quotes,
+        fee_schedules,
+        order_books: Vec::new(),
+        inventory_limits: Vec::new(),
+        transfer_risk_profiles: Vec::new(),
+        config: OpportunityDiscoveryConfig {
+            max_candidates: request.max_candidates,
+            min_net_profit_quote: 0.0,
+            min_roi_bps: 0.0,
+            ..OpportunityDiscoveryConfig::default()
+        },
+        now_unix_ms: request.now_unix_ms,
+    };
+
+    let quotes_ingested = discovery_request.quotes.len() as u64;
+    let fee_schedules_ingested = discovery_request.fee_schedules.len() as u64;
+    let expected_pairwise_candidates = request.venue_pairs as u64;
+    let candidates = DeterministicOpportunityEngine::new().discover(&discovery_request)?;
+    let candidates_returned = candidates.len() as u64;
+    let max_candidates = request.max_candidates as u64;
+    let candidate_backpressure_applied =
+        expected_pairwise_candidates > max_candidates && candidates_returned == max_candidates;
+    let truncated_candidate_lower_bound = expected_pairwise_candidates
+        .saturating_sub(candidates_returned)
+        .min(expected_pairwise_candidates.saturating_sub(max_candidates));
+
+    let report = OpportunityQuoteIngestionLoadReport {
+        run_id: request.id,
+        quotes_ingested,
+        fee_schedules_ingested,
+        max_candidates,
+        candidates_returned,
+        candidate_backpressure_applied,
+        truncated_candidate_lower_bound,
+        external_data_downloaded: false,
+        external_calls_performed: false,
+        live_execution_performed: false,
+        production_ready: false,
+    };
+    report.validate()?;
+    Ok(report)
+}
+
+fn local_quote_load_quote(
+    id: &str,
+    venue_name: &str,
+    pair: MarketPair,
+    bid_price: f64,
+    ask_price: f64,
+    quantity_base: f64,
+    now_unix_ms: u64,
+) -> NormalizedQuote {
+    NormalizedQuote {
+        id: id.to_owned(),
+        venue: VenueRef {
+            name: venue_name.to_owned(),
+            kind: VenueKind::Cex,
+        },
+        pair,
+        bid: PriceLevel {
+            price_quote: bid_price,
+            quantity_base,
+        },
+        ask: PriceLevel {
+            price_quote: ask_price,
+            quantity_base,
+        },
+        captured_at_unix_ms: now_unix_ms.saturating_sub(1),
+        received_at_unix_ms: now_unix_ms,
+    }
+}
+
+fn local_quote_load_fee(venue_name: &str, pair: MarketPair) -> FeeSchedule {
+    FeeSchedule {
+        venue: VenueRef {
+            name: venue_name.to_owned(),
+            kind: VenueKind::Cex,
+        },
+        pair: Some(pair),
+        maker_bps: 5.0,
+        taker_bps: 5.0,
+        network_fee_quote: 0.0,
+        externally_verified: true,
+    }
 }
 
 /// Boundary trait for future opportunity engines.
@@ -2752,6 +3403,21 @@ fn collect_fee_model_error(
     }
 }
 
+fn opportunity_error_from_market_data(
+    code: &'static str,
+    error: &MarketDataError,
+) -> OpportunityError {
+    let mut violations = Vec::new();
+    collect_market_data_error(code, error, &mut violations);
+    OpportunityError::ValidationFailed { violations }
+}
+
+fn opportunity_error_from_fee_model(code: &'static str, error: &FeeModelError) -> OpportunityError {
+    let mut violations = Vec::new();
+    collect_fee_model_error(code, error, &mut violations);
+    OpportunityError::ValidationFailed { violations }
+}
+
 fn collect_opportunity_error(error: OpportunityError, violations: &mut Vec<OpportunityViolation>) {
     match error {
         OpportunityError::ValidationFailed {
@@ -2896,16 +3562,21 @@ impl Error for OpportunityError {}
 #[cfg(test)]
 mod tests {
     use super::{
+        discover_opportunities_from_local_providers,
         phase27_local_opportunity_historical_fixture_corpus,
-        phase27_local_opportunity_replay_corpus, DeterministicOpportunityEngine,
-        OpportunityDiscoveryConfig, OpportunityDiscoveryRequest, OpportunityEngine,
-        OpportunityInventoryLimit, OpportunityReplayCorpus, OpportunityReplayExpectation,
-        OpportunityReplayScenario, OpportunityReplayStatus, OpportunityRouteKind,
+        phase27_local_opportunity_replay_corpus, validate_local_opportunity_quote_ingestion_load,
+        DeterministicOpportunityEngine, OpportunityDiscoveryConfig, OpportunityDiscoveryRequest,
+        OpportunityEngine, OpportunityInventoryLimit, OpportunityProviderIngestionRequest,
+        OpportunityQuoteIngestionLoadRequest, OpportunityReplayCorpus,
+        OpportunityReplayExpectation, OpportunityReplayLoadIteration, OpportunityReplayLoadReport,
+        OpportunityReplayRouteCount, OpportunityReplayRunReport, OpportunityReplayScenario,
+        OpportunityReplayScenarioReport, OpportunityReplayStatus, OpportunityRouteKind,
         OpportunityTransferRiskProfile,
     };
     use crate::{
-        FeeSchedule, MarketPair, NormalizedQuote, OrderBookSnapshot, PriceLevel, VenueKind,
-        VenueRef,
+        FeeModelError, FeeProvider, FeeSchedule, MarketDataCapabilities, MarketDataError,
+        MarketDataProvider, MarketDataRequest, MarketPair, NormalizedQuote, OrderBookSnapshot,
+        PriceLevel, VenueKind, VenueRef,
     };
 
     #[test]
@@ -3099,6 +3770,101 @@ mod tests {
             .warnings
             .iter()
             .any(|warning| warning.contains("no external transfer was performed")));
+    }
+
+    #[test]
+    fn discovers_candidates_from_local_provider_traits_only() {
+        let pair = MarketPair::new("BTC", "USD").expect("pair should validate");
+        let market_provider = LocalOpportunityMarketProvider {
+            quotes: vec![
+                quote("provider-buy", "paper-a", pair.clone(), 99.0, 100.0, 2.0),
+                quote("provider-sell", "paper-b", pair.clone(), 106.0, 107.0, 2.0),
+            ],
+            books: vec![
+                book(
+                    "provider-book-a",
+                    "paper-a",
+                    pair.clone(),
+                    vec![(99.0, 2.0)],
+                    vec![(100.0, 2.0)],
+                ),
+                book(
+                    "provider-book-b",
+                    "paper-b",
+                    pair.clone(),
+                    vec![(106.0, 2.0)],
+                    vec![(107.0, 2.0)],
+                ),
+            ],
+            capabilities: MarketDataCapabilities {
+                order_book: true,
+                top_of_book: true,
+                fees: false,
+                websocket: false,
+                rest: false,
+            },
+        };
+        let fee_provider = LocalOpportunityFeeProvider {
+            schedules: vec![fee("paper-a", pair.clone()), fee("paper-b", pair.clone())],
+        };
+
+        let report =
+            discover_opportunities_from_local_providers(&OpportunityProviderIngestionRequest {
+                id: "provider-ingestion-local".to_owned(),
+                market_data_provider: &market_provider,
+                fee_provider: &fee_provider,
+                venues: vec![venue("paper-a"), venue("paper-b")],
+                pairs: vec![pair],
+                include_order_books: true,
+                config: OpportunityDiscoveryConfig::default(),
+                now_unix_ms: 10_000,
+            })
+            .expect("local provider ingestion should discover candidates");
+
+        assert_eq!(report.quotes_ingested, 2);
+        assert_eq!(report.order_books_ingested, 2);
+        assert_eq!(report.fee_schedules_ingested, 2);
+        assert_eq!(report.candidates_discovered, report.candidates.len());
+        assert!(report.candidates_discovered >= 1);
+        assert!(!report.external_calls_performed);
+        assert!(!report.live_execution_performed);
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn rejects_live_capable_provider_before_fetching_data() {
+        let pair = MarketPair::new("BTC", "USD").expect("pair should validate");
+        let market_provider = LocalOpportunityMarketProvider {
+            quotes: Vec::new(),
+            books: Vec::new(),
+            capabilities: MarketDataCapabilities {
+                order_book: true,
+                top_of_book: true,
+                fees: false,
+                websocket: true,
+                rest: true,
+            },
+        };
+        let fee_provider = LocalOpportunityFeeProvider {
+            schedules: vec![fee("paper-a", pair.clone()), fee("paper-b", pair.clone())],
+        };
+
+        let error =
+            discover_opportunities_from_local_providers(&OpportunityProviderIngestionRequest {
+                id: "provider-ingestion-live-blocked".to_owned(),
+                market_data_provider: &market_provider,
+                fee_provider: &fee_provider,
+                venues: vec![venue("paper-a"), venue("paper-b")],
+                pairs: vec![pair],
+                include_order_books: true,
+                config: OpportunityDiscoveryConfig::default(),
+                now_unix_ms: 10_000,
+            })
+            .expect_err("live-capable provider must fail before fetching data");
+
+        assert!(error.violations().iter().any(|violation| {
+            violation.code() == "OPPORTUNITY_PROVIDER_LIVE_CAPABILITY_BLOCKED"
+        }));
     }
 
     #[test]
@@ -3308,6 +4074,113 @@ mod tests {
     }
 
     #[test]
+    fn opportunity_replay_load_report_aggregates_local_iterations() {
+        let report = OpportunityReplayLoadReport::from_iterations(vec![
+            OpportunityReplayLoadIteration {
+                iteration_id: "run-1".to_owned(),
+                elapsed_ms: 3,
+                report: valid_replay_report("phase27-local-replay", 9, 8),
+            },
+            OpportunityReplayLoadIteration {
+                iteration_id: "run-2".to_owned(),
+                elapsed_ms: 5,
+                report: valid_replay_report("phase27-local-replay", 9, 8),
+            },
+        ])
+        .expect("valid replay iterations should aggregate");
+
+        assert_eq!(report.corpus_id, "phase27-local-replay");
+        assert_eq!(report.iterations_attempted, 2);
+        assert_eq!(report.iterations_passed, 2);
+        assert_eq!(report.min_elapsed_ms, 3);
+        assert_eq!(report.max_elapsed_ms, 5);
+        assert_eq!(report.average_elapsed_ms, 4);
+        assert_eq!(report.total_elapsed_ms, 8);
+        assert_eq!(report.total_scenarios_replayed, 18);
+        assert_eq!(report.total_passed_scenarios, 18);
+        assert_eq!(report.total_failed_scenarios, 0);
+        assert_eq!(report.total_candidates, 16);
+        assert!(!report.external_calls_performed);
+        assert!(!report.live_execution_performed);
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn opportunity_replay_load_report_rejects_failed_or_mismatched_iterations() {
+        let mut failed_report = valid_replay_report("phase27-local-replay", 9, 8);
+        failed_report.status = OpportunityReplayStatus::Failed;
+        failed_report.failed_scenarios = 1;
+
+        let failed_error =
+            OpportunityReplayLoadReport::from_iterations(vec![OpportunityReplayLoadIteration {
+                iteration_id: "run-1".to_owned(),
+                elapsed_ms: 3,
+                report: failed_report,
+            }])
+            .expect_err("failed replay report should be rejected");
+        assert!(failed_error
+            .to_string()
+            .contains("OPPORTUNITY_REPLAY_LOAD_ITERATION_FAILED"));
+
+        let mismatch_error = OpportunityReplayLoadReport::from_iterations(vec![
+            OpportunityReplayLoadIteration {
+                iteration_id: "run-1".to_owned(),
+                elapsed_ms: 3,
+                report: valid_replay_report("phase27-local-replay-a", 9, 8),
+            },
+            OpportunityReplayLoadIteration {
+                iteration_id: "run-2".to_owned(),
+                elapsed_ms: 4,
+                report: valid_replay_report("phase27-local-replay-b", 9, 8),
+            },
+        ])
+        .expect_err("mismatched corpus ids should be rejected");
+        assert!(mismatch_error
+            .to_string()
+            .contains("OPPORTUNITY_REPLAY_LOAD_CORPUS_MISMATCH"));
+    }
+
+    #[test]
+    fn quote_ingestion_load_reports_candidate_backpressure_locally() {
+        let report =
+            validate_local_opportunity_quote_ingestion_load(OpportunityQuoteIngestionLoadRequest {
+                id: "local-quote-load".to_owned(),
+                venue_pairs: 8,
+                max_candidates: 3,
+                now_unix_ms: 10_000,
+            })
+            .expect("local quote ingestion load should pass");
+
+        assert_eq!(report.run_id, "local-quote-load");
+        assert_eq!(report.quotes_ingested, 16);
+        assert_eq!(report.fee_schedules_ingested, 16);
+        assert_eq!(report.max_candidates, 3);
+        assert_eq!(report.candidates_returned, 3);
+        assert!(report.candidate_backpressure_applied);
+        assert_eq!(report.truncated_candidate_lower_bound, 5);
+        assert!(!report.external_data_downloaded);
+        assert!(!report.external_calls_performed);
+        assert!(!report.live_execution_performed);
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn quote_ingestion_load_rejects_invalid_local_fixture_shape() {
+        let error =
+            validate_local_opportunity_quote_ingestion_load(OpportunityQuoteIngestionLoadRequest {
+                id: "bad-quote-load".to_owned(),
+                venue_pairs: 0,
+                max_candidates: 3,
+                now_unix_ms: 10_000,
+            })
+            .expect_err("empty venue pairs should fail closed");
+
+        assert!(error
+            .to_string()
+            .contains("OPPORTUNITY_QUOTE_LOAD_VENUES_EMPTY"));
+    }
+
+    #[test]
     fn phase27_local_historical_fixture_corpus_executes_multiple_windows() {
         let corpus = phase27_local_opportunity_historical_fixture_corpus()
             .expect("phase 27 local historical fixture corpus should build");
@@ -3334,6 +4207,36 @@ mod tests {
                 .iter()
                 .any(|scenario| scenario.scenario_id == "phase27-stale-data-fail-closed")
         }));
+    }
+
+    fn valid_replay_report(
+        corpus_id: &str,
+        scenario_count: usize,
+        total_candidates: usize,
+    ) -> OpportunityReplayRunReport {
+        OpportunityReplayRunReport {
+            corpus_id: corpus_id.to_owned(),
+            scenario_count,
+            passed_scenarios: scenario_count,
+            failed_scenarios: 0,
+            total_candidates,
+            external_calls_performed: false,
+            live_execution_performed: false,
+            status: OpportunityReplayStatus::Passed,
+            scenario_reports: vec![OpportunityReplayScenarioReport {
+                scenario_id: "local-load-scenario".to_owned(),
+                candidate_count: total_candidates,
+                route_counts: vec![OpportunityReplayRouteCount {
+                    route_kind: OpportunityRouteKind::CexCex,
+                    count: total_candidates,
+                }],
+                best_candidate_id: Some("local-load-candidate".to_owned()),
+                best_score_bps: Some(1.0),
+                best_net_profit_quote: Some(1.0),
+                status: OpportunityReplayStatus::Passed,
+                violations: Vec::new(),
+            }],
+        }
     }
 
     fn quote(
@@ -3430,6 +4333,84 @@ mod tests {
         VenueRef {
             kind: VenueKind::Cex,
             name: venue_name.to_owned(),
+        }
+    }
+
+    struct LocalOpportunityMarketProvider {
+        quotes: Vec<NormalizedQuote>,
+        books: Vec<OrderBookSnapshot>,
+        capabilities: MarketDataCapabilities,
+    }
+
+    impl MarketDataProvider for LocalOpportunityMarketProvider {
+        fn provider_name(&self) -> &'static str {
+            "local-opportunity-market-provider"
+        }
+
+        fn capabilities(&self) -> MarketDataCapabilities {
+            self.capabilities
+        }
+
+        fn order_book(
+            &self,
+            request: &MarketDataRequest,
+        ) -> Result<OrderBookSnapshot, MarketDataError> {
+            request.validate()?;
+            self.books
+                .iter()
+                .find(|book| book.venue == request.venue && book.pair == request.pair)
+                .cloned()
+                .ok_or_else(|| MarketDataError::NoData {
+                    provider: self.provider_name().to_owned(),
+                    reason: format!("missing book for {}", request.pair.symbol()),
+                })
+        }
+
+        fn top_of_book(
+            &self,
+            request: &MarketDataRequest,
+        ) -> Result<NormalizedQuote, MarketDataError> {
+            request.validate()?;
+            self.quotes
+                .iter()
+                .find(|quote| quote.venue == request.venue && quote.pair == request.pair)
+                .cloned()
+                .ok_or_else(|| MarketDataError::NoData {
+                    provider: self.provider_name().to_owned(),
+                    reason: format!("missing quote for {}", request.pair.symbol()),
+                })
+        }
+    }
+
+    struct LocalOpportunityFeeProvider {
+        schedules: Vec<FeeSchedule>,
+    }
+
+    impl FeeProvider for LocalOpportunityFeeProvider {
+        fn provider_name(&self) -> &'static str {
+            "local-opportunity-fee-provider"
+        }
+
+        fn fee_schedule(
+            &self,
+            venue: &VenueRef,
+            pair: Option<&MarketPair>,
+        ) -> Result<FeeSchedule, FeeModelError> {
+            self.schedules
+                .iter()
+                .find(|schedule| {
+                    &schedule.venue == venue
+                        && match (&schedule.pair, pair) {
+                            (Some(left), Some(right)) => left == right,
+                            (None, None) => true,
+                            (None, Some(_)) | (Some(_), None) => false,
+                        }
+                })
+                .cloned()
+                .ok_or_else(|| FeeModelError::ScheduleUnavailable {
+                    provider: self.provider_name().to_owned(),
+                    reason: "missing local fee schedule".to_owned(),
+                })
         }
     }
 }

@@ -14,6 +14,7 @@ Wire paper execution reports and paper balance-ledger mutations into the existin
 - Append sanitized audit events for paper execution reports.
 - Append sanitized audit events for paper ledger reserve and settlement mutations.
 - Provide audited ledgered execution helpers for realistic paper fills and venue-realistic paper fills.
+- Settle modeled execution-adapter fills into the local paper ledger during paper-scoped runtime smoke and recover both paper report and ledger checkpoints.
 - Reopen the local JSONL audit journal after writes to verify hash-chain replay.
 - Add local Cargo tests for audit journal append/replay behavior.
 - Update roadmap, architecture, handoff, manifest, and gap tracker language.
@@ -31,6 +32,7 @@ Wire paper execution reports and paper balance-ledger mutations into the existin
 
 - `PHASE_25_SUBROADMAP.md` exists before Phase 25 documentation completion.
 - Paper audit helpers append report and ledger mutation records through `AppendOnlyAuditJournal`.
+- Paper-scoped runtime smoke persists and reopens a local paper execution report checkpoint plus final paper ledger checkpoint.
 - Audited paper execution helpers preserve `live_network_used = false` and `external_execution_performed = false`.
 - Local tests reopen the journal and verify replay after paper report and ledger mutation writes.
 - Structure validation and Cargo validation pass for the current workspace state.
