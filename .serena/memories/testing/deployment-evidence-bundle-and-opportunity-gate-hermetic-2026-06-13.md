@@ -1,0 +1,8 @@
+# Deployment evidence bundle + hermetic opportunity gate (2026-06-13)
+
+- Expanded `scripts/validate_deployment_evidence_bundle.py` to index three aggregate local-only validators in addition to the existing non-mutating deployment helpers: `validate_deployment_runtime_gate.py --json`, `validate_opportunity_scenario_gate.py --json`, and `validate_connector_scenario_gate.py --json`.
+- This means `scripts/validate_deployment_evidence_checklist.py --json` now surfaces those aggregate gate component names through the embedded bundle index as well.
+- While doing that, a real flake surfaced in `scripts/validate_opportunity_scenario_gate.py`: it used fixed workspace paths for `validate-local-validation-corpus` and `validate-local-paper-backtest-corpus`, so stale local state could make the aggregate gate fail even though the underlying validators passed on fresh workspaces.
+- Fixed the gate by switching it to a per-run temp workspace root under `target/` and wiring the two stateful subcommands to fresh subdirectories. This keeps the gate hermetic like `validate_connector_scenario_gate.py`.
+- Validation after the fix passed: `rtk python3 scripts/validate_deployment_evidence_bundle.py --json`, `rtk python3 scripts/validate_deployment_evidence_checklist.py --json`, `rtk python3 scripts/validate_structure.py`, `rtk cargo fmt --check`, `rtk cargo check --workspace`, `rtk cargo test --workspace` (495 passed), and `rtk cargo clippy --workspace --all-targets -- -D warnings`.
+- Obsidian-targeted project memory is still conceptually preferred by AGENTS, but the known project vault paths have previously been absent on this machine, so Serena memory remains the active durable memory surface unless the vault path is created later.

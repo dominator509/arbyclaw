@@ -1,0 +1,8 @@
+# Adapter-run paper intent audit coverage (2026-06-13)
+
+- `crates/arb-core/src/paper.rs::ledger_execution_adapter_run_paper_fills` now appends `append_paper_execution_intent_audit(...)` before reserve/settlement/report audit records for each deterministic modeled fill, then passes `Some(intent_record.sequence)` into `append_paper_ledgered_execution_audit(...)`.
+- The adapter-run ledger test now expects 8 audit records appended for two fills, `journal.next_sequence() == 9`, and explicit `"kind":"intent-lifecycle"` presence after reopen.
+- `crates/arb-core/src/runtime.rs` local runtime smoke fixture was updated so `paper_ledger_audit_records_appended` is 8.
+- `ARCHITECTURE.md` and `PRODUCTION_GAP_TRACKER.md` were reconciled to say adapter-run paper paths now append paper intent, report, and ledger-mutation audit records rather than only report plus reserve/settlement.
+- Validation on 2026-06-13 passed for targeted tests plus full repo gates: structure manifest generation, structure validation, py_compile for validation scripts, `cargo fmt --check`, `cargo check --workspace`, `cargo test --workspace` (458 passed), and `cargo clippy --workspace --all-targets -- -D warnings`.
+- Obsidian MCP is not available in-session, and a targeted local search did not find the preferred `Projects/arbyclaw` note files under common `C:\Users\domin\Documents\Obsidian` or `C:\Users\domin\Obsidian` paths, so Serena memory remains the reliable in-session project-memory surface for now.

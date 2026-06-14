@@ -96,6 +96,7 @@ Available in ChatGPT environment:
 ```bash
 python3 scripts/validate_structure.py
 python3 -m py_compile scripts/validate_structure.py
+python3 scripts/validate_packaging_deployment_gate.py --json
 ```
 
 Required externally before production claims:

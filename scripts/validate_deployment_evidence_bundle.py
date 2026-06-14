@@ -56,14 +56,46 @@ COMPONENT_COMMANDS = [
         True,
     ),
     (
+        "deployment-runtime-gate",
+        [sys.executable, "scripts/validate_deployment_runtime_gate.py", "--json"],
+        True,
+    ),
+    (
+        "opportunity-scenario-gate",
+        [sys.executable, "scripts/validate_opportunity_scenario_gate.py", "--json"],
+        True,
+    ),
+    (
+        "connector-scenario-gate",
+        [sys.executable, "scripts/validate_connector_scenario_gate.py", "--json"],
+        True,
+    ),
+    (
         "rollback-drill-plan",
         [sys.executable, "scripts/validate_rollback_drill.py", "--json"],
         True,
     ),
     (
+        "rollback-execution-transcript",
+        ["cargo", "run", "-p", "arb-agent", "--", "validate-rollback-execution-transcript"],
+        False,
+    ),
+    (
         "incident-response-drill-plan",
         [sys.executable, "scripts/validate_incident_response_drill.py", "--json"],
         True,
+    ),
+    (
+        "incident-response-execution-transcript",
+        [
+            "cargo",
+            "run",
+            "-p",
+            "arb-agent",
+            "--",
+            "validate-incident-response-execution-transcript",
+        ],
+        False,
     ),
 ]
 

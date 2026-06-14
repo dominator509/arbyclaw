@@ -23,6 +23,8 @@ preserve safety invariants together.
 - Add `scripts/validate_deployment_runtime_gate.py`.
 - Run the existing non-secret deployment-host runtime helper with all local-only
   runtime components enabled against fresh `target/` workspaces.
+- Enforce the embedded production-runtime preflight contract reported by local
+  runtime smoke.
 - Fail closed if any nested report claims service-manager action, external
   calls, live execution, secret loading, production readiness, public exposure,
   telemetry export, outbound alert/network delivery, or production-path mutation.

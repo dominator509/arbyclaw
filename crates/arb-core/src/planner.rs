@@ -4,13 +4,13 @@
 #![allow(clippy::too_many_lines)]
 
 use crate::{
-    AppendOnlyAuditJournal, AuditEvent, AuditEventKind, AuditRecord, AuditValue, DestinationPolicy,
-    DeterministicOpportunityEngine, ExecutionIntent, ExecutionIntentKind, ExecutionScope,
-    OpportunityCandidate, OpportunityEngine, OpportunityError, OpportunityHistoricalFixtureCorpus,
-    OpportunityLeg, OpportunityLegSide, OpportunityRouteKind, PolicyDecision, PolicyEngine,
-    SqliteWalStateStore, StateCheckpoint, StateStore, StateStoreError,
-    StrategyPolicyConstraintReport, StrategyPolicyConstraintStatus, StrategyProfile, VenueKind,
-    DEFAULT_MAX_MARKET_DATA_AGE_MS,
+    append_policy_decision_audit, AppendOnlyAuditJournal, AuditError, AuditEvent, AuditEventKind,
+    AuditRecord, AuditValue, DestinationPolicy, DeterministicOpportunityEngine, ExecutionIntent,
+    ExecutionIntentKind, ExecutionScope, OpportunityCandidate, OpportunityEngine, OpportunityError,
+    OpportunityHistoricalFixtureCorpus, OpportunityLeg, OpportunityLegSide, OpportunityRouteKind,
+    PolicyDecision, PolicyDecisionRecord, PolicyEngine, SqliteWalStateStore, StateCheckpoint,
+    StateStore, StateStoreError, StrategyPolicyConstraintReport, StrategyPolicyConstraintStatus,
+    StrategyProfile, VenueKind, DEFAULT_MAX_MARKET_DATA_AGE_MS, TRUST_CONTRACT_VERSION,
 };
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, error::Error, fmt, path::Path};
@@ -599,6 +599,151 @@ pub fn persist_execution_plan_draft_checkpoint(
     Ok(checkpoint)
 }
 
+/// Local audit outcome for one execution-plan draft and its policy outcomes.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExecutionPlanAuditReport {
+    /// Stable plan id that was journaled.
+    pub plan_id: String,
+    /// Audit sequence for the draft-level planning event.
+    pub draft_record_sequence: u64,
+    /// Audit sequences for per-intent policy outcome events.
+    pub policy_outcome_record_sequences: Vec<u64>,
+    /// Total audit records appended for this plan.
+    pub records_appended: usize,
+    /// Whether external submission occurred. Always false for this boundary.
+    pub external_submission_performed: bool,
+    /// Whether live execution occurred. Always false for this boundary.
+    pub live_execution_performed: bool,
+    /// Operator-supplied audit timestamp.
+    pub audited_at_unix_ms: u64,
+}
+
+/// Append one local execution-plan draft and each policy outcome to the audit journal.
+///
+/// This journals only deterministic draft-planning metadata and redacted policy
+/// outcomes. It never submits to adapters, places orders, calls exchanges/RPCs,
+/// signs payloads, broadcasts transactions, withdraws funds, or bridges assets.
+pub fn append_execution_plan_draft_audit(
+    journal: &mut AppendOnlyAuditJournal,
+    draft: &ExecutionPlanDraft,
+    audited_at_unix_ms: u64,
+) -> Result<ExecutionPlanAuditReport, AuditError> {
+    draft
+        .validate()
+        .map_err(|error| AuditError::ValidationFailed {
+            violations: vec![crate::AuditViolation::new_owned(
+                "EXECUTION_PLAN_DRAFT_INVALID",
+                error.to_string(),
+            )],
+        })?;
+    if audited_at_unix_ms == 0 {
+        return Err(AuditError::ValidationFailed {
+            violations: vec![crate::AuditViolation::new_owned(
+                "EXECUTION_PLAN_AUDIT_TIMESTAMP_ZERO",
+                "execution plan audit timestamp is required".to_owned(),
+            )],
+        });
+    }
+
+    let draft_record = journal.append_event(
+        AuditEvent::new(
+            format!("execution-plan-draft-{}", draft.id),
+            AuditEventKind::ExecutionPlanning,
+            EXECUTION_PLANNER_STATE_SUBSYSTEM,
+            "execution-planner",
+            "execution plan draft recorded before adapter handoff",
+        )
+        .with_metadata("plan_id", AuditValue::Text(draft.id.clone()))
+        .with_metadata("request_id", AuditValue::Text(draft.request_id.clone()))
+        .with_metadata("candidate_id", AuditValue::Text(draft.candidate_id.clone()))
+        .with_metadata("status", AuditValue::Text(format!("{:?}", draft.status)))
+        .with_metadata("scope", AuditValue::Text(format!("{:?}", draft.scope)))
+        .with_metadata(
+            "intent_count",
+            AuditValue::Unsigned(draft.intents.len() as u64),
+        )
+        .with_metadata("step_count", AuditValue::Unsigned(draft.steps.len() as u64))
+        .with_metadata(
+            "policy_outcome_count",
+            AuditValue::Unsigned(draft.policy_outcomes.len() as u64),
+        )
+        .with_metadata(
+            "failure_mode_count",
+            AuditValue::Unsigned(draft.failure_modes.len() as u64),
+        )
+        .with_metadata(
+            "total_notional_quote",
+            AuditValue::Text(draft.total_notional_quote.to_string()),
+        )
+        .with_metadata(
+            "expected_net_profit_quote",
+            AuditValue::Text(draft.expected_net_profit_quote.to_string()),
+        )
+        .with_metadata(
+            "adapter_submission_enabled",
+            AuditValue::Bool(draft.adapter_submission_enabled),
+        )
+        .with_metadata("external_submission_performed", AuditValue::Bool(false))
+        .with_metadata("live_execution_performed", AuditValue::Bool(false)),
+    )?;
+
+    let mut policy_outcome_record_sequences = Vec::with_capacity(draft.policy_outcomes.len());
+    for outcome in &draft.policy_outcomes {
+        let intent = draft
+            .intents
+            .iter()
+            .find(|intent| intent.id == outcome.intent_id)
+            .ok_or_else(|| AuditError::ValidationFailed {
+                violations: vec![crate::AuditViolation::new_owned(
+                    "EXECUTION_PLAN_POLICY_OUTCOME_UNKNOWN_INTENT",
+                    format!(
+                        "execution plan audit could not find intent for policy outcome {}",
+                        outcome.intent_id
+                    ),
+                )],
+            })?;
+        let violation_codes = outcome
+            .violations
+            .iter()
+            .map(|violation| violation.code.clone())
+            .collect::<Vec<_>>();
+        let decision_record = PolicyDecisionRecord {
+            trust_contract_version: outcome
+                .trust_contract_version
+                .clone()
+                .unwrap_or_else(|| TRUST_CONTRACT_VERSION.to_owned()),
+            intent_id: intent.id.clone(),
+            strategy_id: intent.strategy_id.clone(),
+            intent_kind: intent.kind,
+            requested_scope: intent.scope,
+            venue: intent.venue.clone(),
+            approved: outcome.is_approved(),
+            approved_scope: outcome.approved_scope,
+            violation_count: u64::try_from(violation_codes.len()).unwrap_or(u64::MAX),
+            violation_codes,
+            live_scope_requested: intent.scope == ExecutionScope::Live,
+            funds_movement_requested: intent.kind.requires_funds_movement(),
+            signing_requested: intent.requires_signing,
+            external_submission_performed: false,
+            secret_material_recorded: false,
+            recorded_at_unix_ms: audited_at_unix_ms,
+        };
+        let record = append_policy_decision_audit(journal, &decision_record)?;
+        policy_outcome_record_sequences.push(record.sequence);
+    }
+
+    Ok(ExecutionPlanAuditReport {
+        plan_id: draft.id.clone(),
+        draft_record_sequence: draft_record.sequence,
+        records_appended: 1 + policy_outcome_record_sequences.len(),
+        policy_outcome_record_sequences,
+        external_submission_performed: false,
+        live_execution_performed: false,
+        audited_at_unix_ms,
+    })
+}
+
 /// Local audit/state trace for one discovered opportunity candidate before planner handoff.
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -838,6 +983,585 @@ pub struct OpportunityCandidateTraceRecoveryReport {
     pub live_execution_performed: bool,
     /// Overall recovery validation status.
     pub status: OpportunityPlannerHandoffStatus,
+}
+
+/// Local strategy-profile replay validation status across the historical fixture corpus.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum StrategyProfileReplayValidationStatus {
+    /// Every discoverable replay candidate produced the expected accepted/rejected profile outcomes.
+    Passed,
+    /// One or more replay candidates failed accepted/rejected profile validation.
+    Failed,
+}
+
+/// Local strategy-profile replay validation report.
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct StrategyProfileReplayValidationReport {
+    /// Source historical fixture corpus id.
+    pub corpus_id: String,
+    /// Number of replay windows inspected.
+    pub replay_window_count: usize,
+    /// Number of replay scenarios inspected.
+    pub replay_scenario_count: usize,
+    /// Number of discovery validation failures skipped as fail-closed replay windows.
+    pub skipped_discovery_failures: usize,
+    /// Number of opportunity candidates discovered and offered to the planner.
+    pub discovered_candidates: usize,
+    /// Number of accepted-profile planner runs that produced a draft.
+    pub accepted_planned_candidates: usize,
+    /// Number of accepted-profile planner runs that remained draft-ready.
+    pub accepted_draft_ready_plans: usize,
+    /// Number of accepted-profile constraint reports that remained satisfied.
+    pub accepted_satisfied_constraint_reports: usize,
+    /// Number of accepted-profile strategy-rejected intents.
+    pub accepted_strategy_rejected_intents: usize,
+    /// Number of rejected-profile planner runs that produced a draft.
+    pub rejected_planned_candidates: usize,
+    /// Number of rejected-profile planner runs that were denied by strategy constraints.
+    pub rejected_policy_denied_plans: usize,
+    /// Number of rejected-profile constraint reports that were rejected.
+    pub rejected_constraint_reports: usize,
+    /// Number of rejected-profile strategy-rejected intents.
+    pub rejected_strategy_rejected_intents: usize,
+    /// Number of strategy replay planner failures across both profiles.
+    pub failed_strategy_planner_runs: usize,
+    /// Total accepted-profile draft intents across generated plans.
+    pub total_accepted_intents: usize,
+    /// Total rejected-profile draft intents across generated plans.
+    pub total_rejected_intents: usize,
+    /// True only if a bug enabled adapter submission.
+    pub adapter_submission_performed: bool,
+    /// Always false; validation consumes supplied local records only.
+    pub external_calls_performed: bool,
+    /// Always false; validation never submits orders or moves funds.
+    pub live_execution_performed: bool,
+    /// True only if a bug enabled signing or broadcasting.
+    pub signing_or_broadcast_performed: bool,
+    /// True only if a bug marked the replay as production-ready.
+    pub production_ready: bool,
+    /// Overall strategy replay validation status.
+    pub status: StrategyProfileReplayValidationStatus,
+}
+
+/// Local strategy profitability tuning validation status across the historical fixture corpus.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum StrategyProfitabilityTuningValidationStatus {
+    /// The local profitability threshold sweep behaved monotonically and remained side-effect free.
+    Passed,
+    /// One or more profitability threshold invariants failed.
+    Failed,
+}
+
+/// Local profitability threshold point over the replay corpus.
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct StrategyProfitabilityTuningPoint {
+    /// Minimum net profit threshold applied to every draft intent.
+    pub min_net_profit_abs: f64,
+    /// Number of candidate planner runs attempted at this threshold.
+    pub planned_candidates: usize,
+    /// Number of draft-ready plans at this threshold.
+    pub draft_ready_plans: usize,
+    /// Number of policy-denied drafts at this threshold.
+    pub policy_denied_plans: usize,
+    /// Number of draft intents accepted at this threshold.
+    pub accepted_intents: usize,
+    /// Number of draft intents rejected at this threshold.
+    pub rejected_intents: usize,
+    /// Number of planner runs that failed before reporting a draft.
+    pub failed_planner_runs: usize,
+    /// Aggregate expected net profit for accepted intents only.
+    pub total_expected_net_profit_quote: f64,
+    /// Lowest accepted intent net profit observed at this threshold.
+    pub lowest_accepted_net_profit_quote: Option<f64>,
+    /// Highest accepted intent net profit observed at this threshold.
+    pub highest_accepted_net_profit_quote: Option<f64>,
+}
+
+/// Local strategy profitability tuning validation report.
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct StrategyProfitabilityTuningValidationReport {
+    /// Source historical fixture corpus id.
+    pub corpus_id: String,
+    /// Number of replay windows inspected.
+    pub replay_window_count: usize,
+    /// Number of replay scenarios inspected.
+    pub replay_scenario_count: usize,
+    /// Number of discovery validation failures skipped as fail-closed replay windows.
+    pub skipped_discovery_failures: usize,
+    /// Number of opportunity candidates discovered and offered to the planner.
+    pub discovered_candidates: usize,
+    /// Monotonic threshold points derived from the local corpus.
+    pub profitability_points: Vec<StrategyProfitabilityTuningPoint>,
+    /// Whether accepted-plan/intents counts decreased monotonically as thresholds rose.
+    pub monotonic_acceptance_validated: bool,
+    /// Whether denied-plan/rejected-intent counts increased monotonically as thresholds rose.
+    pub monotonic_rejection_validated: bool,
+    /// Whether the sweep observed at least one threshold transition across the corpus.
+    pub threshold_transition_observed: bool,
+    /// True only if a bug enabled adapter submission.
+    pub adapter_submission_performed: bool,
+    /// Always false; validation consumes supplied local records only.
+    pub external_calls_performed: bool,
+    /// Always false; validation never submits orders or moves funds.
+    pub live_execution_performed: bool,
+    /// True only if a bug enabled signing or broadcasting.
+    pub signing_or_broadcast_performed: bool,
+    /// True only if a bug marked the sweep as production-ready.
+    pub production_ready: bool,
+    /// Overall profitability tuning validation status.
+    pub status: StrategyProfitabilityTuningValidationStatus,
+}
+
+/// Validate local historical replay candidates against accepted/rejected strategy profiles.
+///
+/// This consumes caller-supplied local replay records only. It does not call
+/// exchanges/RPC endpoints, submit adapters, sign, broadcast, withdraw, bridge,
+/// mutate balances, or claim production readiness.
+pub fn validate_strategy_profile_replay_corpus(
+    corpus: &OpportunityHistoricalFixtureCorpus,
+    policy: &PolicyEngine,
+    accepted_profile: &StrategyProfile,
+    rejected_profile: &StrategyProfile,
+) -> Result<StrategyProfileReplayValidationReport, ExecutionPlannerError> {
+    corpus
+        .validate()
+        .map_err(opportunity_error_to_planner_error)?;
+
+    let engine = DeterministicOpportunityEngine::new();
+    let planner = DeterministicExecutionPlanner::new();
+    let mut replay_scenario_count = 0;
+    let mut skipped_discovery_failures = 0;
+    let mut discovered_candidates = 0;
+    let mut accepted_planned_candidates = 0;
+    let mut accepted_draft_ready_plans = 0;
+    let mut accepted_satisfied_constraint_reports = 0;
+    let mut accepted_strategy_rejected_intents = 0;
+    let mut rejected_planned_candidates = 0;
+    let mut rejected_policy_denied_plans = 0;
+    let mut rejected_constraint_reports = 0;
+    let mut rejected_strategy_rejected_intents = 0;
+    let mut failed_strategy_planner_runs = 0;
+    let mut total_accepted_intents = 0;
+    let mut total_rejected_intents = 0;
+    let mut adapter_submission_performed = false;
+    let mut live_execution_performed = false;
+    let mut signing_or_broadcast_performed = false;
+    let mut production_ready = false;
+
+    for window in &corpus.replay_windows {
+        for scenario in &window.scenarios {
+            replay_scenario_count += 1;
+            let Ok(candidates) = engine.discover(&scenario.request) else {
+                skipped_discovery_failures += 1;
+                continue;
+            };
+
+            for candidate in candidates {
+                discovered_candidates += 1;
+                let accepted_request = ExecutionPlannerRequest {
+                    id: format!("phase27-strategy-replay-accepted-{discovered_candidates}"),
+                    strategy_id: accepted_profile.id.clone(),
+                    candidate: candidate.clone(),
+                    config: ExecutionPlannerConfig {
+                        requested_scope: ExecutionScope::Paper,
+                        max_plan_legs: 4,
+                        max_total_notional_quote: 1_000_000.0,
+                        default_slippage_bps: 50,
+                        max_market_data_age_ms: DEFAULT_MAX_MARKET_DATA_AGE_MS,
+                        require_policy_preflight: true,
+                    },
+                    default_chain: Some("ethereum".to_owned()),
+                    now_unix_ms: 10_000,
+                };
+                match planner.plan_with_strategy_profile(
+                    &accepted_request,
+                    policy,
+                    accepted_profile,
+                ) {
+                    Ok(plan) => {
+                        accepted_planned_candidates += 1;
+                        total_accepted_intents += plan.draft.intents.len();
+                        accepted_satisfied_constraint_reports += plan
+                            .strategy_constraint_reports
+                            .iter()
+                            .filter(|report| {
+                                report.status == StrategyPolicyConstraintStatus::Satisfied
+                            })
+                            .count();
+                        accepted_strategy_rejected_intents += plan.strategy_rejected_intents;
+                        adapter_submission_performed |= plan.adapter_submission_performed;
+                        live_execution_performed |= plan.live_execution_performed;
+                        signing_or_broadcast_performed |= plan.signing_or_broadcast_performed;
+                        production_ready |= plan.production_ready;
+                        if plan.draft.status == ExecutionPlanStatus::DraftReady {
+                            accepted_draft_ready_plans += 1;
+                        }
+                    }
+                    Err(_) => failed_strategy_planner_runs += 1,
+                }
+
+                let rejected_request = ExecutionPlannerRequest {
+                    id: format!("phase27-strategy-replay-rejected-{discovered_candidates}"),
+                    strategy_id: rejected_profile.id.clone(),
+                    candidate,
+                    config: ExecutionPlannerConfig {
+                        requested_scope: ExecutionScope::Paper,
+                        max_plan_legs: 4,
+                        max_total_notional_quote: 1_000_000.0,
+                        default_slippage_bps: 50,
+                        max_market_data_age_ms: DEFAULT_MAX_MARKET_DATA_AGE_MS,
+                        require_policy_preflight: true,
+                    },
+                    default_chain: Some("ethereum".to_owned()),
+                    now_unix_ms: 10_000,
+                };
+                match planner.plan_with_strategy_profile(
+                    &rejected_request,
+                    policy,
+                    rejected_profile,
+                ) {
+                    Ok(plan) => {
+                        rejected_planned_candidates += 1;
+                        total_rejected_intents += plan.draft.intents.len();
+                        rejected_constraint_reports += plan
+                            .strategy_constraint_reports
+                            .iter()
+                            .filter(|report| {
+                                report.status == StrategyPolicyConstraintStatus::Rejected
+                            })
+                            .count();
+                        rejected_strategy_rejected_intents += plan.strategy_rejected_intents;
+                        adapter_submission_performed |= plan.adapter_submission_performed;
+                        live_execution_performed |= plan.live_execution_performed;
+                        signing_or_broadcast_performed |= plan.signing_or_broadcast_performed;
+                        production_ready |= plan.production_ready;
+                        if plan.draft.status == ExecutionPlanStatus::PolicyDeniedDraft {
+                            rejected_policy_denied_plans += 1;
+                        }
+                    }
+                    Err(_) => failed_strategy_planner_runs += 1,
+                }
+            }
+        }
+    }
+
+    let status = if discovered_candidates > 0
+        && accepted_planned_candidates == discovered_candidates
+        && accepted_draft_ready_plans == discovered_candidates
+        && accepted_satisfied_constraint_reports == total_accepted_intents
+        && accepted_strategy_rejected_intents == 0
+        && rejected_planned_candidates == discovered_candidates
+        && rejected_policy_denied_plans == discovered_candidates
+        && rejected_constraint_reports == total_rejected_intents
+        && rejected_strategy_rejected_intents == total_rejected_intents
+        && failed_strategy_planner_runs == 0
+        && !adapter_submission_performed
+        && !live_execution_performed
+        && !signing_or_broadcast_performed
+        && !production_ready
+    {
+        StrategyProfileReplayValidationStatus::Passed
+    } else {
+        StrategyProfileReplayValidationStatus::Failed
+    };
+
+    Ok(StrategyProfileReplayValidationReport {
+        corpus_id: corpus.id.clone(),
+        replay_window_count: corpus.replay_windows.len(),
+        replay_scenario_count,
+        skipped_discovery_failures,
+        discovered_candidates,
+        accepted_planned_candidates,
+        accepted_draft_ready_plans,
+        accepted_satisfied_constraint_reports,
+        accepted_strategy_rejected_intents,
+        rejected_planned_candidates,
+        rejected_policy_denied_plans,
+        rejected_constraint_reports,
+        rejected_strategy_rejected_intents,
+        failed_strategy_planner_runs,
+        total_accepted_intents,
+        total_rejected_intents,
+        adapter_submission_performed,
+        external_calls_performed: false,
+        live_execution_performed,
+        signing_or_broadcast_performed,
+        production_ready,
+        status,
+    })
+}
+
+/// Validate local strategy profitability tuning over the historical fixture corpus.
+///
+/// This derives a low/median/high threshold sweep from observed local replay
+/// intent profitability, then proves monotonic draft-ready vs policy-denied
+/// behavior without adapter submission, signing, broadcasting, or live calls.
+pub fn validate_strategy_profitability_tuning(
+    corpus: &OpportunityHistoricalFixtureCorpus,
+    policy: &PolicyEngine,
+) -> Result<StrategyProfitabilityTuningValidationReport, ExecutionPlannerError> {
+    corpus
+        .validate()
+        .map_err(opportunity_error_to_planner_error)?;
+
+    let engine = DeterministicOpportunityEngine::new();
+    let planner = DeterministicExecutionPlanner::new();
+    let mut replay_scenario_count = 0;
+    let mut skipped_discovery_failures = 0;
+    let mut candidates = Vec::new();
+
+    for window in &corpus.replay_windows {
+        for scenario in &window.scenarios {
+            replay_scenario_count += 1;
+            let Ok(discovered) = engine.discover(&scenario.request) else {
+                skipped_discovery_failures += 1;
+                continue;
+            };
+            candidates.extend(discovered);
+        }
+    }
+
+    if candidates.is_empty() {
+        return Err(planner_validation_error(
+            "STRATEGY_PROFITABILITY_TUNING_CANDIDATES_REQUIRED",
+            "strategy profitability tuning requires at least one discovered candidate",
+        ));
+    }
+
+    let baseline_profile = local_strategy_profitability_profile(
+        "phase27-local-profitability-baseline".to_owned(),
+        0.0,
+    );
+    let mut observed_intent_profits = Vec::new();
+    for (index, candidate) in candidates.iter().enumerate() {
+        let request = local_strategy_planning_request(
+            format!("phase27-strategy-profitability-baseline-{}", index + 1),
+            baseline_profile.id.clone(),
+            candidate.clone(),
+        );
+        let plan = planner
+            .plan_with_strategy_profile(&request, policy, &baseline_profile)
+            .map_err(|error| {
+                planner_validation_error_owned(
+                    "STRATEGY_PROFITABILITY_TUNING_BASELINE_FAILED",
+                    error.to_string(),
+                )
+            })?;
+        for intent in &plan.draft.intents {
+            observed_intent_profits.push(intent_net_profit_quote(intent));
+        }
+    }
+
+    if observed_intent_profits.is_empty() {
+        return Err(planner_validation_error(
+            "STRATEGY_PROFITABILITY_TUNING_INTENTS_REQUIRED",
+            "strategy profitability tuning requires at least one draft intent",
+        ));
+    }
+
+    observed_intent_profits.sort_by(f64::total_cmp);
+    let highest_observed_profit = *observed_intent_profits.last().ok_or_else(|| {
+        planner_validation_error(
+            "STRATEGY_PROFITABILITY_TUNING_INTENTS_REQUIRED",
+            "strategy profitability tuning requires at least one draft intent",
+        )
+    })?;
+    let median_observed_profit =
+        observed_intent_profits[observed_intent_profits.len() / 2].max(0.0);
+    let derived_midpoint = if median_observed_profit > f64::EPSILON {
+        median_observed_profit
+    } else {
+        (highest_observed_profit / 2.0).max(0.01)
+    };
+    let profitability_thresholds = [
+        0.0,
+        derived_midpoint,
+        (highest_observed_profit + 0.01).max(derived_midpoint + 0.01),
+    ];
+
+    let mut profitability_points = Vec::with_capacity(profitability_thresholds.len());
+    let mut adapter_submission_performed = false;
+    let mut live_execution_performed = false;
+    let mut signing_or_broadcast_performed = false;
+    let mut production_ready = false;
+
+    for (threshold_index, threshold) in profitability_thresholds.iter().enumerate() {
+        let profile = local_strategy_profitability_profile(
+            format!(
+                "phase27-local-profitability-threshold-{}",
+                threshold_index + 1
+            ),
+            *threshold,
+        );
+        let mut point = StrategyProfitabilityTuningPoint {
+            min_net_profit_abs: *threshold,
+            planned_candidates: 0,
+            draft_ready_plans: 0,
+            policy_denied_plans: 0,
+            accepted_intents: 0,
+            rejected_intents: 0,
+            failed_planner_runs: 0,
+            total_expected_net_profit_quote: 0.0,
+            lowest_accepted_net_profit_quote: None,
+            highest_accepted_net_profit_quote: None,
+        };
+
+        for (candidate_index, candidate) in candidates.iter().enumerate() {
+            let request = local_strategy_planning_request(
+                format!(
+                    "phase27-strategy-profitability-{}-{}",
+                    threshold_index + 1,
+                    candidate_index + 1
+                ),
+                profile.id.clone(),
+                candidate.clone(),
+            );
+            match planner.plan_with_strategy_profile(&request, policy, &profile) {
+                Ok(plan) => {
+                    point.planned_candidates += 1;
+                    match plan.draft.status {
+                        ExecutionPlanStatus::DraftReady => point.draft_ready_plans += 1,
+                        ExecutionPlanStatus::PolicyDeniedDraft => point.policy_denied_plans += 1,
+                    }
+                    point.rejected_intents += plan.strategy_rejected_intents;
+                    point.accepted_intents += plan
+                        .draft
+                        .intents
+                        .len()
+                        .saturating_sub(plan.strategy_rejected_intents);
+                    for (intent, constraint_report) in plan
+                        .draft
+                        .intents
+                        .iter()
+                        .zip(plan.strategy_constraint_reports.iter())
+                    {
+                        if constraint_report.status != StrategyPolicyConstraintStatus::Satisfied {
+                            continue;
+                        }
+                        let net_profit_quote = intent_net_profit_quote(intent);
+                        point.total_expected_net_profit_quote += net_profit_quote;
+                        point.lowest_accepted_net_profit_quote = Some(
+                            point
+                                .lowest_accepted_net_profit_quote
+                                .map_or(net_profit_quote, |current| current.min(net_profit_quote)),
+                        );
+                        point.highest_accepted_net_profit_quote = Some(
+                            point
+                                .highest_accepted_net_profit_quote
+                                .map_or(net_profit_quote, |current| current.max(net_profit_quote)),
+                        );
+                    }
+                    adapter_submission_performed |= plan.adapter_submission_performed;
+                    live_execution_performed |= plan.live_execution_performed;
+                    signing_or_broadcast_performed |= plan.signing_or_broadcast_performed;
+                    production_ready |= plan.production_ready;
+                }
+                Err(_) => point.failed_planner_runs += 1,
+            }
+        }
+
+        profitability_points.push(point);
+    }
+
+    let monotonic_acceptance_validated = profitability_points.windows(2).all(|window| {
+        window[1].draft_ready_plans <= window[0].draft_ready_plans
+            && window[1].accepted_intents <= window[0].accepted_intents
+            && window[1].total_expected_net_profit_quote
+                <= window[0].total_expected_net_profit_quote + f64::EPSILON
+    });
+    let monotonic_rejection_validated = profitability_points.windows(2).all(|window| {
+        window[1].policy_denied_plans >= window[0].policy_denied_plans
+            && window[1].rejected_intents >= window[0].rejected_intents
+    });
+    let threshold_transition_observed = profitability_points
+        .first()
+        .zip(profitability_points.last())
+        .is_some_and(|(first, last)| {
+            first.accepted_intents > last.accepted_intents
+                && last.policy_denied_plans > first.policy_denied_plans
+                && last.accepted_intents == 0
+                && last.policy_denied_plans == candidates.len()
+        });
+
+    let status = if profitability_points
+        .iter()
+        .all(|point| point.failed_planner_runs == 0)
+        && monotonic_acceptance_validated
+        && monotonic_rejection_validated
+        && threshold_transition_observed
+        && !adapter_submission_performed
+        && !live_execution_performed
+        && !signing_or_broadcast_performed
+        && !production_ready
+    {
+        StrategyProfitabilityTuningValidationStatus::Passed
+    } else {
+        StrategyProfitabilityTuningValidationStatus::Failed
+    };
+
+    Ok(StrategyProfitabilityTuningValidationReport {
+        corpus_id: corpus.id.clone(),
+        replay_window_count: corpus.replay_windows.len(),
+        replay_scenario_count,
+        skipped_discovery_failures,
+        discovered_candidates: candidates.len(),
+        profitability_points,
+        monotonic_acceptance_validated,
+        monotonic_rejection_validated,
+        threshold_transition_observed,
+        adapter_submission_performed,
+        external_calls_performed: false,
+        live_execution_performed,
+        signing_or_broadcast_performed,
+        production_ready,
+        status,
+    })
+}
+
+fn local_strategy_profitability_profile(id: String, min_net_profit_abs: f64) -> StrategyProfile {
+    let mut profile = StrategyProfile::conservative_paper(id, "USD");
+    profile.capital.max_total_deployed = 1_000_000.0;
+    profile.capital.max_per_opportunity = 1_000_000.0;
+    profile.capital.reserve_minimum = 0.0;
+    profile.risk.max_single_tx_value = 1_000_000.0;
+    profile.opportunity.min_net_profit_abs = min_net_profit_abs;
+    profile.execution.max_slippage_bps = u16::MAX;
+    profile.venues.allowed_exchanges.clear();
+    profile.venues.allowed_assets.clear();
+    profile.venues.allowed_chains.clear();
+    profile.venues.allowed_routers.clear();
+    profile
+}
+
+fn local_strategy_planning_request(
+    id: String,
+    strategy_id: String,
+    candidate: OpportunityCandidate,
+) -> ExecutionPlannerRequest {
+    ExecutionPlannerRequest {
+        id,
+        strategy_id,
+        candidate,
+        config: ExecutionPlannerConfig {
+            requested_scope: ExecutionScope::Paper,
+            max_plan_legs: 4,
+            max_total_notional_quote: 1_000_000.0,
+            default_slippage_bps: 50,
+            max_market_data_age_ms: DEFAULT_MAX_MARKET_DATA_AGE_MS,
+            require_policy_preflight: true,
+        },
+        default_chain: Some("ethereum".to_owned()),
+        now_unix_ms: 10_000,
+    }
+}
+
+fn intent_net_profit_quote(intent: &ExecutionIntent) -> f64 {
+    intent.expected_profit_quote - intent.estimated_fee_quote - intent.gas_fee_quote
 }
 
 /// Validate local opportunity replay candidates can be handed to the draft planner.
@@ -1739,20 +2463,25 @@ impl Error for OpportunityCandidateTraceError {}
 #[cfg(test)]
 mod tests {
     use super::{
-        persist_execution_plan_draft_checkpoint, persist_opportunity_candidate_trace,
-        validate_opportunity_candidate_trace_restart_recovery,
+        append_execution_plan_draft_audit, persist_execution_plan_draft_checkpoint,
+        persist_opportunity_candidate_trace, validate_opportunity_candidate_trace_restart_recovery,
         validate_opportunity_planner_handoff, validate_opportunity_planner_handoff_with_trace,
-        DeterministicExecutionPlanner, ExecutionPlanStatus, ExecutionPlanner,
-        ExecutionPlannerConfig, ExecutionPlannerRequest, OpportunityCandidateTraceRecord,
-        OpportunityPlannerHandoffStatus, EXECUTION_PLANNER_LAST_DRAFT_CHECKPOINT_KEY,
-        EXECUTION_PLANNER_STATE_SUBSYSTEM, OPPORTUNITY_CANDIDATE_TRACE_STATE_SUBSYSTEM,
+        validate_strategy_profile_replay_corpus, validate_strategy_profitability_tuning,
+        DeterministicExecutionPlanner, ExecutionPlanFailureMode, ExecutionPlanStatus,
+        ExecutionPlanStepAction, ExecutionPlanner, ExecutionPlannerConfig, ExecutionPlannerRequest,
+        OpportunityCandidateTraceRecord, OpportunityPlannerHandoffStatus,
+        StrategyProfileReplayValidationStatus, StrategyProfitabilityTuningValidationStatus,
+        EXECUTION_PLANNER_LAST_DRAFT_CHECKPOINT_KEY, EXECUTION_PLANNER_STATE_SUBSYSTEM,
+        OPPORTUNITY_CANDIDATE_TRACE_STATE_SUBSYSTEM,
     };
     use crate::{
         phase27_local_opportunity_historical_fixture_corpus, AgentConfig, AppendOnlyAuditJournal,
-        FeeAdjustedEdge, FeeEstimate, LiquidityRole, MarketPair, OpportunityCandidate,
-        OpportunityLeg, OpportunityLegSide, OpportunityRouteKind, OpportunityScore, PolicyEngine,
-        SqliteWalStateStore, StateStore, StrategyPolicyConstraintStatus, StrategyProfile,
-        VenueKind, VenueRef,
+        FeeAdjustedEdge, FeeEstimate, FeeSchedule, LiquidityRole, MarketPair, NormalizedQuote,
+        OpportunityCandidate, OpportunityDiscoveryConfig, OpportunityDiscoveryRequest,
+        OpportunityHistoricalFixtureCorpus, OpportunityLeg, OpportunityLegSide,
+        OpportunityReplayCorpus, OpportunityReplayExpectation, OpportunityReplayScenario,
+        OpportunityRouteKind, OpportunityScore, PolicyEngine, PriceLevel, SqliteWalStateStore,
+        StateStore, StrategyPolicyConstraintStatus, StrategyProfile, VenueKind, VenueRef,
     };
     use std::{
         env, fs,
@@ -1869,6 +2598,40 @@ redact_secrets = true
     }
 
     #[test]
+    fn execution_plan_draft_audits_plan_and_policy_outcomes_locally() {
+        let audit_path = unique_audit_path("plan-draft-audit");
+        let draft = plan();
+
+        {
+            let mut journal = AppendOnlyAuditJournal::open(&audit_path).expect("journal opens");
+            let report = append_execution_plan_draft_audit(&mut journal, &draft, 10_100)
+                .expect("plan draft audit should append");
+
+            assert_eq!(report.plan_id, draft.id);
+            assert_eq!(report.draft_record_sequence, 1);
+            assert_eq!(report.policy_outcome_record_sequences, vec![2, 3]);
+            assert_eq!(report.records_appended, 3);
+            assert!(!report.external_submission_performed);
+            assert!(!report.live_execution_performed);
+            assert_eq!(report.audited_at_unix_ms, 10_100);
+            assert_eq!(journal.next_sequence(), 4);
+        }
+
+        {
+            let reopened = AppendOnlyAuditJournal::open(&audit_path).expect("journal replays");
+            assert_eq!(reopened.next_sequence(), 4);
+            let lines = fs::read_to_string(&audit_path).expect("journal should be readable");
+            assert!(lines.contains("\"kind\":\"execution-planning\""));
+            assert!(lines.contains("\"kind\":\"policy-decision\""));
+            assert!(lines.contains(&format!("\"id\":\"execution-plan-draft-{}\"", draft.id)));
+            assert!(lines.contains(&draft.intents[0].id));
+            assert!(lines.contains(&draft.intents[1].id));
+        }
+
+        cleanup_audit_files(&audit_path);
+    }
+
+    #[test]
     fn planner_applies_strategy_profile_constraints_before_adapter_boundary() {
         let policy = PolicyEngine::from_config(
             AgentConfig::from_toml_str(BASE_CONFIG).expect("config should validate"),
@@ -1965,6 +2728,59 @@ redact_secrets = true
     }
 
     #[test]
+    fn planner_assigns_route_specific_failure_modes_to_draft_steps() {
+        let policy = PolicyEngine::from_config(
+            AgentConfig::from_toml_str(BASE_CONFIG).expect("config should validate"),
+        );
+        let cex_request = ExecutionPlannerRequest {
+            id: "planner-request-cex-failure-modes".to_owned(),
+            strategy_id: "strategy-basic-arb".to_owned(),
+            candidate: candidate(),
+            config: ExecutionPlannerConfig::default(),
+            default_chain: None,
+            now_unix_ms: 10_000,
+        };
+        let cex_plan = DeterministicExecutionPlanner::new()
+            .plan(&cex_request, &policy)
+            .expect("cex plan should be created");
+
+        assert!(cex_plan
+            .failure_modes
+            .contains(&ExecutionPlanFailureMode::CancelUnfilledRemainder));
+        assert!(!cex_plan
+            .failure_modes
+            .contains(&ExecutionPlanFailureMode::DoNotSignOrBroadcast));
+        assert!(cex_plan.steps.iter().any(|step| {
+            step.action == ExecutionPlanStepAction::PrepareCexOrderDraft
+                && step.failure_mode == ExecutionPlanFailureMode::CancelUnfilledRemainder
+        }));
+        assert_eq!(
+            cex_plan.steps.last().map(|step| step.failure_mode),
+            Some(ExecutionPlanFailureMode::ManualReviewRequired)
+        );
+
+        let dex_request = ExecutionPlannerRequest {
+            id: "planner-request-dex-failure-modes".to_owned(),
+            strategy_id: "strategy-basic-arb".to_owned(),
+            candidate: dex_candidate(),
+            config: ExecutionPlannerConfig::default(),
+            default_chain: None,
+            now_unix_ms: 10_001,
+        };
+        let dex_plan = DeterministicExecutionPlanner::new()
+            .plan(&dex_request, &policy)
+            .expect("dex plan should be created");
+
+        assert!(dex_plan
+            .failure_modes
+            .contains(&ExecutionPlanFailureMode::DoNotSignOrBroadcast));
+        assert!(dex_plan.steps.iter().any(|step| {
+            step.action == ExecutionPlanStepAction::PrepareDexSwapDraft
+                && step.failure_mode == ExecutionPlanFailureMode::DoNotSignOrBroadcast
+        }));
+    }
+
+    #[test]
     fn phase27_replay_candidates_handoff_to_draft_planner_without_submission() {
         let corpus = phase27_local_opportunity_historical_fixture_corpus()
             .expect("phase 27 local corpus should build");
@@ -1990,6 +2806,115 @@ redact_secrets = true
         assert!(!report.adapter_submission_enabled);
         assert!(!report.external_calls_performed);
         assert!(!report.live_execution_performed);
+    }
+
+    #[test]
+    fn phase27_strategy_profiles_replay_against_historical_fixture_corpus() {
+        let corpus = phase27_local_opportunity_historical_fixture_corpus()
+            .expect("phase 27 local corpus should build");
+        let policy = PolicyEngine::from_config(
+            AgentConfig::from_toml_str(PHASE27_HANDOFF_CONFIG).expect("config should validate"),
+        );
+        let mut accepted_profile =
+            StrategyProfile::conservative_paper("phase27-local-replay-profile-accepted", "USD");
+        accepted_profile.capital.max_total_deployed = 1_000_000.0;
+        accepted_profile.capital.max_per_opportunity = 1_000_000.0;
+        accepted_profile.capital.reserve_minimum = 0.0;
+        accepted_profile.risk.max_single_tx_value = 1_000_000.0;
+        accepted_profile.opportunity.min_net_profit_abs = 0.0;
+        accepted_profile.execution.max_slippage_bps = u16::MAX;
+
+        let mut rejected_profile = accepted_profile.clone();
+        rejected_profile.id = "phase27-local-replay-profile-rejected".to_owned();
+        rejected_profile.opportunity.min_net_profit_abs = 1_000_000.0;
+
+        let report = validate_strategy_profile_replay_corpus(
+            &corpus,
+            &policy,
+            &accepted_profile,
+            &rejected_profile,
+        )
+        .expect("strategy replay validation should run");
+
+        assert_eq!(report.status, StrategyProfileReplayValidationStatus::Passed);
+        assert_eq!(report.replay_window_count, 2);
+        assert_eq!(report.replay_scenario_count, 13);
+        assert_eq!(report.skipped_discovery_failures, 2);
+        assert_eq!(report.discovered_candidates, 12);
+        assert_eq!(report.accepted_planned_candidates, 12);
+        assert_eq!(report.accepted_draft_ready_plans, 12);
+        assert_eq!(report.accepted_strategy_rejected_intents, 0);
+        assert_eq!(
+            report.accepted_satisfied_constraint_reports,
+            report.total_accepted_intents
+        );
+        assert_eq!(report.rejected_planned_candidates, 12);
+        assert_eq!(report.rejected_policy_denied_plans, 12);
+        assert_eq!(
+            report.rejected_constraint_reports,
+            report.total_rejected_intents
+        );
+        assert_eq!(
+            report.rejected_strategy_rejected_intents,
+            report.total_rejected_intents
+        );
+        assert_eq!(report.failed_strategy_planner_runs, 0);
+        assert!(!report.adapter_submission_performed);
+        assert!(!report.external_calls_performed);
+        assert!(!report.live_execution_performed);
+        assert!(!report.signing_or_broadcast_performed);
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn phase27_strategy_profitability_tuning_is_monotonic_across_local_corpus() {
+        let corpus = phase27_local_opportunity_historical_fixture_corpus()
+            .expect("phase 27 local corpus should build");
+        let policy = PolicyEngine::from_config(
+            AgentConfig::from_toml_str(PHASE27_HANDOFF_CONFIG).expect("config should validate"),
+        );
+
+        let report = validate_strategy_profitability_tuning(&corpus, &policy)
+            .expect("strategy profitability tuning should run");
+
+        assert_eq!(
+            report.status,
+            StrategyProfitabilityTuningValidationStatus::Passed
+        );
+        assert_eq!(report.replay_window_count, 2);
+        assert_eq!(report.replay_scenario_count, 13);
+        assert_eq!(report.skipped_discovery_failures, 2);
+        assert_eq!(report.discovered_candidates, 12);
+        assert_eq!(report.profitability_points.len(), 3);
+        assert!(report.monotonic_acceptance_validated);
+        assert!(report.monotonic_rejection_validated);
+        assert!(report.threshold_transition_observed);
+        assert_eq!(
+            report
+                .profitability_points
+                .first()
+                .map(|point| point.draft_ready_plans),
+            Some(report.discovered_candidates)
+        );
+        assert_eq!(
+            report
+                .profitability_points
+                .last()
+                .map(|point| point.policy_denied_plans),
+            Some(report.discovered_candidates)
+        );
+        assert_eq!(
+            report
+                .profitability_points
+                .last()
+                .map(|point| point.accepted_intents),
+            Some(0)
+        );
+        assert!(!report.adapter_submission_performed);
+        assert!(!report.external_calls_performed);
+        assert!(!report.live_execution_performed);
+        assert!(!report.signing_or_broadcast_performed);
+        assert!(!report.production_ready);
     }
 
     #[test]
@@ -2132,6 +3057,54 @@ redact_secrets = true
     }
 
     #[test]
+    fn traced_planner_handoff_deduplicates_duplicate_candidate_ids_before_persistence() {
+        let audit_path = unique_audit_path("phase27-dedup-handoff");
+        let state_path = unique_state_path("phase27-dedup-handoff");
+        let corpus = duplicate_candidate_fixture_corpus();
+        let policy = PolicyEngine::from_config(
+            AgentConfig::from_toml_str(PHASE27_HANDOFF_CONFIG).expect("config should validate"),
+        );
+
+        {
+            let mut journal = AppendOnlyAuditJournal::open(&audit_path).expect("journal opens");
+            let mut store = SqliteWalStateStore::open(&state_path).expect("sqlite opens");
+            let report = validate_opportunity_planner_handoff_with_trace(
+                &corpus,
+                &policy,
+                &mut journal,
+                &mut store,
+            )
+            .expect("deduplicated traced planner handoff should run");
+
+            assert_eq!(report.status, OpportunityPlannerHandoffStatus::Passed);
+            assert_eq!(report.replay_window_count, 1);
+            assert_eq!(report.replay_scenario_count, 1);
+            assert_eq!(report.discovered_candidates, 1);
+            assert_eq!(report.planned_candidates, 1);
+            assert_eq!(report.candidate_trace_audit_records, 1);
+            assert_eq!(report.candidate_trace_checkpoints, 1);
+            assert_eq!(report.draft_ready_plans, 1);
+            assert_eq!(journal.next_sequence(), 2);
+        }
+
+        {
+            let reopened_journal =
+                AppendOnlyAuditJournal::open(&audit_path).expect("journal reopens");
+            assert_eq!(reopened_journal.next_sequence(), 2);
+            let reopened_store = SqliteWalStateStore::open(&state_path).expect("sqlite reopens");
+            assert!(reopened_store
+                .get_checkpoint(
+                    "opportunity-candidate-trace:opp:cex-cex:BTC/USD:paper-a:paper-b:dedup-request:phase27-planner-handoff-1",
+                )
+                .expect("checkpoint should read")
+                .is_some());
+        }
+
+        cleanup_audit_files(&audit_path);
+        cleanup_state_files(&state_path);
+    }
+
+    #[test]
     fn planner_draft_persists_as_state_checkpoint() {
         let plan = plan();
         let mut store = crate::InMemoryStateStore::new();
@@ -2224,11 +3197,73 @@ redact_secrets = true
         }
     }
 
+    fn dex_candidate() -> OpportunityCandidate {
+        let mut candidate = candidate();
+        candidate.id = "opp-dex-dex-btc-usd".to_owned();
+        candidate.route_kind = OpportunityRouteKind::DexDex;
+        candidate.legs[0].venue = VenueRef {
+            name: "paper-dex-a".to_owned(),
+            kind: VenueKind::Dex,
+        };
+        candidate.legs[0].fee_estimate.venue = candidate.legs[0].venue.clone();
+        candidate.legs[0].source_quote_id = "quote-paper-dex-a".to_owned();
+        candidate.legs[1].venue = VenueRef {
+            name: "paper-dex-b".to_owned(),
+            kind: VenueKind::Dex,
+        };
+        candidate.legs[1].fee_estimate.venue = candidate.legs[1].venue.clone();
+        candidate.legs[1].source_quote_id = "quote-paper-dex-b".to_owned();
+        candidate.source_quote_ids = vec![
+            "quote-paper-dex-a".to_owned(),
+            "quote-paper-dex-b".to_owned(),
+        ];
+        candidate
+    }
+
     fn strategy_profile() -> StrategyProfile {
         let mut profile = StrategyProfile::conservative_paper("strategy-basic-arb", "USD");
         profile.venues.allowed_exchanges = vec!["paper-a".to_owned(), "paper-b".to_owned()];
         profile.venues.allowed_assets = vec!["BTC".to_owned(), "USD".to_owned()];
         profile
+    }
+
+    fn duplicate_candidate_fixture_corpus() -> OpportunityHistoricalFixtureCorpus {
+        let pair = MarketPair::new("BTC", "USD").expect("pair should validate");
+        OpportunityHistoricalFixtureCorpus {
+            id: "planner-dedup-fixture".to_owned(),
+            historical_fixture_replay: true,
+            replay_windows: vec![OpportunityReplayCorpus {
+                id: "planner-dedup-window-1".to_owned(),
+                scenarios: vec![OpportunityReplayScenario {
+                    id: "planner-dedup-scenario-1".to_owned(),
+                    request: OpportunityDiscoveryRequest {
+                        id: "dedup-request".to_owned(),
+                        quotes: vec![
+                            planner_quote("buy-a-1", "paper-a", pair.clone(), 98.0, 99.0, 1.0),
+                            planner_quote("buy-a-2", "paper-a", pair.clone(), 97.0, 98.0, 1.0),
+                            planner_quote("sell-b", "paper-b", pair.clone(), 110.0, 111.0, 1.0),
+                        ],
+                        fee_schedules: vec![
+                            planner_fee("paper-a", pair.clone()),
+                            planner_fee("paper-b", pair),
+                        ],
+                        order_books: Vec::new(),
+                        inventory_limits: Vec::new(),
+                        transfer_risk_profiles: Vec::new(),
+                        config: OpportunityDiscoveryConfig::default(),
+                        now_unix_ms: 10_000,
+                    },
+                    expectation: OpportunityReplayExpectation {
+                        min_candidates: 1,
+                        max_candidates: Some(1),
+                        required_route_kinds: vec![OpportunityRouteKind::CexCex],
+                        forbidden_route_kinds: Vec::new(),
+                        min_best_net_profit_quote: None,
+                        expected_violation_codes: Vec::new(),
+                    },
+                }],
+            }],
+        }
     }
 
     fn leg(
@@ -2265,6 +3300,48 @@ redact_secrets = true
             },
             source_quote_id: format!("quote-{venue_name}"),
             market_data_age_ms: 100,
+        }
+    }
+
+    fn planner_quote(
+        id: &str,
+        venue_name: &str,
+        pair: MarketPair,
+        bid_price: f64,
+        ask_price: f64,
+        quantity_base: f64,
+    ) -> NormalizedQuote {
+        NormalizedQuote {
+            id: id.to_owned(),
+            venue: VenueRef {
+                name: venue_name.to_owned(),
+                kind: VenueKind::Cex,
+            },
+            pair,
+            bid: PriceLevel {
+                price_quote: bid_price,
+                quantity_base,
+            },
+            ask: PriceLevel {
+                price_quote: ask_price,
+                quantity_base,
+            },
+            captured_at_unix_ms: 9_500,
+            received_at_unix_ms: 9_500,
+        }
+    }
+
+    fn planner_fee(venue_name: &str, pair: MarketPair) -> FeeSchedule {
+        FeeSchedule {
+            venue: VenueRef {
+                name: venue_name.to_owned(),
+                kind: VenueKind::Cex,
+            },
+            pair: Some(pair),
+            maker_bps: 5.0,
+            taker_bps: 10.0,
+            network_fee_quote: 0.0,
+            externally_verified: false,
         }
     }
 

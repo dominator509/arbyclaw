@@ -100,6 +100,8 @@ Met when:
 - The planner rejects live scope.
 - Generated plans are draft-only and cannot submit to adapters.
 - Every generated draft intent receives a policy outcome record.
+- Deterministic planner handoff paths can append local plan-draft and per-intent policy-outcome audit records without enabling execution.
+- `arb-agent validate-execution-planner-audit --workspace <fresh-dir>` proves local planner audit replay, SQLite WAL checkpoint recovery, and fail-closed invalid-audit/state-write behavior without enabling execution.
 - Structure validation passes.
 - Production gaps are updated for deferred Rust validation and future execution-adapter integration.
 
@@ -115,7 +117,6 @@ Met when:
 ## Deferred Work
 
 - Keep Rust compilation, formatting, clippy, and unit tests current after future changes.
-- Durable audit journal writes for plan creation and policy outcomes.
 - Production runtime validation beyond the current local lifecycle checkpoint wiring.
 - Execution adapter handoff in Phase 11.
 - Advanced partial-fill, timeout, cancellation, and hedge sequencing.

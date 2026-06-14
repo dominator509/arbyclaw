@@ -43,6 +43,136 @@ EXPECTED_COMPONENTS = {
     "communications_runtime": "communications_runtime_requested",
 }
 
+TRANSCRIPT_COMPONENTS = [
+    {
+        "name": "service-manager-lifecycle-transcript",
+        "command": [
+            "cargo",
+            "run",
+            "-p",
+            "arb-agent",
+            "--",
+            "validate-service-manager-lifecycle-transcript",
+        ],
+        "expected": {
+            "service-manager-lifecycle-transcript": "validation passed",
+            "ready-transcript-status": "ready-for-external-review",
+            "blocked-transcript-status": "blocked",
+            "service-manager-action-performed-by-validator": "false",
+            "external-submission-performed": "false",
+            "live-execution-performed": "false",
+            "production-ready": "false",
+        },
+    },
+    {
+        "name": "deployment-disk-full-transcript",
+        "command": [
+            "cargo",
+            "run",
+            "-p",
+            "arb-agent",
+            "--",
+            "validate-deployment-disk-full-transcript",
+        ],
+        "expected": {
+            "deployment-disk-full-transcript": "validation passed",
+            "ready-transcript-status": "ready-for-external-review",
+            "blocked-transcript-status": "blocked",
+            "disk-filled-by-validator": "false",
+            "production-path-mutated-by-validator": "false",
+            "live-execution-performed": "false",
+            "production-ready": "false",
+        },
+    },
+    {
+        "name": "deployment-retention-transcript",
+        "command": [
+            "cargo",
+            "run",
+            "-p",
+            "arb-agent",
+            "--",
+            "validate-deployment-retention-transcript",
+        ],
+        "expected": {
+            "deployment-retention-transcript": "validation passed",
+            "ready-transcript-status": "ready-for-external-review",
+            "blocked-transcript-status": "blocked",
+            "rotation-performed-by-validator": "false",
+            "production-path-mutated-by-validator": "false",
+            "live-execution-performed": "false",
+            "production-ready": "false",
+        },
+    },
+    {
+        "name": "deployment-permission-transcript",
+        "command": [
+            "cargo",
+            "run",
+            "-p",
+            "arb-agent",
+            "--",
+            "validate-deployment-permission-transcript",
+        ],
+        "expected": {
+            "deployment-permission-transcript": "validation passed",
+            "ready-transcript-status": "ready-for-external-review",
+            "blocked-transcript-status": "blocked",
+            "permission-changed-by-validator": "false",
+            "production-path-mutated-by-validator": "false",
+            "service-manager-action-performed-by-validator": "false",
+            "external-submission-performed": "false",
+            "live-execution-performed": "false",
+            "production-ready": "false",
+        },
+    },
+    {
+        "name": "rollback-execution-transcript",
+        "command": [
+            "cargo",
+            "run",
+            "-p",
+            "arb-agent",
+            "--",
+            "validate-rollback-execution-transcript",
+        ],
+        "expected": {
+            "rollback-execution-transcript": "validation passed",
+            "ready-transcript-status": "ready-for-external-review",
+            "blocked-transcript-status": "blocked",
+            "rollback-executed-by-validator": "false",
+            "service-manager-action-performed-by-validator": "false",
+            "files-mutated-by-validator": "false",
+            "external-calls-performed": "false",
+            "live-execution-performed": "false",
+            "production-ready": "false",
+        },
+    },
+    {
+        "name": "incident-response-execution-transcript",
+        "command": [
+            "cargo",
+            "run",
+            "-p",
+            "arb-agent",
+            "--",
+            "validate-incident-response-execution-transcript",
+        ],
+        "expected": {
+            "incident-response-execution-transcript": "validation passed",
+            "ready-transcript-status": "ready-for-external-review",
+            "blocked-transcript-status": "blocked",
+            "incident-response-executed-by-validator": "false",
+            "service-manager-action-performed-by-validator": "false",
+            "files-mutated-by-validator": "false",
+            "alerts-sent-by-validator": "false",
+            "external-calls-performed": "false",
+            "live-execution-performed": "false",
+            "production-ready": "false",
+        },
+    },
+]
+
 DANGEROUS_TRUE_KEYS = {
     "external_calls_performed",
     "external_execution_performed",
@@ -69,6 +199,7 @@ DANGEROUS_TRUE_KEYS = {
     "service_manager_action_performed",
     "telemetry_exported",
 }
+TRANSCRIPT_TIMEOUT_SECONDS = 900
 
 
 def parse_args() -> argparse.Namespace:
@@ -230,6 +361,97 @@ def validate_report(report: dict[str, Any]) -> list[str]:
         if key in DANGEROUS_TRUE_KEYS and value:
             errors.append(f"unsafe side-effect flag set true at {path}")
 
+    runtime_smoke = report.get("runtime_smoke")
+    if not isinstance(runtime_smoke, dict):
+        errors.append("runtime_smoke report missing or invalid")
+        return errors
+
+    production_preflight = runtime_smoke.get("production_runtime_preflight")
+    if not isinstance(production_preflight, dict):
+        errors.append("runtime_smoke.production_runtime_preflight missing or invalid")
+        return errors
+
+    if production_preflight.get("validation_passed") is not True:
+        errors.append("runtime production preflight was not marked as passed")
+    if (
+        production_preflight.get("status")
+        != "BlockedPendingProductionHostValidation"
+    ):
+        errors.append(
+            "runtime production preflight status was not BlockedPendingProductionHostValidation"
+        )
+    for key in ("local_smoke_validated", "local_smoke_load_validated"):
+        if production_preflight.get(key) != "true":
+            errors.append(f"runtime production preflight {key} was not true")
+    unresolved_blockers = production_preflight.get("unresolved_blockers")
+    try:
+        if int(unresolved_blockers) <= 0:
+            errors.append("runtime production preflight unresolved_blockers was not positive")
+    except (TypeError, ValueError):
+        errors.append("runtime production preflight unresolved_blockers was not an integer")
+    for key in ("service_manager_evidence_available", "disk_full_evidence_available", "production_ready"):
+        if production_preflight.get(key) != "false":
+            errors.append(f"runtime production preflight {key} was not false")
+
+    return errors
+
+
+def parse_key_value_lines(stdout: str) -> dict[str, str]:
+    pairs: dict[str, str] = {}
+    for line in stdout.splitlines():
+        if ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        key = key.strip()
+        value = value.strip()
+        if key:
+            pairs[key] = value
+    return pairs
+
+
+def run_transcript_component(component: dict[str, Any]) -> dict[str, Any]:
+    completed = subprocess.run(
+        component["command"],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        timeout=TRANSCRIPT_TIMEOUT_SECONDS,
+        check=False,
+    )
+    fields = parse_key_value_lines(completed.stdout)
+    summary = {
+        "name": component["name"],
+        "returncode": completed.returncode,
+        "passed": completed.returncode == 0,
+        "stdout_line_count": len(completed.stdout.splitlines()),
+        "timeout_seconds": TRANSCRIPT_TIMEOUT_SECONDS,
+        "fields": fields,
+    }
+    return summary
+
+
+def validate_transcript_component(component: dict[str, Any], summary: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    if not summary["passed"]:
+        errors.append(f"{component['name']} exited {summary['returncode']}")
+        return errors
+
+    fields = summary["fields"]
+    for key, expected in component["expected"].items():
+        actual = fields.get(key)
+        if actual != expected:
+            errors.append(
+                f"{component['name']} expected {key}={expected!r} but saw {actual!r}"
+            )
+    blocked_count = fields.get("blocked-blocker-count")
+    if blocked_count is None:
+        errors.append(f"{component['name']} missing blocked-blocker-count")
+    else:
+        try:
+            if int(blocked_count) <= 0:
+                errors.append(f"{component['name']} blocked-blocker-count was not positive")
+        except ValueError:
+            errors.append(f"{component['name']} blocked-blocker-count was not an integer")
     return errors
 
 
@@ -260,15 +482,24 @@ def main() -> int:
         return fail(f"deployment-host runtime helper did not emit JSON: {exc}")
 
     errors = validate_report(nested_report)
+    transcript_summaries = [
+        run_transcript_component(component) for component in TRANSCRIPT_COMPONENTS
+    ]
+    for component, summary in zip(TRANSCRIPT_COMPONENTS, transcript_summaries, strict=True):
+        errors.extend(validate_transcript_component(component, summary))
     if errors:
         for error in errors:
             print(f"- {error}", file=sys.stderr)
         return fail("aggregate deployment-runtime invariants failed")
 
+    total_component_count = len(EXPECTED_COMPONENTS) + len(TRANSCRIPT_COMPONENTS)
+
     report = {
         "schema": "arbyclaw.deployment_runtime_aggregate_gate.v1",
         "workspace_base": str(workspace.relative_to(ROOT)),
-        "component_count": len(EXPECTED_COMPONENTS),
+        "component_count": total_component_count,
+        "nested_runtime_component_count": len(EXPECTED_COMPONENTS),
+        "transcript_component_count": len(TRANSCRIPT_COMPONENTS),
         "all_components_requested": True,
         "all_components_reported": True,
         "unsafe_side_effect_flags_detected": False,
@@ -278,6 +509,11 @@ def main() -> int:
         "secrets_loaded": False,
         "production_readiness_claimed": False,
         "deployment_host_report_schema": nested_report["schema"],
+        "runtime_smoke_production_preflight_enforced": True,
+        "transcript_component_names": [
+            component["name"] for component in TRANSCRIPT_COMPONENTS
+        ],
+        "transcript_components_passed": True,
         "remaining_external_evidence": nested_report.get("remaining_external_evidence", []),
     }
 
@@ -286,6 +522,9 @@ def main() -> int:
     else:
         print("deployment runtime aggregate gate passed")
         print(f"component-count: {report['component_count']}")
+        print(
+            f"transcript-component-count: {report['transcript_component_count']}"
+        )
         print("unsafe-side-effect-flags-detected: false")
         print("service-actions-performed: false")
         print("external-calls-performed: false")

@@ -7,18 +7,19 @@ use crate::{
     append_dashboard_hosted_request_validation_audit,
     append_dashboard_hosted_security_review_audit, append_dashboard_render_audit,
     append_execution_adapter_recovery_plan_audit, append_execution_adapter_run_audit,
-    append_local_tracing_subscriber_audit, append_notification_dispatch_audit,
-    append_observability_alert_route_dispatch_audit, append_observability_endpoint_preflight_audit,
-    append_observability_export_dry_run_audit, append_observability_loopback_bind_validation_audit,
+    append_execution_plan_draft_audit, append_local_tracing_subscriber_audit,
+    append_notification_dispatch_audit, append_observability_alert_route_dispatch_audit,
+    append_observability_endpoint_preflight_audit, append_observability_export_dry_run_audit,
+    append_observability_loopback_bind_validation_audit,
     append_observability_metrics_endpoint_validation_audit,
     append_observability_metrics_scrape_preflight_audit,
     append_observability_operations_review_audit, append_observability_record_audit,
-    append_paper_execution_report_audit, append_platform_adapter_review_audit,
-    append_platform_command_ingress_audit, append_property_check_report_audit,
-    append_remote_command_envelope_validation_audit, append_remote_command_security_review_audit,
-    append_routed_operator_command_audit, append_runtime_failure_capture_audit,
-    append_validation_run_audit, capture_local_runtime_failure,
-    ledger_execution_adapter_run_paper_fills, parse_cli_command,
+    append_paper_execution_intent_audit, append_paper_execution_report_audit,
+    append_platform_adapter_review_audit, append_platform_command_ingress_audit,
+    append_property_check_report_audit, append_remote_command_envelope_validation_audit,
+    append_remote_command_security_review_audit, append_routed_operator_command_audit,
+    append_runtime_failure_capture_audit, append_validation_run_audit,
+    capture_local_runtime_failure, ledger_execution_adapter_run_paper_fills, parse_cli_command,
     persist_channel_adapter_validation_checkpoint, persist_channel_session_validation_checkpoint,
     persist_dashboard_hosted_request_preflight_checkpoint,
     persist_dashboard_hosted_request_validation_checkpoint,
@@ -50,7 +51,7 @@ use crate::{
     validate_observability_metrics_endpoint, validate_opportunity_candidate_trace_restart_recovery,
     validate_remote_command_envelope, AppendOnlyAuditJournal, AuditError, AuditEvent,
     AuditEventKind, AuditValue, BacktestDatasetDefinition, BacktestScenarioDefinition,
-    ChannelAdapterValidationReport, ChannelAdapterValidationRequest,
+    CexOrderLifecycleRecord, ChannelAdapterValidationReport, ChannelAdapterValidationRequest,
     ChannelAdapterValidationStatus, ChannelSessionValidationReport, ChannelSessionValidationStatus,
     CommunicationBoundaryConfig, ComponentHealthStatus, DashboardAccessContext,
     DashboardAccessSource, DashboardBoundaryConfig, DashboardHostedRequestMethod,
@@ -62,8 +63,8 @@ use crate::{
     DashboardRenderRecord, DashboardRenderRequest, DashboardRenderer, DashboardSeverity,
     DashboardSnapshot, DeterministicDashboardRenderer, DeterministicExecutionAdapterBoundary,
     DeterministicNotificationBoundary, DeterministicObservabilityCollector,
-    DeterministicOperatorCommandRouter, DeterministicValidationHarness, ExecutionAdapter,
-    ExecutionAdapterConfig, ExecutionAdapterError, ExecutionAdapterRequest,
+    DeterministicOperatorCommandRouter, DeterministicValidationHarness, DexSwapLifecycleRecord,
+    ExecutionAdapter, ExecutionAdapterConfig, ExecutionAdapterError, ExecutionAdapterRequest,
     ExecutionAdapterRunRecord, ExecutionPlanDraft, ExecutionScope, ExpectedValidationOutcome,
     FixtureKind, FuzzCorpusDefinition, FuzzSeedRecord, FuzzTargetKind, HealthStatus,
     LocalPropertyCheckReport, LocalTracingSubscriberValidationReport,
@@ -84,10 +85,11 @@ use crate::{
     ObservabilityOperationsReviewStatus, ObservabilityRecord, ObservabilitySeverity,
     ObservabilitySnapshot, OperatorCommandRouter, OperatorCommandRoutingRequest,
     OperatorCommandSource, OperatorNotification, OpportunityCandidateTraceRecoveryReport,
-    PaperAdapterRunLedgerReport, PaperAssetBalance, PaperBalanceLedger, PaperExecutionAdapter,
-    PlatformAdapterReviewReport, PlatformAdapterReviewRequest, PlatformAdapterReviewStatus,
-    PlatformCommandIngressReport, PlatformCommandIngressRequest, PlatformCommandIngressStatus,
-    PolicyEngine, RecoveredOpportunityTraceSummary, RemoteCommandEnvelopeValidationReport,
+    OpportunityHistoricalFixtureCorpus, PaperAdapterRunLedgerReport, PaperAssetBalance,
+    PaperBalanceLedger, PaperExecutionAdapter, PlatformAdapterReviewReport,
+    PlatformAdapterReviewRequest, PlatformAdapterReviewStatus, PlatformCommandIngressReport,
+    PlatformCommandIngressRequest, PlatformCommandIngressStatus, PolicyEngine,
+    RecoveredOpportunityTraceSummary, RemoteCommandEnvelopeValidationReport,
     RemoteCommandEnvelopeValidationRequest, RemoteCommandEnvelopeValidationStatus,
     RemoteCommandSecurityReviewReport, RemoteCommandSecurityReviewRequest,
     RemoteCommandSecurityReviewStatus, RoutedOperatorCommand, RuntimeFailureCaptureRecord,
@@ -95,7 +97,7 @@ use crate::{
     StateCheckpoint, StateStore, StateStoreError, StructuredLogEvent, StructuredLogField,
     ValidationExecutionMode, ValidationFixtureRecord, ValidationHarness, ValidationHarnessConfig,
     ValidationPlan, ValidationRunRecord, ValidationRunRequest, ValidationRunStatus,
-    ValidationSuiteKind, ValidationTestCase,
+    ValidationSuiteKind, ValidationTestCase, CEX_LAST_ORDER_LIFECYCLE_CHECKPOINT_KEY,
     COMMUNICATIONS_LAST_CHANNEL_ADAPTER_VALIDATION_CHECKPOINT_KEY,
     COMMUNICATIONS_LAST_CHANNEL_SESSION_VALIDATION_CHECKPOINT_KEY,
     COMMUNICATIONS_LAST_COMMAND_ROUTE_CHECKPOINT_KEY,
@@ -107,8 +109,8 @@ use crate::{
     DASHBOARD_LAST_HOSTED_REQUEST_PREFLIGHT_CHECKPOINT_KEY,
     DASHBOARD_LAST_HOSTED_REQUEST_VALIDATION_CHECKPOINT_KEY,
     DASHBOARD_LAST_HOSTED_SECURITY_REVIEW_CHECKPOINT_KEY, DASHBOARD_LAST_RENDER_CHECKPOINT_KEY,
-    EXECUTION_ADAPTER_LAST_RECOVERY_PLAN_CHECKPOINT_KEY, EXECUTION_ADAPTER_LAST_RUN_CHECKPOINT_KEY,
-    EXECUTION_PLANNER_LAST_DRAFT_CHECKPOINT_KEY,
+    DEX_LAST_SWAP_LIFECYCLE_CHECKPOINT_KEY, EXECUTION_ADAPTER_LAST_RECOVERY_PLAN_CHECKPOINT_KEY,
+    EXECUTION_ADAPTER_LAST_RUN_CHECKPOINT_KEY, EXECUTION_PLANNER_LAST_DRAFT_CHECKPOINT_KEY,
     OBSERVABILITY_LAST_ALERT_ROUTE_DISPATCH_CHECKPOINT_KEY,
     OBSERVABILITY_LAST_ENDPOINT_PREFLIGHT_CHECKPOINT_KEY,
     OBSERVABILITY_LAST_EXPORT_DRY_RUN_CHECKPOINT_KEY, OBSERVABILITY_LAST_FAILURE_CHECKPOINT_KEY,
@@ -395,6 +397,16 @@ pub struct RuntimeRestartRecoveryValidationReport {
     pub recovery_disposition: RuntimeRestartRecoveryDisposition,
     /// True when local lifecycle state is coherent enough for operator review.
     pub local_review_ready: bool,
+    /// True when local connector lifecycle checkpoint recovery was validated.
+    pub connector_lifecycle_recovery_validated: bool,
+    /// True when the latest CEX lifecycle checkpoint was recovered after reopen.
+    pub cex_lifecycle_checkpoint_recovered: bool,
+    /// True when the latest DEX lifecycle checkpoint was recovered after reopen.
+    pub dex_lifecycle_checkpoint_recovered: bool,
+    /// Non-secret recovered CEX lifecycle summary available to restart recovery consumers.
+    pub recovered_cex_lifecycle: Option<RuntimeRecoveredCexLifecycleSummary>,
+    /// Non-secret recovered DEX lifecycle summary available to restart recovery consumers.
+    pub recovered_dex_lifecycle: Option<RuntimeRecoveredDexLifecycleSummary>,
     /// True when opportunity trace checkpoint recovery was validated.
     pub opportunity_trace_recovery_validated: bool,
     /// Number of opportunity trace checkpoints discovered by local recovery.
@@ -457,6 +469,54 @@ pub struct RuntimeRecoveredOpportunityTraceSummary {
     pub route_kind: String,
     /// Number of candidate legs summarized without embedding the full candidate.
     pub leg_count: u64,
+}
+
+/// Non-secret recovered CEX lifecycle summary from local restart recovery.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RuntimeRecoveredCexLifecycleSummary {
+    /// Original request id.
+    pub request_id: String,
+    /// Client order id.
+    pub client_order_id: String,
+    /// Strategy profile id.
+    pub strategy_id: String,
+    /// Venue name.
+    pub venue_name: String,
+    /// Market pair label.
+    pub market_pair: String,
+    /// Final local/mock lifecycle status label.
+    pub final_status: String,
+    /// Number of reconciled transitions.
+    pub transition_count: u64,
+    /// Number of fill-bearing responses.
+    pub fill_count: u64,
+}
+
+/// Non-secret recovered DEX lifecycle summary from local restart recovery.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RuntimeRecoveredDexLifecycleSummary {
+    /// Original request id.
+    pub request_id: String,
+    /// Strategy profile id.
+    pub strategy_id: String,
+    /// Venue name.
+    pub venue_name: String,
+    /// Chain label.
+    pub chain: String,
+    /// Market pair label.
+    pub market_pair: String,
+    /// Quote response id.
+    pub quote_response_id: String,
+    /// Simulation response id.
+    pub simulation_response_id: String,
+    /// Route kind label.
+    pub route_kind: String,
+    /// Final local simulation status label.
+    pub simulation_status: String,
+    /// Simulated gas used.
+    pub gas_used: u64,
 }
 
 /// Non-secret result of a local deployment-like runtime smoke validation pass.
@@ -1270,6 +1330,7 @@ impl RuntimeRestartRecoveryValidationReport {
                 reason: "runtime restart recovery validation must not perform external submission or live execution".to_owned(),
             });
         }
+        self.validate_connector_lifecycle_recovery_summary()?;
         self.validate_opportunity_trace_recovery_summary()?;
         if self.production_ready {
             return Err(RuntimeLifecycleError::ValidationFailed {
@@ -1370,6 +1431,50 @@ impl RuntimeRestartRecoveryValidationReport {
             });
         }
         Ok(())
+    }
+
+    fn validate_connector_lifecycle_recovery_summary(&self) -> Result<(), RuntimeLifecycleError> {
+        match (
+            &self.recovered_cex_lifecycle,
+            &self.recovered_dex_lifecycle,
+            self.connector_lifecycle_recovery_validated,
+            self.cex_lifecycle_checkpoint_recovered,
+            self.dex_lifecycle_checkpoint_recovered,
+        ) {
+            (None, None, false, false, false) => Ok(()),
+            (Some(cex), Some(dex), true, true, true) => {
+                if cex.request_id.trim().is_empty()
+                    || cex.client_order_id.trim().is_empty()
+                    || cex.strategy_id.trim().is_empty()
+                    || cex.venue_name.trim().is_empty()
+                    || cex.market_pair.trim().is_empty()
+                    || cex.final_status.trim().is_empty()
+                    || cex.transition_count == 0
+                {
+                    return Err(RuntimeLifecycleError::ValidationFailed {
+                        reason: "runtime restart recovery CEX lifecycle summary requires non-empty identifiers and transitions".to_owned(),
+                    });
+                }
+                if dex.request_id.trim().is_empty()
+                    || dex.strategy_id.trim().is_empty()
+                    || dex.venue_name.trim().is_empty()
+                    || dex.chain.trim().is_empty()
+                    || dex.market_pair.trim().is_empty()
+                    || dex.quote_response_id.trim().is_empty()
+                    || dex.simulation_response_id.trim().is_empty()
+                    || dex.route_kind.trim().is_empty()
+                    || dex.simulation_status.trim().is_empty()
+                {
+                    return Err(RuntimeLifecycleError::ValidationFailed {
+                        reason: "runtime restart recovery DEX lifecycle summary requires non-empty identifiers".to_owned(),
+                    });
+                }
+                Ok(())
+            }
+            _ => Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "runtime restart recovery connector lifecycle fields must be all present or all absent".to_owned(),
+            }),
+        }
     }
 }
 
@@ -2405,6 +2510,8 @@ pub fn run_local_runtime_lifecycle(
     ))?;
 
     let plan_checkpoint = persist_execution_plan_draft_checkpoint(store, &request.plan)?;
+    let _plan_audit =
+        append_execution_plan_draft_audit(journal, &request.plan, request.now_unix_ms)?;
     let plan_checkpoint_record = journal.append_event(checkpoint_event(
         &request,
         AuditEventKind::ExecutionPlanning,
@@ -2627,6 +2734,7 @@ pub fn validate_local_runtime_restart_recovery_with_trace_recovery(
     validate_local_runtime_restart_recovery_internal(audit_path, state_path, Some(policy))
 }
 
+#[allow(clippy::too_many_lines)]
 fn validate_local_runtime_restart_recovery_internal(
     audit_path: impl AsRef<Path>,
     state_path: impl AsRef<Path>,
@@ -2667,6 +2775,7 @@ fn validate_local_runtime_restart_recovery_internal(
     let graceful_shutdown_checkpoint_recovered = state
         .get_checkpoint(RUNTIME_GRACEFUL_SHUTDOWN_CHECKPOINT_KEY)?
         .is_some();
+    let connector_lifecycle_recovery = runtime_connector_lifecycle_recovery_summary(&state)?;
     let recovery_disposition = if graceful_shutdown_checkpoint_recovered {
         RuntimeRestartRecoveryDisposition::ReadyForLocalReview
     } else {
@@ -2686,6 +2795,11 @@ fn validate_local_runtime_restart_recovery_internal(
         local_review_ready: plan_checkpoint_recovered
             && adapter_checkpoint_recovered
             && adapter_recovery_plan_checkpoint_recovered,
+        connector_lifecycle_recovery_validated: false,
+        cex_lifecycle_checkpoint_recovered: false,
+        dex_lifecycle_checkpoint_recovered: false,
+        recovered_cex_lifecycle: None,
+        recovered_dex_lifecycle: None,
         opportunity_trace_recovery_validated: false,
         opportunity_trace_discovered_candidates: 0,
         opportunity_trace_recovered_checkpoints: 0,
@@ -2697,6 +2811,14 @@ fn validate_local_runtime_restart_recovery_internal(
         production_ready: false,
     };
     let mut report = report;
+
+    if let Some((cex_lifecycle, dex_lifecycle)) = connector_lifecycle_recovery {
+        report.connector_lifecycle_recovery_validated = true;
+        report.cex_lifecycle_checkpoint_recovered = true;
+        report.dex_lifecycle_checkpoint_recovered = true;
+        report.recovered_cex_lifecycle = Some(cex_lifecycle);
+        report.recovered_dex_lifecycle = Some(dex_lifecycle);
+    }
 
     if let Some(policy) = include_opportunity_trace_recovery {
         let opportunity_trace_audit_path =
@@ -2730,6 +2852,99 @@ fn validate_local_runtime_restart_recovery_internal(
 
     report.validate()?;
     Ok(report)
+}
+
+fn runtime_connector_lifecycle_recovery_summary(
+    state: &SqliteWalStateStore,
+) -> Result<
+    Option<(
+        RuntimeRecoveredCexLifecycleSummary,
+        RuntimeRecoveredDexLifecycleSummary,
+    )>,
+    RuntimeLifecycleError,
+> {
+    let cex_checkpoint = state.get_checkpoint(CEX_LAST_ORDER_LIFECYCLE_CHECKPOINT_KEY)?;
+    let dex_checkpoint = state.get_checkpoint(DEX_LAST_SWAP_LIFECYCLE_CHECKPOINT_KEY)?;
+    match (cex_checkpoint, dex_checkpoint) {
+        (None, None) => Ok(None),
+        (Some(_), None) | (None, Some(_)) => Err(RuntimeLifecycleError::ValidationFailed {
+            reason: "runtime restart recovery connector lifecycle checkpoints must be recovered together".to_owned(),
+        }),
+        (Some(cex), Some(dex)) => Ok(Some((
+            runtime_recovered_cex_lifecycle_summary(&cex)?,
+            runtime_recovered_dex_lifecycle_summary(&dex)?,
+        ))),
+    }
+}
+
+fn runtime_recovered_cex_lifecycle_summary(
+    checkpoint: &StateCheckpoint,
+) -> Result<RuntimeRecoveredCexLifecycleSummary, RuntimeLifecycleError> {
+    let record: CexOrderLifecycleRecord =
+        serde_json::from_str(&checkpoint.value).map_err(|error| {
+            RuntimeLifecycleError::ValidationFailed {
+                reason: format!("failed to decode recovered CEX lifecycle checkpoint: {error}"),
+            }
+        })?;
+    if record.external_submission_performed
+        || record.live_execution_performed
+        || record.production_ready
+    {
+        return Err(RuntimeLifecycleError::ValidationFailed {
+            reason: "recovered CEX lifecycle checkpoint must remain local-only".to_owned(),
+        });
+    }
+    Ok(RuntimeRecoveredCexLifecycleSummary {
+        request_id: record.request_id,
+        client_order_id: record.client_order_id,
+        strategy_id: record.strategy_id,
+        venue_name: record.venue.name,
+        market_pair: format!("{}/{}", record.pair.base, record.pair.quote),
+        final_status: format!("{:?}", record.final_status),
+        transition_count: u64::try_from(record.transition_count).map_err(|_| {
+            RuntimeLifecycleError::ValidationFailed {
+                reason: "recovered CEX lifecycle transition count overflowed".to_owned(),
+            }
+        })?,
+        fill_count: u64::try_from(record.fill_count).map_err(|_| {
+            RuntimeLifecycleError::ValidationFailed {
+                reason: "recovered CEX lifecycle fill count overflowed".to_owned(),
+            }
+        })?,
+    })
+}
+
+fn runtime_recovered_dex_lifecycle_summary(
+    checkpoint: &StateCheckpoint,
+) -> Result<RuntimeRecoveredDexLifecycleSummary, RuntimeLifecycleError> {
+    let record: DexSwapLifecycleRecord =
+        serde_json::from_str(&checkpoint.value).map_err(|error| {
+            RuntimeLifecycleError::ValidationFailed {
+                reason: format!("failed to decode recovered DEX lifecycle checkpoint: {error}"),
+            }
+        })?;
+    if record.rpc_call_performed
+        || record.signing_performed
+        || record.broadcast_performed
+        || record.live_execution_performed
+        || record.production_ready
+    {
+        return Err(RuntimeLifecycleError::ValidationFailed {
+            reason: "recovered DEX lifecycle checkpoint must remain local-only".to_owned(),
+        });
+    }
+    Ok(RuntimeRecoveredDexLifecycleSummary {
+        request_id: record.request_id,
+        strategy_id: record.strategy_id,
+        venue_name: record.venue.name,
+        chain: record.chain,
+        market_pair: format!("{}/{}", record.pair.base, record.pair.quote),
+        quote_response_id: record.quote_response_id,
+        simulation_response_id: record.simulation_response_id,
+        route_kind: format!("{:?}", record.route_kind),
+        simulation_status: format!("{:?}", record.simulation_status),
+        gas_used: record.gas_used,
+    })
 }
 
 fn runtime_opportunity_trace_recovery_summary(
@@ -2798,8 +3013,17 @@ fn validate_runtime_opportunity_trace_recovery(
             reason: format!("failed to load local opportunity trace recovery corpus: {error}"),
         }
     })?;
+    validate_runtime_opportunity_trace_recovery_for_corpus(&corpus, audit_path, state_path, policy)
+}
+
+fn validate_runtime_opportunity_trace_recovery_for_corpus(
+    corpus: &OpportunityHistoricalFixtureCorpus,
+    audit_path: &Path,
+    state_path: &Path,
+    policy: &PolicyEngine,
+) -> Result<RuntimeOpportunityTraceRecoverySummary, RuntimeLifecycleError> {
     let trace_report = validate_opportunity_candidate_trace_restart_recovery(
-        &corpus, policy, audit_path, state_path,
+        corpus, policy, audit_path, state_path,
     )
     .map_err(|error| RuntimeLifecycleError::ValidationFailed {
         reason: format!("opportunity trace recovery validation failed: {error}"),
@@ -5229,6 +5453,11 @@ fn record_local_runtime_smoke_paper_ledger(
     .map_err(|error| RuntimeLifecycleError::ValidationFailed {
         reason: format!("runtime smoke paper adapter setup failed: {error}"),
     })?;
+    append_paper_execution_intent_audit(journal, first_intent, recorded_at_ms).map_err(
+        |error| RuntimeLifecycleError::ValidationFailed {
+            reason: format!("runtime smoke paper intent audit failed: {error}"),
+        },
+    )?;
     let paper_report = paper_adapter.submit(first_intent).map_err(|error| {
         RuntimeLifecycleError::ValidationFailed {
             reason: format!("runtime smoke paper execution report failed: {error}"),
@@ -5660,10 +5889,13 @@ mod tests {
     use crate::{
         AgentConfig, AppendOnlyAuditJournal, AuditEvent, AuditEventKind,
         DeterministicExecutionPlanner, ExecutionAdapterConfig, ExecutionPlanner,
-        ExecutionPlannerConfig, ExecutionPlannerRequest, FeeAdjustedEdge, FeeEstimate,
-        InMemoryStateStore, LiquidityRole, MarketPair, OpportunityCandidate, OpportunityLeg,
-        OpportunityLegSide, OpportunityRouteKind, OpportunityScore, PolicyEngine,
-        SqliteWalStateStore, StateCheckpoint, StateStore, StateStoreError, VenueKind, VenueRef,
+        ExecutionPlannerConfig, ExecutionPlannerRequest, FeeAdjustedEdge, FeeEstimate, FeeSchedule,
+        InMemoryStateStore, LiquidityRole, MarketPair, NormalizedQuote, OpportunityCandidate,
+        OpportunityDiscoveryConfig, OpportunityDiscoveryRequest,
+        OpportunityHistoricalFixtureCorpus, OpportunityLeg, OpportunityLegSide,
+        OpportunityReplayCorpus, OpportunityReplayExpectation, OpportunityReplayScenario,
+        OpportunityRouteKind, OpportunityScore, PolicyEngine, PriceLevel, SqliteWalStateStore,
+        StateCheckpoint, StateStore, StateStoreError, VenueKind, VenueRef,
     };
     use std::{
         env, fs,
@@ -5725,10 +5957,10 @@ redact_secrets = true
         assert!(!record.external_submission_performed);
         assert!(!record.live_execution_performed);
         assert_eq!(record.start_audit_sequence, 1);
-        assert_eq!(record.plan_checkpoint_audit_sequence, 2);
-        assert_eq!(record.adapter_complete_audit_sequence, 3);
-        assert_eq!(record.adapter_recovery_plan_audit_sequence, 4);
-        assert_eq!(journal.next_sequence(), 5);
+        assert_eq!(record.plan_checkpoint_audit_sequence, 5);
+        assert_eq!(record.adapter_complete_audit_sequence, 6);
+        assert_eq!(record.adapter_recovery_plan_audit_sequence, 7);
+        assert_eq!(journal.next_sequence(), 8);
         assert!(store
             .get_checkpoint(EXECUTION_PLANNER_LAST_DRAFT_CHECKPOINT_KEY)
             .expect("plan checkpoint reads")
@@ -5743,7 +5975,7 @@ redact_secrets = true
             .is_some());
 
         let reopened = AppendOnlyAuditJournal::open(&path).expect("journal reopens");
-        assert_eq!(reopened.next_sequence(), 5);
+        assert_eq!(reopened.next_sequence(), 8);
         let _ = fs::remove_file(path);
     }
 
@@ -5902,7 +6134,7 @@ redact_secrets = true
         )
         .expect("local runtime backup/restore validation should pass");
 
-        assert_eq!(report.audit_records_replayed, 4);
+        assert_eq!(report.audit_records_replayed, 7);
         assert!(report.audit_restore_check_passed);
         assert!(report.sqlite_restore_check_passed);
         assert!(report.plan_checkpoint_restored);
@@ -5914,7 +6146,7 @@ redact_secrets = true
 
         let restored_journal =
             AppendOnlyAuditJournal::open(&backup_audit_path).expect("backup journal reopens");
-        assert_eq!(restored_journal.next_sequence(), 5);
+        assert_eq!(restored_journal.next_sequence(), 8);
 
         let restored_state =
             SqliteWalStateStore::open(&backup_state_path).expect("backup sqlite reopens");
@@ -5973,7 +6205,7 @@ redact_secrets = true
         let report = validate_local_runtime_restart_recovery(&audit_path, &state_path)
             .expect("restart recovery validation should pass");
 
-        assert_eq!(report.audit_records_replayed, 6);
+        assert_eq!(report.audit_records_replayed, 9);
         assert!(report.audit_replay_check_passed);
         assert!(report.sqlite_reopen_check_passed);
         assert!(report.plan_checkpoint_recovered);
@@ -6075,6 +6307,39 @@ redact_secrets = true
     }
 
     #[test]
+    fn runtime_trace_recovery_from_duplicate_candidate_corpus_preserves_deduplicated_counts() {
+        let audit_path = temp_audit_path("runtime-trace-dedup");
+        let state_path = temp_state_path("runtime-trace-dedup");
+        let policy = policy();
+        let corpus = duplicate_candidate_trace_corpus();
+
+        let summary = super::validate_runtime_opportunity_trace_recovery_for_corpus(
+            &corpus,
+            &audit_path,
+            &state_path,
+            &policy,
+        )
+        .expect("deduplicated runtime opportunity trace recovery should pass");
+
+        assert_eq!(summary.corpus_id, "runtime-dedup-trace-corpus");
+        assert!(summary.trace_recovery_validated);
+        assert_eq!(summary.discovered_candidates, 1);
+        assert_eq!(summary.audit_trace_records_replayed, 1);
+        assert_eq!(summary.recovered_trace_checkpoints, 1);
+        assert_eq!(summary.missing_trace_checkpoints, 0);
+        assert_eq!(summary.recovered_trace_summaries.len(), 1);
+        assert_eq!(
+            summary.recovered_trace_summaries[0].planner_request_id,
+            "phase27-planner-handoff-1"
+        );
+        assert_eq!(summary.recovered_trace_summaries[0].audit_sequence, 1);
+        assert!(summary.recovered_trace_summaries[0].leg_count > 0);
+
+        let _ = fs::remove_file(audit_path);
+        cleanup_state_files(&state_path);
+    }
+
+    #[test]
     fn runtime_restart_recovery_needs_operator_review_without_shutdown_checkpoint() {
         let audit_path = temp_audit_path("runtime-restart-recovery-review-needed");
         let state_path = temp_state_path("runtime-restart-recovery-review-needed");
@@ -6091,7 +6356,7 @@ redact_secrets = true
         let report = validate_local_runtime_restart_recovery(&audit_path, &state_path)
             .expect("restart recovery validation should pass with operator review");
 
-        assert_eq!(report.audit_records_replayed, 4);
+        assert_eq!(report.audit_records_replayed, 7);
         assert!(report.audit_replay_check_passed);
         assert!(report.sqlite_reopen_check_passed);
         assert!(report.plan_checkpoint_recovered);
@@ -6205,7 +6470,7 @@ redact_secrets = true
         let reopened_journal = AppendOnlyAuditJournal::open(&audit_path).expect("journal reopens");
         assert_eq!(
             reopened_journal.next_sequence(),
-            1 + u64::try_from(workers * 4).unwrap_or(u64::MAX)
+            1 + u64::try_from(workers * 7).unwrap_or(u64::MAX)
         );
 
         let reopened_store = SqliteWalStateStore::open(&state_path).expect("sqlite store reopens");
@@ -7078,7 +7343,7 @@ redact_secrets = true
             paper_ledger_checkpointed: true,
             paper_ledger_checkpoint_recovered: true,
             paper_modeled_fills_settled: 2,
-            paper_ledger_audit_records_appended: 6,
+            paper_ledger_audit_records_appended: 8,
             paper_ledger_replay_validated: true,
             paper_ledger_external_submission_performed: false,
             paper_ledger_live_execution_performed: false,
@@ -7308,6 +7573,66 @@ redact_secrets = true
         }
     }
 
+    fn duplicate_candidate_trace_corpus() -> OpportunityHistoricalFixtureCorpus {
+        let pair = MarketPair::new("BTC", "USD").expect("pair should validate");
+        OpportunityHistoricalFixtureCorpus {
+            id: "runtime-dedup-trace-corpus".to_owned(),
+            historical_fixture_replay: true,
+            replay_windows: vec![OpportunityReplayCorpus {
+                id: "runtime-dedup-trace-window-1".to_owned(),
+                scenarios: vec![OpportunityReplayScenario {
+                    id: "runtime-dedup-trace-scenario-1".to_owned(),
+                    request: OpportunityDiscoveryRequest {
+                        id: "runtime-dedup-request".to_owned(),
+                        quotes: vec![
+                            runtime_trace_quote(
+                                "buy-a-1",
+                                "paper-a",
+                                pair.clone(),
+                                98.0,
+                                99.0,
+                                1.0,
+                            ),
+                            runtime_trace_quote(
+                                "buy-a-2",
+                                "paper-a",
+                                pair.clone(),
+                                97.0,
+                                98.0,
+                                1.0,
+                            ),
+                            runtime_trace_quote(
+                                "sell-b",
+                                "paper-b",
+                                pair.clone(),
+                                110.0,
+                                111.0,
+                                1.0,
+                            ),
+                        ],
+                        fee_schedules: vec![
+                            runtime_trace_fee("paper-a", pair.clone()),
+                            runtime_trace_fee("paper-b", pair),
+                        ],
+                        order_books: Vec::new(),
+                        inventory_limits: Vec::new(),
+                        transfer_risk_profiles: Vec::new(),
+                        config: OpportunityDiscoveryConfig::default(),
+                        now_unix_ms: 10_000,
+                    },
+                    expectation: OpportunityReplayExpectation {
+                        min_candidates: 1,
+                        max_candidates: Some(1),
+                        required_route_kinds: vec![OpportunityRouteKind::CexCex],
+                        forbidden_route_kinds: Vec::new(),
+                        min_best_net_profit_quote: None,
+                        expected_violation_codes: Vec::new(),
+                    },
+                }],
+            }],
+        }
+    }
+
     fn leg(
         venue_name: &str,
         pair: MarketPair,
@@ -7382,6 +7707,48 @@ redact_secrets = true
             process::id()
         ));
         path
+    }
+
+    fn runtime_trace_quote(
+        id: &str,
+        venue_name: &str,
+        pair: MarketPair,
+        bid_price: f64,
+        ask_price: f64,
+        quantity_base: f64,
+    ) -> NormalizedQuote {
+        NormalizedQuote {
+            id: id.to_owned(),
+            venue: VenueRef {
+                name: venue_name.to_owned(),
+                kind: VenueKind::Cex,
+            },
+            pair,
+            bid: PriceLevel {
+                price_quote: bid_price,
+                quantity_base,
+            },
+            ask: PriceLevel {
+                price_quote: ask_price,
+                quantity_base,
+            },
+            captured_at_unix_ms: 9_500,
+            received_at_unix_ms: 9_500,
+        }
+    }
+
+    fn runtime_trace_fee(venue_name: &str, pair: MarketPair) -> FeeSchedule {
+        FeeSchedule {
+            venue: VenueRef {
+                name: venue_name.to_owned(),
+                kind: VenueKind::Cex,
+            },
+            pair: Some(pair),
+            maker_bps: 5.0,
+            taker_bps: 10.0,
+            network_fee_quote: 0.0,
+            externally_verified: false,
+        }
     }
 
     fn cleanup_state_files(path: &std::path::Path) {

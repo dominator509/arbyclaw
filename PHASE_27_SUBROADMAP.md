@@ -29,7 +29,7 @@ In scope:
 - Local opportunity-to-planner handoff validation that records discovered replay candidates through local append-only audit and SQLite WAL state traces before converting them into draft-only planner records without adapter submission.
 - Local opportunity candidate trace restart/reopen recovery validation that verifies audit replay and SQLite WAL trace checkpoints survive handle restart before planner trace evidence is accepted.
 - Candidate records that expose liquidity and transfer-risk modeling details.
-- Rust tests and local CLI validation commands for depth/inventory sizing, transfer-risk scoring, triangular discovery, DEX/DEX and CEX/DEX route classification, candidate truncation, stale-data fail-closed replay, local replay expectations, the built-in local regression corpus, the local historical fixture corpus, replay-candidate planner handoff, local candidate audit/state traces, and local candidate trace restart/reopen recovery.
+- Rust tests and local CLI validation commands for depth/inventory sizing, transfer-risk scoring, triangular discovery, DEX/DEX and CEX/DEX route classification, candidate truncation, duplicate-candidate collapse by stable id, stale-data fail-closed replay, local replay expectations, the built-in local regression corpus, the local historical fixture corpus, replay-candidate planner handoff, local candidate audit/state traces, and local candidate trace restart/reopen recovery.
 
 Out of scope:
 
@@ -105,7 +105,7 @@ Met for local deterministic modeling when:
 - CLI validation can run local quote-ingestion/backpressure validation and fail closed if candidate cap pressure is not reported or forbidden side-effect flags appear.
 - CLI validation can run the local historical fixture corpus, local opportunity planner handoff, and local candidate trace restart/reopen recovery and fail closed on failed replay windows, missing candidate audit/state traces, missing recovered trace checkpoints, planner handoff failures, adapter-submission flags, or forbidden side-effect flags.
 - CI runs the local replay, local historical fixture, local opportunity planner handoff, and local candidate trace recovery CLI validation commands as hard gates.
-- Tests cover depth/inventory caps, transfer-risk penalties, triangular discovery, route classifications, candidate truncation, stale-data fail-closed replay, local replay expectations, the built-in local regression corpus, local historical fixture corpus aggregation, replay-candidate planner handoff, local candidate audit/state trace replay, local candidate trace restart/reopen recovery, and the CLI validation paths.
+- Tests cover depth/inventory caps, transfer-risk penalties, triangular discovery, route classifications, candidate truncation, duplicate-candidate collapse by stable id, stale-data fail-closed replay, local replay expectations, the built-in local regression corpus, local historical fixture corpus aggregation, replay-candidate planner handoff, local candidate audit/state trace replay, local candidate trace restart/reopen recovery, and the CLI validation paths.
 - Standard validation passes.
 
 ## Deferred Work

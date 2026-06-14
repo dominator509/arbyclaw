@@ -1,0 +1,8 @@
+# Planner draft audit persistence (2026-06-13)
+
+- `crates/arb-core/src/planner.rs` now exports `append_execution_plan_draft_audit(...)` plus `ExecutionPlanAuditReport`.
+- The helper appends one `execution-planning` audit event for the draft and one redacted `policy-decision` audit event per draft intent using `PolicyDecisionRecord`-shaped metadata, while preserving `external_submission_performed = false` and `live_execution_performed = false`.
+- `crates/arb-core/src/runtime.rs::run_local_runtime_lifecycle` now calls the planner audit helper after the plan checkpoint and before deterministic adapter evaluation, so runtime planner-to-adapter handoff now journals the draft and policy outcomes locally before adapter work.
+- Runtime lifecycle/restart/backup/concurrency test expectations shifted from 4 lifecycle audit records to 7 lifecycle audit records (or 9 with graceful-shutdown records) because the planner draft plus two policy outcomes are now journaled.
+- Docs reconciled: `ROADMAP.md`, `ARCHITECTURE.md`, `PHASE_10_SUBROADMAP.md`, and `PRODUCTION_GAP_TRACKER.md` now describe local plan-draft audit/checkpoint persistence and per-intent policy-outcome audit records instead of leaving that as deferred work.
+- Full validation after the doc/code updates passed on 2026-06-13: `python3 scripts/generate_structure_manifest.py`, `python3 scripts/validate_structure.py`, `python3 -m py_compile scripts/validate_structure.py scripts/generate_structure_manifest.py scripts/validate_deployment_host_runtime.py scripts/validate_arm_cross_check.py`, `cargo fmt --check`, `cargo check --workspace`, `cargo test --workspace` (459 passed), and `cargo clippy --workspace --all-targets -- -D warnings`.

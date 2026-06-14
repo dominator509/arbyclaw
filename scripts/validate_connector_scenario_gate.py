@@ -76,6 +76,21 @@ def command_set(workspace_root: pathlib.Path) -> list[tuple[str, list[str]]]:
             ["cargo", "run", "-p", "arb-agent", "--", "validate-market-data-reconnect-plan"],
         ),
         (
+            "market_data_quality_assessment",
+            ["cargo", "run", "-p", "arb-agent", "--", "validate-market-data-quality-assessment"],
+        ),
+        (
+            "paid_market_data_provider_evaluation",
+            [
+                "cargo",
+                "run",
+                "-p",
+                "arb-agent",
+                "--",
+                "validate-paid-market-data-provider-evaluation",
+            ],
+        ),
+        (
             "market_data_boundary_audit",
             [
                 "cargo",
@@ -86,6 +101,19 @@ def command_set(workspace_root: pathlib.Path) -> list[tuple[str, list[str]]]:
                 "validate-market-data-boundary-audit",
                 "--workspace",
                 str(workspace_root / "market-data-boundary"),
+            ],
+        ),
+        (
+            "market_data_history_persistence",
+            [
+                "cargo",
+                "run",
+                "-p",
+                "arb-agent",
+                "--",
+                "validate-market-data-history-persistence",
+                "--workspace",
+                str(workspace_root / "market-data-history"),
             ],
         ),
         (
@@ -103,6 +131,17 @@ def command_set(workspace_root: pathlib.Path) -> list[tuple[str, list[str]]]:
                 "validate-fee-boundary-audit",
                 "--workspace",
                 str(workspace_root / "fee-boundary"),
+            ],
+        ),
+        (
+            "cex_governance_review",
+            [
+                "cargo",
+                "run",
+                "-p",
+                "arb-agent",
+                "--",
+                "validate-cex-governance-review",
             ],
         ),
         (
@@ -238,6 +277,83 @@ def validate_components(components: list[dict[str, Any]]) -> list[str]:
     require(reconnect, "outage-blocked", "true", errors, "market_data_reconnect_plan")
     require(reconnect, "retry-budget-exhausted", "true", errors, "market_data_reconnect_plan")
 
+    quality = by_name["market_data_quality_assessment"]["parsed"]
+    require(quality, "acceptable-status", "acceptable", errors, "market_data_quality_assessment")
+    require(quality, "degraded-status", "degraded", errors, "market_data_quality_assessment")
+    require(quality, "blocked-status", "blocked", errors, "market_data_quality_assessment")
+    require(
+        quality,
+        "acceptable-quality-score",
+        "100",
+        errors,
+        "market_data_quality_assessment",
+    )
+    require(
+        quality,
+        "acceptable-depth-levels",
+        "2",
+        errors,
+        "market_data_quality_assessment",
+    )
+    require(
+        quality,
+        "blocked-violation-codes",
+        "3",
+        errors,
+        "market_data_quality_assessment",
+    )
+
+    paid_provider = by_name["paid_market_data_provider_evaluation"]["parsed"]
+    require(
+        paid_provider,
+        "ready-provider-status",
+        "ready-for-local-review",
+        errors,
+        "paid_market_data_provider_evaluation",
+    )
+    require(
+        paid_provider,
+        "blocked-provider-status",
+        "blocked",
+        errors,
+        "paid_market_data_provider_evaluation",
+    )
+    require(
+        paid_provider,
+        "ready-covered-venues",
+        "2",
+        errors,
+        "paid_market_data_provider_evaluation",
+    )
+    require(
+        paid_provider,
+        "ready-covered-pairs",
+        "2",
+        errors,
+        "paid_market_data_provider_evaluation",
+    )
+    require(
+        paid_provider,
+        "blocked-provider-violation-codes",
+        "5",
+        errors,
+        "paid_market_data_provider_evaluation",
+    )
+    for key in (
+        "latency-within-budget",
+        "rate-limit-review-passed",
+        "cost-review-passed",
+        "failure-behavior-review-passed",
+        "governance-review-passed",
+    ):
+        require(
+            paid_provider,
+            key,
+            "true",
+            errors,
+            "paid_market_data_provider_evaluation",
+        )
+
     market_audit = by_name["market_data_boundary_audit"]["parsed"]
     require(market_audit, "clean-provider-status", "usable", errors, "market_data_boundary_audit")
     require(market_audit, "degraded-provider-status", "blocked", errors, "market_data_boundary_audit")
@@ -245,6 +361,29 @@ def validate_components(components: list[dict[str, Any]]) -> list[str]:
     require(market_audit, "blocked-reconnect-status", "blocked", errors, "market_data_boundary_audit")
     for key in ("preflight-audit-failed-closed", "reconnect-audit-failed-closed", "state-failure-failed-closed", "state-checkpoints-recovered"):
         require(market_audit, key, "true", errors, "market_data_boundary_audit")
+
+    history = by_name["market_data_history_persistence"]["parsed"]
+    require(
+        history,
+        "history-batch-status",
+        "persisted-for-local-replay",
+        errors,
+        "market_data_history_persistence",
+    )
+    require(history, "stored-quote-count", "2", errors, "market_data_history_persistence")
+    require(history, "stored-order-book-count", "2", errors, "market_data_history_persistence")
+    require(history, "quotes-truncated", "true", errors, "market_data_history_persistence")
+    require(history, "order-books-truncated", "true", errors, "market_data_history_persistence")
+    require(history, "audit-failed-closed", "true", errors, "market_data_history_persistence")
+    require(history, "state-failed-closed", "true", errors, "market_data_history_persistence")
+    require(history, "audit-records-replayed", "1", errors, "market_data_history_persistence")
+    require(
+        history,
+        "state-checkpoints-recovered",
+        "true",
+        errors,
+        "market_data_history_persistence",
+    )
 
     fee = by_name["fee_schedule_verification"]["parsed"]
     require(fee, "current-fee-review-status", "ready-for-local-review", errors, "fee_schedule_verification")
@@ -257,6 +396,25 @@ def validate_components(components: list[dict[str, Any]]) -> list[str]:
     require(fee_audit, "fee-verification-audit-failed-closed", "true", errors, "fee_boundary_audit")
     require(fee_audit, "state-failure-failed-closed", "true", errors, "fee_boundary_audit")
     require(fee_audit, "state-checkpoints-recovered", "true", errors, "fee_boundary_audit")
+
+    cex_governance = by_name["cex_governance_review"]["parsed"]
+    require(cex_governance, "scope-ready-count", "1", errors, "cex_governance_review")
+    require(cex_governance, "scope-blocked-count", "1", errors, "cex_governance_review")
+    require(cex_governance, "rate-limit-ready-count", "1", errors, "cex_governance_review")
+    require(cex_governance, "rate-limit-blocked-count", "1", errors, "cex_governance_review")
+    for key in (
+        "fee-review-ready",
+        "rate-limit-documentation-ready",
+        "terms-review-ready",
+        "jurisdiction-review-ready",
+        "api-capabilities-ready",
+        "incident-review-ready",
+        "governance-review-ready",
+        "credential-reference-validated",
+        "rate-limit-budget-blocked",
+        "rate-limit-provider-blocked",
+    ):
+        require(cex_governance, key, "true", errors, "cex_governance_review")
 
     cex_request = by_name["cex_market_data_request_plans"]["parsed"]
     require(cex_request, "request-plan-count", "6", errors, "cex_market_data_request_plans")
@@ -296,7 +454,7 @@ def validate_components(components: list[dict[str, Any]]) -> list[str]:
     require(dex_protocol, "protocol-risk-review-count", "2", errors, "dex_protocol_risk_review")
     require(dex_protocol, "protocol-risk-ready-count", "1", errors, "dex_protocol_risk_review")
     require(dex_protocol, "protocol-risk-blocked-count", "1", errors, "dex_protocol_risk_review")
-    require(dex_protocol, "protocol-risk-blocker-count", "9", errors, "dex_protocol_risk_review")
+    require(dex_protocol, "protocol-risk-blocker-count", "16", errors, "dex_protocol_risk_review")
     require(dex_protocol, "spender-hygiene-ready", "true", errors, "dex_protocol_risk_review")
     require(dex_protocol, "gas-slippage-ready", "true", errors, "dex_protocol_risk_review")
     require(dex_protocol, "mev-controls-ready", "true", errors, "dex_protocol_risk_review")

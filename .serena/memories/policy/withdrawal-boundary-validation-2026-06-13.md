@@ -1,0 +1,8 @@
+# Withdrawal policy boundary validation (2026-06-13)
+
+- Added `arb-agent validate-withdrawal-policy-boundary --workspace <fresh-dir>` in `crates/arb-agent/src/main.rs`.
+- The local validator proves these existing fail-closed withdrawal guards are real and replayable without live execution: config live-mode withdrawal denial (`WITHDRAWALS_BLOCKED_IN_PHASE_2`), strategy-profile withdrawal flag denial, strategy intent withdrawal denial, policy trust-contract denial, destination-allowlist denial for approved-address labels without a matching entry, signer-reference denial, append-only policy audit replay, SQLite checkpoint recovery, invalid-audit fail-closed behavior, and permission-denied state fail-closed behavior.
+- Output remains local-only and explicitly keeps `external-submission-performed`, `secret-material-recorded`, and `production-ready` false.
+- Reconciled stale tracker/docs wording that claimed withdrawal policy pieces did not exist yet: updated GAP-0027 in `PRODUCTION_GAP_TRACKER.md`, plus Phase 3 notes in `ROADMAP.md` and policy architecture notes in `ARCHITECTURE.md`.
+- During full RTK validation, `cargo test --workspace` exposed a Windows-local flake in `audit::tests::durability_validation_covers_crash_concurrency_and_filesystem_failures`; fixed it in `crates/arb-core/src/audit.rs` by retrying only the validation probe's concurrent append path on the specific audit lock-timeout error instead of weakening global runtime lock semantics.
+- Obsidian project paths were rechecked and are still absent locally (`C:\Users\domin\Documents\Obsidian\Projects\arbyclaw`, `C:\Users\domin\Obsidian\Projects\arbyclaw`, and parent vault paths all missing), so Serena memory remains the active project memory surface until a vault exists.

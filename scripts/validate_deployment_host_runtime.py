@@ -534,6 +534,30 @@ def runtime_restart_recovery_report(parsed: dict[str, str]) -> dict[str, Any]:
     }
 
 
+def production_runtime_preflight_report(parsed: dict[str, str]) -> dict[str, Any]:
+    return {
+        "validation_passed": parsed.get("production-runtime-preflight")
+        == "validation passed",
+        "status": parsed.get("production-runtime-preflight-status"),
+        "local_smoke_validated": parsed.get(
+            "production-runtime-preflight-local-smoke-validated"
+        ),
+        "local_smoke_load_validated": parsed.get(
+            "production-runtime-preflight-local-smoke-load-validated"
+        ),
+        "unresolved_blockers": parsed.get(
+            "production-runtime-preflight-unresolved-blockers"
+        ),
+        "service_manager_evidence_available": parsed.get(
+            "production-runtime-preflight-service-manager-evidence-available"
+        ),
+        "disk_full_evidence_available": parsed.get(
+            "production-runtime-preflight-disk-full-evidence-available"
+        ),
+        "production_ready": parsed.get("production-runtime-preflight-production-ready"),
+    }
+
+
 def run_retention_preflight(
     active_path: pathlib.Path | None,
     archive_dir: pathlib.Path | None,
@@ -1126,6 +1150,7 @@ def run_runtime_smoke(
         "service_manager_action_performed": parsed.get("service-manager-action-performed"),
         "external_submission_performed": parsed.get("external-submission-performed"),
         "live_execution_performed": parsed.get("live-execution-performed"),
+        "production_runtime_preflight": production_runtime_preflight_report(parsed),
         "runtime_smoke_passed": completed.returncode == 0,
         "iterations": iterations,
         "runtime_restart_recovery_report": restart_recovery_report,
@@ -1471,6 +1496,15 @@ def run_restart_recovery(
         "local_review_ready": parsed.get(
             "runtime-restart-recovery-local-review-ready"
         ),
+        "connector_lifecycle_validated": parsed.get(
+            "runtime-restart-recovery-connector-lifecycle-validated"
+        ),
+        "cex_lifecycle_checkpoint_recovered": parsed.get(
+            "runtime-restart-recovery-cex-lifecycle-checkpoint-recovered"
+        ),
+        "dex_lifecycle_checkpoint_recovered": parsed.get(
+            "runtime-restart-recovery-dex-lifecycle-checkpoint-recovered"
+        ),
         "opportunity_trace_validated": parsed.get(
             "runtime-restart-recovery-opportunity-trace-validated"
         ),
@@ -1605,6 +1639,15 @@ def run_supervised_restart(
         ),
         "graceful_shutdown_checkpoint_recovered": parsed.get(
             "runtime-restart-recovery-graceful-shutdown-checkpoint-recovered"
+        ),
+        "connector_lifecycle_validated": parsed.get(
+            "runtime-restart-recovery-connector-lifecycle-validated"
+        ),
+        "cex_lifecycle_checkpoint_recovered": parsed.get(
+            "runtime-restart-recovery-cex-lifecycle-checkpoint-recovered"
+        ),
+        "dex_lifecycle_checkpoint_recovered": parsed.get(
+            "runtime-restart-recovery-dex-lifecycle-checkpoint-recovered"
         ),
         "opportunity_trace_recovered_checkpoints": parsed.get(
             "runtime-restart-recovery-opportunity-trace-recovered-checkpoints"
@@ -2246,6 +2289,7 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
             "physical disk-full fail-closed evidence",
             "deployment-host retention/rotation execution evidence",
             "rollback drill evidence",
+            "incident-response drill evidence",
         ],
     }
 

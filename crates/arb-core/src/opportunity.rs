@@ -10,7 +10,7 @@ use crate::{
     DEFAULT_MARKET_DATA_FRESHNESS_MS,
 };
 use serde::{Deserialize, Serialize};
-use std::{cmp::Ordering, error::Error, fmt};
+use std::{cmp::Ordering, collections::HashSet, error::Error, fmt};
 
 /// Stable opportunity-engine version for audit and replay surfaces.
 pub const OPPORTUNITY_ENGINE_VERSION: &str = "phase-27-opportunity-replay-v1";
@@ -2471,6 +2471,8 @@ fn rank_candidates(
     }
 
     candidates.sort_by(compare_candidates);
+    let mut seen_candidate_ids = HashSet::new();
+    candidates.retain(|candidate| seen_candidate_ids.insert(candidate.id.clone()));
     candidates.truncate(max_candidates);
     Ok(candidates)
 }
@@ -3578,6 +3580,7 @@ mod tests {
         MarketDataProvider, MarketDataRequest, MarketPair, NormalizedQuote, OrderBookSnapshot,
         PriceLevel, VenueKind, VenueRef,
     };
+    use proptest::prelude::*;
 
     #[test]
     fn discovers_fee_adjusted_cex_cex_candidate() {
@@ -3676,6 +3679,40 @@ mod tests {
             .expect("discovery should succeed");
         assert!(candidates.len() >= 2);
         assert!(candidates[0].edge.net_profit_quote >= candidates[1].edge.net_profit_quote);
+    }
+
+    #[test]
+    fn deduplicates_cross_venue_candidates_by_stable_candidate_id() {
+        let pair = MarketPair::new("BTC", "USD").expect("pair should validate");
+        let request = OpportunityDiscoveryRequest {
+            id: "req-dedup".to_owned(),
+            quotes: vec![
+                quote("buy-a-1", "paper-a", pair.clone(), 98.0, 99.0, 1.0),
+                quote("buy-a-2", "paper-a", pair.clone(), 97.0, 98.0, 1.0),
+                quote("sell-b", "paper-b", pair.clone(), 110.0, 111.0, 1.0),
+            ],
+            fee_schedules: vec![fee("paper-a", pair.clone()), fee("paper-b", pair)],
+            order_books: Vec::new(),
+            inventory_limits: Vec::new(),
+            transfer_risk_profiles: Vec::new(),
+            config: OpportunityDiscoveryConfig::default(),
+            now_unix_ms: 10_000,
+        };
+
+        let candidates = DeterministicOpportunityEngine::new()
+            .discover(&request)
+            .expect("discovery should succeed");
+
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(
+            candidates[0].id,
+            "opp:cex-cex:BTC/USD:paper-a:paper-b:req-dedup"
+        );
+        assert_eq!(
+            candidates[0].source_quote_ids,
+            vec!["buy-a-2".to_owned(), "sell-b".to_owned()]
+        );
+        assert!(candidates[0].edge.net_profit_quote > 0.0);
     }
 
     #[test]
@@ -4207,6 +4244,191 @@ mod tests {
                 .iter()
                 .any(|scenario| scenario.scenario_id == "phase27-stale-data-fail-closed")
         }));
+    }
+
+    proptest! {
+        #[test]
+        fn property_discovery_respects_max_candidates_and_descending_profit(
+            buy_ask_cents in 10_000u32..20_000u32,
+            buy_spread_cents in 1u32..25u32,
+            sell_bid_offsets_cents in prop::collection::vec(500u32..5_000u32, 1..8),
+            max_candidates in 1usize..8usize,
+        ) {
+            let pair = MarketPair::new("BTC", "USD").expect("pair should validate");
+            let ask_price = f64::from(buy_ask_cents) / 100.0;
+            let bid_price = ask_price - (f64::from(buy_spread_cents) / 100.0);
+            let mut quotes = vec![quote(
+                "buy-quote",
+                "paper-buy",
+                pair.clone(),
+                bid_price,
+                ask_price,
+                1.0,
+            )];
+            let mut fee_schedules = vec![fee("paper-buy", pair.clone())];
+
+            for (index, offset_cents) in sell_bid_offsets_cents.iter().copied().enumerate() {
+                let venue_name = format!("paper-sell-{index}");
+                let quote_id = format!("sell-quote-{index}");
+                let sell_bid = ask_price + (f64::from(offset_cents) / 100.0);
+                quotes.push(quote(
+                    &quote_id,
+                    &venue_name,
+                    pair.clone(),
+                    sell_bid,
+                    sell_bid + 50.0,
+                    1.0,
+                ));
+                fee_schedules.push(fee(&venue_name, pair.clone()));
+            }
+
+            let request = OpportunityDiscoveryRequest {
+                id: "prop-max-candidates".to_owned(),
+                quotes,
+                fee_schedules,
+                order_books: Vec::new(),
+                inventory_limits: Vec::new(),
+                transfer_risk_profiles: Vec::new(),
+                config: OpportunityDiscoveryConfig {
+                    max_candidates,
+                    ..OpportunityDiscoveryConfig::default()
+                },
+                now_unix_ms: 10_000,
+            };
+
+            let candidates = DeterministicOpportunityEngine::new()
+                .discover(&request)
+                .expect("discovery should succeed");
+
+            prop_assert_eq!(
+                candidates.len(),
+                sell_bid_offsets_cents.len().min(max_candidates)
+            );
+            prop_assert!(!candidates.is_empty());
+            for candidate in &candidates {
+                prop_assert!(candidate.edge.net_profit_quote > 0.0);
+            }
+            for window in candidates.windows(2) {
+                prop_assert!(
+                    window[0].edge.net_profit_quote >= window[1].edge.net_profit_quote,
+                    "candidates must remain sorted by descending net profit"
+                );
+            }
+        }
+
+        #[test]
+        fn property_depth_aware_liquidity_never_exceeds_order_books_or_inventory(
+            ask_quantity in 1u32..64u32,
+            bid_quantity in 1u32..64u32,
+            inventory_quantity in 1u32..64u32,
+        ) {
+            let pair = MarketPair::new("BTC", "USD").expect("pair should validate");
+            let largest_quantity =
+                f64::from(ask_quantity.max(bid_quantity).max(inventory_quantity));
+            let request = OpportunityDiscoveryRequest {
+                id: "prop-liquidity-cap".to_owned(),
+                quotes: vec![
+                    quote("buy-quote", "paper-a", pair.clone(), 99.0, 100.0, largest_quantity),
+                    quote("sell-quote", "paper-b", pair.clone(), 109.0, 110.0, largest_quantity),
+                ],
+                fee_schedules: vec![fee("paper-a", pair.clone()), fee("paper-b", pair.clone())],
+                order_books: vec![
+                    book(
+                        "book-a",
+                        "paper-a",
+                        pair.clone(),
+                        vec![(99.0, largest_quantity)],
+                        vec![(100.0, f64::from(ask_quantity))],
+                    ),
+                    book(
+                        "book-b",
+                        "paper-b",
+                        pair.clone(),
+                        vec![(109.0, f64::from(bid_quantity))],
+                        vec![(110.0, largest_quantity)],
+                    ),
+                ],
+                inventory_limits: vec![OpportunityInventoryLimit {
+                    venue: venue("paper-b"),
+                    pair,
+                    available_base: f64::from(inventory_quantity),
+                    available_quote: 0.0,
+                    max_fraction: Some(1.0),
+                }],
+                transfer_risk_profiles: Vec::new(),
+                config: OpportunityDiscoveryConfig::default(),
+                now_unix_ms: 10_000,
+            };
+
+            let candidates = DeterministicOpportunityEngine::new()
+                .discover(&request)
+                .expect("discovery should succeed");
+            let liquidity = candidates[0]
+                .liquidity_model
+                .as_ref()
+                .expect("liquidity model should be attached");
+            let cap = f64::from(ask_quantity.min(bid_quantity).min(inventory_quantity));
+
+            prop_assert!(liquidity.depth_aware);
+            prop_assert!(liquidity.executable_quantity_base > 0.0);
+            prop_assert!(liquidity.executable_quantity_base <= cap + 0.000_000_01);
+            prop_assert!(liquidity.executable_quantity_base <= f64::from(ask_quantity) + 0.000_000_01);
+            prop_assert!(liquidity.executable_quantity_base <= f64::from(bid_quantity) + 0.000_000_01);
+            prop_assert!(liquidity.executable_quantity_base <= f64::from(inventory_quantity) + 0.000_000_01);
+        }
+
+        #[test]
+        fn property_stale_quotes_fail_closed(
+            max_market_data_age_ms in 1u64..5_000u64,
+            stale_margin_ms in 1u64..5_000u64,
+        ) {
+            let pair = MarketPair::new("ETH", "USD").expect("pair should validate");
+            let now_unix_ms = 20_000u64;
+            let captured_at = now_unix_ms
+                .saturating_sub(max_market_data_age_ms)
+                .saturating_sub(stale_margin_ms);
+            let request = OpportunityDiscoveryRequest {
+                id: "prop-stale-data".to_owned(),
+                quotes: vec![
+                    quote_with_time(
+                        "buy-quote",
+                        "paper-a",
+                        pair.clone(),
+                        99.0,
+                        100.0,
+                        1.0,
+                        captured_at,
+                    ),
+                    quote_with_time(
+                        "sell-quote",
+                        "paper-b",
+                        pair.clone(),
+                        109.0,
+                        110.0,
+                        1.0,
+                        captured_at,
+                    ),
+                ],
+                fee_schedules: vec![fee("paper-a", pair.clone()), fee("paper-b", pair)],
+                order_books: Vec::new(),
+                inventory_limits: Vec::new(),
+                transfer_risk_profiles: Vec::new(),
+                config: OpportunityDiscoveryConfig {
+                    max_market_data_age_ms,
+                    ..OpportunityDiscoveryConfig::default()
+                },
+                now_unix_ms,
+            };
+
+            let error = DeterministicOpportunityEngine::new()
+                .discover(&request)
+                .expect_err("stale market data must fail closed");
+
+            prop_assert!(error
+                .violations()
+                .iter()
+                .any(|violation| violation.code() == "OPPORTUNITY_QUOTE_STALE"));
+        }
     }
 
     fn valid_replay_report(

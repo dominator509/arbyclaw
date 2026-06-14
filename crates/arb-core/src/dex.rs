@@ -848,12 +848,16 @@ pub struct DexProtocolRiskReviewRequest {
     pub venue: VenueRef,
     /// Chain label.
     pub chain: String,
+    /// Whether the chain label is locally allowlisted.
+    pub chain_allowlisted: bool,
     /// Router label.
     pub router_label: String,
     /// Spender label.
     pub spender_label: String,
     /// Market pair under review.
     pub pair: MarketPair,
+    /// Whether the market pair is locally allowlisted.
+    pub pair_allowlisted: bool,
     /// Maximum allowed slippage in basis points.
     pub max_slippage_bps: u16,
     /// Local quoted slippage in basis points.
@@ -866,6 +870,8 @@ pub struct DexProtocolRiskReviewRequest {
     pub mev_risk_bps: f64,
     /// Maximum allowed MEV/sandwich risk in basis points.
     pub mev_risk_limit_bps: f64,
+    /// Whether the router label is locally allowlisted.
+    pub router_allowlisted: bool,
     /// Whether the spender label is locally allowlisted.
     pub spender_allowlisted: bool,
     /// Whether unlimited allowance is requested. Must be false.
@@ -874,8 +880,16 @@ pub struct DexProtocolRiskReviewRequest {
     pub approval_revocation_planned: bool,
     /// Whether token metadata has been locally reviewed.
     pub token_metadata_reviewed: bool,
+    /// Whether token contract metadata is locally reviewed.
+    pub token_contract_reviewed: bool,
+    /// Whether token decimals have been locally verified.
+    pub token_decimals_verified: bool,
     /// Whether protocol/router terms have been locally reviewed.
     pub protocol_terms_reviewed: bool,
+    /// Whether jurisdiction constraints for this protocol/path were locally reviewed.
+    pub jurisdiction_reviewed: bool,
+    /// Whether protocol incident/reputation history was locally reviewed.
+    pub incident_reputation_reviewed: bool,
     /// Whether public mempool exposure is required by the reviewed path.
     pub public_mempool_required: bool,
     /// Whether local MEV mitigation metadata is present for public-mempool paths.
@@ -916,6 +930,14 @@ pub struct DexProtocolRiskReviewReport {
     pub status: DexProtocolRiskReviewStatus,
     /// Non-secret local blocker codes.
     pub blocker_codes: Vec<String>,
+    /// Whether chain and token-pair scope controls passed.
+    pub asset_scope_passed: bool,
+    /// Whether router and spender contract hygiene passed.
+    pub contract_hygiene_passed: bool,
+    /// Whether token metadata/contract/decimals checks passed.
+    pub token_hygiene_passed: bool,
+    /// Whether jurisdiction, protocol terms, and incident/reputation checks passed.
+    pub governance_review_passed: bool,
     /// Whether spender hygiene passed.
     pub spender_hygiene_passed: bool,
     /// Whether gas/slippage checks passed.
@@ -1341,20 +1363,27 @@ impl DexProtocolRiskReviewRequest {
             protocol_label: protocol_label.into(),
             venue,
             chain: chain.into(),
+            chain_allowlisted: true,
             router_label: router_label.into(),
             spender_label: spender_label.into(),
             pair,
+            pair_allowlisted: true,
             max_slippage_bps,
             quoted_slippage_bps,
             max_gas_fee_quote,
             estimated_gas_fee_quote,
             mev_risk_bps,
             mev_risk_limit_bps,
+            router_allowlisted: true,
             spender_allowlisted: true,
             unlimited_allowance_requested: false,
             approval_revocation_planned: true,
             token_metadata_reviewed: true,
+            token_contract_reviewed: true,
+            token_decimals_verified: true,
             protocol_terms_reviewed: true,
+            jurisdiction_reviewed: true,
+            incident_reputation_reviewed: true,
             public_mempool_required: false,
             mev_mitigation_reviewed: true,
             rpc_call_performed: false,
@@ -1458,6 +1487,17 @@ impl DexProtocolRiskReviewRequest {
     pub fn review(&self) -> Result<DexProtocolRiskReviewReport, DexConnectorError> {
         self.validate()?;
         let mut blockers = Vec::new();
+        let asset_scope_passed = self.chain_allowlisted && self.pair_allowlisted;
+        if !self.chain_allowlisted {
+            blockers.push("chain-not-allowlisted".to_owned());
+        }
+        if !self.pair_allowlisted {
+            blockers.push("pair-not-allowlisted".to_owned());
+        }
+        let router_hygiene_passed = self.router_allowlisted;
+        if !self.router_allowlisted {
+            blockers.push("router-not-allowlisted".to_owned());
+        }
         let spender_hygiene_passed = self.spender_allowlisted
             && !self.unlimited_allowance_requested
             && self.approval_revocation_planned;
@@ -1469,6 +1509,16 @@ impl DexProtocolRiskReviewRequest {
         }
         if !self.approval_revocation_planned {
             blockers.push("approval-revocation-not-planned".to_owned());
+        }
+        let contract_hygiene_passed = router_hygiene_passed && spender_hygiene_passed;
+        let token_hygiene_passed = self.token_metadata_reviewed
+            && self.token_contract_reviewed
+            && self.token_decimals_verified;
+        if !self.token_contract_reviewed {
+            blockers.push("token-contract-not-reviewed".to_owned());
+        }
+        if !self.token_decimals_verified {
+            blockers.push("token-decimals-not-verified".to_owned());
         }
 
         let gas_slippage_passed = self.quoted_slippage_bps <= f64::from(self.max_slippage_bps)
@@ -1489,12 +1539,21 @@ impl DexProtocolRiskReviewRequest {
             blockers.push("public-mempool-mev-mitigation-missing".to_owned());
         }
 
+        let governance_review_passed = self.protocol_terms_reviewed
+            && self.jurisdiction_reviewed
+            && self.incident_reputation_reviewed;
         let terms_metadata_passed = self.token_metadata_reviewed && self.protocol_terms_reviewed;
         if !self.token_metadata_reviewed {
             blockers.push("token-metadata-not-reviewed".to_owned());
         }
         if !self.protocol_terms_reviewed {
             blockers.push("protocol-terms-not-reviewed".to_owned());
+        }
+        if !self.jurisdiction_reviewed {
+            blockers.push("jurisdiction-not-reviewed".to_owned());
+        }
+        if !self.incident_reputation_reviewed {
+            blockers.push("incident-reputation-not-reviewed".to_owned());
         }
 
         let status = if blockers.is_empty() {
@@ -1511,6 +1570,10 @@ impl DexProtocolRiskReviewRequest {
             pair: self.pair.clone(),
             status,
             blocker_codes: blockers,
+            asset_scope_passed,
+            contract_hygiene_passed,
+            token_hygiene_passed,
+            governance_review_passed,
             spender_hygiene_passed,
             gas_slippage_passed,
             mev_controls_passed,
@@ -10253,6 +10316,10 @@ redact_secrets = true
             DexProtocolRiskReviewStatus::ReadyForLocalReview
         );
         assert!(report.blocker_codes.is_empty());
+        assert!(report.asset_scope_passed);
+        assert!(report.contract_hygiene_passed);
+        assert!(report.token_hygiene_passed);
+        assert!(report.governance_review_passed);
         assert!(report.spender_hygiene_passed);
         assert!(report.gas_slippage_passed);
         assert!(report.mev_controls_passed);
@@ -10281,31 +10348,49 @@ redact_secrets = true
             40.0,
         )
         .expect("local protocol review request should validate");
+        request.chain_allowlisted = false;
+        request.pair_allowlisted = false;
+        request.router_allowlisted = false;
         request.spender_allowlisted = false;
         request.unlimited_allowance_requested = true;
         request.approval_revocation_planned = false;
+        request.token_contract_reviewed = false;
+        request.token_decimals_verified = false;
         request.public_mempool_required = true;
         request.mev_mitigation_reviewed = false;
         request.token_metadata_reviewed = false;
         request.protocol_terms_reviewed = false;
+        request.jurisdiction_reviewed = false;
+        request.incident_reputation_reviewed = false;
 
         let report = request
             .review()
             .expect("blocked review should still report");
         assert_eq!(report.status, DexProtocolRiskReviewStatus::Blocked);
         for expected in [
+            "chain-not-allowlisted",
+            "pair-not-allowlisted",
+            "router-not-allowlisted",
             "spender-not-allowlisted",
             "unlimited-allowance-requested",
             "approval-revocation-not-planned",
+            "token-contract-not-reviewed",
+            "token-decimals-not-verified",
             "slippage-limit-exceeded",
             "gas-fee-limit-exceeded",
             "mev-risk-limit-exceeded",
             "public-mempool-mev-mitigation-missing",
             "token-metadata-not-reviewed",
             "protocol-terms-not-reviewed",
+            "jurisdiction-not-reviewed",
+            "incident-reputation-not-reviewed",
         ] {
             assert!(report.blocker_codes.iter().any(|actual| actual == expected));
         }
+        assert!(!report.asset_scope_passed);
+        assert!(!report.contract_hygiene_passed);
+        assert!(!report.token_hygiene_passed);
+        assert!(!report.governance_review_passed);
         assert!(!report.spender_hygiene_passed);
         assert!(!report.gas_slippage_passed);
         assert!(!report.mev_controls_passed);

@@ -2,10 +2,10 @@
 """Run the strongest local opportunity scenario-corpus validation bundle.
 
 This gate composes existing opportunity replay, load, historical fixture,
-planner-handoff, and trace-recovery CLI probes. It validates only local
-synthetic/recorded fixtures and fails if any nested command reports external
-calls, data downloads, adapter submission, signing, broadcasts, live execution,
-or production readiness.
+planner-handoff, strategy replay/profitability tuning, and trace-recovery CLI
+probes. It validates only local synthetic/recorded fixtures and fails if any
+nested command reports external calls, data downloads, adapter submission,
+signing, broadcasts, live execution, or production readiness.
 """
 
 from __future__ import annotations
@@ -15,57 +15,139 @@ import json
 import pathlib
 import subprocess
 import sys
+import tempfile
 from typing import Any
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 TIMEOUT_SECONDS = 900
 
-COMMANDS = [
-    (
-        "opportunity_replay",
-        [
-            "cargo",
-            "run",
-            "-p",
-            "arb-agent",
-            "--",
-            "validate-opportunity-replay",
-            "--iterations",
-            "2",
-        ],
-    ),
-    (
-        "opportunity_quote_load",
-        [
-            "cargo",
-            "run",
-            "-p",
-            "arb-agent",
-            "--",
-            "validate-opportunity-quote-load",
-            "--venue-pairs",
-            "8",
-            "--max-candidates",
-            "3",
-        ],
-    ),
-    (
-        "opportunity_provider_ingestion",
-        ["cargo", "run", "-p", "arb-agent", "--", "validate-opportunity-provider-ingestion"],
-    ),
-    (
-        "opportunity_historical_fixtures",
-        ["cargo", "run", "-p", "arb-agent", "--", "validate-opportunity-historical-fixtures"],
-    ),
-    (
-        "opportunity_planner_handoff",
-        ["cargo", "run", "-p", "arb-agent", "--", "validate-opportunity-planner-handoff"],
-    ),
-    (
-        "opportunity_trace_recovery",
-        ["cargo", "run", "-p", "arb-agent", "--", "validate-opportunity-trace-recovery"],
-    ),
-]
+def command_set(workspace_root: pathlib.Path) -> list[tuple[str, list[str]]]:
+    return [
+        (
+            "opportunity_replay",
+            [
+                "cargo",
+                "run",
+                "-p",
+                "arb-agent",
+                "--",
+                "validate-opportunity-replay",
+                "--iterations",
+                "2",
+            ],
+        ),
+        (
+            "opportunity_quote_load",
+            [
+                "cargo",
+                "run",
+                "-p",
+                "arb-agent",
+                "--",
+                "validate-opportunity-quote-load",
+                "--venue-pairs",
+                "8",
+                "--max-candidates",
+                "3",
+            ],
+        ),
+        (
+            "opportunity_provider_ingestion",
+            ["cargo", "run", "-p", "arb-agent", "--", "validate-opportunity-provider-ingestion"],
+        ),
+        (
+            "opportunity_historical_fixtures",
+            ["cargo", "run", "-p", "arb-agent", "--", "validate-opportunity-historical-fixtures"],
+        ),
+        (
+            "opportunity_planner_handoff",
+            ["cargo", "run", "-p", "arb-agent", "--", "validate-opportunity-planner-handoff"],
+        ),
+        (
+            "strategy_replay_corpus",
+            ["cargo", "run", "-p", "arb-agent", "--", "validate-strategy-replay-corpus"],
+        ),
+        (
+            "strategy_profitability_tuning",
+            [
+                "cargo",
+                "run",
+                "-p",
+                "arb-agent",
+                "--",
+                "validate-strategy-profitability-tuning",
+            ],
+        ),
+        (
+            "local_validation_run",
+            [
+                "cargo",
+                "run",
+                "-p",
+                "arb-agent",
+                "--",
+                "validate-local-validation-run",
+                "--workspace",
+                str(workspace_root / "validation-run"),
+            ],
+        ),
+        (
+            "local_property_checks",
+            [
+                "cargo",
+                "run",
+                "-p",
+                "arb-agent",
+                "--",
+                "validate-local-property-checks",
+                "--workspace",
+                str(workspace_root / "property-checks"),
+            ],
+        ),
+        (
+            "local_fuzz_corpus",
+            [
+                "cargo",
+                "run",
+                "-p",
+                "arb-agent",
+                "--",
+                "validate-local-fuzz-corpus",
+                "--workspace",
+                str(workspace_root / "fuzz-corpus"),
+            ],
+        ),
+        (
+            "local_validation_corpus",
+            [
+                "cargo",
+                "run",
+                "-p",
+                "arb-agent",
+                "--",
+                "validate-local-validation-corpus",
+                "--workspace",
+                str(workspace_root / "validation-corpus"),
+            ],
+        ),
+        (
+            "local_paper_backtest_corpus",
+            [
+                "cargo",
+                "run",
+                "-p",
+                "arb-agent",
+                "--",
+                "validate-local-paper-backtest-corpus",
+                "--workspace",
+                str(workspace_root / "paper-backtest-corpus"),
+            ],
+        ),
+        (
+            "opportunity_trace_recovery",
+            ["cargo", "run", "-p", "arb-agent", "--", "validate-opportunity-trace-recovery"],
+        ),
+    ]
 
 DANGEROUS_TRUE_KEYS = {
     "adapter-submission-enabled",
@@ -73,7 +155,10 @@ DANGEROUS_TRUE_KEYS = {
     "external-calls-performed",
     "external-data-downloaded",
     "external-execution-performed",
+    "external-fuzzer-invoked",
     "live-execution-performed",
+    "live-execution-submitted",
+    "live-network-used",
     "production-ready",
     "signing-or-broadcast-performed",
 }
@@ -162,7 +247,95 @@ def validate_components(components: list[dict[str, Any]]) -> list[str]:
     ):
         errors.append("planner handoff trace audit/checkpoint counts diverged")
 
-    trace = components[5]["parsed"]
+    strategy = components[5]["parsed"]
+    if strategy.get("strategy-replay-status") != "passed":
+        errors.append("strategy replay corpus status was not passed")
+    if strategy.get("accepted-strategy-rejected-intents") not in {"0", None}:
+        errors.append("accepted strategy replay profile rejected intents")
+    if strategy.get("rejected-policy-denied-plans") != strategy.get(
+        "discovered-candidates"
+    ):
+        errors.append("rejected strategy replay profile did not deny every discovered candidate")
+
+    profitability = components[6]["parsed"]
+    if profitability.get("strategy-profitability-status") != "passed":
+        errors.append("strategy profitability tuning status was not passed")
+    if profitability.get("monotonic-acceptance-validated") != "true":
+        errors.append("strategy profitability tuning did not validate monotonic acceptance")
+    if profitability.get("monotonic-rejection-validated") != "true":
+        errors.append("strategy profitability tuning did not validate monotonic rejection")
+    if profitability.get("profitability-threshold-transition-observed") != "true":
+        errors.append("strategy profitability tuning did not observe a threshold transition")
+
+    validation_run = components[7]["parsed"]
+    if validation_run.get("validation-run-status") != "planned-only":
+        errors.append("local validation run status was not planned-only")
+    if validation_run.get("planned-test-cases") in {"0", None}:
+        errors.append("local validation run did not report planned test cases")
+    if validation_run.get("planned-fixtures") in {"0", None}:
+        errors.append("local validation run did not report planned fixtures")
+    if validation_run.get("planned-fuzz-corpora") in {"0", None}:
+        errors.append("local validation run did not report planned fuzz corpora")
+    if validation_run.get("planned-backtest-scenarios") in {"0", None}:
+        errors.append("local validation run did not report planned backtest scenarios")
+    if validation_run.get("state-checkpoint-recovered") != "true":
+        errors.append("local validation run did not recover its state checkpoint")
+
+    property_checks = components[8]["parsed"]
+    if property_checks.get("property-checks-executed") != property_checks.get(
+        "property-checks-passed"
+    ):
+        errors.append("local property checks did not pass every executed check")
+    if property_checks.get("property-checks-failed") not in {"0", None}:
+        errors.append("local property checks reported failed checks")
+    if property_checks.get("missing-fixture-references") not in {"0", None}:
+        errors.append("local property checks reported missing fixture references")
+    if property_checks.get("empty-fuzz-corpora") not in {"0", None}:
+        errors.append("local property checks reported empty fuzz corpora")
+    if property_checks.get("nonlocal-backtest-datasets") not in {"0", None}:
+        errors.append("local property checks reported nonlocal backtest datasets")
+    if property_checks.get("state-checkpoint-recovered") != "true":
+        errors.append("local property checks did not recover their state checkpoint")
+
+    fuzz_corpus = components[9]["parsed"]
+    if fuzz_corpus.get("fuzz-replay-status") != "ready-for-local-review":
+        errors.append("local fuzz corpus status was not ready-for-local-review")
+    if fuzz_corpus.get("fuzz-corpora") in {"0", None}:
+        errors.append("local fuzz corpus did not report fuzz corpora")
+    if fuzz_corpus.get("fuzz-seeds") in {"0", None}:
+        errors.append("local fuzz corpus did not report fuzz seeds")
+    if fuzz_corpus.get("fuzz-targets") in {"0", None}:
+        errors.append("local fuzz corpus did not report fuzz targets")
+    if fuzz_corpus.get("unique-fuzz-seeds") != fuzz_corpus.get("fuzz-seeds"):
+        errors.append("local fuzz corpus unique seed count diverged from total seeds")
+    if fuzz_corpus.get("state-checkpoint-recovered") != "true":
+        errors.append("local fuzz corpus did not recover its state checkpoint")
+
+    validation_corpus = components[10]["parsed"]
+    if validation_corpus.get("validation-corpus-status") != "ready-for-local-review":
+        errors.append("local validation corpus status was not ready-for-local-review")
+    if validation_corpus.get("accepted-validation-plans") != validation_corpus.get(
+        "validation-plans"
+    ):
+        errors.append("local validation corpus did not accept every validation plan")
+    if validation_corpus.get("property-checks-failed") not in {"0", None}:
+        errors.append("local validation corpus reported failed property checks")
+    if validation_corpus.get("state-checkpoint-recovered") != "true":
+        errors.append("local validation corpus did not recover its state checkpoint")
+
+    paper_backtest = components[11]["parsed"]
+    if paper_backtest.get("paper-backtest-replay-validated") != "true":
+        errors.append("local paper backtest corpus did not validate replay")
+    if paper_backtest.get("paper-backtest-filled-steps") != "1":
+        errors.append("local paper backtest corpus filled-step count changed")
+    if paper_backtest.get("paper-backtest-partial-steps") != "1":
+        errors.append("local paper backtest corpus partial-step count changed")
+    if paper_backtest.get("paper-backtest-unfilled-steps") != "1":
+        errors.append("local paper backtest corpus unfilled-step count changed")
+    if paper_backtest.get("state-checkpoint-recovered") != "true":
+        errors.append("local paper backtest corpus did not recover its state checkpoint")
+
+    trace = components[12]["parsed"]
     if trace.get("trace-recovery-validated") != "true":
         errors.append("trace recovery was not validated")
     if trace.get("missing-trace-checkpoints") not in {"0", None}:
@@ -173,7 +346,12 @@ def validate_components(components: list[dict[str, Any]]) -> list[str]:
 
 def main() -> int:
     args = parse_args()
-    components = [run_component(name, command) for name, command in COMMANDS]
+    with tempfile.TemporaryDirectory(prefix="opportunity-scenario-gate-", dir=ROOT / "target") as temp_dir:
+        workspace_root = pathlib.Path(temp_dir)
+        components = [
+            run_component(name, command)
+            for name, command in command_set(workspace_root)
+        ]
     errors = validate_components(components)
     if errors:
         for error in errors:
@@ -197,6 +375,8 @@ def main() -> int:
         "external_calls_performed": False,
         "external_data_downloaded": False,
         "adapter_submission_performed": False,
+        "external_fuzzer_invoked": False,
+        "live_network_used": False,
         "signing_or_broadcast_performed": False,
         "live_execution_performed": False,
         "production_ready": False,
@@ -213,6 +393,7 @@ def main() -> int:
             "broader external/deployment scenario-corpus execution",
             "external sandbox/live calibration evidence",
             "live/provider-backed market-data validation",
+            "external fuzzing-engine and broader production backtest execution",
             "production runtime validation",
         ],
     }
@@ -225,6 +406,8 @@ def main() -> int:
         print("external-calls-performed: false")
         print("external-data-downloaded: false")
         print("adapter-submission-performed: false")
+        print("external-fuzzer-invoked: false")
+        print("live-network-used: false")
         print("signing-or-broadcast-performed: false")
         print("live-execution-performed: false")
         print("production-ready: false")

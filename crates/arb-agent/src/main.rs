@@ -10,8 +10,9 @@ use arb_core::{
     append_dashboard_hosted_session_validation_audit, append_dashboard_render_audit,
     append_destination_allowlist_audit, append_destination_ownership_review_audit,
     append_dex_swap_lifecycle_audit, append_execution_adapter_recovery_plan_audit,
-    append_execution_adapter_run_audit, append_fee_schedule_verification_audit,
-    append_fuzz_corpus_replay_report_audit, append_local_tracing_subscriber_audit,
+    append_execution_adapter_run_audit, append_execution_plan_draft_audit,
+    append_fee_schedule_verification_audit, append_fuzz_corpus_replay_report_audit,
+    append_historical_market_data_persistence_audit, append_local_tracing_subscriber_audit,
     append_market_data_provider_preflight_audit, append_market_data_reconnect_plan_audit,
     append_notification_dispatch_audit, append_observability_alert_route_dispatch_audit,
     append_observability_endpoint_preflight_audit, append_observability_export_dry_run_audit,
@@ -33,10 +34,11 @@ use arb_core::{
     append_web3_raw_transaction_serialization_review_audit,
     append_web3_sandbox_live_discrepancy_calibration_audit,
     append_web3_unsigned_payload_review_audit, append_web3_unsigned_transaction_construction_audit,
-    build_local_signer_authorization_envelope, capture_local_runtime_failure,
-    discover_opportunities_from_local_providers, evaluate_local_signer_request,
-    execute_local_observability_log_retention, install_local_runtime_panic_hook, load_config_file,
-    migrate_config_toml_to_current, parse_cli_command, persist_agentic_handoff_review_checkpoint,
+    assess_market_data_quality, build_local_signer_authorization_envelope,
+    capture_local_runtime_failure, discover_opportunities_from_local_providers,
+    evaluate_local_signer_request, execute_local_observability_log_retention,
+    install_local_runtime_panic_hook, load_config_file, migrate_config_toml_to_current,
+    parse_cli_command, persist_agentic_handoff_review_checkpoint,
     persist_cex_order_lifecycle_checkpoint, persist_channel_adapter_validation_checkpoint,
     persist_channel_session_validation_checkpoint,
     persist_dashboard_hosted_request_preflight_checkpoint,
@@ -45,8 +47,9 @@ use arb_core::{
     persist_dashboard_hosted_session_validation_checkpoint, persist_dashboard_render_checkpoint,
     persist_destination_allowlist_checkpoint, persist_destination_ownership_review_checkpoint,
     persist_dex_swap_lifecycle_checkpoint, persist_execution_adapter_recovery_plan_checkpoint,
-    persist_execution_adapter_run_checkpoint, persist_fee_schedule_verification_checkpoint,
-    persist_fuzz_corpus_replay_report_checkpoint, persist_local_tracing_subscriber_checkpoint,
+    persist_execution_adapter_run_checkpoint, persist_execution_plan_draft_checkpoint,
+    persist_fee_schedule_verification_checkpoint, persist_fuzz_corpus_replay_report_checkpoint,
+    persist_historical_market_data_checkpoint, persist_local_tracing_subscriber_checkpoint,
     persist_market_data_provider_preflight_checkpoint,
     persist_market_data_reconnect_plan_checkpoint, persist_notification_dispatch_checkpoint,
     persist_observability_alert_route_dispatch_checkpoint,
@@ -81,29 +84,34 @@ use arb_core::{
     review_signer_runtime_isolation, review_signer_secret_scope, run_local_fuzz_corpus_replay,
     run_local_graceful_shutdown_checkpoint, run_local_runtime_lifecycle,
     run_local_validation_corpus, run_local_validation_property_checks,
-    validate_audit_journal_durability, validate_channel_adapter, validate_channel_session,
+    validate_audit_journal_durability, validate_cex_credential_scope_review,
+    validate_cex_rate_limit, validate_channel_adapter, validate_channel_session,
     validate_dashboard_hosted_request, validate_dashboard_hosted_session,
     validate_deployment_disk_full_transcript, validate_deployment_permission_transcript,
     validate_deployment_retention_transcript, validate_fee_schedule_verification,
+    validate_historical_market_data_persistence, validate_incident_response_execution_transcript,
     validate_local_opportunity_quote_ingestion_load, validate_local_runtime_backup_restore,
     validate_local_runtime_restart_recovery,
     validate_local_runtime_restart_recovery_with_trace_recovery, validate_local_tracing_subscriber,
     validate_market_data_provider_preflight, validate_market_data_reconnect_plan,
     validate_observability_loopback_bind, validate_observability_metrics_endpoint,
     validate_opportunity_candidate_trace_restart_recovery,
-    validate_opportunity_planner_handoff_with_trace, validate_remote_command_envelope,
-    validate_rollback_execution_transcript, validate_service_manager_lifecycle_transcript,
-    AgentConfig, AgenticHandoffPackager, AgenticHandoffReviewRecord, AgenticHandoffReviewRequest,
-    AgenticHandoffReviewStatus, AppendOnlyAuditJournal, ApprovedDestinationEntry,
-    AuditDeploymentDiskFullTranscript, AuditDeploymentDiskFullTranscriptStatus,
-    AuditDeploymentRetentionTranscript, AuditDeploymentRetentionTranscriptStatus, AuditEvent,
-    AuditEventKind, AuditJournalFileMetadata, AuditRecord, AuditRetentionExecutionRequest,
-    AuditRetentionPolicy, AuditValue, BacktestDatasetDefinition, BacktestScenarioDefinition,
-    BuildIdentity, CexBalanceSnapshotTranscript, CexBalanceSnapshotTranscriptFormat,
-    CexExchangeMarketDataFormat, CexMarketDataRequestKind, CexMarketDataRequestPlan,
-    CexMockMarketDataTranscript, CexOrderLifecycleRecord, CexOrderLifecycleTranscript,
-    CexOrderLifecycleTranscriptFormat, CexOrderRequest, CexOrderSide, CexOrderType,
-    CexOrderValidationRecord, CexTimeInForce, ChannelAdapterValidationReport,
+    validate_opportunity_planner_handoff_with_trace, validate_paid_market_data_provider_evaluation,
+    validate_remote_command_envelope, validate_rollback_execution_transcript,
+    validate_service_manager_lifecycle_transcript, validate_strategy_profile_replay_corpus,
+    validate_strategy_profitability_tuning, AgentConfig, AgenticHandoffPackager,
+    AgenticHandoffReviewRecord, AgenticHandoffReviewRequest, AgenticHandoffReviewStatus,
+    AppendOnlyAuditJournal, ApprovedDestinationEntry, AuditDeploymentDiskFullTranscript,
+    AuditDeploymentDiskFullTranscriptStatus, AuditDeploymentRetentionTranscript,
+    AuditDeploymentRetentionTranscriptStatus, AuditEvent, AuditEventKind, AuditJournalFileMetadata,
+    AuditRecord, AuditRetentionExecutionRequest, AuditRetentionPolicy, AuditValue,
+    BacktestDatasetDefinition, BacktestScenarioDefinition, BuildIdentity,
+    CexBalanceSnapshotTranscript, CexBalanceSnapshotTranscriptFormat, CexCredentialPermission,
+    CexCredentialScopeReviewInput, CexCredentialScopeReviewStatus, CexExchangeMarketDataFormat,
+    CexMarketDataRequestKind, CexMarketDataRequestPlan, CexMockMarketDataTranscript,
+    CexOrderLifecycleRecord, CexOrderLifecycleTranscript, CexOrderLifecycleTranscriptFormat,
+    CexOrderRequest, CexOrderSide, CexOrderType, CexOrderValidationRecord, CexRateLimitObservation,
+    CexRateLimitScope, CexRateLimitStatus, CexTimeInForce, ChannelAdapterValidationReport,
     ChannelAdapterValidationRequest, ChannelAdapterValidationStatus,
     ChannelSessionValidationReport, ChannelSessionValidationStatus, CommunicationBoundaryConfig,
     ComponentHealthStatus, ConfigError, ConfigMigrationStatus, DashboardAccessContext,
@@ -122,21 +130,25 @@ use arb_core::{
     DexRequestPlan, DexRequestPlanKind, DexResponseTranscript, DexRouteKind, DexSimulationStatus,
     DexSwapLifecycleRecord, DexSwapMode, DexSwapQuoteRequest, DexSwapQuoteResponse,
     DexSwapValidationRecord, ExecutionAdapter, ExecutionAdapterConfig, ExecutionAdapterRequest,
-    ExecutionIntent, ExecutionIntentKind, ExecutionPlanStatus, ExecutionPlanner,
-    ExecutionPlannerConfig, ExecutionPlannerRequest, ExecutionScope, ExpectedValidationOutcome,
-    FeeAdjustedEdge, FeeEstimate, FeeModelError, FeeProvider, FeeSchedule,
-    FeeScheduleVerificationInput, FeeScheduleVerificationReport, FeeScheduleVerificationStatus,
-    FixtureKind, FuzzCorpusDefinition, FuzzSeedRecord, FuzzTargetKind, HealthStatus, LiquidityRole,
+    ExecutionAdapterRunStatus, ExecutionIntent, ExecutionIntentKind, ExecutionPlanStatus,
+    ExecutionPlanner, ExecutionPlannerConfig, ExecutionPlannerRequest, ExecutionScope,
+    ExpectedValidationOutcome, FeeAdjustedEdge, FeeEstimate, FeeModelError, FeeProvider,
+    FeeSchedule, FeeScheduleVerificationInput, FeeScheduleVerificationReport,
+    FeeScheduleVerificationStatus, FixtureKind, FuzzCorpusDefinition, FuzzSeedRecord,
+    FuzzTargetKind, HealthStatus, HistoricalMarketDataPersistenceInput,
+    HistoricalMarketDataPersistenceReport, HistoricalMarketDataPersistenceStatus,
+    IncidentResponseExecutionTranscript, IncidentResponseExecutionTranscriptStatus, LiquidityRole,
     LocalFuzzCorpusReplayRequest, LocalFuzzCorpusReplayStatus,
     LocalTracingSubscriberValidationRequest, LocalTracingSubscriberValidationStatus,
     LocalValidationCorpusRequest, LocalValidationCorpusStatus, MarketDataCapabilities,
     MarketDataError, MarketDataProvider, MarketDataProviderHealthObservation,
     MarketDataProviderPreflightReport, MarketDataProviderPreflightStatus,
-    MarketDataReconnectPlanInput, MarketDataReconnectPlanReport, MarketDataReconnectPlanStatus,
-    MarketDataRequest, MarketPair, MetricKind, MetricLabel, MetricSample, NormalizedQuote,
-    NotificationChannelProfile, NotificationChannelSafetyState, NotificationDispatchRecord,
-    NotificationDispatchStatus, NotificationPublisher, NotificationSeverity,
-    ObservabilityAccessContext, ObservabilityAlertRouteDispatchRequest,
+    MarketDataQualityAssessmentInput, MarketDataQualityAssessmentReport,
+    MarketDataQualityAssessmentStatus, MarketDataReconnectPlanInput, MarketDataReconnectPlanReport,
+    MarketDataReconnectPlanStatus, MarketDataRequest, MarketPair, MetricKind, MetricLabel,
+    MetricSample, NormalizedQuote, NotificationChannelProfile, NotificationChannelSafetyState,
+    NotificationDispatchRecord, NotificationDispatchStatus, NotificationPublisher,
+    NotificationSeverity, ObservabilityAccessContext, ObservabilityAlertRouteDispatchRequest,
     ObservabilityAlertRouteDispatchStatus, ObservabilityBoundaryConfig,
     ObservabilityCollectionRequest, ObservabilityCollector, ObservabilityEndpointPreflight,
     ObservabilityLogRetentionExecutionRequest, ObservabilityLoopbackBindValidationRequest,
@@ -147,38 +159,40 @@ use arb_core::{
     OpportunityLegSide, OpportunityPlannerHandoffStatus, OpportunityProviderIngestionRequest,
     OpportunityQuoteIngestionLoadRequest, OpportunityReplayLoadIteration,
     OpportunityReplayLoadReport, OpportunityReplayStatus, OpportunityRouteKind, OpportunityScore,
-    OrderBookSnapshot, PaperAssetBalance, PaperBacktestCorpus, PaperBacktestRunReport,
-    PaperBacktestScenario, PaperBacktestStep, PaperExecutionAdapter, PaperFillModelConfig,
-    PaperFillSide, PaperFillSimulationRequest, PlatformAdapterReviewReport,
-    PlatformAdapterReviewRequest, PlatformAdapterReviewStatus, PlatformCommandIngressReport,
-    PlatformCommandIngressRequest, PlatformCommandIngressStatus, PolicyApproval,
-    PolicyDecisionRecord, PolicyEngine, PriceLevel, RemoteCommandEnvelopeValidationReport,
-    RemoteCommandEnvelopeValidationRequest, RemoteCommandEnvelopeValidationStatus,
-    RemoteCommandSecurityReviewReport, RemoteCommandSecurityReviewRequest,
-    RemoteCommandSecurityReviewStatus, RollbackExecutionTranscript,
-    RollbackExecutionTranscriptStatus, RoutedOperatorCommand, Runbook, RunbookStep,
-    RuntimeDeploymentPermissionTranscript, RuntimeDeploymentPermissionTranscriptStatus,
-    RuntimeDeploymentSmokeLoadIteration, RuntimeDeploymentSmokeLoadValidationReport,
-    RuntimeDeploymentSmokeValidationRequest, RuntimeFailureCaptureRequest, RuntimeFailureKind,
-    RuntimeGracefulShutdownRequest, RuntimeLifecycleStatus, RuntimePanicHookInstallationRequest,
-    RuntimeRestartRecoveryDisposition, RuntimeServiceManagerKind,
-    RuntimeServiceManagerLifecycleEvent, RuntimeServiceManagerLifecycleEventKind,
-    RuntimeServiceManagerLifecycleTranscript, RuntimeServiceManagerLifecycleTranscriptStatus,
-    SecretRef, SecretRotationPlanReport, SecretRotationPlanRequest, SecretRotationPlanStatus,
-    SignerAuthorizationEnvelopeReport, SignerAuthorizationEnvelopeRequest,
-    SignerAuthorizationEnvelopeStatus, SignerRequest, SignerRequestRecord, SignerRequestStatus,
-    SignerRuntimeIsolationReviewReport, SignerRuntimeIsolationReviewRequest,
-    SignerRuntimeIsolationReviewStatus, SignerSecretScopeReviewReport,
-    SignerSecretScopeReviewRequest, SignerSecretScopeReviewStatus, SqliteWalStateStore,
-    StateCheckpoint, StateStore, StateStoreError, StrategyPolicyConstraintStatus, StrategyProfile,
-    StructuredLogEvent, StructuredLogField, ValidationExecutionMode, ValidationFixtureRecord,
-    ValidationHarness, ValidationHarnessConfig, ValidationPlan, ValidationRunRequest,
-    ValidationRunStatus, ValidationSuiteKind, ValidationTestCase, VenueKind, VenueRef,
-    Web3BroadcastAdapterControlReviewReport, Web3BroadcastAdapterControlReviewRequest,
-    Web3BroadcastAdapterControlReviewStatus, Web3BroadcastReadinessReport,
-    Web3BroadcastReadinessRequest, Web3BroadcastReadinessStatus, Web3NonceReservationReport,
-    Web3NonceReservationRequest, Web3NonceReservationStatus, Web3PreSignSafetyReviewReport,
-    Web3PreSignSafetyReviewRequest, Web3PreSignSafetyReviewStatus,
+    OrderBookSnapshot, PaidMarketDataProviderEvaluationInput,
+    PaidMarketDataProviderEvaluationReport, PaidMarketDataProviderEvaluationStatus,
+    PaperAssetBalance, PaperBacktestCorpus, PaperBacktestRunReport, PaperBacktestScenario,
+    PaperBacktestStep, PaperExecutionAdapter, PaperFillModelConfig, PaperFillSide,
+    PaperFillSimulationRequest, PlatformAdapterReviewReport, PlatformAdapterReviewRequest,
+    PlatformAdapterReviewStatus, PlatformCommandIngressReport, PlatformCommandIngressRequest,
+    PlatformCommandIngressStatus, PolicyApproval, PolicyDecisionRecord, PolicyEngine, PriceLevel,
+    RemoteCommandEnvelopeValidationReport, RemoteCommandEnvelopeValidationRequest,
+    RemoteCommandEnvelopeValidationStatus, RemoteCommandSecurityReviewReport,
+    RemoteCommandSecurityReviewRequest, RemoteCommandSecurityReviewStatus,
+    RollbackExecutionTranscript, RollbackExecutionTranscriptStatus, RoutedOperatorCommand, Runbook,
+    RunbookStep, RuntimeDeploymentPermissionTranscript,
+    RuntimeDeploymentPermissionTranscriptStatus, RuntimeDeploymentSmokeLoadIteration,
+    RuntimeDeploymentSmokeLoadValidationReport, RuntimeDeploymentSmokeValidationRequest,
+    RuntimeFailureCaptureRequest, RuntimeFailureKind, RuntimeGracefulShutdownRequest,
+    RuntimeLifecycleStatus, RuntimePanicHookInstallationRequest, RuntimeRestartRecoveryDisposition,
+    RuntimeServiceManagerKind, RuntimeServiceManagerLifecycleEvent,
+    RuntimeServiceManagerLifecycleEventKind, RuntimeServiceManagerLifecycleTranscript,
+    RuntimeServiceManagerLifecycleTranscriptStatus, SecretRef, SecretRotationPlanReport,
+    SecretRotationPlanRequest, SecretRotationPlanStatus, SignerAuthorizationEnvelopeReport,
+    SignerAuthorizationEnvelopeRequest, SignerAuthorizationEnvelopeStatus, SignerRequest,
+    SignerRequestRecord, SignerRequestStatus, SignerRuntimeIsolationReviewReport,
+    SignerRuntimeIsolationReviewRequest, SignerRuntimeIsolationReviewStatus,
+    SignerSecretScopeReviewReport, SignerSecretScopeReviewRequest, SignerSecretScopeReviewStatus,
+    SqliteWalStateStore, StateCheckpoint, StateStore, StateStoreError,
+    StrategyPolicyConstraintStatus, StrategyProfile, StrategyProfileReplayValidationStatus,
+    StrategyProfitabilityTuningValidationStatus, StructuredLogEvent, StructuredLogField,
+    ValidationExecutionMode, ValidationFixtureRecord, ValidationHarness, ValidationHarnessConfig,
+    ValidationPlan, ValidationRunRequest, ValidationRunStatus, ValidationSuiteKind,
+    ValidationTestCase, VenueKind, VenueRef, Web3BroadcastAdapterControlReviewReport,
+    Web3BroadcastAdapterControlReviewRequest, Web3BroadcastAdapterControlReviewStatus,
+    Web3BroadcastReadinessReport, Web3BroadcastReadinessRequest, Web3BroadcastReadinessStatus,
+    Web3NonceReservationReport, Web3NonceReservationRequest, Web3NonceReservationStatus,
+    Web3PreSignSafetyReviewReport, Web3PreSignSafetyReviewRequest, Web3PreSignSafetyReviewStatus,
     Web3ProviderNonceReconciliationReport, Web3ProviderNonceReconciliationRequest,
     Web3ProviderNonceReconciliationStatus, Web3RawTransactionSerializationReviewReport,
     Web3RawTransactionSerializationReviewRequest, Web3RawTransactionSerializationReviewStatus,
@@ -218,6 +232,7 @@ use arb_core::{
     EXECUTION_ADAPTER_FRAMEWORK_VERSION, EXECUTION_ADAPTER_LAST_RECOVERY_PLAN_CHECKPOINT_KEY,
     EXECUTION_ADAPTER_LAST_RUN_CHECKPOINT_KEY, EXECUTION_PLANNER_LAST_DRAFT_CHECKPOINT_KEY,
     EXECUTION_PLANNER_VERSION, EXTERNAL_HARDENING_VERSION, FEE_LAST_VERIFICATION_CHECKPOINT_KEY,
+    MARKET_DATA_LAST_HISTORICAL_PERSISTENCE_CHECKPOINT_KEY,
     MARKET_DATA_LAST_PROVIDER_PREFLIGHT_CHECKPOINT_KEY,
     MARKET_DATA_LAST_RECONNECT_PLAN_CHECKPOINT_KEY, OBSERVABILITY_LAST_FAILURE_CHECKPOINT_KEY,
     OBSERVABILITY_RUNBOOK_VERSION, OPPORTUNITY_ENGINE_VERSION, PACKAGING_DEPLOYMENT_VERSION,
@@ -309,6 +324,40 @@ allowed_assets = ["BTC", "ETH", "USDC"]
 notify_channels = []
 "#;
 
+const LOCAL_LEGACY_VENUES_CONFIG_MIGRATION_FIXTURE: &str = r#"
+[runtime]
+mode = "observe"
+live_execution_enabled = false
+allow_withdrawals = false
+kill_switch_enabled = true
+
+[risk]
+max_single_trade_quote = 10.0
+max_daily_loss_quote = 2.0
+max_open_exposure_quote = 20.0
+slippage_bps = 50
+gas_fee_cap_quote = 0.0
+
+[venues]
+allowed_exchanges = ["coinbase", "kraken"]
+allowed_dexes = ["paper-uniswap"]
+allowed_chains = ["ethereum"]
+allowed_assets = ["BTC", "ETH", "USDC"]
+
+[secrets]
+backend = "disabled"
+exchange_credentials = { source = "disabled" }
+wallet_signer = { source = "disabled" }
+
+[communication]
+cli_enabled = true
+notify_channels = []
+
+[audit]
+enabled = true
+redact_secrets = true
+"#;
+
 fn main() -> ExitCode {
     match run() {
         Ok(()) => ExitCode::SUCCESS,
@@ -349,10 +398,13 @@ fn run_with_args(args: impl IntoIterator<Item = String>) -> Result<(), AgentCliE
             | "validate-local-validation-corpus"
             | "validate-local-paper-backtest-corpus"
             | "validate-market-data-boundary-audit"
+            | "validate-market-data-history-persistence"
             | "validate-fee-boundary-audit"
             | "validate-agentic-handoff-audit"
             | "validate-policy-decision-audit"
+            | "validate-withdrawal-policy-boundary"
             | "validate-secret-boundary-audit"
+            | "validate-execution-planner-audit"
             | "validate-execution-adapter-audit"
             | "validate-signer-boundary-audit"
             | "validate-destination-boundary-audit"
@@ -383,13 +435,22 @@ fn run_with_args(args: impl IntoIterator<Item = String>) -> Result<(), AgentCliE
             | "validate-opportunity-provider-ingestion"
             | "validate-opportunity-historical-fixtures"
             | "validate-opportunity-planner-handoff"
+            | "validate-strategy-profitability-tuning"
+            | "validate-strategy-replay-corpus"
             | "validate-opportunity-trace-recovery"),
         ) => run_opportunity_validation_command(command, args),
         Some("validate-market-data-provider-preflight") => {
             run_market_data_provider_preflight_validation()
         }
         Some("validate-market-data-reconnect-plan") => run_market_data_reconnect_plan_validation(),
+        Some("validate-market-data-quality-assessment") => {
+            run_market_data_quality_assessment_validation()
+        }
+        Some("validate-paid-market-data-provider-evaluation") => {
+            run_paid_market_data_provider_evaluation_validation()
+        }
         Some("validate-fee-schedule-verification") => run_fee_schedule_verification_validation(),
+        Some("validate-cex-governance-review") => run_cex_governance_review_validation(),
         Some("validate-cex-market-data-request-plans") => {
             run_cex_market_data_request_plan_validation()
         }
@@ -420,6 +481,7 @@ fn is_signer_web3_validation_command(command: &str) -> bool {
         command,
         "validate-signer-authorization-envelope"
             | "validate-deployment-disk-full-transcript"
+            | "validate-incident-response-execution-transcript"
             | "validate-deployment-permission-transcript"
             | "validate-deployment-retention-transcript"
             | "validate-rollback-execution-transcript"
@@ -458,6 +520,8 @@ fn run_opportunity_validation_command(
             run_opportunity_historical_fixture_validation()
         }
         "validate-opportunity-planner-handoff" => run_opportunity_planner_handoff_validation(),
+        "validate-strategy-profitability-tuning" => run_strategy_profitability_tuning_validation(),
+        "validate-strategy-replay-corpus" => run_strategy_replay_corpus_validation(),
         "validate-opportunity-trace-recovery" => run_opportunity_trace_recovery_validation(),
         _ => unreachable!("opportunity validation command is matched by run_with_args"),
     }
@@ -487,6 +551,9 @@ fn run_signer_web3_validation_command(command: &str) -> Result<(), AgentCliError
         }
         "validate-deployment-disk-full-transcript" => {
             run_deployment_disk_full_transcript_validation()
+        }
+        "validate-incident-response-execution-transcript" => {
+            run_incident_response_execution_transcript_validation()
         }
         "validate-deployment-permission-transcript" => {
             run_deployment_permission_transcript_validation()
@@ -525,10 +592,15 @@ fn run_local_workspace_validation_command(
         "validate-market-data-boundary-audit" => {
             run_market_data_boundary_audit_validation(&options)
         }
+        "validate-market-data-history-persistence" => {
+            run_market_data_history_persistence_validation(&options)
+        }
         "validate-fee-boundary-audit" => run_fee_boundary_audit_validation(&options),
         "validate-agentic-handoff-audit" => run_agentic_handoff_audit_validation(&options),
         "validate-policy-decision-audit" => run_policy_decision_audit_validation(&options),
+        "validate-withdrawal-policy-boundary" => run_withdrawal_policy_validation(&options),
         "validate-secret-boundary-audit" => run_secret_boundary_audit_validation(&options),
+        "validate-execution-planner-audit" => run_execution_planner_audit_validation(&options),
         "validate-execution-adapter-audit" => run_execution_adapter_audit_validation(&options),
         "validate-signer-boundary-audit" => run_signer_boundary_audit_validation(&options),
         "validate-destination-boundary-audit" => {
@@ -593,7 +665,7 @@ fn run_config_status(mut args: impl Iterator<Item = String>) -> Result<(), Agent
     println!("paper-balance-ledger: {PAPER_BALANCE_LEDGER_VERSION} available for local simulated balances, reservations, fills, and SQLite checkpoints only");
     println!("paper-fill-model: {PAPER_REALISTIC_FILL_MODEL_VERSION} available for supplied-depth local paper fills only; exchange-specific calibration pending");
     println!("paper-replay-calibration-backtest: {PAPER_REALISM_VALIDATION_VERSION} available for local matching profiles, adverse selection, calibration records, replay validation, and fixture backtests only; production-host validation still pending");
-    println!("paper-audit-integration: {PAPER_AUDIT_INTEGRATION_VERSION} available for local paper report and ledger mutation audit records only; production audit durability validation still pending");
+    println!("paper-audit-integration: {PAPER_AUDIT_INTEGRATION_VERSION} available for local paper intent, report, and ledger mutation audit records only; production audit durability validation still pending");
     println!("cex-framework: {CEX_CONNECTOR_FRAMEWORK_VERSION} available as typed interface only; live exchange adapters pending");
     println!("dex-web3-framework: {DEX_CONNECTOR_FRAMEWORK_VERSION} available as typed interface only; live RPC, signing, and broadcasts pending");
     println!("opportunity-engine: {OPPORTUNITY_ENGINE_VERSION} available for deterministic discovery/ranking, a local regression replay corpus, and local replay checks with supplied depth, paper inventory, transfer-risk, and triangular records only; live execution pending");
@@ -617,6 +689,8 @@ fn run_config_status(mut args: impl Iterator<Item = String>) -> Result<(), Agent
 fn run_config_migration_validation() -> Result<(), AgentCliError> {
     let current = migrate_config_toml_to_current(LOCAL_STRATEGY_PLANNER_CONFIG)?;
     let legacy = migrate_config_toml_to_current(LOCAL_LEGACY_CONFIG_MIGRATION_FIXTURE)?;
+    let legacy_venue_aliases =
+        migrate_config_toml_to_current(LOCAL_LEGACY_VENUES_CONFIG_MIGRATION_FIXTURE)?;
 
     println!("config-migration: validation passed");
     println!(
@@ -627,10 +701,22 @@ fn run_config_migration_validation() -> Result<(), AgentCliError> {
         "legacy-config-status: {}",
         config_migration_status_label(legacy.status)
     );
+    println!(
+        "legacy-venue-alias-status: {}",
+        config_migration_status_label(legacy_venue_aliases.status)
+    );
     println!("legacy-action-codes: {}", legacy.action_codes.len());
+    println!(
+        "legacy-venue-alias-action-codes: {}",
+        legacy_venue_aliases.action_codes.len()
+    );
     println!(
         "legacy-venue-count: {}",
         legacy.config.venues.cex_allowlist.len()
+    );
+    println!(
+        "legacy-venue-alias-count: {}",
+        legacy_venue_aliases.config.venues.cex_allowlist.len()
     );
     println!(
         "legacy-gas-fee-cap-quote: {}",
@@ -638,19 +724,26 @@ fn run_config_migration_validation() -> Result<(), AgentCliError> {
     );
     println!(
         "secret-material-loaded: {}",
-        current.secret_material_loaded || legacy.secret_material_loaded
+        current.secret_material_loaded
+            || legacy.secret_material_loaded
+            || legacy_venue_aliases.secret_material_loaded
     );
     println!(
         "live-execution-enabled: {}",
-        current.live_execution_enabled || legacy.live_execution_enabled
+        current.live_execution_enabled
+            || legacy.live_execution_enabled
+            || legacy_venue_aliases.live_execution_enabled
     );
     println!(
         "production-ready: {}",
-        current.production_ready || legacy.production_ready
+        current.production_ready
+            || legacy.production_ready
+            || legacy_venue_aliases.production_ready
     );
 
     if current.status != ConfigMigrationStatus::AlreadyCurrent
         || legacy.status != ConfigMigrationStatus::Migrated
+        || legacy_venue_aliases.status != ConfigMigrationStatus::Migrated
         || !legacy
             .action_codes
             .iter()
@@ -658,15 +751,30 @@ fn run_config_migration_validation() -> Result<(), AgentCliError> {
         || !legacy
             .action_codes
             .iter()
+            .any(|code| code == "CONFIG_MIGRATED_NOTIFICATIONS_TO_COMMUNICATION")
+        || !legacy
+            .action_codes
+            .iter()
             .any(|code| code == "CONFIG_DEFAULTED_RISK_GAS_FEE_CAP")
+        || !legacy_venue_aliases
+            .action_codes
+            .iter()
+            .any(|code| code == "CONFIG_MIGRATED_VENUE_FIELD_ALIASES")
         || legacy.config.venues.cex_allowlist.len() != 2
+        || legacy_venue_aliases.config.venues.cex_allowlist.len() != 2
+        || legacy_venue_aliases.config.venues.dex_allowlist.len() != 1
+        || legacy_venue_aliases.config.venues.chain_allowlist.len() != 1
+        || legacy_venue_aliases.config.venues.asset_allowlist.len() != 3
         || legacy.config.risk.gas_fee_cap_quote != 0.0
         || current.secret_material_loaded
         || legacy.secret_material_loaded
+        || legacy_venue_aliases.secret_material_loaded
         || current.live_execution_enabled
         || legacy.live_execution_enabled
+        || legacy_venue_aliases.live_execution_enabled
         || current.production_ready
         || legacy.production_ready
+        || legacy_venue_aliases.production_ready
     {
         return Err(AgentCliError::Validation(
             "config migration validation failed".to_owned(),
@@ -684,7 +792,10 @@ fn print_usage() {
     println!("       arb-agent validate-opportunity-provider-ingestion");
     println!("       arb-agent validate-market-data-provider-preflight");
     println!("       arb-agent validate-market-data-reconnect-plan");
+    println!("       arb-agent validate-market-data-quality-assessment");
+    println!("       arb-agent validate-paid-market-data-provider-evaluation");
     println!("       arb-agent validate-fee-schedule-verification");
+    println!("       arb-agent validate-cex-governance-review");
     println!("       arb-agent validate-cex-market-data-request-plans");
     println!("       arb-agent validate-cex-balance-snapshots");
     println!("       arb-agent validate-dex-request-plans");
@@ -693,6 +804,8 @@ fn print_usage() {
     println!("       arb-agent validate-dex-protocol-risk-review");
     println!("       arb-agent validate-opportunity-historical-fixtures");
     println!("       arb-agent validate-opportunity-planner-handoff");
+    println!("       arb-agent validate-strategy-profitability-tuning");
+    println!("       arb-agent validate-strategy-replay-corpus");
     println!("       arb-agent validate-strategy-constrained-planner");
     println!("       arb-agent validate-opportunity-trace-recovery");
     println!("       arb-agent validate-local-validation-run --workspace <fresh-dir>");
@@ -701,10 +814,13 @@ fn print_usage() {
     println!("       arb-agent validate-local-validation-corpus --workspace <fresh-dir>");
     println!("       arb-agent validate-local-paper-backtest-corpus --workspace <fresh-dir>");
     println!("       arb-agent validate-market-data-boundary-audit --workspace <fresh-dir>");
+    println!("       arb-agent validate-market-data-history-persistence --workspace <fresh-dir>");
     println!("       arb-agent validate-fee-boundary-audit --workspace <fresh-dir>");
     println!("       arb-agent validate-agentic-handoff-audit --workspace <fresh-dir>");
     println!("       arb-agent validate-policy-decision-audit --workspace <fresh-dir>");
+    println!("       arb-agent validate-withdrawal-policy-boundary --workspace <fresh-dir>");
     println!("       arb-agent validate-secret-boundary-audit --workspace <fresh-dir>");
+    println!("       arb-agent validate-execution-planner-audit --workspace <fresh-dir>");
     println!("       arb-agent validate-execution-adapter-audit --workspace <fresh-dir>");
     println!("       arb-agent validate-signer-boundary-audit --workspace <fresh-dir>");
     println!("       arb-agent validate-signer-runtime-isolation");
@@ -723,6 +839,7 @@ fn print_usage() {
     println!("       arb-agent validate-audit-durability --workspace <fresh-dir>");
     println!("       arb-agent validate-audit-retention-execution --workspace <fresh-dir>");
     println!("       arb-agent validate-deployment-disk-full-transcript");
+    println!("       arb-agent validate-incident-response-execution-transcript");
     println!("       arb-agent validate-deployment-permission-transcript");
     println!("       arb-agent validate-deployment-retention-transcript");
     println!("       arb-agent validate-rollback-execution-transcript");
@@ -1171,6 +1288,360 @@ fn run_market_data_reconnect_plan_validation() -> Result<(), AgentCliError> {
     Ok(())
 }
 
+struct MarketDataQualityAssessmentCase {
+    acceptable: MarketDataQualityAssessmentReport,
+    degraded: MarketDataQualityAssessmentReport,
+    blocked: MarketDataQualityAssessmentReport,
+}
+
+fn build_acceptable_market_data_quality_assessment(
+) -> Result<MarketDataQualityAssessmentReport, AgentCliError> {
+    let pair = MarketPair::new("BTC", "USDC")
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let venue = local_provider_venue("paper-quality-acceptable");
+    assess_market_data_quality(MarketDataQualityAssessmentInput {
+        assessment_id: "cli-market-data-quality-acceptable".to_owned(),
+        provider_name: "local-market-data-quality-acceptable".to_owned(),
+        request: MarketDataRequest {
+            venue: venue.clone(),
+            pair: pair.clone(),
+            max_age_ms: 250,
+        },
+        quote: NormalizedQuote {
+            id: "cli-market-data-quality-acceptable-quote".to_owned(),
+            venue: venue.clone(),
+            pair: pair.clone(),
+            bid: PriceLevel::new(100.0, 1.0)
+                .map_err(|error| AgentCliError::Validation(error.to_string()))?,
+            ask: PriceLevel::new(100.1, 1.0)
+                .map_err(|error| AgentCliError::Validation(error.to_string()))?,
+            captured_at_unix_ms: 1_000,
+            received_at_unix_ms: 1_015,
+        },
+        order_book: Some(OrderBookSnapshot {
+            id: "cli-market-data-quality-acceptable-book".to_owned(),
+            venue,
+            pair,
+            captured_at_unix_ms: 1_000,
+            received_at_unix_ms: 1_015,
+            bids: vec![
+                PriceLevel::new(100.0, 1.0)
+                    .map_err(|error| AgentCliError::Validation(error.to_string()))?,
+                PriceLevel::new(99.9, 1.0)
+                    .map_err(|error| AgentCliError::Validation(error.to_string()))?,
+            ],
+            asks: vec![
+                PriceLevel::new(100.1, 1.0)
+                    .map_err(|error| AgentCliError::Validation(error.to_string()))?,
+                PriceLevel::new(100.2, 1.0)
+                    .map_err(|error| AgentCliError::Validation(error.to_string()))?,
+            ],
+            source_sequence: Some("quality-acceptable-seq".to_owned()),
+        }),
+        now_unix_ms: 1_120,
+        max_spread_bps: 20,
+        min_depth_levels: 2,
+        max_capture_latency_ms: 25,
+        live_network_used: false,
+        credential_loaded: false,
+        production_ready_claimed: false,
+    })
+    .map_err(|error| AgentCliError::Validation(error.to_string()))
+}
+
+fn build_degraded_market_data_quality_assessment(
+) -> Result<MarketDataQualityAssessmentReport, AgentCliError> {
+    let pair = MarketPair::new("ETH", "USDC")
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let venue = local_provider_venue("paper-quality-degraded");
+    assess_market_data_quality(MarketDataQualityAssessmentInput {
+        assessment_id: "cli-market-data-quality-degraded".to_owned(),
+        provider_name: "local-market-data-quality-degraded".to_owned(),
+        request: MarketDataRequest {
+            venue: venue.clone(),
+            pair: pair.clone(),
+            max_age_ms: 500,
+        },
+        quote: NormalizedQuote {
+            id: "cli-market-data-quality-degraded-quote".to_owned(),
+            venue: venue.clone(),
+            pair: pair.clone(),
+            bid: PriceLevel::new(200.0, 1.0)
+                .map_err(|error| AgentCliError::Validation(error.to_string()))?,
+            ask: PriceLevel::new(201.0, 1.0)
+                .map_err(|error| AgentCliError::Validation(error.to_string()))?,
+            captured_at_unix_ms: 10_000,
+            received_at_unix_ms: 10_060,
+        },
+        order_book: Some(OrderBookSnapshot {
+            id: "cli-market-data-quality-degraded-book".to_owned(),
+            venue,
+            pair,
+            captured_at_unix_ms: 10_000,
+            received_at_unix_ms: 10_060,
+            bids: vec![PriceLevel::new(200.0, 1.0)
+                .map_err(|error| AgentCliError::Validation(error.to_string()))?],
+            asks: vec![PriceLevel::new(201.0, 1.0)
+                .map_err(|error| AgentCliError::Validation(error.to_string()))?],
+            source_sequence: Some("quality-degraded-seq".to_owned()),
+        }),
+        now_unix_ms: 10_200,
+        max_spread_bps: 20,
+        min_depth_levels: 2,
+        max_capture_latency_ms: 25,
+        live_network_used: false,
+        credential_loaded: false,
+        production_ready_claimed: false,
+    })
+    .map_err(|error| AgentCliError::Validation(error.to_string()))
+}
+
+fn build_blocked_market_data_quality_assessment(
+) -> Result<MarketDataQualityAssessmentReport, AgentCliError> {
+    let pair = MarketPair::new("SOL", "USDC")
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let venue = local_provider_venue("paper-quality-blocked");
+    assess_market_data_quality(MarketDataQualityAssessmentInput {
+        assessment_id: "cli-market-data-quality-blocked".to_owned(),
+        provider_name: "local-market-data-quality-blocked".to_owned(),
+        request: MarketDataRequest {
+            venue: venue.clone(),
+            pair: pair.clone(),
+            max_age_ms: 100,
+        },
+        quote: NormalizedQuote {
+            id: "cli-market-data-quality-blocked-quote".to_owned(),
+            venue,
+            pair,
+            bid: PriceLevel::new(50.0, 1.0)
+                .map_err(|error| AgentCliError::Validation(error.to_string()))?,
+            ask: PriceLevel::new(50.2, 1.0)
+                .map_err(|error| AgentCliError::Validation(error.to_string()))?,
+            captured_at_unix_ms: 20_000,
+            received_at_unix_ms: 20_010,
+        },
+        order_book: None,
+        now_unix_ms: 20_500,
+        max_spread_bps: 50,
+        min_depth_levels: 1,
+        max_capture_latency_ms: 30,
+        live_network_used: true,
+        credential_loaded: false,
+        production_ready_claimed: false,
+    })
+    .map_err(|error| AgentCliError::Validation(error.to_string()))
+}
+
+fn build_market_data_quality_assessment_case(
+) -> Result<MarketDataQualityAssessmentCase, AgentCliError> {
+    Ok(MarketDataQualityAssessmentCase {
+        acceptable: build_acceptable_market_data_quality_assessment()?,
+        degraded: build_degraded_market_data_quality_assessment()?,
+        blocked: build_blocked_market_data_quality_assessment()?,
+    })
+}
+
+fn run_market_data_quality_assessment_validation() -> Result<(), AgentCliError> {
+    let quality_case = build_market_data_quality_assessment_case()?;
+    let acceptable = &quality_case.acceptable;
+    let degraded = &quality_case.degraded;
+    let blocked = &quality_case.blocked;
+
+    println!("market-data-quality-assessment: validation passed");
+    println!("acceptable-provider: {}", acceptable.provider_name);
+    println!(
+        "acceptable-status: {}",
+        market_data_quality_assessment_status_label(acceptable.status)
+    );
+    println!("acceptable-quality-score: {}", acceptable.quality_score);
+    println!(
+        "acceptable-depth-levels: {}",
+        acceptable.depth_levels_available
+    );
+    println!("degraded-provider: {}", degraded.provider_name);
+    println!(
+        "degraded-status: {}",
+        market_data_quality_assessment_status_label(degraded.status)
+    );
+    println!("degraded-quality-score: {}", degraded.quality_score);
+    println!("blocked-provider: {}", blocked.provider_name);
+    println!(
+        "blocked-status: {}",
+        market_data_quality_assessment_status_label(blocked.status)
+    );
+    println!("blocked-violation-codes: {}", blocked.violation_codes.len());
+    println!("live-network-used: false");
+    println!("credential-loaded: false");
+    println!("production-ready: false");
+
+    if acceptable.status != MarketDataQualityAssessmentStatus::Acceptable
+        || degraded.status != MarketDataQualityAssessmentStatus::Degraded
+        || blocked.status != MarketDataQualityAssessmentStatus::Blocked
+        || !acceptable.freshness_status.is_fresh()
+        || !acceptable.spread_within_limit
+        || !acceptable.depth_levels_sufficient
+        || !acceptable.capture_latency_within_limit
+        || degraded.violation_codes.is_empty()
+        || blocked.violation_codes.is_empty()
+        || acceptable.live_network_used
+        || acceptable.credential_loaded
+        || degraded.live_network_used
+        || degraded.credential_loaded
+        || blocked.credential_loaded
+        || acceptable.production_ready
+        || degraded.production_ready
+        || blocked.production_ready
+    {
+        return Err(AgentCliError::Validation(
+            "market-data quality assessment validation failed".to_owned(),
+        ));
+    }
+
+    Ok(())
+}
+
+struct PaidMarketDataProviderEvaluationCase {
+    ready: PaidMarketDataProviderEvaluationReport,
+    blocked: PaidMarketDataProviderEvaluationReport,
+}
+
+fn build_paid_market_data_provider_evaluation_case(
+) -> Result<PaidMarketDataProviderEvaluationCase, AgentCliError> {
+    let ready =
+        validate_paid_market_data_provider_evaluation(PaidMarketDataProviderEvaluationInput {
+            evaluation_id: "cli-paid-market-data-ready".to_owned(),
+            provider_name: "local-paid-provider-ready".to_owned(),
+            covered_venues: vec![
+                local_provider_venue("paper-binance"),
+                local_provider_venue("paper-coinbase"),
+            ],
+            covered_pairs: vec![
+                MarketPair::new("BTC", "USDC")
+                    .map_err(|error| AgentCliError::Validation(error.to_string()))?,
+                MarketPair::new("ETH", "USDC")
+                    .map_err(|error| AgentCliError::Validation(error.to_string()))?,
+            ],
+            capabilities: MarketDataCapabilities {
+                order_book: true,
+                top_of_book: true,
+                fees: false,
+                websocket: true,
+                rest: true,
+            },
+            documented_latency_ms: 35,
+            max_allowed_latency_ms: 50,
+            max_requests_per_minute: 1_200,
+            monthly_cost_usd: 499,
+            failure_modes_reviewed: vec![
+                "provider-outage".to_owned(),
+                "stale-book".to_owned(),
+                "rate-limit-burst".to_owned(),
+            ],
+            rate_limit_documentation_reviewed: true,
+            pricing_documentation_reviewed: true,
+            terms_reviewed: true,
+            credential_scope_reviewed: true,
+            live_network_used: false,
+            credential_loaded: false,
+            production_ready_claimed: false,
+        })
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let blocked =
+        validate_paid_market_data_provider_evaluation(PaidMarketDataProviderEvaluationInput {
+            evaluation_id: "cli-paid-market-data-blocked".to_owned(),
+            provider_name: "local-paid-provider-blocked".to_owned(),
+            covered_venues: vec![local_provider_venue("paper-kraken")],
+            covered_pairs: vec![MarketPair::new("BTC", "USDT")
+                .map_err(|error| AgentCliError::Validation(error.to_string()))?],
+            capabilities: MarketDataCapabilities {
+                order_book: true,
+                top_of_book: true,
+                fees: false,
+                websocket: false,
+                rest: true,
+            },
+            documented_latency_ms: 120,
+            max_allowed_latency_ms: 50,
+            max_requests_per_minute: 600,
+            monthly_cost_usd: 250,
+            failure_modes_reviewed: vec!["provider-outage".to_owned()],
+            rate_limit_documentation_reviewed: false,
+            pricing_documentation_reviewed: false,
+            terms_reviewed: false,
+            credential_scope_reviewed: false,
+            live_network_used: false,
+            credential_loaded: false,
+            production_ready_claimed: false,
+        })
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+
+    Ok(PaidMarketDataProviderEvaluationCase { ready, blocked })
+}
+
+fn run_paid_market_data_provider_evaluation_validation() -> Result<(), AgentCliError> {
+    let evaluation_case = build_paid_market_data_provider_evaluation_case()?;
+    let ready = &evaluation_case.ready;
+    let blocked = &evaluation_case.blocked;
+
+    println!("paid-market-data-provider-evaluation: validation passed");
+    println!("ready-provider: {}", ready.provider_name);
+    println!(
+        "ready-provider-status: {}",
+        paid_market_data_provider_evaluation_status_label(ready.status)
+    );
+    println!("ready-covered-venues: {}", ready.covered_venues.len());
+    println!("ready-covered-pairs: {}", ready.covered_pairs.len());
+    println!("blocked-provider: {}", blocked.provider_name);
+    println!(
+        "blocked-provider-status: {}",
+        paid_market_data_provider_evaluation_status_label(blocked.status)
+    );
+    println!(
+        "blocked-provider-violation-codes: {}",
+        blocked.violation_codes.len()
+    );
+    println!("latency-within-budget: {}", ready.latency_within_budget);
+    println!(
+        "rate-limit-review-passed: {}",
+        ready.rate_limit_review_passed
+    );
+    println!("cost-review-passed: {}", ready.cost_review_passed);
+    println!(
+        "failure-behavior-review-passed: {}",
+        ready.failure_behavior_review_passed
+    );
+    println!(
+        "governance-review-passed: {}",
+        ready.governance_review_passed
+    );
+    println!("live-network-used: false");
+    println!("credential-loaded: false");
+    println!("production-ready: false");
+
+    if ready.status != PaidMarketDataProviderEvaluationStatus::ReadyForLocalReview
+        || blocked.status != PaidMarketDataProviderEvaluationStatus::Blocked
+        || !ready.coverage_review_passed
+        || !ready.latency_within_budget
+        || !ready.rate_limit_review_passed
+        || !ready.cost_review_passed
+        || !ready.failure_behavior_review_passed
+        || !ready.governance_review_passed
+        || blocked.violation_codes.is_empty()
+        || ready.live_network_used
+        || ready.credential_loaded
+        || blocked.live_network_used
+        || blocked.credential_loaded
+        || ready.production_ready
+        || blocked.production_ready
+    {
+        return Err(AgentCliError::Validation(
+            "paid market-data provider evaluation validation failed".to_owned(),
+        ));
+    }
+
+    Ok(())
+}
+
 struct LocalMarketDataBoundaryAuditCase {
     clean_preflight: MarketDataProviderPreflightReport,
     degraded_preflight: MarketDataProviderPreflightReport,
@@ -1452,6 +1923,227 @@ fn verify_local_market_data_boundary_audit_case(
     Ok(replayed.next_sequence() - 1)
 }
 
+struct MarketDataHistoryPersistenceValidation {
+    audit_sequence: u64,
+    checkpoint_value: String,
+    audit_failed_closed: bool,
+    state_failed_closed: bool,
+}
+
+fn run_market_data_history_persistence_validation(
+    options: &LocalValidationRunOptions,
+) -> Result<(), AgentCliError> {
+    prepare_fresh_workspace(&options.workspace_dir)?;
+    let now_unix_ms = current_unix_ms()?;
+    let audit_path = options
+        .workspace_dir
+        .join("market-data-history-persistence.audit.jsonl");
+    let state_path = options
+        .workspace_dir
+        .join("market-data-history-persistence.sqlite3");
+    let report = build_local_market_data_history_persistence_report()?;
+    let persisted = persist_local_market_data_history_persistence(
+        &audit_path,
+        &state_path,
+        &report,
+        now_unix_ms,
+    )?;
+    let audit_records_replayed =
+        verify_local_market_data_history_persistence(&audit_path, &state_path, &persisted)?;
+
+    if report.status != HistoricalMarketDataPersistenceStatus::PersistedForLocalReplay
+        || report.stored_quotes.is_empty()
+        || report.stored_order_books.is_empty()
+        || !report.quotes_truncated
+        || !report.order_books_truncated
+        || !persisted.audit_failed_closed
+        || !persisted.state_failed_closed
+        || report.live_network_used
+        || report.credential_loaded
+        || report.production_ready
+    {
+        return Err(AgentCliError::Validation(
+            "market-data history persistence validation failed".to_owned(),
+        ));
+    }
+
+    println!("market-data-history-persistence: validation passed");
+    println!("history-batch-status: persisted-for-local-replay");
+    println!("stored-quote-count: {}", report.stored_quotes.len());
+    println!(
+        "stored-order-book-count: {}",
+        report.stored_order_books.len()
+    );
+    println!("quotes-truncated: {}", report.quotes_truncated);
+    println!("order-books-truncated: {}", report.order_books_truncated);
+    println!("window-span-ms: {}", report.window_span_ms);
+    println!("audit-failed-closed: {}", persisted.audit_failed_closed);
+    println!("state-failed-closed: {}", persisted.state_failed_closed);
+    println!("audit-records-replayed: {audit_records_replayed}");
+    println!("state-checkpoints-recovered: true");
+    println!("live-network-used: false");
+    println!("credential-loaded: false");
+    println!("production-ready: false");
+    Ok(())
+}
+
+fn build_local_market_data_history_persistence_report(
+) -> Result<HistoricalMarketDataPersistenceReport, AgentCliError> {
+    let venue = local_provider_venue("paper-history");
+    let pair = MarketPair::new("BTC", "USDC")
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let quotes = vec![
+        historical_quote(&venue, &pair, "quote-1", 100.0, 100.1, 1_000, 1_010)?,
+        historical_quote(&venue, &pair, "quote-2", 101.0, 101.1, 2_000, 2_010)?,
+        historical_quote(&venue, &pair, "quote-3", 102.0, 102.1, 3_000, 3_010)?,
+    ];
+    let order_books = vec![
+        historical_order_book(&venue, &pair, "book-1", 100.0, 100.1, 1_000, 1_015)?,
+        historical_order_book(&venue, &pair, "book-2", 101.0, 101.1, 2_000, 2_015)?,
+        historical_order_book(&venue, &pair, "book-3", 102.0, 102.1, 3_000, 3_015)?,
+    ];
+    validate_historical_market_data_persistence(HistoricalMarketDataPersistenceInput {
+        batch_id: "local-market-data-history-batch".to_owned(),
+        provider_name: "local-market-data-history".to_owned(),
+        venue,
+        pair,
+        quotes,
+        order_books,
+        max_retained_records_per_kind: 2,
+        persisted_at_unix_ms: 4_000,
+        live_network_used: false,
+        credential_loaded: false,
+        production_ready_claimed: false,
+    })
+    .map_err(|error| AgentCliError::Validation(error.to_string()))
+}
+
+fn persist_local_market_data_history_persistence(
+    audit_path: &Path,
+    state_path: &Path,
+    report: &HistoricalMarketDataPersistenceReport,
+    now_unix_ms: u64,
+) -> Result<MarketDataHistoryPersistenceValidation, AgentCliError> {
+    let mut journal = AppendOnlyAuditJournal::open(audit_path)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let mut store = SqliteWalStateStore::open(state_path)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let audit = append_historical_market_data_persistence_audit(&mut journal, report, now_unix_ms)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let checkpoint = persist_historical_market_data_checkpoint(
+        &mut store,
+        report,
+        now_unix_ms.saturating_add(1),
+    )
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let audit_failed_closed =
+        validate_market_data_history_invalid_audit_fails_closed(&mut journal, report);
+    let state_failed_closed =
+        validate_market_data_history_invalid_state_fails_closed(&mut store, report);
+
+    Ok(MarketDataHistoryPersistenceValidation {
+        audit_sequence: audit.sequence,
+        checkpoint_value: checkpoint.value,
+        audit_failed_closed,
+        state_failed_closed,
+    })
+}
+
+fn verify_local_market_data_history_persistence(
+    audit_path: &Path,
+    state_path: &Path,
+    persisted: &MarketDataHistoryPersistenceValidation,
+) -> Result<u64, AgentCliError> {
+    let replayed = AppendOnlyAuditJournal::open(audit_path)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let reopened = SqliteWalStateStore::open(state_path)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let checkpoint = reopened
+        .get_checkpoint(MARKET_DATA_LAST_HISTORICAL_PERSISTENCE_CHECKPOINT_KEY)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?
+        .ok_or_else(|| {
+            AgentCliError::Validation("historical market-data checkpoint missing".to_owned())
+        })?;
+
+    if replayed.next_sequence() <= persisted.audit_sequence
+        || checkpoint.value != persisted.checkpoint_value
+        || !persisted.audit_failed_closed
+        || !persisted.state_failed_closed
+    {
+        return Err(AgentCliError::Validation(
+            "market-data history persistence reopen check failed".to_owned(),
+        ));
+    }
+    Ok(replayed.next_sequence().saturating_sub(1))
+}
+
+fn validate_market_data_history_invalid_audit_fails_closed(
+    journal: &mut AppendOnlyAuditJournal,
+    report: &HistoricalMarketDataPersistenceReport,
+) -> bool {
+    let next_sequence = journal.next_sequence();
+    let mut invalid = report.clone();
+    invalid.production_ready = true;
+    invalid.status = HistoricalMarketDataPersistenceStatus::PersistedForLocalReplay;
+    append_historical_market_data_persistence_audit(journal, &invalid, 1_700_000_100).is_err()
+        && journal.next_sequence() == next_sequence
+}
+
+fn validate_market_data_history_invalid_state_fails_closed(
+    store: &mut SqliteWalStateStore,
+    report: &HistoricalMarketDataPersistenceReport,
+) -> bool {
+    let mut invalid = report.clone();
+    invalid.production_ready = true;
+    invalid.status = HistoricalMarketDataPersistenceStatus::PersistedForLocalReplay;
+    persist_historical_market_data_checkpoint(store, &invalid, 1_700_000_101).is_err()
+}
+
+fn historical_quote(
+    venue: &VenueRef,
+    pair: &MarketPair,
+    id: &str,
+    bid: f64,
+    ask: f64,
+    captured_at_unix_ms: u64,
+    received_at_unix_ms: u64,
+) -> Result<NormalizedQuote, AgentCliError> {
+    Ok(NormalizedQuote {
+        id: id.to_owned(),
+        venue: venue.clone(),
+        pair: pair.clone(),
+        bid: PriceLevel::new(bid, 1.0)
+            .map_err(|error| AgentCliError::Validation(error.to_string()))?,
+        ask: PriceLevel::new(ask, 1.0)
+            .map_err(|error| AgentCliError::Validation(error.to_string()))?,
+        captured_at_unix_ms,
+        received_at_unix_ms,
+    })
+}
+
+fn historical_order_book(
+    venue: &VenueRef,
+    pair: &MarketPair,
+    id: &str,
+    best_bid: f64,
+    best_ask: f64,
+    captured_at_unix_ms: u64,
+    received_at_unix_ms: u64,
+) -> Result<OrderBookSnapshot, AgentCliError> {
+    Ok(OrderBookSnapshot {
+        id: id.to_owned(),
+        venue: venue.clone(),
+        pair: pair.clone(),
+        captured_at_unix_ms,
+        received_at_unix_ms,
+        bids: vec![PriceLevel::new(best_bid, 1.0)
+            .map_err(|error| AgentCliError::Validation(error.to_string()))?],
+        asks: vec![PriceLevel::new(best_ask, 1.0)
+            .map_err(|error| AgentCliError::Validation(error.to_string()))?],
+        source_sequence: Some(format!("{id}-seq")),
+    })
+}
+
 fn validate_market_data_preflight_invalid_audit_fails_closed(
     journal: &mut AppendOnlyAuditJournal,
     report: &MarketDataProviderPreflightReport,
@@ -1562,6 +2254,250 @@ fn run_fee_schedule_verification_validation() -> Result<(), AgentCliError> {
     {
         return Err(AgentCliError::Validation(
             "fee schedule verification validation failed".to_owned(),
+        ));
+    }
+
+    Ok(())
+}
+
+fn local_cex_governance_review_inputs(
+) -> Result<(CexCredentialScopeReviewInput, CexCredentialScopeReviewInput), AgentCliError> {
+    let ready = CexCredentialScopeReviewInput::new(
+        "binance-governance-review-ready",
+        local_cex_exchange_venue("binance"),
+        SecretRef::Keystore {
+            alias: "binance-paper-api-key".to_owned(),
+        },
+        vec![
+            CexCredentialPermission::ReadOnlyMarketData,
+            CexCredentialPermission::ReadBalances,
+            CexCredentialPermission::TradeOrders,
+            CexCredentialPermission::CancelOrders,
+        ],
+        vec![
+            CexCredentialPermission::ReadOnlyMarketData,
+            CexCredentialPermission::ReadBalances,
+            CexCredentialPermission::TradeOrders,
+            CexCredentialPermission::CancelOrders,
+        ],
+        vec![
+            CexCredentialPermission::Withdrawals,
+            CexCredentialPermission::Transfers,
+            CexCredentialPermission::MarginOrDerivatives,
+            CexCredentialPermission::AccountAdmin,
+        ],
+        1_700_000_000_000,
+        1_700_000_500_000,
+        86_400_000,
+    )
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let mut blocked = CexCredentialScopeReviewInput::new(
+        "coinbase-governance-review-blocked",
+        local_cex_exchange_venue("coinbase"),
+        SecretRef::Keystore {
+            alias: "coinbase-paper-api-key".to_owned(),
+        },
+        vec![
+            CexCredentialPermission::ReadOnlyMarketData,
+            CexCredentialPermission::TradeOrders,
+        ],
+        vec![
+            CexCredentialPermission::ReadOnlyMarketData,
+            CexCredentialPermission::Withdrawals,
+        ],
+        vec![
+            CexCredentialPermission::Withdrawals,
+            CexCredentialPermission::Transfers,
+        ],
+        1_700_000_000_000,
+        1_700_000_500_000,
+        86_400_000,
+    )
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    blocked.fee_schedule_reviewed = false;
+    blocked.rate_limit_documentation_reviewed = false;
+    blocked.terms_of_service_reviewed = false;
+    blocked.jurisdiction_reviewed = false;
+    blocked.api_capabilities_reviewed = false;
+    blocked.incident_reputation_reviewed = false;
+    Ok((ready, blocked))
+}
+
+fn local_cex_rate_limit_review_observations(
+) -> Result<(CexRateLimitObservation, CexRateLimitObservation), AgentCliError> {
+    let ready = CexRateLimitObservation::new(
+        "binance-governance-rate-limit-ready",
+        local_cex_exchange_venue("binance"),
+        CexRateLimitScope::RestMarketData,
+        1_200,
+        60_000,
+        12,
+        None,
+        false,
+    )
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let blocked = CexRateLimitObservation::new(
+        "coinbase-governance-rate-limit-blocked",
+        local_cex_exchange_venue("coinbase"),
+        CexRateLimitScope::OrderSubmission,
+        10,
+        1_000,
+        10,
+        Some(500),
+        true,
+    )
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    Ok((ready, blocked))
+}
+
+#[allow(clippy::too_many_lines)]
+fn run_cex_governance_review_validation() -> Result<(), AgentCliError> {
+    let (ready_scope_input, blocked_scope_input) = local_cex_governance_review_inputs()?;
+    let (ready_rate_limit_observation, blocked_rate_limit_observation) =
+        local_cex_rate_limit_review_observations()?;
+
+    let scope_reports = [&ready_scope_input, &blocked_scope_input]
+        .into_iter()
+        .map(|input| validate_cex_credential_scope_review(input.clone()))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let rate_limit_reports = vec![ready_rate_limit_observation, blocked_rate_limit_observation]
+        .into_iter()
+        .map(validate_cex_rate_limit)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+
+    let scope_ready_count = scope_reports
+        .iter()
+        .filter(|report| report.status == CexCredentialScopeReviewStatus::ReadyForLocalReview)
+        .count();
+    let scope_blocked_count = scope_reports
+        .iter()
+        .filter(|report| report.status == CexCredentialScopeReviewStatus::Blocked)
+        .count();
+    let scope_violation_code_count = scope_reports
+        .iter()
+        .map(|report| report.violation_codes.len())
+        .sum::<usize>();
+    let rate_limit_ready_count = rate_limit_reports
+        .iter()
+        .filter(|report| report.status == CexRateLimitStatus::ReadyForLocalReview)
+        .count();
+    let rate_limit_blocked_count = rate_limit_reports
+        .iter()
+        .filter(|report| report.status == CexRateLimitStatus::Blocked)
+        .count();
+    let rate_limit_violation_code_count = rate_limit_reports
+        .iter()
+        .map(|report| report.violation_codes.len())
+        .sum::<usize>();
+    let unsafe_side_effect = [&ready_scope_input, &blocked_scope_input]
+        .into_iter()
+        .any(|input| {
+            input.secret_material_loaded
+                || input.credential_plaintext_seen
+                || input.live_provider_call_performed
+                || input.account_state_queried
+                || input.live_execution_performed
+                || input.production_ready_claimed
+        })
+        || scope_reports.iter().any(|report| {
+            report.secret_material_loaded
+                || report.credential_plaintext_seen
+                || report.live_provider_call_performed
+                || report.account_state_queried
+                || report.live_execution_performed
+                || report.production_ready
+        })
+        || rate_limit_reports.iter().any(|report| {
+            report.live_provider_call_performed
+                || report.websocket_connection_opened
+                || report.credential_loaded
+                || report.live_execution_performed
+                || report.production_ready
+        });
+
+    println!("cex-governance-review: validation passed");
+    println!("scope-review-count: {}", scope_reports.len());
+    println!("scope-ready-count: {scope_ready_count}");
+    println!("scope-blocked-count: {scope_blocked_count}");
+    println!("scope-blocker-count: {scope_violation_code_count}");
+    println!("rate-limit-review-count: {}", rate_limit_reports.len());
+    println!("rate-limit-ready-count: {rate_limit_ready_count}");
+    println!("rate-limit-blocked-count: {rate_limit_blocked_count}");
+    println!("rate-limit-blocker-count: {rate_limit_violation_code_count}");
+    println!(
+        "fee-review-ready: {}",
+        scope_reports[0].fee_schedule_reviewed
+    );
+    println!(
+        "rate-limit-documentation-ready: {}",
+        scope_reports[0].rate_limit_documentation_reviewed
+    );
+    println!(
+        "terms-review-ready: {}",
+        scope_reports[0].terms_of_service_reviewed
+    );
+    println!(
+        "jurisdiction-review-ready: {}",
+        scope_reports[0].jurisdiction_reviewed
+    );
+    println!(
+        "api-capabilities-ready: {}",
+        scope_reports[0].api_capabilities_reviewed
+    );
+    println!(
+        "incident-review-ready: {}",
+        scope_reports[0].incident_reputation_reviewed
+    );
+    println!(
+        "governance-review-ready: {}",
+        scope_reports[0].governance_review_passed
+    );
+    println!(
+        "credential-reference-validated: {}",
+        scope_reports[0].credential_reference_validated
+    );
+    println!(
+        "rate-limit-budget-blocked: {}",
+        rate_limit_reports[1].local_budget_exhausted
+    );
+    println!(
+        "rate-limit-provider-blocked: {}",
+        rate_limit_reports[1].provider_rate_limited
+    );
+    println!("live-provider-call-performed: false");
+    println!("account-state-queried: false");
+    println!("credential-loaded: false");
+    println!("websocket-connection-opened: false");
+    println!("external-submission-performed: false");
+    println!("rpc-call-performed: false");
+    println!("signing-or-broadcast-performed: false");
+    println!("live-execution-performed: false");
+    println!("production-ready: false");
+
+    if scope_reports.len() != 2
+        || scope_ready_count != 1
+        || scope_blocked_count != 1
+        || scope_violation_code_count != 8
+        || rate_limit_reports.len() != 2
+        || rate_limit_ready_count != 1
+        || rate_limit_blocked_count != 1
+        || rate_limit_violation_code_count != 2
+        || !scope_reports[0].fee_schedule_reviewed
+        || !scope_reports[0].rate_limit_documentation_reviewed
+        || !scope_reports[0].terms_of_service_reviewed
+        || !scope_reports[0].jurisdiction_reviewed
+        || !scope_reports[0].api_capabilities_reviewed
+        || !scope_reports[0].incident_reputation_reviewed
+        || !scope_reports[0].governance_review_passed
+        || !scope_reports[0].credential_reference_validated
+        || !rate_limit_reports[1].local_budget_exhausted
+        || !rate_limit_reports[1].provider_rate_limited
+        || unsafe_side_effect
+    {
+        return Err(AgentCliError::Validation(
+            "CEX governance review validation failed".to_owned(),
         ));
     }
 
@@ -2220,12 +3156,22 @@ fn run_dex_protocol_risk_review_validation() -> Result<(), AgentCliError> {
     println!("protocol-risk-ready-count: {ready_count}");
     println!("protocol-risk-blocked-count: {blocked_count}");
     println!("protocol-risk-blocker-count: {total_blocker_codes}");
+    println!("asset-scope-ready: {}", reports[0].asset_scope_passed);
+    println!(
+        "contract-hygiene-ready: {}",
+        reports[0].contract_hygiene_passed
+    );
+    println!("token-hygiene-ready: {}", reports[0].token_hygiene_passed);
     println!(
         "spender-hygiene-ready: {}",
         reports[0].spender_hygiene_passed
     );
     println!("gas-slippage-ready: {}", reports[0].gas_slippage_passed);
     println!("mev-controls-ready: {}", reports[0].mev_controls_passed);
+    println!(
+        "governance-review-ready: {}",
+        reports[0].governance_review_passed
+    );
     println!("terms-metadata-ready: {}", reports[0].terms_metadata_passed);
     println!("rpc-call-performed: false");
     println!("signer-material-loaded: false");
@@ -2237,10 +3183,14 @@ fn run_dex_protocol_risk_review_validation() -> Result<(), AgentCliError> {
     if reports.len() != 2
         || ready_count != 1
         || blocked_count != 1
-        || total_blocker_codes != 9
+        || total_blocker_codes != 16
+        || !reports[0].asset_scope_passed
+        || !reports[0].contract_hygiene_passed
+        || !reports[0].token_hygiene_passed
         || !reports[0].spender_hygiene_passed
         || !reports[0].gas_slippage_passed
         || !reports[0].mev_controls_passed
+        || !reports[0].governance_review_passed
         || !reports[0].terms_metadata_passed
         || unsafe_side_effect
     {
@@ -2288,13 +3238,20 @@ fn local_dex_protocol_risk_review_requests(
         40.0,
     )
     .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    blocked_request.chain_allowlisted = false;
+    blocked_request.pair_allowlisted = false;
+    blocked_request.router_allowlisted = false;
     blocked_request.spender_allowlisted = false;
     blocked_request.unlimited_allowance_requested = true;
     blocked_request.approval_revocation_planned = false;
+    blocked_request.token_contract_reviewed = false;
+    blocked_request.token_decimals_verified = false;
     blocked_request.public_mempool_required = true;
     blocked_request.mev_mitigation_reviewed = false;
     blocked_request.token_metadata_reviewed = false;
     blocked_request.protocol_terms_reviewed = false;
+    blocked_request.jurisdiction_reviewed = false;
+    blocked_request.incident_reputation_reviewed = false;
     Ok((ready_request, blocked_request))
 }
 
@@ -2742,6 +3699,21 @@ fn local_strategy_profile(min_net_profit_abs: f64) -> StrategyProfile {
     profile
 }
 
+fn local_strategy_replay_profile(id: &str, min_net_profit_abs: f64) -> StrategyProfile {
+    let mut profile = StrategyProfile::conservative_paper(id, "USD");
+    profile.capital.max_total_deployed = 1_000_000.0;
+    profile.capital.max_per_opportunity = 1_000_000.0;
+    profile.capital.reserve_minimum = 0.0;
+    profile.risk.max_single_tx_value = 1_000_000.0;
+    profile.opportunity.min_net_profit_abs = min_net_profit_abs;
+    profile.execution.max_slippage_bps = u16::MAX;
+    profile.venues.allowed_exchanges.clear();
+    profile.venues.allowed_assets.clear();
+    profile.venues.allowed_chains.clear();
+    profile.venues.allowed_routers.clear();
+    profile
+}
+
 fn local_strategy_planner_candidate() -> Result<OpportunityCandidate, AgentCliError> {
     let pair = MarketPair::new("BTC", "USD")
         .map_err(|error| AgentCliError::Validation(error.to_string()))?;
@@ -3126,6 +4098,204 @@ fn run_strategy_constrained_planner_validation() -> Result<(), AgentCliError> {
     {
         return Err(AgentCliError::Validation(
             "strategy-constrained planner validation failed".to_owned(),
+        ));
+    }
+
+    Ok(())
+}
+
+fn run_strategy_replay_corpus_validation() -> Result<(), AgentCliError> {
+    let corpus = phase27_local_opportunity_historical_fixture_corpus()
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let policy = PolicyEngine::from_config(
+        AgentConfig::from_toml_str(PHASE27_PLANNER_HANDOFF_CONFIG)
+            .map_err(|error| AgentCliError::Validation(error.to_string()))?,
+    );
+    let accepted_profile = local_strategy_replay_profile("cli-strategy-replay-accepted", 0.0);
+    let rejected_profile =
+        local_strategy_replay_profile("cli-strategy-replay-rejected", 1_000_000.0);
+    let report = validate_strategy_profile_replay_corpus(
+        &corpus,
+        &policy,
+        &accepted_profile,
+        &rejected_profile,
+    )
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+
+    println!("strategy-profile-replay-corpus: {}", report.corpus_id);
+    println!("replay-window-count: {}", report.replay_window_count);
+    println!("replay-scenario-count: {}", report.replay_scenario_count);
+    println!(
+        "skipped-discovery-failures: {}",
+        report.skipped_discovery_failures
+    );
+    println!("discovered-candidates: {}", report.discovered_candidates);
+    println!(
+        "accepted-planned-candidates: {}",
+        report.accepted_planned_candidates
+    );
+    println!(
+        "accepted-draft-ready-plans: {}",
+        report.accepted_draft_ready_plans
+    );
+    println!(
+        "accepted-satisfied-constraint-reports: {}",
+        report.accepted_satisfied_constraint_reports
+    );
+    println!(
+        "accepted-strategy-rejected-intents: {}",
+        report.accepted_strategy_rejected_intents
+    );
+    println!(
+        "rejected-planned-candidates: {}",
+        report.rejected_planned_candidates
+    );
+    println!(
+        "rejected-policy-denied-plans: {}",
+        report.rejected_policy_denied_plans
+    );
+    println!(
+        "rejected-constraint-reports: {}",
+        report.rejected_constraint_reports
+    );
+    println!(
+        "rejected-strategy-rejected-intents: {}",
+        report.rejected_strategy_rejected_intents
+    );
+    println!(
+        "failed-strategy-planner-runs: {}",
+        report.failed_strategy_planner_runs
+    );
+    println!("total-accepted-intents: {}", report.total_accepted_intents);
+    println!("total-rejected-intents: {}", report.total_rejected_intents);
+    println!(
+        "strategy-replay-status: {}",
+        strategy_profile_replay_status_label(report.status)
+    );
+    println!(
+        "adapter-submission-performed: {}",
+        report.adapter_submission_performed
+    );
+    println!(
+        "external-calls-performed: {}",
+        report.external_calls_performed
+    );
+    println!(
+        "live-execution-performed: {}",
+        report.live_execution_performed
+    );
+    println!(
+        "signing-or-broadcast-performed: {}",
+        report.signing_or_broadcast_performed
+    );
+    println!("production-ready: {}", report.production_ready);
+
+    if report.status != StrategyProfileReplayValidationStatus::Passed
+        || report.adapter_submission_performed
+        || report.external_calls_performed
+        || report.live_execution_performed
+        || report.signing_or_broadcast_performed
+        || report.production_ready
+    {
+        return Err(AgentCliError::Validation(
+            "strategy replay corpus validation failed".to_owned(),
+        ));
+    }
+
+    Ok(())
+}
+
+fn run_strategy_profitability_tuning_validation() -> Result<(), AgentCliError> {
+    let corpus = phase27_local_opportunity_historical_fixture_corpus()
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let policy = PolicyEngine::from_config(
+        AgentConfig::from_toml_str(PHASE27_PLANNER_HANDOFF_CONFIG)
+            .map_err(|error| AgentCliError::Validation(error.to_string()))?,
+    );
+    let report = validate_strategy_profitability_tuning(&corpus, &policy)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let lowest = report.profitability_points.first().ok_or_else(|| {
+        AgentCliError::Validation("missing lowest profitability threshold".to_owned())
+    })?;
+    let highest = report.profitability_points.last().ok_or_else(|| {
+        AgentCliError::Validation("missing highest profitability threshold".to_owned())
+    })?;
+
+    println!("strategy-profitability-tuning-corpus: {}", report.corpus_id);
+    println!("replay-window-count: {}", report.replay_window_count);
+    println!("replay-scenario-count: {}", report.replay_scenario_count);
+    println!(
+        "skipped-discovery-failures: {}",
+        report.skipped_discovery_failures
+    );
+    println!("discovered-candidates: {}", report.discovered_candidates);
+    println!(
+        "profitability-threshold-count: {}",
+        report.profitability_points.len()
+    );
+    println!(
+        "lowest-threshold-min-net-profit-abs: {}",
+        lowest.min_net_profit_abs
+    );
+    println!(
+        "highest-threshold-min-net-profit-abs: {}",
+        highest.min_net_profit_abs
+    );
+    println!(
+        "lowest-threshold-draft-ready-plans: {}",
+        lowest.draft_ready_plans
+    );
+    println!(
+        "highest-threshold-policy-denied-plans: {}",
+        highest.policy_denied_plans
+    );
+    println!(
+        "highest-threshold-rejected-intents: {}",
+        highest.rejected_intents
+    );
+    println!(
+        "monotonic-acceptance-validated: {}",
+        report.monotonic_acceptance_validated
+    );
+    println!(
+        "monotonic-rejection-validated: {}",
+        report.monotonic_rejection_validated
+    );
+    println!(
+        "profitability-threshold-transition-observed: {}",
+        report.threshold_transition_observed
+    );
+    println!(
+        "strategy-profitability-status: {}",
+        strategy_profitability_tuning_status_label(report.status)
+    );
+    println!(
+        "adapter-submission-performed: {}",
+        report.adapter_submission_performed
+    );
+    println!(
+        "external-calls-performed: {}",
+        report.external_calls_performed
+    );
+    println!(
+        "live-execution-performed: {}",
+        report.live_execution_performed
+    );
+    println!(
+        "signing-or-broadcast-performed: {}",
+        report.signing_or_broadcast_performed
+    );
+    println!("production-ready: {}", report.production_ready);
+
+    if report.status != StrategyProfitabilityTuningValidationStatus::Passed
+        || report.adapter_submission_performed
+        || report.external_calls_performed
+        || report.live_execution_performed
+        || report.signing_or_broadcast_performed
+        || report.production_ready
+    {
+        return Err(AgentCliError::Validation(
+            "strategy profitability tuning validation failed".to_owned(),
         ));
     }
 
@@ -3865,6 +5035,11 @@ fn run_runtime_restart_recovery_validation(
     .map_err(|error| AgentCliError::Validation(error.to_string()))?;
     drop(store);
     drop(journal);
+    seed_runtime_restart_connector_lifecycle_checkpoints(
+        &audit_path,
+        &state_path,
+        now_unix_ms.saturating_add(2),
+    )?;
 
     let report = validate_local_runtime_restart_recovery_with_trace_recovery(
         &audit_path,
@@ -3872,6 +5047,12 @@ fn run_runtime_restart_recovery_validation(
         &policy,
     )
     .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    if !report.connector_lifecycle_recovery_validated {
+        return Err(AgentCliError::Validation(
+            "runtime restart recovery connector lifecycle checkpoints were not recovered"
+                .to_owned(),
+        ));
+    }
     print_runtime_restart_recovery_validation_report(
         &options.workspace_dir,
         lifecycle.id.as_str(),
@@ -4012,6 +5193,12 @@ fn run_runtime_supervised_restart_validation(
         &policy,
     )
     .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    if !report.connector_lifecycle_recovery_validated {
+        return Err(AgentCliError::Validation(
+            "runtime supervised restart connector lifecycle checkpoints were not recovered"
+                .to_owned(),
+        ));
+    }
 
     let child_stdout_lines = String::from_utf8_lossy(&child_output.stdout)
         .lines()
@@ -4160,6 +5347,13 @@ fn write_runtime_supervised_restart_seed(workspace_dir: &Path) -> Result<(), Age
         },
     )
     .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    drop(store);
+    drop(journal);
+    seed_runtime_restart_connector_lifecycle_checkpoints(
+        &audit_path,
+        &state_path,
+        now_unix_ms.saturating_add(2),
+    )?;
     Ok(())
 }
 
@@ -4171,6 +5365,23 @@ fn runtime_supervised_restart_state_path(workspace_dir: &Path) -> PathBuf {
     workspace_dir.join("runtime-supervised-restart.sqlite3")
 }
 
+fn seed_runtime_restart_connector_lifecycle_checkpoints(
+    audit_path: &Path,
+    state_path: &Path,
+    now_unix_ms: u64,
+) -> Result<(), AgentCliError> {
+    let connector_case = build_local_connector_lifecycle_audit_case()?;
+    let persisted = persist_local_connector_lifecycle_audit_case(
+        audit_path,
+        state_path,
+        &connector_case,
+        now_unix_ms,
+    )?;
+    verify_local_connector_lifecycle_audit_case(audit_path, state_path, &persisted)?;
+    Ok(())
+}
+
+#[allow(clippy::too_many_lines)]
 fn print_runtime_restart_recovery_validation_report(
     workspace_dir: &Path,
     lifecycle_id: &str,
@@ -4228,6 +5439,46 @@ fn print_runtime_restart_recovery_validation_report(
         "runtime-restart-recovery-local-review-ready: {}",
         report.local_review_ready
     );
+    println!(
+        "runtime-restart-recovery-connector-lifecycle-validated: {}",
+        report.connector_lifecycle_recovery_validated
+    );
+    println!(
+        "runtime-restart-recovery-cex-lifecycle-checkpoint-recovered: {}",
+        report.cex_lifecycle_checkpoint_recovered
+    );
+    println!(
+        "runtime-restart-recovery-dex-lifecycle-checkpoint-recovered: {}",
+        report.dex_lifecycle_checkpoint_recovered
+    );
+    if let Some(cex) = &report.recovered_cex_lifecycle {
+        println!(
+            "runtime-restart-recovery-cex-lifecycle-summary: request_id={};client_order_id={};strategy_id={};venue_name={};market_pair={};final_status={};transition_count={};fill_count={}",
+            cex.request_id,
+            cex.client_order_id,
+            cex.strategy_id,
+            cex.venue_name,
+            cex.market_pair,
+            cex.final_status,
+            cex.transition_count,
+            cex.fill_count
+        );
+    }
+    if let Some(dex) = &report.recovered_dex_lifecycle {
+        println!(
+            "runtime-restart-recovery-dex-lifecycle-summary: request_id={};strategy_id={};venue_name={};chain={};market_pair={};quote_response_id={};simulation_response_id={};route_kind={};simulation_status={};gas_used={}",
+            dex.request_id,
+            dex.strategy_id,
+            dex.venue_name,
+            dex.chain,
+            dex.market_pair,
+            dex.quote_response_id,
+            dex.simulation_response_id,
+            dex.route_kind,
+            dex.simulation_status,
+            dex.gas_used
+        );
+    }
     print_runtime_restart_recovery_trace_report(report, recovered_summary_count);
     println!(
         "runtime-restart-recovery-opportunity-trace-recovered-summaries-match-count: {recovered_summaries_match_count}"
@@ -5002,6 +6253,209 @@ fn validate_policy_decision_state_failure(record: &PolicyDecisionRecord) -> bool
     failed && store.put_attempts == 1
 }
 
+#[allow(clippy::struct_excessive_bools)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct WithdrawalPolicyValidationReport {
+    config_guard_active: bool,
+    strategy_flag_guard_active: bool,
+    strategy_intent_guard_active: bool,
+    trust_contract_guard_active: bool,
+    destination_allowlist_guard_active: bool,
+    signing_boundary_guard_active: bool,
+    audit_append_failure_failed_closed: bool,
+    state_failure_failed_closed: bool,
+    audit_records_replayed: u64,
+    state_checkpoint_recovered: bool,
+    external_submission_performed: bool,
+    secret_material_recorded: bool,
+    production_ready: bool,
+}
+
+fn run_withdrawal_policy_validation(
+    options: &LocalValidationRunOptions,
+) -> Result<(), AgentCliError> {
+    let report = build_withdrawal_policy_validation_report(options)?;
+    validate_withdrawal_policy_report(&report)?;
+
+    println!("withdrawal-policy-boundary: validation passed");
+    println!("config-guard-active: {}", report.config_guard_active);
+    println!(
+        "strategy-flag-guard-active: {}",
+        report.strategy_flag_guard_active
+    );
+    println!(
+        "strategy-intent-guard-active: {}",
+        report.strategy_intent_guard_active
+    );
+    println!(
+        "trust-contract-guard-active: {}",
+        report.trust_contract_guard_active
+    );
+    println!(
+        "destination-allowlist-guard-active: {}",
+        report.destination_allowlist_guard_active
+    );
+    println!(
+        "signing-boundary-guard-active: {}",
+        report.signing_boundary_guard_active
+    );
+    println!(
+        "audit-append-failure-failed-closed: {}",
+        report.audit_append_failure_failed_closed
+    );
+    println!(
+        "state-failure-failed-closed: {}",
+        report.state_failure_failed_closed
+    );
+    println!("audit-records-replayed: {}", report.audit_records_replayed);
+    println!(
+        "state-checkpoint-recovered: {}",
+        report.state_checkpoint_recovered
+    );
+    println!(
+        "external-submission-performed: {}",
+        report.external_submission_performed
+    );
+    println!(
+        "secret-material-recorded: {}",
+        report.secret_material_recorded
+    );
+    println!("production-ready: {}", report.production_ready);
+    Ok(())
+}
+
+fn build_withdrawal_policy_validation_report(
+    options: &LocalValidationRunOptions,
+) -> Result<WithdrawalPolicyValidationReport, AgentCliError> {
+    prepare_fresh_workspace(&options.workspace_dir)?;
+    let now_unix_ms = current_unix_ms()?;
+    let audit_path = options.workspace_dir.join("withdrawal-policy.audit.jsonl");
+    let state_path = options.workspace_dir.join("withdrawal-policy.sqlite3");
+
+    let live_withdrawals_config = LOCAL_STRATEGY_PLANNER_CONFIG
+        .replace("mode = \"paper\"", "mode = \"live-armed\"")
+        .replace(
+            "live_execution_enabled = false",
+            "live_execution_enabled = true",
+        )
+        .replace("allow_withdrawals = false", "allow_withdrawals = true");
+    let config_guard_active = AgentConfig::from_toml_str(&live_withdrawals_config)
+        .err()
+        .is_some_and(|error| error.to_string().contains("WITHDRAWALS_BLOCKED_IN_PHASE_2"));
+
+    let mut invalid_profile =
+        StrategyProfile::conservative_paper("withdrawal-policy-invalid", "USD");
+    invalid_profile.execution.allow_withdrawals = true;
+    let strategy_flag_guard_active = invalid_profile.validate().err().is_some_and(|error| {
+        error
+            .violations()
+            .iter()
+            .any(|violation| violation.code() == "STRATEGY_WITHDRAWALS_DENIED")
+    });
+
+    let config = AgentConfig::from_toml_str(LOCAL_STRATEGY_PLANNER_CONFIG)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let policy = PolicyEngine::from_config(config);
+    let profile = StrategyProfile::conservative_paper("withdrawal-policy", "USD");
+    let mut intent = local_policy_decision_intent("withdrawal", ExecutionScope::Paper, true);
+    intent.kind = ExecutionIntentKind::Withdrawal;
+    intent.destination = DestinationPolicy::ApprovedAddress {
+        chain: "ethereum".to_owned(),
+        label: "ops-vault".to_owned(),
+    };
+
+    let strategy_report = profile.constrain_intent(&intent);
+    let strategy_intent_guard_active = strategy_report
+        .violations
+        .iter()
+        .any(|violation| violation.code() == "STRATEGY_WITHDRAWALS_DENIED");
+
+    let decision = policy.evaluate(&intent);
+    let record = PolicyDecisionRecord::from_decision(&intent, &decision, now_unix_ms);
+    let trust_contract_guard_active = record
+        .violation_codes
+        .iter()
+        .any(|code| code == "WITHDRAWALS_DENIED_BY_TRUST_CONTRACT");
+    let destination_allowlist_guard_active = record
+        .violation_codes
+        .iter()
+        .any(|code| code == "DESTINATION_NOT_APPROVED");
+    let signing_boundary_guard_active = record
+        .violation_codes
+        .iter()
+        .any(|code| code == "SECRET_BACKEND_REQUIRED_FOR_SIGNING")
+        && record
+            .violation_codes
+            .iter()
+            .any(|code| code == "WALLET_SIGNER_REFERENCE_REQUIRED");
+
+    let mut journal = AppendOnlyAuditJournal::open(&audit_path)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let mut store = SqliteWalStateStore::open(&state_path)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    append_policy_decision_audit(&mut journal, &record)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let checkpoint = persist_policy_decision_checkpoint(&mut store, &record)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let audit_append_failure_failed_closed =
+        validate_policy_decision_invalid_audit_fails_closed(&mut journal, &record);
+    let state_failure_failed_closed = validate_policy_decision_state_failure(&record);
+    drop(store);
+    drop(journal);
+
+    let replayed = AppendOnlyAuditJournal::open(&audit_path)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let reopened = SqliteWalStateStore::open(&state_path)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let recovered = reopened
+        .get_checkpoint(POLICY_LAST_DECISION_CHECKPOINT_KEY)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let state_checkpoint_recovered = recovered
+        .as_ref()
+        .is_some_and(|recovered| recovered.value == checkpoint.value);
+
+    Ok(WithdrawalPolicyValidationReport {
+        config_guard_active,
+        strategy_flag_guard_active,
+        strategy_intent_guard_active,
+        trust_contract_guard_active,
+        destination_allowlist_guard_active,
+        signing_boundary_guard_active,
+        audit_append_failure_failed_closed,
+        state_failure_failed_closed,
+        audit_records_replayed: replayed.next_sequence().saturating_sub(1),
+        state_checkpoint_recovered,
+        external_submission_performed: record.external_submission_performed,
+        secret_material_recorded: record.secret_material_recorded,
+        production_ready: false,
+    })
+}
+
+fn validate_withdrawal_policy_report(
+    report: &WithdrawalPolicyValidationReport,
+) -> Result<(), AgentCliError> {
+    if !report.config_guard_active
+        || !report.strategy_flag_guard_active
+        || !report.strategy_intent_guard_active
+        || !report.trust_contract_guard_active
+        || !report.destination_allowlist_guard_active
+        || !report.signing_boundary_guard_active
+        || !report.audit_append_failure_failed_closed
+        || !report.state_failure_failed_closed
+        || report.audit_records_replayed == 0
+        || !report.state_checkpoint_recovered
+        || report.external_submission_performed
+        || report.secret_material_recorded
+        || report.production_ready
+    {
+        return Err(AgentCliError::Validation(
+            "withdrawal policy validation did not preserve expected local fail-closed guards"
+                .to_owned(),
+        ));
+    }
+    Ok(())
+}
+
 struct SecretBoundaryAuditPersistence {
     ready_sequence: u64,
     rejected_sequence: u64,
@@ -5171,6 +6625,184 @@ fn validate_secret_rotation_state_failure(report: &SecretRotationPlanReport) -> 
     failed && store.put_attempts == 1
 }
 
+struct LocalExecutionPlannerAuditCase {
+    draft: arb_core::ExecutionPlanDraft,
+}
+
+struct ExecutionPlannerAuditPersistence {
+    draft_audit_sequence: u64,
+    last_record_sequence: u64,
+    records_appended: usize,
+    checkpoint_value: String,
+    audit_failure_failed_closed: bool,
+}
+
+fn run_execution_planner_audit_validation(
+    options: &LocalValidationRunOptions,
+) -> Result<(), AgentCliError> {
+    prepare_fresh_workspace(&options.workspace_dir)?;
+    let now_unix_ms = current_unix_ms()?;
+    let audit_path = options.workspace_dir.join("execution-planner.audit.jsonl");
+    let state_path = options.workspace_dir.join("execution-planner.sqlite3");
+    let planner_case = build_local_execution_planner_audit_case(now_unix_ms)?;
+    let persisted =
+        persist_local_execution_planner_audit_case(&audit_path, &state_path, &planner_case)?;
+    let audit_records_replayed =
+        verify_local_execution_planner_audit_case(&audit_path, &state_path, &persisted)?;
+    let state_failure_failed_closed = validate_execution_planner_state_failure(&planner_case.draft);
+
+    if !state_failure_failed_closed
+        || planner_case.draft.adapter_submission_enabled
+        || persisted.records_appended != 1 + planner_case.draft.policy_outcomes.len()
+    {
+        return Err(AgentCliError::Validation(
+            "execution planner audit/state validation failed".to_owned(),
+        ));
+    }
+
+    println!("execution-planner-audit: validation passed");
+    println!(
+        "plan-status: {}",
+        plan_status_label(planner_case.draft.status)
+    );
+    println!("plan-intents: {}", planner_case.draft.intents.len());
+    println!(
+        "plan-policy-outcomes: {}",
+        planner_case.draft.policy_outcomes.len()
+    );
+    println!(
+        "plan-failure-modes: {}",
+        planner_case.draft.failure_modes.len()
+    );
+    println!(
+        "audit-append-failure-failed-closed: {}",
+        persisted.audit_failure_failed_closed
+    );
+    println!("state-failure-failed-closed: {state_failure_failed_closed}");
+    println!("audit-records-replayed: {audit_records_replayed}");
+    println!("state-checkpoints-recovered: true");
+    println!("adapter-submission-enabled: false");
+    println!("external-submission-performed: false");
+    println!("live-execution-performed: false");
+    println!("production-ready: false");
+    Ok(())
+}
+
+fn build_local_execution_planner_audit_case(
+    now_unix_ms: u64,
+) -> Result<LocalExecutionPlannerAuditCase, AgentCliError> {
+    let config = AgentConfig::from_toml_str(LOCAL_STRATEGY_PLANNER_CONFIG)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let policy = PolicyEngine::from_config(config);
+    let planner_request = ExecutionPlannerRequest {
+        id: "local-execution-planner-audit-request".to_owned(),
+        strategy_id: "local-execution-planner-audit".to_owned(),
+        candidate: local_strategy_planner_candidate()?,
+        config: ExecutionPlannerConfig {
+            requested_scope: ExecutionScope::Paper,
+            max_plan_legs: 2,
+            max_total_notional_quote: 1_000.0,
+            default_slippage_bps: 50,
+            max_market_data_age_ms: DEFAULT_MARKET_DATA_FRESHNESS_MS,
+            require_policy_preflight: true,
+        },
+        default_chain: None,
+        now_unix_ms,
+    };
+    let draft = DeterministicExecutionPlanner::new()
+        .plan(&planner_request, &policy)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    Ok(LocalExecutionPlannerAuditCase { draft })
+}
+
+fn persist_local_execution_planner_audit_case(
+    audit_path: &Path,
+    state_path: &Path,
+    planner_case: &LocalExecutionPlannerAuditCase,
+) -> Result<ExecutionPlannerAuditPersistence, AgentCliError> {
+    let mut journal = AppendOnlyAuditJournal::open(audit_path)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let mut store = SqliteWalStateStore::open(state_path)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let audit_report = append_execution_plan_draft_audit(
+        &mut journal,
+        &planner_case.draft,
+        planner_case.draft.created_at_unix_ms,
+    )
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let checkpoint = persist_execution_plan_draft_checkpoint(&mut store, &planner_case.draft)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let audit_failure_failed_closed =
+        validate_execution_planner_invalid_audit_fails_closed(&mut journal, &planner_case.draft);
+    drop(store);
+    drop(journal);
+
+    Ok(ExecutionPlannerAuditPersistence {
+        draft_audit_sequence: audit_report.draft_record_sequence,
+        last_record_sequence: audit_report
+            .policy_outcome_record_sequences
+            .last()
+            .copied()
+            .unwrap_or(audit_report.draft_record_sequence),
+        records_appended: audit_report.records_appended,
+        checkpoint_value: checkpoint.value,
+        audit_failure_failed_closed,
+    })
+}
+
+fn verify_local_execution_planner_audit_case(
+    audit_path: &Path,
+    state_path: &Path,
+    persisted: &ExecutionPlannerAuditPersistence,
+) -> Result<u64, AgentCliError> {
+    let replayed = AppendOnlyAuditJournal::open(audit_path)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let reopened = SqliteWalStateStore::open(state_path)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let recovered = reopened
+        .get_checkpoint(EXECUTION_PLANNER_LAST_DRAFT_CHECKPOINT_KEY)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?
+        .ok_or_else(|| {
+            AgentCliError::Validation(
+                "execution planner draft checkpoint was not recovered after reopen".to_owned(),
+            )
+        })?;
+
+    let replayed_records = replayed.next_sequence() - 1;
+    if replayed.next_sequence() != persisted.last_record_sequence.saturating_add(1)
+        || persisted.last_record_sequence
+            != persisted.draft_audit_sequence
+                + (persisted.records_appended.saturating_sub(1) as u64)
+        || replayed_records != persisted.records_appended as u64
+        || recovered.value != persisted.checkpoint_value
+        || !persisted.audit_failure_failed_closed
+    {
+        return Err(AgentCliError::Validation(
+            "execution planner audit/state validation failed".to_owned(),
+        ));
+    }
+
+    Ok(replayed_records)
+}
+
+fn validate_execution_planner_invalid_audit_fails_closed(
+    journal: &mut AppendOnlyAuditJournal,
+    draft: &arb_core::ExecutionPlanDraft,
+) -> bool {
+    let next_sequence = journal.next_sequence();
+    let mut invalid = draft.clone();
+    invalid.adapter_submission_enabled = true;
+    let failed =
+        append_execution_plan_draft_audit(journal, &invalid, invalid.created_at_unix_ms).is_err();
+    failed && journal.next_sequence() == next_sequence
+}
+
+fn validate_execution_planner_state_failure(draft: &arb_core::ExecutionPlanDraft) -> bool {
+    let mut store = PermissionDeniedLocalStateStore::default();
+    let failed = persist_execution_plan_draft_checkpoint(&mut store, draft).is_err();
+    failed && store.put_attempts == 1
+}
+
 struct LocalExecutionAdapterAuditCase {
     adapter_request: ExecutionAdapterRequest,
     run: arb_core::ExecutionAdapterRunRecord,
@@ -5200,8 +6832,24 @@ fn run_execution_adapter_audit_validation(
         verify_local_execution_adapter_audit_case(&audit_path, &state_path, &persisted)?;
     let state_failure_failed_closed =
         validate_execution_adapter_state_failure(&adapter_case.run, &adapter_case.recovery_plan);
+    let all_attempts_policy_revalidated = adapter_case
+        .run
+        .attempts
+        .iter()
+        .all(|attempt| attempt.policy_revalidated);
+    let policy_denied_attempts = adapter_case
+        .run
+        .attempts
+        .iter()
+        .filter(|attempt| {
+            attempt.reason.contains("policy")
+                || attempt.reason.contains("kill switch")
+                || attempt.reason.contains("source planner policy outcome")
+        })
+        .count();
 
     if !state_failure_failed_closed
+        || !all_attempts_policy_revalidated
         || adapter_case.run.external_submission_enabled
         || adapter_case.recovery_plan.external_submission_performed
         || adapter_case.recovery_plan.live_execution_performed
@@ -5215,6 +6863,10 @@ fn run_execution_adapter_audit_validation(
     println!("execution-adapter-audit: validation passed");
     println!(
         "adapter-run-status: {}",
+        execution_adapter_run_status_label(adapter_case.run.status)
+    );
+    println!(
+        "source-plan-status: {}",
         plan_status_label(adapter_case.adapter_request.plan.status)
     );
     println!("adapter-run-attempts: {}", adapter_case.run.attempts.len());
@@ -5223,6 +6875,8 @@ fn run_execution_adapter_audit_validation(
         "adapter-run-reconciliations: {}",
         adapter_case.run.reconciliations.len()
     );
+    println!("adapter-policy-revalidated: {all_attempts_policy_revalidated}");
+    println!("adapter-policy-denied-attempts: {policy_denied_attempts}");
     println!(
         "adapter-recovery-steps: {}",
         adapter_case.recovery_plan.steps.len()
@@ -8686,6 +10340,17 @@ const fn rollback_execution_status_label(
     }
 }
 
+const fn incident_response_execution_status_label(
+    status: IncidentResponseExecutionTranscriptStatus,
+) -> &'static str {
+    match status {
+        IncidentResponseExecutionTranscriptStatus::ReadyForExternalReview => {
+            "ready-for-external-review"
+        }
+        IncidentResponseExecutionTranscriptStatus::Blocked => "blocked",
+    }
+}
+
 const fn validation_corpus_status_label(status: LocalValidationCorpusStatus) -> &'static str {
     match status {
         LocalValidationCorpusStatus::ReadyForLocalReview => "ready-for-local-review",
@@ -10551,6 +12216,81 @@ fn run_rollback_execution_transcript_validation() -> Result<(), AgentCliError> {
     Ok(())
 }
 
+fn run_incident_response_execution_transcript_validation() -> Result<(), AgentCliError> {
+    let ready = validate_incident_response_execution_transcript(
+        local_incident_response_execution_transcript("ready", true),
+    )
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let blocked = validate_incident_response_execution_transcript(
+        local_incident_response_execution_transcript("blocked", false),
+    )
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+
+    if ready.status != IncidentResponseExecutionTranscriptStatus::ReadyForExternalReview
+        || blocked.status != IncidentResponseExecutionTranscriptStatus::Blocked
+        || ready.production_ready
+        || blocked.production_ready
+        || ready.incident_response_executed_by_validator
+        || blocked.incident_response_executed_by_validator
+        || ready.service_manager_action_performed_by_validator
+        || blocked.service_manager_action_performed_by_validator
+        || ready.files_mutated_by_validator
+        || blocked.files_mutated_by_validator
+        || ready.alerts_sent_by_validator
+        || blocked.alerts_sent_by_validator
+        || ready.external_calls_performed
+        || blocked.external_calls_performed
+        || ready.live_execution_performed
+        || blocked.live_execution_performed
+        || blocked.blocker_codes.is_empty()
+    {
+        return Err(AgentCliError::Validation(
+            "incident-response execution transcript validation failed".to_owned(),
+        ));
+    }
+
+    println!("incident-response-execution-transcript: validation passed");
+    println!(
+        "ready-transcript-status: {}",
+        incident_response_execution_status_label(ready.status)
+    );
+    println!(
+        "ready-incident-reference-present: {}",
+        ready.incident_scenario_reference_present
+    );
+    println!(
+        "ready-responder-reviewer-reference-present: {}",
+        ready.responder_reference_present && ready.reviewer_reference_present
+    );
+    println!(
+        "ready-detection-containment-reference-present: {}",
+        ready.detection_triage_reference_present && ready.containment_recovery_reference_present
+    );
+    println!(
+        "ready-post-incident-recovery-validated: {}",
+        ready.post_incident_runtime_smoke_passed
+            && ready.audit_replay_after_recovery_validated
+            && ready.sqlite_recovery_after_recovery_validated
+    );
+    println!(
+        "ready-communications-reference-present: {}",
+        ready.communications_reference_present
+    );
+    println!(
+        "blocked-transcript-status: {}",
+        incident_response_execution_status_label(blocked.status)
+    );
+    println!("blocked-blocker-count: {}", blocked.blocker_codes.len());
+    println!("incident-response-executed-by-validator: false");
+    println!("service-manager-action-performed-by-validator: false");
+    println!("files-mutated-by-validator: false");
+    println!("alerts-sent-by-validator: false");
+    println!("external-calls-performed: false");
+    println!("live-execution-performed: false");
+    println!("production-ready: false");
+    Ok(())
+}
+
 fn local_deployment_disk_full_transcript(
     suffix: &str,
     complete: bool,
@@ -10652,6 +12392,37 @@ fn local_rollback_execution_transcript(
         live_execution_performed: false,
         production_ready_claimed: false,
         validated_at_unix_ms: 96_000,
+    }
+}
+
+fn local_incident_response_execution_transcript(
+    suffix: &str,
+    complete: bool,
+) -> IncidentResponseExecutionTranscript {
+    IncidentResponseExecutionTranscript {
+        transcript_id: format!("local-incident-response-execution-{suffix}"),
+        plan_id: "phase-55-incident-response-execution".to_owned(),
+        incident_scenario_reference_present: complete,
+        severity_reference_present: complete,
+        responder_reference_present: complete,
+        reviewer_reference_present: complete,
+        detection_triage_reference_present: complete,
+        containment_recovery_reference_present: complete,
+        post_incident_runtime_smoke_passed: complete,
+        audit_replay_after_recovery_validated: complete,
+        sqlite_recovery_after_recovery_validated: complete,
+        communications_reference_present: complete,
+        operator_approved: complete,
+        reviewer_approved: complete,
+        non_secret_reference_count: if complete { 8 } else { 1 },
+        incident_response_executed_by_validator: false,
+        service_manager_action_performed_by_validator: false,
+        files_mutated_by_validator: false,
+        alerts_sent_by_validator: false,
+        external_calls_performed: false,
+        live_execution_performed: false,
+        production_ready_claimed: false,
+        validated_at_unix_ms: 97_000,
     }
 }
 
@@ -12244,6 +14015,33 @@ const fn opportunity_planner_handoff_status_label(
     }
 }
 
+const fn strategy_profile_replay_status_label(
+    status: StrategyProfileReplayValidationStatus,
+) -> &'static str {
+    match status {
+        StrategyProfileReplayValidationStatus::Passed => "passed",
+        StrategyProfileReplayValidationStatus::Failed => "failed",
+    }
+}
+
+const fn strategy_profitability_tuning_status_label(
+    status: StrategyProfitabilityTuningValidationStatus,
+) -> &'static str {
+    match status {
+        StrategyProfitabilityTuningValidationStatus::Passed => "passed",
+        StrategyProfitabilityTuningValidationStatus::Failed => "failed",
+    }
+}
+
+const fn execution_adapter_run_status_label(status: ExecutionAdapterRunStatus) -> &'static str {
+    match status {
+        ExecutionAdapterRunStatus::ObserveRecorded => "observe-recorded",
+        ExecutionAdapterRunStatus::PaperModelComplete => "paper-model-complete",
+        ExecutionAdapterRunStatus::SubmissionBlocked => "submission-blocked",
+        ExecutionAdapterRunStatus::PolicyDenied => "policy-denied",
+    }
+}
+
 const fn plan_status_label(status: ExecutionPlanStatus) -> &'static str {
     match status {
         ExecutionPlanStatus::DraftReady => "draft-ready",
@@ -12276,6 +14074,25 @@ const fn market_data_reconnect_plan_status_label(
     }
 }
 
+const fn market_data_quality_assessment_status_label(
+    status: MarketDataQualityAssessmentStatus,
+) -> &'static str {
+    match status {
+        MarketDataQualityAssessmentStatus::Acceptable => "acceptable",
+        MarketDataQualityAssessmentStatus::Degraded => "degraded",
+        MarketDataQualityAssessmentStatus::Blocked => "blocked",
+    }
+}
+
+const fn paid_market_data_provider_evaluation_status_label(
+    status: PaidMarketDataProviderEvaluationStatus,
+) -> &'static str {
+    match status {
+        PaidMarketDataProviderEvaluationStatus::ReadyForLocalReview => "ready-for-local-review",
+        PaidMarketDataProviderEvaluationStatus::Blocked => "blocked",
+    }
+}
+
 const fn fee_schedule_verification_status_label(
     status: FeeScheduleVerificationStatus,
 ) -> &'static str {
@@ -12288,39 +14105,49 @@ const fn fee_schedule_verification_status_label(
 #[cfg(test)]
 mod tests {
     use super::{
-        config_migration_status_label, fee_schedule_verification_status_label,
-        fuzz_corpus_replay_status_label, market_data_preflight_status_label,
+        config_migration_status_label, execution_adapter_run_status_label,
+        fee_schedule_verification_status_label, fuzz_corpus_replay_status_label,
+        market_data_preflight_status_label, market_data_quality_assessment_status_label,
         market_data_reconnect_plan_status_label, opportunity_planner_handoff_status_label,
-        opportunity_replay_status_label, parse_local_iteration_options,
-        parse_local_validation_run_options, parse_runtime_smoke_options,
-        recovery_disposition_label, run_agentic_handoff_audit_validation,
-        run_audit_durability_validation, run_audit_retention_execution_validation,
-        run_communications_runtime_validation, run_config_migration_validation,
-        run_connector_lifecycle_audit_validation, run_dashboard_runtime_validation,
-        run_destination_boundary_audit_validation, run_execution_adapter_audit_validation,
+        opportunity_replay_status_label, paid_market_data_provider_evaluation_status_label,
+        parse_local_iteration_options, parse_local_validation_run_options,
+        parse_runtime_smoke_options, recovery_disposition_label,
+        run_agentic_handoff_audit_validation, run_audit_durability_validation,
+        run_audit_retention_execution_validation, run_communications_runtime_validation,
+        run_config_migration_validation, run_connector_lifecycle_audit_validation,
+        run_dashboard_runtime_validation, run_destination_boundary_audit_validation,
+        run_execution_adapter_audit_validation, run_execution_planner_audit_validation,
         run_fee_boundary_audit_validation, run_fee_schedule_verification_validation,
         run_local_fuzz_corpus_runner, run_local_paper_backtest_corpus_runner,
         run_local_property_check_runner, run_local_validation_corpus_runner,
         run_local_validation_runner, run_market_data_boundary_audit_validation,
-        run_market_data_provider_preflight_validation, run_market_data_reconnect_plan_validation,
+        run_market_data_history_persistence_validation,
+        run_market_data_provider_preflight_validation,
+        run_market_data_quality_assessment_validation, run_market_data_reconnect_plan_validation,
         run_observability_runtime_validation, run_opportunity_historical_fixture_validation,
         run_opportunity_planner_handoff_validation, run_opportunity_provider_ingestion_validation,
         run_opportunity_quote_load_validation, run_opportunity_replay_validation,
-        run_opportunity_trace_recovery_validation, run_policy_decision_audit_validation,
+        run_opportunity_trace_recovery_validation,
+        run_paid_market_data_provider_evaluation_validation, run_policy_decision_audit_validation,
         run_runtime_backup_restore_load_validation, run_runtime_backup_restore_validation,
         run_runtime_blocked_audit_preflight_validation,
         run_runtime_blocked_state_preflight_validation, run_runtime_graceful_shutdown_validation,
         run_runtime_incomplete_recovery_validation, run_runtime_panic_hook_validation,
         run_runtime_permission_denial_validation, run_runtime_restart_recovery_validation,
         run_secret_boundary_audit_validation, run_signer_boundary_audit_validation,
-        run_strategy_constrained_planner_validation, runtime_recovery_disposition_status,
-        runtime_supervised_restart_audit_path, runtime_supervised_restart_state_path,
-        validation_corpus_status_label, validation_run_status_label,
-        write_runtime_supervised_restart_seed, ConfigMigrationStatus,
-        FeeScheduleVerificationStatus, LocalFuzzCorpusReplayStatus, LocalValidationCorpusStatus,
-        LocalValidationRunOptions, MarketDataProviderPreflightStatus,
-        MarketDataReconnectPlanStatus, OpportunityPlannerHandoffStatus, OpportunityReplayStatus,
-        RuntimeRestartRecoveryDisposition, ValidationRunStatus,
+        run_strategy_constrained_planner_validation, run_strategy_profitability_tuning_validation,
+        run_strategy_replay_corpus_validation, run_withdrawal_policy_validation,
+        runtime_recovery_disposition_status, runtime_supervised_restart_audit_path,
+        runtime_supervised_restart_state_path, strategy_profile_replay_status_label,
+        strategy_profitability_tuning_status_label, validation_corpus_status_label,
+        validation_run_status_label, write_runtime_supervised_restart_seed, ConfigMigrationStatus,
+        ExecutionAdapterRunStatus, FeeScheduleVerificationStatus, LocalFuzzCorpusReplayStatus,
+        LocalValidationCorpusStatus, LocalValidationRunOptions, MarketDataProviderPreflightStatus,
+        MarketDataQualityAssessmentStatus, MarketDataReconnectPlanStatus,
+        OpportunityPlannerHandoffStatus, OpportunityReplayStatus,
+        PaidMarketDataProviderEvaluationStatus, RuntimeRestartRecoveryDisposition,
+        StrategyProfileReplayValidationStatus, StrategyProfitabilityTuningValidationStatus,
+        ValidationRunStatus,
     };
     use std::{
         env, fs,
@@ -12519,6 +14346,54 @@ mod tests {
     }
 
     #[test]
+    fn strategy_profile_replay_status_labels_are_operator_facing() {
+        assert_eq!(
+            strategy_profile_replay_status_label(StrategyProfileReplayValidationStatus::Passed),
+            "passed"
+        );
+        assert_eq!(
+            strategy_profile_replay_status_label(StrategyProfileReplayValidationStatus::Failed),
+            "failed"
+        );
+    }
+
+    #[test]
+    fn strategy_profitability_tuning_status_labels_are_operator_facing() {
+        assert_eq!(
+            strategy_profitability_tuning_status_label(
+                StrategyProfitabilityTuningValidationStatus::Passed
+            ),
+            "passed"
+        );
+        assert_eq!(
+            strategy_profitability_tuning_status_label(
+                StrategyProfitabilityTuningValidationStatus::Failed
+            ),
+            "failed"
+        );
+    }
+
+    #[test]
+    fn execution_adapter_run_status_labels_are_operator_facing() {
+        assert_eq!(
+            execution_adapter_run_status_label(ExecutionAdapterRunStatus::ObserveRecorded),
+            "observe-recorded"
+        );
+        assert_eq!(
+            execution_adapter_run_status_label(ExecutionAdapterRunStatus::PaperModelComplete),
+            "paper-model-complete"
+        );
+        assert_eq!(
+            execution_adapter_run_status_label(ExecutionAdapterRunStatus::SubmissionBlocked),
+            "submission-blocked"
+        );
+        assert_eq!(
+            execution_adapter_run_status_label(ExecutionAdapterRunStatus::PolicyDenied),
+            "policy-denied"
+        );
+    }
+
+    #[test]
     fn market_data_preflight_status_labels_are_operator_facing() {
         assert_eq!(
             market_data_preflight_status_label(MarketDataProviderPreflightStatus::Usable),
@@ -12540,6 +14415,42 @@ mod tests {
         );
         assert_eq!(
             market_data_reconnect_plan_status_label(MarketDataReconnectPlanStatus::Blocked),
+            "blocked"
+        );
+    }
+
+    #[test]
+    fn market_data_quality_assessment_status_labels_are_operator_facing() {
+        assert_eq!(
+            market_data_quality_assessment_status_label(
+                MarketDataQualityAssessmentStatus::Acceptable
+            ),
+            "acceptable"
+        );
+        assert_eq!(
+            market_data_quality_assessment_status_label(
+                MarketDataQualityAssessmentStatus::Degraded
+            ),
+            "degraded"
+        );
+        assert_eq!(
+            market_data_quality_assessment_status_label(MarketDataQualityAssessmentStatus::Blocked),
+            "blocked"
+        );
+    }
+
+    #[test]
+    fn paid_market_data_provider_evaluation_status_labels_are_operator_facing() {
+        assert_eq!(
+            paid_market_data_provider_evaluation_status_label(
+                PaidMarketDataProviderEvaluationStatus::ReadyForLocalReview
+            ),
+            "ready-for-local-review"
+        );
+        assert_eq!(
+            paid_market_data_provider_evaluation_status_label(
+                PaidMarketDataProviderEvaluationStatus::Blocked
+            ),
             "blocked"
         );
     }
@@ -12601,6 +14512,18 @@ mod tests {
     }
 
     #[test]
+    fn market_data_quality_assessment_validation_runs_local_metadata_only() {
+        run_market_data_quality_assessment_validation()
+            .expect("local market-data quality assessment should pass");
+    }
+
+    #[test]
+    fn paid_market_data_provider_evaluation_validation_runs_local_metadata_only() {
+        run_paid_market_data_provider_evaluation_validation()
+            .expect("local paid market-data provider evaluation should pass");
+    }
+
+    #[test]
     fn fee_schedule_verification_validation_runs_local_records_only() {
         run_fee_schedule_verification_validation()
             .expect("local fee schedule verification should pass");
@@ -12622,6 +14545,17 @@ mod tests {
     fn strategy_constrained_planner_validation_runs_local_profiles_only() {
         run_strategy_constrained_planner_validation()
             .expect("local strategy-constrained planner should pass");
+    }
+
+    #[test]
+    fn strategy_replay_corpus_validation_runs_local_profiles_only() {
+        run_strategy_replay_corpus_validation().expect("local strategy replay corpus should pass");
+    }
+
+    #[test]
+    fn strategy_profitability_tuning_validation_runs_local_profiles_only() {
+        run_strategy_profitability_tuning_validation()
+            .expect("local strategy profitability tuning should pass");
     }
 
     #[test]
@@ -12945,6 +14879,23 @@ mod tests {
     }
 
     #[test]
+    fn market_data_history_persistence_runner_records_and_fails_closed_locally() {
+        let workspace = temp_workspace_path("market-data-history-persistence-runner");
+        run_market_data_history_persistence_validation(&LocalValidationRunOptions {
+            workspace_dir: workspace.clone(),
+        })
+        .expect("market-data history persistence validation should pass");
+
+        assert!(workspace
+            .join("market-data-history-persistence.audit.jsonl")
+            .exists());
+        assert!(workspace
+            .join("market-data-history-persistence.sqlite3")
+            .exists());
+        cleanup_workspace(&workspace);
+    }
+
+    #[test]
     fn fee_boundary_audit_runner_records_and_fails_closed_locally() {
         let workspace = temp_workspace_path("fee-boundary-audit-runner");
         run_fee_boundary_audit_validation(&LocalValidationRunOptions {
@@ -12984,6 +14935,19 @@ mod tests {
     }
 
     #[test]
+    fn withdrawal_policy_runner_records_fail_closed_local_guards() {
+        let workspace = temp_workspace_path("withdrawal-policy-boundary-runner");
+        run_withdrawal_policy_validation(&LocalValidationRunOptions {
+            workspace_dir: workspace.clone(),
+        })
+        .expect("withdrawal policy validation should pass");
+
+        assert!(workspace.join("withdrawal-policy.audit.jsonl").exists());
+        assert!(workspace.join("withdrawal-policy.sqlite3").exists());
+        cleanup_workspace(&workspace);
+    }
+
+    #[test]
     fn secret_boundary_audit_runner_records_and_fails_closed_locally() {
         let workspace = temp_workspace_path("secret-boundary-audit-runner");
         run_secret_boundary_audit_validation(&LocalValidationRunOptions {
@@ -12993,6 +14957,19 @@ mod tests {
 
         assert!(workspace.join("secret-boundary.audit.jsonl").exists());
         assert!(workspace.join("secret-boundary.sqlite3").exists());
+        cleanup_workspace(&workspace);
+    }
+
+    #[test]
+    fn execution_planner_audit_runner_records_and_fails_closed_locally() {
+        let workspace = temp_workspace_path("execution-planner-audit-runner");
+        run_execution_planner_audit_validation(&LocalValidationRunOptions {
+            workspace_dir: workspace.clone(),
+        })
+        .expect("execution planner audit validation should pass");
+
+        assert!(workspace.join("execution-planner.audit.jsonl").exists());
+        assert!(workspace.join("execution-planner.sqlite3").exists());
         cleanup_workspace(&workspace);
     }
 

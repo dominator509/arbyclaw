@@ -227,6 +227,7 @@ pub struct ConfigMigrationReport {
 /// Known legacy aliases are upgraded:
 /// - `[markets]` becomes `[venues]`
 /// - `[notifications]` becomes `[communication]`
+/// - legacy venue allowlist field names under `[venues]` are renamed
 /// - missing `risk.gas_fee_cap_quote` is filled with `0.0`
 /// - missing `[secrets]` is filled with disabled secret references
 pub fn migrate_config_toml_to_current(text: &str) -> Result<ConfigMigrationReport, ConfigError> {
@@ -269,6 +270,10 @@ pub fn migrate_config_toml_to_current(text: &str) -> Result<ConfigMigrationRepor
         let communication = migrate_notifications_to_communication(notifications)?;
         table.insert("communication".to_owned(), communication);
         action_codes.push("CONFIG_MIGRATED_NOTIFICATIONS_TO_COMMUNICATION".to_owned());
+    }
+
+    if migrate_venue_field_aliases(table)? {
+        action_codes.push("CONFIG_MIGRATED_VENUE_FIELD_ALIASES".to_owned());
     }
 
     if ensure_risk_gas_cap(table)? {
@@ -448,6 +453,39 @@ fn migrate_notifications_to_communication(
             .unwrap_or_else(|| toml::Value::Array(Vec::new())),
     );
     Ok(toml::Value::Table(communication))
+}
+
+fn migrate_venue_field_aliases(
+    table: &mut toml::map::Map<String, toml::Value>,
+) -> Result<bool, ConfigError> {
+    let Some(venues) = table.get_mut("venues") else {
+        return Ok(false);
+    };
+    let venues = venues
+        .as_table_mut()
+        .ok_or_else(|| ConfigError::ParseFailed {
+            reason: "venues section must be a table".to_owned(),
+        })?;
+    let mut migrated = false;
+    for (legacy, current) in [
+        ("allowed_exchanges", "cex_allowlist"),
+        ("allowed_dexes", "dex_allowlist"),
+        ("allowed_chains", "chain_allowlist"),
+        ("allowed_assets", "asset_allowlist"),
+    ] {
+        if let Some(value) = venues.remove(legacy) {
+            if venues.contains_key(current) {
+                return Err(ConfigError::ParseFailed {
+                    reason: format!(
+                        "venues section cannot contain both legacy field {legacy} and current field {current}"
+                    ),
+                });
+            }
+            venues.insert(current.to_owned(), value);
+            migrated = true;
+        }
+    }
+    Ok(migrated)
 }
 
 fn ensure_risk_gas_cap(
@@ -704,6 +742,110 @@ notify_channels = []
         assert!(!report.production_ready);
         assert!(!report.migrated_toml.contains("[markets]"));
         assert!(report.migrated_toml.contains("[venues]"));
+    }
+
+    #[test]
+    fn config_migration_upgrades_legacy_venue_field_aliases_in_current_section() {
+        let legacy = r#"
+[runtime]
+mode = "observe"
+live_execution_enabled = false
+allow_withdrawals = false
+kill_switch_enabled = true
+
+[risk]
+max_single_trade_quote = 10.0
+max_daily_loss_quote = 2.0
+max_open_exposure_quote = 20.0
+slippage_bps = 50
+gas_fee_cap_quote = 0.0
+
+[venues]
+allowed_exchanges = ["coinbase", "kraken"]
+allowed_dexes = ["paper-uniswap"]
+allowed_chains = ["ethereum"]
+allowed_assets = ["BTC", "ETH", "USDC"]
+
+[secrets]
+backend = "disabled"
+exchange_credentials = { source = "disabled" }
+wallet_signer = { source = "disabled" }
+
+[communication]
+cli_enabled = true
+notify_channels = []
+
+[audit]
+enabled = true
+redact_secrets = true
+"#;
+
+        let report = migrate_config_toml_to_current(legacy)
+            .expect("legacy venue field aliases should migrate and validate");
+
+        assert_eq!(report.status, ConfigMigrationStatus::Migrated);
+        assert!(report
+            .action_codes
+            .iter()
+            .any(|code| code == "CONFIG_MIGRATED_VENUE_FIELD_ALIASES"));
+        assert_eq!(report.config.venues.cex_allowlist, ["coinbase", "kraken"]);
+        assert_eq!(report.config.venues.dex_allowlist, ["paper-uniswap"]);
+        assert_eq!(report.config.venues.chain_allowlist, ["ethereum"]);
+        assert_eq!(report.config.venues.asset_allowlist, ["BTC", "ETH", "USDC"]);
+        assert!(!report.migrated_toml.contains("allowed_exchanges"));
+        assert!(report.migrated_toml.contains("cex_allowlist"));
+        assert!(!report.secret_material_loaded);
+        assert!(!report.live_execution_enabled);
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn config_migration_rejects_ambiguous_legacy_and_current_venue_fields() {
+        let legacy = r#"
+[runtime]
+mode = "observe"
+live_execution_enabled = false
+allow_withdrawals = false
+kill_switch_enabled = true
+
+[risk]
+max_single_trade_quote = 10.0
+max_daily_loss_quote = 2.0
+max_open_exposure_quote = 20.0
+slippage_bps = 50
+gas_fee_cap_quote = 0.0
+
+[venues]
+cex_allowlist = ["coinbase"]
+allowed_exchanges = ["kraken"]
+dex_allowlist = []
+chain_allowlist = []
+asset_allowlist = ["BTC"]
+
+[secrets]
+backend = "disabled"
+exchange_credentials = { source = "disabled" }
+wallet_signer = { source = "disabled" }
+
+[communication]
+cli_enabled = true
+notify_channels = []
+
+[audit]
+enabled = true
+redact_secrets = true
+"#;
+
+        let error = migrate_config_toml_to_current(legacy)
+            .expect_err("ambiguous legacy and current venue fields should fail closed");
+
+        match error {
+            ConfigError::ParseFailed { reason } => {
+                assert!(reason.contains("allowed_exchanges"));
+                assert!(reason.contains("cex_allowlist"));
+            }
+            other => panic!("unexpected error: {other:?}"),
+        }
     }
 
     #[test]

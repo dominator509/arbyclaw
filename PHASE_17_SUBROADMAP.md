@@ -133,4 +133,4 @@ production readiness review
 
 Completed for ChatGPT Project Mode after Phase 17 evidence-boundary patch and available validation.
 
-Rust, Cargo, CI, local example-container build, and example image scan validation now have repeatable local/CI paths where the required tools are available. Production container, systemd, ARM, SAST review, dependency audit review, SBOM review, cloud/staging deployment, load, penetration, rollback, incident-response, live exchange/RPC, and production readiness validation remain external unless explicitly run in a capable environment.
+Rust, Cargo, CI, the local `scripts/validate_hardening_core_gate.py --json` aggregate over packaging/deployment, dependency-license policy, and secret/policy audit boundaries, local example-container build, and example image scan validation now have repeatable local/CI paths where the required tools are available. Production container, systemd, ARM, SAST review, dependency audit review, SBOM review, cloud/staging deployment, load, penetration, rollback, incident-response, live exchange/RPC, and production readiness validation remain external unless explicitly run in a capable environment.

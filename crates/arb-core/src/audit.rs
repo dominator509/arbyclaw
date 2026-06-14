@@ -1141,10 +1141,10 @@ fn validate_concurrent_append_probe(
         let path = concurrent_path.clone();
         handles.push(thread::spawn(move || -> Result<(), AuditError> {
             for event_index in 0..events_per_writer {
-                let mut journal = AppendOnlyAuditJournal::open(&path)?;
-                journal.append_event(validation_event(format!(
-                    "concurrent-{writer_index}-{event_index}"
-                )))?;
+                append_validation_event_with_retry(
+                    &path,
+                    format!("concurrent-{writer_index}-{event_index}"),
+                )?;
             }
             Ok(())
         }));
@@ -1161,6 +1161,42 @@ fn validate_concurrent_append_probe(
         == u64::try_from(concurrent_records)
             .unwrap_or(u64::MAX)
             .saturating_add(1))
+}
+
+fn append_validation_event_with_retry(path: &Path, label: String) -> Result<(), AuditError> {
+    const VALIDATION_APPEND_RETRY_COUNT: usize = 5;
+
+    for attempt in 0..VALIDATION_APPEND_RETRY_COUNT {
+        match AppendOnlyAuditJournal::open(path) {
+            Ok(mut journal) => match journal.append_event(validation_event(label.clone())) {
+                Ok(_) => return Ok(()),
+                Err(error) if is_audit_lock_timeout(&error) => {
+                    if attempt + 1 == VALIDATION_APPEND_RETRY_COUNT {
+                        return Err(error);
+                    }
+                }
+                Err(error) => return Err(error),
+            },
+            Err(error) if is_audit_lock_timeout(&error) => {
+                if attempt + 1 == VALIDATION_APPEND_RETRY_COUNT {
+                    return Err(error);
+                }
+            }
+            Err(error) => return Err(error),
+        }
+        thread::sleep(AUDIT_LOCK_RETRY_DELAY);
+    }
+
+    Err(AuditError::ValidationHarnessFailed {
+        reason: "validation append retry loop exited unexpectedly".to_owned(),
+    })
+}
+
+fn is_audit_lock_timeout(error: &AuditError) -> bool {
+    matches!(
+        error,
+        AuditError::Io { reason, .. } if reason == "timed out waiting for audit journal lock"
+    )
 }
 
 fn validate_filesystem_failure_probe(workspace_dir: &Path) -> Result<bool, AuditError> {

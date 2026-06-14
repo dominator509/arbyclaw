@@ -144,12 +144,12 @@ No secrets, wallets, exchange accounts, runtime state, network integrations, or 
 
 - Rust/Cargo validation is current for the workspace state and must be refreshed after future changes.
 - No live market-data providers implemented.
-- Local rate-limit/outage/stale/latency provider preflight, local reconnect/backoff plan validation, `arb-agent validate-market-data-boundary-audit --workspace <fresh-dir>`, local fee verification records, and `arb-agent validate-fee-boundary-audit --workspace <fresh-dir>` now exist for caller-supplied no-network/no-credential observations; provider-side market-data reconciliation and external account/provider fee verification remain future work.
+- Local rate-limit/outage/stale/latency provider preflight, local reconnect/backoff plan validation, local market-data quality assessment, local historical market-data persistence, local paid-provider evaluation dossiers, `arb-agent validate-market-data-boundary-audit --workspace <fresh-dir>`, local fee verification records, and `arb-agent validate-fee-boundary-audit --workspace <fresh-dir>` now exist for caller-supplied no-network/no-credential observations; provider-side market-data reconciliation and external account/provider fee verification remain future work.
 - No live WebSocket reconnect implementation.
 - No paid market-data provider integration.
-- No historical data persistence.
-- No market-data quality scoring.
-- No strategy/opportunity engine consuming these models yet.
+- No downloaded or provider-backed historical market datasets.
+- No production-host or provider-backed market-data quality evidence.
+- No live production runtime consuming provider-backed versions of these models yet.
 
 ## Expected Future Continuation Tasks
 

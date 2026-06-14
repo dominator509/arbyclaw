@@ -1,0 +1,23 @@
+# Runtime restart connector lifecycle recovery
+
+- Extended `crates/arb-core/src/runtime.rs` so `validate_local_runtime_restart_recovery_with_trace_recovery(...)` can optionally recover local CEX and DEX lifecycle checkpoints when both are present, decode them into sanitized `RuntimeRecoveredCexLifecycleSummary` / `RuntimeRecoveredDexLifecycleSummary`, and validate they remain local-only.
+- Added new `RuntimeRestartRecoveryValidationReport` fields:
+  - `connector_lifecycle_recovery_validated`
+  - `cex_lifecycle_checkpoint_recovered`
+  - `dex_lifecycle_checkpoint_recovered`
+  - `recovered_cex_lifecycle`
+  - `recovered_dex_lifecycle`
+- In `crates/arb-agent/src/main.rs`, both `validate-runtime-restart-recovery` and `validate-runtime-supervised-restart` now seed connector lifecycle checkpoints into the same audit/state artifacts via `seed_runtime_restart_connector_lifecycle_checkpoints(...)` and fail closed if restart recovery does not report connector lifecycle recovery.
+- CLI output now prints:
+  - `runtime-restart-recovery-connector-lifecycle-validated`
+  - `runtime-restart-recovery-cex-lifecycle-checkpoint-recovered`
+  - `runtime-restart-recovery-dex-lifecycle-checkpoint-recovered`
+  - `runtime-restart-recovery-cex-lifecycle-summary`
+  - `runtime-restart-recovery-dex-lifecycle-summary`
+- `scripts/validate_deployment_host_runtime.py` restart/supervised-restart JSON wrappers now surface the new connector lifecycle recovery booleans.
+- Local validation after patch:
+  - `rtk cargo run -p arb-agent -- validate-runtime-restart-recovery --workspace target/ci-runtime-restart-recovery-connector`
+  - `rtk cargo run -p arb-agent -- validate-runtime-supervised-restart --workspace target/ci-runtime-supervised-restart-connector`
+  - `rtk python3 scripts/validate_deployment_host_runtime.py --run-restart-recovery --restart-recovery-workspace target/runtime-wrapper-restart-connector --json`
+  - full repo gates passed again: structure, fmt, check, test, clippy.
+- Tracker/docs were updated to describe connector-lifecycle recovery as local restart evidence only; deployment-host restart execution and live connector validation remain open.

@@ -26,6 +26,18 @@ pub const MARKET_DATA_LAST_PROVIDER_PREFLIGHT_CHECKPOINT_KEY: &str =
 /// Checkpoint key for the latest local market-data reconnect plan validation.
 pub const MARKET_DATA_LAST_RECONNECT_PLAN_CHECKPOINT_KEY: &str = "market_data.last_reconnect_plan";
 
+/// Checkpoint key for the latest local paid market-data provider evaluation.
+pub const MARKET_DATA_LAST_PAID_PROVIDER_EVALUATION_CHECKPOINT_KEY: &str =
+    "market_data.last_paid_provider_evaluation";
+
+/// Checkpoint key for the latest local market-data quality assessment.
+pub const MARKET_DATA_LAST_QUALITY_ASSESSMENT_CHECKPOINT_KEY: &str =
+    "market_data.last_quality_assessment";
+
+/// Checkpoint key for the latest local historical market-data persistence batch.
+pub const MARKET_DATA_LAST_HISTORICAL_PERSISTENCE_CHECKPOINT_KEY: &str =
+    "market_data.last_historical_persistence";
+
 /// A normalized base/quote market pair.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -621,6 +633,285 @@ pub struct MarketDataReconnectPlanReport {
     pub violation_codes: Vec<String>,
 }
 
+/// Caller-supplied local market-data quality assessment input.
+///
+/// This boundary scores already-normalized local quote/order-book records. It
+/// does not fetch provider data, open sockets, or load credentials.
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct MarketDataQualityAssessmentInput {
+    /// Stable local assessment id.
+    pub assessment_id: String,
+    /// Stable provider name or fixture label.
+    pub provider_name: String,
+    /// Request context for the assessed pair and freshness ceiling.
+    pub request: MarketDataRequest,
+    /// Normalized top-of-book quote to assess.
+    pub quote: NormalizedQuote,
+    /// Optional normalized order book for depth scoring.
+    pub order_book: Option<OrderBookSnapshot>,
+    /// Caller-supplied local assessment time.
+    pub now_unix_ms: u64,
+    /// Maximum acceptable spread in basis points.
+    pub max_spread_bps: u64,
+    /// Minimum required levels on both sides for depth quality.
+    pub min_depth_levels: u32,
+    /// Maximum acceptable capture-to-receive latency in milliseconds.
+    pub max_capture_latency_ms: u64,
+    /// Whether any live network was used. Must remain false here.
+    pub live_network_used: bool,
+    /// Whether provider credentials were loaded. Must remain false here.
+    pub credential_loaded: bool,
+    /// Whether the caller tried to claim production readiness. Must remain false here.
+    pub production_ready_claimed: bool,
+}
+
+/// Local market-data quality assessment status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum MarketDataQualityAssessmentStatus {
+    /// Data quality is strong enough for local review.
+    Acceptable,
+    /// Data remains local-only but quality is degraded.
+    Degraded,
+    /// Data quality must fail closed before future use.
+    Blocked,
+}
+
+/// Non-secret local market-data quality assessment report.
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct MarketDataQualityAssessmentReport {
+    /// Stable local assessment id.
+    pub assessment_id: String,
+    /// Provider name or fixture label.
+    pub provider_name: String,
+    /// Assessed request context.
+    pub request: MarketDataRequest,
+    /// Overall local quality status.
+    pub status: MarketDataQualityAssessmentStatus,
+    /// Freshness classification at assessment time.
+    pub freshness_status: FreshnessStatus,
+    /// Quote age in milliseconds.
+    pub quote_age_ms: u64,
+    /// Observed spread in basis points.
+    pub observed_spread_bps: f64,
+    /// Whether spread stayed within the caller limit.
+    pub spread_within_limit: bool,
+    /// Whether an order book was available for depth scoring.
+    pub order_book_present: bool,
+    /// Number of depth levels available on both sides.
+    pub depth_levels_available: u32,
+    /// Whether depth met the caller requirement.
+    pub depth_levels_sufficient: bool,
+    /// Capture-to-receive latency in milliseconds.
+    pub capture_latency_ms: u64,
+    /// Whether capture latency stayed within the caller limit.
+    pub capture_latency_within_limit: bool,
+    /// Deterministic local quality score from 0 to 100.
+    pub quality_score: u8,
+    /// Whether any live network was used. Always false for an acceptable report.
+    pub live_network_used: bool,
+    /// Whether provider credentials were loaded. Always false for an acceptable report.
+    pub credential_loaded: bool,
+    /// Whether this report approves production readiness. Always false here.
+    pub production_ready: bool,
+    /// Sanitized local violation codes.
+    pub violation_codes: Vec<String>,
+}
+
+/// Caller-supplied local historical market-data persistence input.
+///
+/// This boundary persists already-normalized quotes and order books for later
+/// local replay. It does not fetch provider data, open sockets, or load
+/// credentials.
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct HistoricalMarketDataPersistenceInput {
+    /// Stable local batch id.
+    pub batch_id: String,
+    /// Stable provider name or fixture label.
+    pub provider_name: String,
+    /// Venue represented by the persisted batch.
+    pub venue: VenueRef,
+    /// Market pair represented by the persisted batch.
+    pub pair: MarketPair,
+    /// Normalized quotes to persist.
+    pub quotes: Vec<NormalizedQuote>,
+    /// Normalized order books to persist.
+    pub order_books: Vec<OrderBookSnapshot>,
+    /// Maximum number of retained records per kind.
+    pub max_retained_records_per_kind: u32,
+    /// Caller-supplied local persistence timestamp.
+    pub persisted_at_unix_ms: u64,
+    /// Whether any live network was used. Must remain false here.
+    pub live_network_used: bool,
+    /// Whether provider credentials were loaded. Must remain false here.
+    pub credential_loaded: bool,
+    /// Whether the caller tried to claim production readiness. Must remain false here.
+    pub production_ready_claimed: bool,
+}
+
+/// Local historical market-data persistence status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum HistoricalMarketDataPersistenceStatus {
+    /// History batch was stored for later local replay.
+    PersistedForLocalReplay,
+    /// History batch must fail closed before future use.
+    Blocked,
+}
+
+/// Non-secret local historical market-data persistence report.
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct HistoricalMarketDataPersistenceReport {
+    /// Stable local batch id.
+    pub batch_id: String,
+    /// Provider name or fixture label.
+    pub provider_name: String,
+    /// Venue represented by the persisted batch.
+    pub venue: VenueRef,
+    /// Market pair represented by the persisted batch.
+    pub pair: MarketPair,
+    /// Overall local persistence status.
+    pub status: HistoricalMarketDataPersistenceStatus,
+    /// Persisted quotes after deterministic truncation.
+    pub stored_quotes: Vec<NormalizedQuote>,
+    /// Persisted order books after deterministic truncation.
+    pub stored_order_books: Vec<OrderBookSnapshot>,
+    /// Whether quotes were truncated to the configured retention ceiling.
+    pub quotes_truncated: bool,
+    /// Whether order books were truncated to the configured retention ceiling.
+    pub order_books_truncated: bool,
+    /// Oldest received timestamp across stored records, if any.
+    pub oldest_received_at_unix_ms: Option<u64>,
+    /// Newest received timestamp across stored records, if any.
+    pub newest_received_at_unix_ms: Option<u64>,
+    /// Window span across stored records.
+    pub window_span_ms: u64,
+    /// Maximum retained record count per kind.
+    pub max_retained_records_per_kind: u32,
+    /// Whether any live network was used. Always false for a persisted report.
+    pub live_network_used: bool,
+    /// Whether provider credentials were loaded. Always false for a persisted report.
+    pub credential_loaded: bool,
+    /// Whether this report approves production readiness. Always false here.
+    pub production_ready: bool,
+    /// Sanitized local violation codes.
+    pub violation_codes: Vec<String>,
+}
+
+/// Caller-supplied local paid market-data provider evaluation input.
+///
+/// This record captures sanitized comparison metadata only. It does not open
+/// provider connections, sign contracts, provision accounts, or load
+/// credentials.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct PaidMarketDataProviderEvaluationInput {
+    /// Stable local evaluation id.
+    pub evaluation_id: String,
+    /// Stable provider name or local fixture label.
+    pub provider_name: String,
+    /// Venues this provider is expected to cover.
+    pub covered_venues: Vec<VenueRef>,
+    /// Market pairs this provider is expected to cover.
+    pub covered_pairs: Vec<MarketPair>,
+    /// Local capability snapshot for the provider.
+    pub capabilities: MarketDataCapabilities,
+    /// Documented or fixture-derived latency reference in milliseconds.
+    pub documented_latency_ms: u64,
+    /// Maximum locally accepted latency ceiling in milliseconds.
+    pub max_allowed_latency_ms: u64,
+    /// Documented request budget per minute for the planned account tier.
+    pub max_requests_per_minute: u64,
+    /// Estimated monthly spend in whole USD for the evaluated tier.
+    pub monthly_cost_usd: u64,
+    /// Failure modes reviewed locally from non-secret references.
+    pub failure_modes_reviewed: Vec<String>,
+    /// Whether rate-limit documentation was reviewed locally.
+    pub rate_limit_documentation_reviewed: bool,
+    /// Whether pricing documentation was reviewed locally.
+    pub pricing_documentation_reviewed: bool,
+    /// Whether terms and use restrictions were reviewed locally.
+    pub terms_reviewed: bool,
+    /// Whether planned credential scope was reviewed without loading secrets.
+    pub credential_scope_reviewed: bool,
+    /// Whether any live network was used. Must remain false here.
+    pub live_network_used: bool,
+    /// Whether provider credentials were loaded. Must remain false here.
+    pub credential_loaded: bool,
+    /// Whether the caller tried to claim production readiness. Must remain false here.
+    pub production_ready_claimed: bool,
+}
+
+/// Local paid market-data provider evaluation status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PaidMarketDataProviderEvaluationStatus {
+    /// Comparison metadata is coherent enough for later human review.
+    ReadyForLocalReview,
+    /// Evaluation must fail closed before any future provider choice.
+    Blocked,
+}
+
+/// Non-secret local paid market-data provider evaluation report.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct PaidMarketDataProviderEvaluationReport {
+    /// Stable local evaluation id.
+    pub evaluation_id: String,
+    /// Provider name or local fixture label.
+    pub provider_name: String,
+    /// Evaluation status.
+    pub status: PaidMarketDataProviderEvaluationStatus,
+    /// Covered venues reviewed locally.
+    pub covered_venues: Vec<VenueRef>,
+    /// Covered pairs reviewed locally.
+    pub covered_pairs: Vec<MarketPair>,
+    /// Local capability snapshot for the provider.
+    pub capabilities: MarketDataCapabilities,
+    /// Documented or fixture-derived latency reference in milliseconds.
+    pub documented_latency_ms: u64,
+    /// Maximum locally accepted latency ceiling in milliseconds.
+    pub max_allowed_latency_ms: u64,
+    /// Whether the documented latency stays within the local ceiling.
+    pub latency_within_budget: bool,
+    /// Documented request budget per minute for the planned account tier.
+    pub max_requests_per_minute: u64,
+    /// Whether rate-limit documentation and budget metadata passed local review.
+    pub rate_limit_review_passed: bool,
+    /// Estimated monthly spend in whole USD for the evaluated tier.
+    pub monthly_cost_usd: u64,
+    /// Whether pricing documentation and cost metadata passed local review.
+    pub cost_review_passed: bool,
+    /// Failure modes reviewed locally from non-secret references.
+    pub failure_modes_reviewed: Vec<String>,
+    /// Whether failure behavior metadata passed local review.
+    pub failure_behavior_review_passed: bool,
+    /// Whether coverage metadata passed local review.
+    pub coverage_review_passed: bool,
+    /// Whether terms and credential-scope governance checks passed locally.
+    pub governance_review_passed: bool,
+    /// Whether rate-limit documentation was reviewed locally.
+    pub rate_limit_documentation_reviewed: bool,
+    /// Whether pricing documentation was reviewed locally.
+    pub pricing_documentation_reviewed: bool,
+    /// Whether terms and use restrictions were reviewed locally.
+    pub terms_reviewed: bool,
+    /// Whether planned credential scope was reviewed without loading secrets.
+    pub credential_scope_reviewed: bool,
+    /// Whether any live network was used. Always false for a ready report.
+    pub live_network_used: bool,
+    /// Whether provider credentials were loaded. Always false for a ready report.
+    pub credential_loaded: bool,
+    /// Whether this report approves production readiness. Always false here.
+    pub production_ready: bool,
+    /// Sanitized local violation codes.
+    pub violation_codes: Vec<String>,
+}
+
 impl MarketDataProviderHealthObservation {
     /// Validate local market-data provider health observation shape.
     pub fn validate(&self) -> Result<(), MarketDataError> {
@@ -848,6 +1139,598 @@ impl MarketDataReconnectPlanReport {
     }
 }
 
+impl MarketDataQualityAssessmentInput {
+    /// Validate local market-data quality assessment input shape.
+    pub fn validate(&self) -> Result<(), MarketDataError> {
+        let mut violations = Vec::new();
+        validate_id(
+            "market-data quality assessment",
+            &self.assessment_id,
+            &mut violations,
+        );
+        validate_id("market-data provider", &self.provider_name, &mut violations);
+        if let Err(MarketDataError::ValidationFailed {
+            violations: request_violations,
+        }) = self.request.validate()
+        {
+            violations.extend(request_violations);
+        }
+        if let Err(MarketDataError::ValidationFailed {
+            violations: quote_violations,
+        }) = self.quote.validate()
+        {
+            violations.extend(quote_violations);
+        }
+        if self.quote.venue != self.request.venue || self.quote.pair != self.request.pair {
+            violations.push(MarketDataViolation::new(
+                "MARKET_DATA_QUALITY_QUOTE_REQUEST_MISMATCH",
+                "quality assessment quote must match the assessed request venue and pair",
+            ));
+        }
+        if let Some(order_book) = &self.order_book {
+            if let Err(MarketDataError::ValidationFailed {
+                violations: order_book_violations,
+            }) = order_book.validate()
+            {
+                violations.extend(order_book_violations);
+            }
+            if order_book.venue != self.request.venue || order_book.pair != self.request.pair {
+                violations.push(MarketDataViolation::new(
+                    "MARKET_DATA_QUALITY_ORDER_BOOK_REQUEST_MISMATCH",
+                    "quality assessment order book must match the assessed request venue and pair",
+                ));
+            }
+        }
+        if self.now_unix_ms < self.quote.received_at_unix_ms {
+            violations.push(MarketDataViolation::new(
+                "MARKET_DATA_QUALITY_NOW_BEFORE_QUOTE",
+                "quality assessment time must not be before quote receipt",
+            ));
+        }
+        if self.max_spread_bps == 0 {
+            violations.push(MarketDataViolation::new(
+                "MARKET_DATA_QUALITY_MAX_SPREAD_ZERO",
+                "quality assessment requires a positive spread ceiling",
+            ));
+        }
+        if self.min_depth_levels == 0 {
+            violations.push(MarketDataViolation::new(
+                "MARKET_DATA_QUALITY_MIN_DEPTH_ZERO",
+                "quality assessment requires a positive minimum depth-level count",
+            ));
+        }
+        if self.max_capture_latency_ms == 0 {
+            violations.push(MarketDataViolation::new(
+                "MARKET_DATA_QUALITY_LATENCY_LIMIT_ZERO",
+                "quality assessment requires a positive capture latency ceiling",
+            ));
+        }
+
+        if violations.is_empty() {
+            Ok(())
+        } else {
+            Err(MarketDataError::ValidationFailed { violations })
+        }
+    }
+}
+
+impl MarketDataQualityAssessmentReport {
+    /// Validate local market-data quality assessment report invariants.
+    pub fn validate(&self) -> Result<(), MarketDataError> {
+        let mut violations = Vec::new();
+        validate_id(
+            "market-data quality assessment",
+            &self.assessment_id,
+            &mut violations,
+        );
+        validate_id("market-data provider", &self.provider_name, &mut violations);
+        if let Err(MarketDataError::ValidationFailed {
+            violations: request_violations,
+        }) = self.request.validate()
+        {
+            violations.extend(request_violations);
+        }
+        if !self.observed_spread_bps.is_finite() || self.observed_spread_bps < 0.0 {
+            violations.push(MarketDataViolation::new(
+                "MARKET_DATA_QUALITY_SPREAD_INVALID",
+                "quality assessment spread must be finite and non-negative",
+            ));
+        }
+        if self.quality_score > 100 {
+            violations.push(MarketDataViolation::new(
+                "MARKET_DATA_QUALITY_SCORE_OUT_OF_RANGE",
+                "quality assessment score must be within 0..=100",
+            ));
+        }
+        if !self.order_book_present && self.depth_levels_available != 0 {
+            violations.push(MarketDataViolation::new(
+                "MARKET_DATA_QUALITY_DEPTH_WITHOUT_BOOK",
+                "quality assessment depth cannot be positive without an order book",
+            ));
+        }
+        let freshness_is_fresh = self.freshness_status.is_fresh();
+        if freshness_is_fresh && self.quote_age_ms > self.request.max_age_ms {
+            violations.push(MarketDataViolation::new(
+                "MARKET_DATA_QUALITY_FRESHNESS_AGE_MISMATCH",
+                "fresh quality assessments must not exceed the request age ceiling",
+            ));
+        }
+        let should_block = !freshness_is_fresh
+            || self.live_network_used
+            || self.credential_loaded
+            || self.production_ready;
+        let should_degrade = !should_block
+            && (!self.spread_within_limit
+                || !self.depth_levels_sufficient
+                || !self.capture_latency_within_limit);
+        let expected_status = if should_block {
+            MarketDataQualityAssessmentStatus::Blocked
+        } else if should_degrade {
+            MarketDataQualityAssessmentStatus::Degraded
+        } else {
+            MarketDataQualityAssessmentStatus::Acceptable
+        };
+        if self.status != expected_status {
+            violations.push(MarketDataViolation::new(
+                "MARKET_DATA_QUALITY_STATUS_MISMATCH",
+                "quality assessment status must match freshness, thresholds, and side-effect flags",
+            ));
+        }
+        if self.production_ready {
+            violations.push(MarketDataViolation::new(
+                "MARKET_DATA_QUALITY_PRODUCTION_READY_FORBIDDEN",
+                "quality assessment must not approve production readiness",
+            ));
+        }
+
+        if violations.is_empty() {
+            Ok(())
+        } else {
+            Err(MarketDataError::ValidationFailed { violations })
+        }
+    }
+}
+
+impl HistoricalMarketDataPersistenceInput {
+    /// Validate local historical market-data persistence input shape.
+    pub fn validate(&self) -> Result<(), MarketDataError> {
+        let mut violations = Vec::new();
+        validate_id(
+            "historical market-data batch",
+            &self.batch_id,
+            &mut violations,
+        );
+        validate_id("market-data provider", &self.provider_name, &mut violations);
+        validate_venue(&self.venue, &mut violations);
+        if let Err(MarketDataError::ValidationFailed {
+            violations: pair_violations,
+        }) = self.pair.validate()
+        {
+            violations.extend(pair_violations);
+        }
+        if self.quotes.is_empty() && self.order_books.is_empty() {
+            violations.push(MarketDataViolation::new(
+                "MARKET_DATA_HISTORY_EMPTY",
+                "historical market-data persistence requires at least one quote or order book",
+            ));
+        }
+        if self.max_retained_records_per_kind == 0 {
+            violations.push(MarketDataViolation::new(
+                "MARKET_DATA_HISTORY_RETENTION_ZERO",
+                "historical market-data persistence requires a positive retention ceiling",
+            ));
+        }
+        for quote in &self.quotes {
+            if let Err(MarketDataError::ValidationFailed {
+                violations: quote_violations,
+            }) = quote.validate()
+            {
+                violations.extend(quote_violations);
+            }
+            if quote.venue != self.venue || quote.pair != self.pair {
+                violations.push(MarketDataViolation::new(
+                    "MARKET_DATA_HISTORY_QUOTE_SCOPE_MISMATCH",
+                    "historical market-data quotes must match the batch venue and pair",
+                ));
+            }
+            if quote.received_at_unix_ms > self.persisted_at_unix_ms {
+                violations.push(MarketDataViolation::new(
+                    "MARKET_DATA_HISTORY_QUOTE_AFTER_PERSISTED_AT",
+                    "historical market-data quote cannot be received after the batch persistence time",
+                ));
+            }
+        }
+        for order_book in &self.order_books {
+            if let Err(MarketDataError::ValidationFailed {
+                violations: order_book_violations,
+            }) = order_book.validate()
+            {
+                violations.extend(order_book_violations);
+            }
+            if order_book.venue != self.venue || order_book.pair != self.pair {
+                violations.push(MarketDataViolation::new(
+                    "MARKET_DATA_HISTORY_ORDER_BOOK_SCOPE_MISMATCH",
+                    "historical market-data order books must match the batch venue and pair",
+                ));
+            }
+            if order_book.received_at_unix_ms > self.persisted_at_unix_ms {
+                violations.push(MarketDataViolation::new(
+                    "MARKET_DATA_HISTORY_ORDER_BOOK_AFTER_PERSISTED_AT",
+                    "historical market-data order book cannot be received after the batch persistence time",
+                ));
+            }
+        }
+
+        if violations.is_empty() {
+            Ok(())
+        } else {
+            Err(MarketDataError::ValidationFailed { violations })
+        }
+    }
+}
+
+impl HistoricalMarketDataPersistenceReport {
+    /// Validate local historical market-data persistence report invariants.
+    pub fn validate(&self) -> Result<(), MarketDataError> {
+        let mut violations = Vec::new();
+        validate_id(
+            "historical market-data batch",
+            &self.batch_id,
+            &mut violations,
+        );
+        validate_id("market-data provider", &self.provider_name, &mut violations);
+        validate_venue(&self.venue, &mut violations);
+        if let Err(MarketDataError::ValidationFailed {
+            violations: pair_violations,
+        }) = self.pair.validate()
+        {
+            violations.extend(pair_violations);
+        }
+        if self.stored_quotes.is_empty() && self.stored_order_books.is_empty() {
+            violations.push(MarketDataViolation::new(
+                "MARKET_DATA_HISTORY_REPORT_EMPTY",
+                "historical market-data persistence report requires stored records",
+            ));
+        }
+        if self.max_retained_records_per_kind == 0 {
+            violations.push(MarketDataViolation::new(
+                "MARKET_DATA_HISTORY_REPORT_RETENTION_ZERO",
+                "historical market-data persistence report requires a positive retention ceiling",
+            ));
+        }
+        let retention_limit =
+            usize::try_from(self.max_retained_records_per_kind).unwrap_or(usize::MAX);
+        if self.stored_quotes.len() > retention_limit
+            || self.stored_order_books.len() > retention_limit
+        {
+            violations.push(MarketDataViolation::new(
+                "MARKET_DATA_HISTORY_REPORT_RETENTION_EXCEEDED",
+                "historical market-data persistence report exceeds its retention ceiling",
+            ));
+        }
+        for quote in &self.stored_quotes {
+            if let Err(MarketDataError::ValidationFailed {
+                violations: quote_violations,
+            }) = quote.validate()
+            {
+                violations.extend(quote_violations);
+            }
+            if quote.venue != self.venue || quote.pair != self.pair {
+                violations.push(MarketDataViolation::new(
+                    "MARKET_DATA_HISTORY_REPORT_QUOTE_SCOPE_MISMATCH",
+                    "stored historical quote must match the batch venue and pair",
+                ));
+            }
+        }
+        for order_book in &self.stored_order_books {
+            if let Err(MarketDataError::ValidationFailed {
+                violations: order_book_violations,
+            }) = order_book.validate()
+            {
+                violations.extend(order_book_violations);
+            }
+            if order_book.venue != self.venue || order_book.pair != self.pair {
+                violations.push(MarketDataViolation::new(
+                    "MARKET_DATA_HISTORY_REPORT_ORDER_BOOK_SCOPE_MISMATCH",
+                    "stored historical order book must match the batch venue and pair",
+                ));
+            }
+        }
+        let expected_oldest = self
+            .stored_quotes
+            .iter()
+            .map(|quote| quote.received_at_unix_ms)
+            .chain(
+                self.stored_order_books
+                    .iter()
+                    .map(|order_book| order_book.received_at_unix_ms),
+            )
+            .min();
+        let expected_newest = self
+            .stored_quotes
+            .iter()
+            .map(|quote| quote.received_at_unix_ms)
+            .chain(
+                self.stored_order_books
+                    .iter()
+                    .map(|order_book| order_book.received_at_unix_ms),
+            )
+            .max();
+        if self.oldest_received_at_unix_ms != expected_oldest
+            || self.newest_received_at_unix_ms != expected_newest
+        {
+            violations.push(MarketDataViolation::new(
+                "MARKET_DATA_HISTORY_REPORT_WINDOW_MISMATCH",
+                "historical market-data persistence report window bounds must match stored records",
+            ));
+        }
+        let expected_span = match (expected_oldest, expected_newest) {
+            (Some(oldest), Some(newest)) => newest.saturating_sub(oldest),
+            _ => 0,
+        };
+        if self.window_span_ms != expected_span {
+            violations.push(MarketDataViolation::new(
+                "MARKET_DATA_HISTORY_REPORT_WINDOW_SPAN_MISMATCH",
+                "historical market-data persistence report window span must match stored records",
+            ));
+        }
+        let should_block =
+            self.live_network_used || self.credential_loaded || self.production_ready;
+        let expected_status = if should_block {
+            HistoricalMarketDataPersistenceStatus::Blocked
+        } else {
+            HistoricalMarketDataPersistenceStatus::PersistedForLocalReplay
+        };
+        if self.status != expected_status {
+            violations.push(MarketDataViolation::new(
+                "MARKET_DATA_HISTORY_REPORT_STATUS_MISMATCH",
+                "historical market-data persistence status must match side-effect flags",
+            ));
+        }
+
+        if violations.is_empty() {
+            Ok(())
+        } else {
+            Err(MarketDataError::ValidationFailed { violations })
+        }
+    }
+}
+
+impl PaidMarketDataProviderEvaluationInput {
+    /// Validate local paid provider evaluation input shape.
+    pub fn validate(&self) -> Result<(), MarketDataError> {
+        let mut violations = Vec::new();
+        validate_id(
+            "paid market-data provider evaluation",
+            &self.evaluation_id,
+            &mut violations,
+        );
+        validate_id("market-data provider", &self.provider_name, &mut violations);
+
+        if self.covered_venues.is_empty() {
+            violations.push(MarketDataViolation::new(
+                "PAID_MARKET_DATA_EVALUATION_VENUES_EMPTY",
+                "paid market-data provider evaluation requires at least one covered venue",
+            ));
+        }
+        for venue in &self.covered_venues {
+            validate_venue(venue, &mut violations);
+        }
+
+        if self.covered_pairs.is_empty() {
+            violations.push(MarketDataViolation::new(
+                "PAID_MARKET_DATA_EVALUATION_PAIRS_EMPTY",
+                "paid market-data provider evaluation requires at least one covered market pair",
+            ));
+        }
+        for pair in &self.covered_pairs {
+            if let Err(MarketDataError::ValidationFailed {
+                violations: pair_violations,
+            }) = pair.validate()
+            {
+                violations.extend(pair_violations);
+            }
+        }
+
+        if !self.capabilities.order_book && !self.capabilities.top_of_book {
+            violations.push(MarketDataViolation::new(
+                "PAID_MARKET_DATA_EVALUATION_CAPABILITIES_INSUFFICIENT",
+                "paid market-data provider evaluation requires top-of-book or order-book coverage",
+            ));
+        }
+        if self.documented_latency_ms == 0 {
+            violations.push(MarketDataViolation::new(
+                "PAID_MARKET_DATA_EVALUATION_LATENCY_ZERO",
+                "paid market-data provider evaluation requires positive documented latency",
+            ));
+        }
+        if self.max_allowed_latency_ms == 0 {
+            violations.push(MarketDataViolation::new(
+                "PAID_MARKET_DATA_EVALUATION_LATENCY_LIMIT_ZERO",
+                "paid market-data provider evaluation requires a positive latency ceiling",
+            ));
+        }
+        if self.max_requests_per_minute == 0 {
+            violations.push(MarketDataViolation::new(
+                "PAID_MARKET_DATA_EVALUATION_RATE_LIMIT_ZERO",
+                "paid market-data provider evaluation requires a positive request budget",
+            ));
+        }
+        if self.monthly_cost_usd == 0 {
+            violations.push(MarketDataViolation::new(
+                "PAID_MARKET_DATA_EVALUATION_COST_ZERO",
+                "paid market-data provider evaluation requires a non-zero monthly cost estimate",
+            ));
+        }
+        if self.failure_modes_reviewed.is_empty() {
+            violations.push(MarketDataViolation::new(
+                "PAID_MARKET_DATA_EVALUATION_FAILURE_MODES_EMPTY",
+                "paid market-data provider evaluation requires at least one reviewed failure mode",
+            ));
+        }
+        for failure_mode in &self.failure_modes_reviewed {
+            validate_id("market-data failure mode", failure_mode, &mut violations);
+        }
+
+        if violations.is_empty() {
+            Ok(())
+        } else {
+            Err(MarketDataError::ValidationFailed { violations })
+        }
+    }
+}
+
+impl PaidMarketDataProviderEvaluationReport {
+    /// Validate local paid provider evaluation report invariants.
+    pub fn validate(&self) -> Result<(), MarketDataError> {
+        let mut violations = Vec::new();
+        validate_id(
+            "paid market-data provider evaluation",
+            &self.evaluation_id,
+            &mut violations,
+        );
+        validate_id("market-data provider", &self.provider_name, &mut violations);
+
+        if self.covered_venues.is_empty() {
+            violations.push(MarketDataViolation::new(
+                "PAID_MARKET_DATA_REPORT_VENUES_EMPTY",
+                "paid market-data provider evaluation report requires covered venues",
+            ));
+        }
+        for venue in &self.covered_venues {
+            validate_venue(venue, &mut violations);
+        }
+
+        if self.covered_pairs.is_empty() {
+            violations.push(MarketDataViolation::new(
+                "PAID_MARKET_DATA_REPORT_PAIRS_EMPTY",
+                "paid market-data provider evaluation report requires covered market pairs",
+            ));
+        }
+        for pair in &self.covered_pairs {
+            if let Err(MarketDataError::ValidationFailed {
+                violations: pair_violations,
+            }) = pair.validate()
+            {
+                violations.extend(pair_violations);
+            }
+        }
+
+        if self.documented_latency_ms == 0 || self.max_allowed_latency_ms == 0 {
+            violations.push(MarketDataViolation::new(
+                "PAID_MARKET_DATA_REPORT_LATENCY_INVALID",
+                "paid market-data provider evaluation report requires positive latency metadata",
+            ));
+        }
+        if self.max_requests_per_minute == 0 {
+            violations.push(MarketDataViolation::new(
+                "PAID_MARKET_DATA_REPORT_RATE_LIMIT_ZERO",
+                "paid market-data provider evaluation report requires a positive request budget",
+            ));
+        }
+        if self.monthly_cost_usd == 0 {
+            violations.push(MarketDataViolation::new(
+                "PAID_MARKET_DATA_REPORT_COST_ZERO",
+                "paid market-data provider evaluation report requires a non-zero monthly cost estimate",
+            ));
+        }
+        if self.failure_modes_reviewed.is_empty() {
+            violations.push(MarketDataViolation::new(
+                "PAID_MARKET_DATA_REPORT_FAILURE_MODES_EMPTY",
+                "paid market-data provider evaluation report requires reviewed failure modes",
+            ));
+        }
+        for failure_mode in &self.failure_modes_reviewed {
+            validate_id("market-data failure mode", failure_mode, &mut violations);
+        }
+
+        let expected_coverage_review_passed = !self.covered_venues.is_empty()
+            && !self.covered_pairs.is_empty()
+            && (self.capabilities.order_book || self.capabilities.top_of_book);
+        if self.coverage_review_passed != expected_coverage_review_passed {
+            violations.push(MarketDataViolation::new(
+                "PAID_MARKET_DATA_REPORT_COVERAGE_MISMATCH",
+                "paid market-data provider evaluation coverage flag must match reviewed venues, pairs, and capabilities",
+            ));
+        }
+        let expected_latency_within_budget = self.documented_latency_ms > 0
+            && self.documented_latency_ms <= self.max_allowed_latency_ms;
+        if self.latency_within_budget != expected_latency_within_budget {
+            violations.push(MarketDataViolation::new(
+                "PAID_MARKET_DATA_REPORT_LATENCY_MISMATCH",
+                "paid market-data provider evaluation latency flag must match local latency metadata",
+            ));
+        }
+        let expected_rate_limit_review_passed =
+            self.rate_limit_documentation_reviewed && self.max_requests_per_minute > 0;
+        if self.rate_limit_review_passed != expected_rate_limit_review_passed {
+            violations.push(MarketDataViolation::new(
+                "PAID_MARKET_DATA_REPORT_RATE_LIMIT_MISMATCH",
+                "paid market-data provider evaluation rate-limit flag must match documentation review state",
+            ));
+        }
+        let expected_cost_review_passed =
+            self.pricing_documentation_reviewed && self.monthly_cost_usd > 0;
+        if self.cost_review_passed != expected_cost_review_passed {
+            violations.push(MarketDataViolation::new(
+                "PAID_MARKET_DATA_REPORT_COST_MISMATCH",
+                "paid market-data provider evaluation cost flag must match pricing review state",
+            ));
+        }
+        let expected_failure_behavior_review_passed = !self.failure_modes_reviewed.is_empty();
+        if self.failure_behavior_review_passed != expected_failure_behavior_review_passed {
+            violations.push(MarketDataViolation::new(
+                "PAID_MARKET_DATA_REPORT_FAILURE_BEHAVIOR_MISMATCH",
+                "paid market-data provider evaluation failure-behavior flag must match reviewed failure modes",
+            ));
+        }
+        let expected_governance_review_passed =
+            self.terms_reviewed && self.credential_scope_reviewed;
+        if self.governance_review_passed != expected_governance_review_passed {
+            violations.push(MarketDataViolation::new(
+                "PAID_MARKET_DATA_REPORT_GOVERNANCE_MISMATCH",
+                "paid market-data provider evaluation governance flag must match terms and credential-scope review state",
+            ));
+        }
+
+        let should_block = !self.coverage_review_passed
+            || !self.latency_within_budget
+            || !self.rate_limit_review_passed
+            || !self.cost_review_passed
+            || !self.failure_behavior_review_passed
+            || !self.governance_review_passed
+            || self.live_network_used
+            || self.credential_loaded
+            || self.production_ready;
+        if should_block && self.status != PaidMarketDataProviderEvaluationStatus::Blocked {
+            violations.push(MarketDataViolation::new(
+                "PAID_MARKET_DATA_REPORT_STATUS_SHOULD_BLOCK",
+                "blocked paid market-data provider evaluations must produce blocked status",
+            ));
+        }
+        if !should_block
+            && self.status != PaidMarketDataProviderEvaluationStatus::ReadyForLocalReview
+        {
+            violations.push(MarketDataViolation::new(
+                "PAID_MARKET_DATA_REPORT_STATUS_SHOULD_BE_READY",
+                "clean paid market-data provider evaluations must produce ready-for-local-review status",
+            ));
+        }
+        if self.production_ready {
+            violations.push(MarketDataViolation::new(
+                "PAID_MARKET_DATA_REPORT_PRODUCTION_READY_FORBIDDEN",
+                "paid market-data provider evaluation must not approve production readiness",
+            ));
+        }
+
+        if violations.is_empty() {
+            Ok(())
+        } else {
+            Err(MarketDataError::ValidationFailed { violations })
+        }
+    }
+}
+
 /// Evaluate local market-data provider health observations without network use.
 pub fn validate_market_data_provider_preflight(
     observation: MarketDataProviderHealthObservation,
@@ -1025,6 +1908,349 @@ pub fn validate_market_data_reconnect_plan(
     Ok(report)
 }
 
+/// Assess local normalized market-data quality without network use.
+pub fn assess_market_data_quality(
+    input: MarketDataQualityAssessmentInput,
+) -> Result<MarketDataQualityAssessmentReport, MarketDataError> {
+    input.validate()?;
+
+    let freshness_status = input
+        .quote
+        .freshness(input.now_unix_ms, input.request.max_age_ms);
+    let quote_age_ms = input
+        .now_unix_ms
+        .saturating_sub(input.quote.received_at_unix_ms);
+    let observed_spread_bps = input.quote.spread_bps();
+    let spread_within_limit =
+        observed_spread_bps.is_finite() && observed_spread_bps <= input.max_spread_bps as f64;
+    let (order_book_present, depth_levels_available) =
+        input
+            .order_book
+            .as_ref()
+            .map_or((false, 0_u32), |order_book| {
+                let available = order_book.bids.len().min(order_book.asks.len());
+                let available = u32::try_from(available).unwrap_or(u32::MAX);
+                (true, available)
+            });
+    let depth_levels_sufficient = depth_levels_available >= input.min_depth_levels;
+    let capture_latency_ms = input
+        .quote
+        .received_at_unix_ms
+        .saturating_sub(input.quote.captured_at_unix_ms);
+    let capture_latency_within_limit = capture_latency_ms <= input.max_capture_latency_ms;
+
+    let mut quality_score = 0_u8;
+    if freshness_status.is_fresh() {
+        quality_score = quality_score.saturating_add(40);
+    }
+    if spread_within_limit {
+        quality_score = quality_score.saturating_add(25);
+    } else if observed_spread_bps.is_finite()
+        && observed_spread_bps <= (input.max_spread_bps as f64 * 2.0)
+    {
+        quality_score = quality_score.saturating_add(10);
+    }
+    if depth_levels_sufficient {
+        quality_score = quality_score.saturating_add(20);
+    } else if depth_levels_available > 0 {
+        quality_score = quality_score.saturating_add(5);
+    }
+    if capture_latency_within_limit {
+        quality_score = quality_score.saturating_add(15);
+    } else if capture_latency_ms <= input.max_capture_latency_ms.saturating_mul(2) {
+        quality_score = quality_score.saturating_add(5);
+    }
+
+    let blocked = !freshness_status.is_fresh()
+        || input.live_network_used
+        || input.credential_loaded
+        || input.production_ready_claimed;
+    let degraded = !blocked
+        && (!spread_within_limit || !depth_levels_sufficient || !capture_latency_within_limit);
+
+    let mut violation_codes = Vec::new();
+    push_if(
+        &mut violation_codes,
+        !freshness_status.is_fresh(),
+        "MARKET_DATA_QUALITY_NOT_FRESH",
+    );
+    push_if(
+        &mut violation_codes,
+        !spread_within_limit,
+        "MARKET_DATA_QUALITY_SPREAD_EXCEEDED",
+    );
+    push_if(
+        &mut violation_codes,
+        !depth_levels_sufficient,
+        "MARKET_DATA_QUALITY_DEPTH_INSUFFICIENT",
+    );
+    push_if(
+        &mut violation_codes,
+        !capture_latency_within_limit,
+        "MARKET_DATA_QUALITY_CAPTURE_LATENCY_EXCEEDED",
+    );
+    push_if(
+        &mut violation_codes,
+        input.live_network_used,
+        "MARKET_DATA_QUALITY_LIVE_NETWORK_USED",
+    );
+    push_if(
+        &mut violation_codes,
+        input.credential_loaded,
+        "MARKET_DATA_QUALITY_CREDENTIAL_LOADED",
+    );
+    push_if(
+        &mut violation_codes,
+        input.production_ready_claimed,
+        "MARKET_DATA_QUALITY_PRODUCTION_READY_CLAIMED",
+    );
+
+    let report = MarketDataQualityAssessmentReport {
+        assessment_id: input.assessment_id,
+        provider_name: input.provider_name,
+        request: input.request,
+        status: if blocked {
+            MarketDataQualityAssessmentStatus::Blocked
+        } else if degraded {
+            MarketDataQualityAssessmentStatus::Degraded
+        } else {
+            MarketDataQualityAssessmentStatus::Acceptable
+        },
+        freshness_status,
+        quote_age_ms,
+        observed_spread_bps,
+        spread_within_limit,
+        order_book_present,
+        depth_levels_available,
+        depth_levels_sufficient,
+        capture_latency_ms,
+        capture_latency_within_limit,
+        quality_score,
+        live_network_used: input.live_network_used,
+        credential_loaded: input.credential_loaded,
+        production_ready: false,
+        violation_codes,
+    };
+    report.validate()?;
+    Ok(report)
+}
+
+/// Validate and prepare a local historical market-data persistence batch.
+pub fn validate_historical_market_data_persistence(
+    input: HistoricalMarketDataPersistenceInput,
+) -> Result<HistoricalMarketDataPersistenceReport, MarketDataError> {
+    input.validate()?;
+
+    let mut stored_quotes = input.quotes;
+    stored_quotes.sort_by(|left, right| {
+        left.received_at_unix_ms
+            .cmp(&right.received_at_unix_ms)
+            .then_with(|| left.captured_at_unix_ms.cmp(&right.captured_at_unix_ms))
+            .then_with(|| left.id.cmp(&right.id))
+    });
+    let mut stored_order_books = input.order_books;
+    stored_order_books.sort_by(|left, right| {
+        left.received_at_unix_ms
+            .cmp(&right.received_at_unix_ms)
+            .then_with(|| left.captured_at_unix_ms.cmp(&right.captured_at_unix_ms))
+            .then_with(|| left.id.cmp(&right.id))
+    });
+
+    let retention_limit =
+        usize::try_from(input.max_retained_records_per_kind).unwrap_or(usize::MAX);
+    let quotes_truncated = stored_quotes.len() > retention_limit;
+    if quotes_truncated {
+        let retained_start = stored_quotes.len().saturating_sub(retention_limit);
+        stored_quotes = stored_quotes.split_off(retained_start);
+    }
+    let order_books_truncated = stored_order_books.len() > retention_limit;
+    if order_books_truncated {
+        let retained_start = stored_order_books.len().saturating_sub(retention_limit);
+        stored_order_books = stored_order_books.split_off(retained_start);
+    }
+
+    let oldest_received_at_unix_ms = stored_quotes
+        .iter()
+        .map(|quote| quote.received_at_unix_ms)
+        .chain(
+            stored_order_books
+                .iter()
+                .map(|order_book| order_book.received_at_unix_ms),
+        )
+        .min();
+    let newest_received_at_unix_ms = stored_quotes
+        .iter()
+        .map(|quote| quote.received_at_unix_ms)
+        .chain(
+            stored_order_books
+                .iter()
+                .map(|order_book| order_book.received_at_unix_ms),
+        )
+        .max();
+    let window_span_ms = match (oldest_received_at_unix_ms, newest_received_at_unix_ms) {
+        (Some(oldest), Some(newest)) => newest.saturating_sub(oldest),
+        _ => 0,
+    };
+
+    let mut violation_codes = Vec::new();
+    push_if(
+        &mut violation_codes,
+        input.live_network_used,
+        "MARKET_DATA_HISTORY_LIVE_NETWORK_USED",
+    );
+    push_if(
+        &mut violation_codes,
+        input.credential_loaded,
+        "MARKET_DATA_HISTORY_CREDENTIAL_LOADED",
+    );
+    push_if(
+        &mut violation_codes,
+        input.production_ready_claimed,
+        "MARKET_DATA_HISTORY_PRODUCTION_READY_CLAIMED",
+    );
+
+    let report = HistoricalMarketDataPersistenceReport {
+        batch_id: input.batch_id,
+        provider_name: input.provider_name,
+        venue: input.venue,
+        pair: input.pair,
+        status: if input.live_network_used
+            || input.credential_loaded
+            || input.production_ready_claimed
+        {
+            HistoricalMarketDataPersistenceStatus::Blocked
+        } else {
+            HistoricalMarketDataPersistenceStatus::PersistedForLocalReplay
+        },
+        stored_quotes,
+        stored_order_books,
+        quotes_truncated,
+        order_books_truncated,
+        oldest_received_at_unix_ms,
+        newest_received_at_unix_ms,
+        window_span_ms,
+        max_retained_records_per_kind: input.max_retained_records_per_kind,
+        live_network_used: input.live_network_used,
+        credential_loaded: input.credential_loaded,
+        production_ready: false,
+        violation_codes,
+    };
+    report.validate()?;
+    Ok(report)
+}
+
+/// Validate a local paid market-data provider comparison dossier without network use.
+pub fn validate_paid_market_data_provider_evaluation(
+    input: PaidMarketDataProviderEvaluationInput,
+) -> Result<PaidMarketDataProviderEvaluationReport, MarketDataError> {
+    input.validate()?;
+
+    let coverage_review_passed = !input.covered_venues.is_empty()
+        && !input.covered_pairs.is_empty()
+        && (input.capabilities.order_book || input.capabilities.top_of_book);
+    let latency_within_budget = input.documented_latency_ms <= input.max_allowed_latency_ms;
+    let rate_limit_review_passed =
+        input.rate_limit_documentation_reviewed && input.max_requests_per_minute > 0;
+    let cost_review_passed = input.pricing_documentation_reviewed && input.monthly_cost_usd > 0;
+    let failure_behavior_review_passed = !input.failure_modes_reviewed.is_empty();
+    let governance_review_passed = input.terms_reviewed && input.credential_scope_reviewed;
+    let blocked = !coverage_review_passed
+        || !latency_within_budget
+        || !rate_limit_review_passed
+        || !cost_review_passed
+        || !failure_behavior_review_passed
+        || !governance_review_passed
+        || input.live_network_used
+        || input.credential_loaded
+        || input.production_ready_claimed;
+
+    let mut violation_codes = Vec::new();
+    push_if(
+        &mut violation_codes,
+        !coverage_review_passed,
+        "PAID_MARKET_DATA_EVALUATION_COVERAGE_INCOMPLETE",
+    );
+    push_if(
+        &mut violation_codes,
+        !latency_within_budget,
+        "PAID_MARKET_DATA_EVALUATION_LATENCY_EXCEEDED",
+    );
+    push_if(
+        &mut violation_codes,
+        !rate_limit_review_passed,
+        "PAID_MARKET_DATA_EVALUATION_RATE_LIMIT_REVIEW_MISSING",
+    );
+    push_if(
+        &mut violation_codes,
+        !cost_review_passed,
+        "PAID_MARKET_DATA_EVALUATION_COST_REVIEW_MISSING",
+    );
+    push_if(
+        &mut violation_codes,
+        !failure_behavior_review_passed,
+        "PAID_MARKET_DATA_EVALUATION_FAILURE_BEHAVIOR_REVIEW_MISSING",
+    );
+    push_if(
+        &mut violation_codes,
+        !input.terms_reviewed,
+        "PAID_MARKET_DATA_EVALUATION_TERMS_REVIEW_MISSING",
+    );
+    push_if(
+        &mut violation_codes,
+        !input.credential_scope_reviewed,
+        "PAID_MARKET_DATA_EVALUATION_CREDENTIAL_SCOPE_REVIEW_MISSING",
+    );
+    push_if(
+        &mut violation_codes,
+        input.live_network_used,
+        "PAID_MARKET_DATA_EVALUATION_LIVE_NETWORK_USED",
+    );
+    push_if(
+        &mut violation_codes,
+        input.credential_loaded,
+        "PAID_MARKET_DATA_EVALUATION_CREDENTIAL_LOADED",
+    );
+    push_if(
+        &mut violation_codes,
+        input.production_ready_claimed,
+        "PAID_MARKET_DATA_EVALUATION_PRODUCTION_READY_CLAIMED",
+    );
+
+    let report = PaidMarketDataProviderEvaluationReport {
+        evaluation_id: input.evaluation_id,
+        provider_name: input.provider_name,
+        status: if blocked {
+            PaidMarketDataProviderEvaluationStatus::Blocked
+        } else {
+            PaidMarketDataProviderEvaluationStatus::ReadyForLocalReview
+        },
+        covered_venues: input.covered_venues,
+        covered_pairs: input.covered_pairs,
+        capabilities: input.capabilities,
+        documented_latency_ms: input.documented_latency_ms,
+        max_allowed_latency_ms: input.max_allowed_latency_ms,
+        latency_within_budget,
+        max_requests_per_minute: input.max_requests_per_minute,
+        rate_limit_review_passed,
+        monthly_cost_usd: input.monthly_cost_usd,
+        cost_review_passed,
+        failure_modes_reviewed: input.failure_modes_reviewed,
+        failure_behavior_review_passed,
+        coverage_review_passed,
+        governance_review_passed,
+        rate_limit_documentation_reviewed: input.rate_limit_documentation_reviewed,
+        pricing_documentation_reviewed: input.pricing_documentation_reviewed,
+        terms_reviewed: input.terms_reviewed,
+        credential_scope_reviewed: input.credential_scope_reviewed,
+        live_network_used: input.live_network_used,
+        credential_loaded: input.credential_loaded,
+        production_ready: false,
+        violation_codes,
+    };
+    report.validate()?;
+    Ok(report)
+}
+
 /// Persist the latest local market-data provider preflight through state.
 pub fn persist_market_data_provider_preflight_checkpoint(
     store: &mut impl StateStore,
@@ -1131,6 +2357,81 @@ pub fn persist_market_data_reconnect_plan_checkpoint(
     Ok(checkpoint)
 }
 
+/// Persist the latest local paid market-data provider evaluation through state.
+pub fn persist_paid_market_data_provider_evaluation_checkpoint(
+    store: &mut impl StateStore,
+    report: &PaidMarketDataProviderEvaluationReport,
+    updated_at_unix_ms: u64,
+) -> Result<StateCheckpoint, MarketDataError> {
+    report.validate()?;
+    let checkpoint = StateCheckpoint {
+        key: MARKET_DATA_LAST_PAID_PROVIDER_EVALUATION_CHECKPOINT_KEY.to_owned(),
+        subsystem: MARKET_DATA_STATE_SUBSYSTEM.to_owned(),
+        value: serde_json::to_string(report).map_err(|error| {
+            MarketDataError::InvariantViolation {
+                reason: format!(
+                    "failed to serialize paid market-data provider evaluation checkpoint: {error}"
+                ),
+            }
+        })?,
+        updated_at_unix_ms,
+    };
+    store
+        .put_checkpoint(checkpoint.clone())
+        .map_err(MarketDataError::from)?;
+    Ok(checkpoint)
+}
+
+/// Persist the latest local market-data quality assessment through state.
+pub fn persist_market_data_quality_assessment_checkpoint(
+    store: &mut impl StateStore,
+    report: &MarketDataQualityAssessmentReport,
+    updated_at_unix_ms: u64,
+) -> Result<StateCheckpoint, MarketDataError> {
+    report.validate()?;
+    let checkpoint = StateCheckpoint {
+        key: MARKET_DATA_LAST_QUALITY_ASSESSMENT_CHECKPOINT_KEY.to_owned(),
+        subsystem: MARKET_DATA_STATE_SUBSYSTEM.to_owned(),
+        value: serde_json::to_string(report).map_err(|error| {
+            MarketDataError::InvariantViolation {
+                reason: format!(
+                    "failed to serialize market-data quality assessment checkpoint: {error}"
+                ),
+            }
+        })?,
+        updated_at_unix_ms,
+    };
+    store
+        .put_checkpoint(checkpoint.clone())
+        .map_err(MarketDataError::from)?;
+    Ok(checkpoint)
+}
+
+/// Persist the latest local historical market-data batch through state.
+pub fn persist_historical_market_data_checkpoint(
+    store: &mut impl StateStore,
+    report: &HistoricalMarketDataPersistenceReport,
+    updated_at_unix_ms: u64,
+) -> Result<StateCheckpoint, MarketDataError> {
+    report.validate()?;
+    let checkpoint = StateCheckpoint {
+        key: MARKET_DATA_LAST_HISTORICAL_PERSISTENCE_CHECKPOINT_KEY.to_owned(),
+        subsystem: MARKET_DATA_STATE_SUBSYSTEM.to_owned(),
+        value: serde_json::to_string(report).map_err(|error| {
+            MarketDataError::InvariantViolation {
+                reason: format!(
+                    "failed to serialize historical market-data persistence checkpoint: {error}"
+                ),
+            }
+        })?,
+        updated_at_unix_ms,
+    };
+    store
+        .put_checkpoint(checkpoint.clone())
+        .map_err(MarketDataError::from)?;
+    Ok(checkpoint)
+}
+
 /// Append one local market-data reconnect plan report to the audit journal.
 pub fn append_market_data_reconnect_plan_audit(
     journal: &mut AppendOnlyAuditJournal,
@@ -1199,6 +2500,225 @@ pub fn append_market_data_reconnect_plan_audit(
         .append_event(event)
         .map_err(|error| MarketDataError::InvariantViolation {
             reason: format!("failed to append market-data reconnect audit record: {error}"),
+        })
+}
+
+/// Append one local paid market-data provider evaluation report to the audit journal.
+pub fn append_paid_market_data_provider_evaluation_audit(
+    journal: &mut AppendOnlyAuditJournal,
+    report: &PaidMarketDataProviderEvaluationReport,
+    occurred_at_unix_ms: u64,
+) -> Result<AuditRecord, MarketDataError> {
+    report.validate()?;
+    let mut event = AuditEvent::new(
+        format!(
+            "paid-market-data-provider-evaluation-{}",
+            report.provider_name
+        ),
+        AuditEventKind::RuntimeLifecycle,
+        MARKET_DATA_STATE_SUBSYSTEM,
+        "market-data-provider",
+        "Paid market-data provider evaluation recorded",
+    );
+    event.occurred_at_unix_ms = occurred_at_unix_ms;
+    event = event
+        .with_metadata(
+            "market_data_model_version",
+            AuditValue::Text(MARKET_DATA_MODEL_VERSION.to_owned()),
+        )
+        .with_metadata(
+            "evaluation_id",
+            AuditValue::Text(report.evaluation_id.clone()),
+        )
+        .with_metadata(
+            "provider_name",
+            AuditValue::Text(report.provider_name.clone()),
+        )
+        .with_metadata("status", AuditValue::Text(format!("{:?}", report.status)))
+        .with_metadata(
+            "covered_venue_count",
+            AuditValue::Unsigned(report.covered_venues.len() as u64),
+        )
+        .with_metadata(
+            "covered_pair_count",
+            AuditValue::Unsigned(report.covered_pairs.len() as u64),
+        )
+        .with_metadata(
+            "latency_within_budget",
+            AuditValue::Bool(report.latency_within_budget),
+        )
+        .with_metadata(
+            "rate_limit_review_passed",
+            AuditValue::Bool(report.rate_limit_review_passed),
+        )
+        .with_metadata(
+            "cost_review_passed",
+            AuditValue::Bool(report.cost_review_passed),
+        )
+        .with_metadata(
+            "failure_behavior_review_passed",
+            AuditValue::Bool(report.failure_behavior_review_passed),
+        )
+        .with_metadata(
+            "governance_review_passed",
+            AuditValue::Bool(report.governance_review_passed),
+        )
+        .with_metadata(
+            "live_network_used",
+            AuditValue::Bool(report.live_network_used),
+        )
+        .with_metadata(
+            "credential_loaded",
+            AuditValue::Bool(report.credential_loaded),
+        )
+        .with_metadata(
+            "production_ready",
+            AuditValue::Bool(report.production_ready),
+        );
+    journal
+        .append_event(event)
+        .map_err(|error| MarketDataError::InvariantViolation {
+            reason: format!(
+                "failed to append paid market-data provider evaluation audit record: {error}"
+            ),
+        })
+}
+
+/// Append one local market-data quality assessment report to the audit journal.
+pub fn append_market_data_quality_assessment_audit(
+    journal: &mut AppendOnlyAuditJournal,
+    report: &MarketDataQualityAssessmentReport,
+    occurred_at_unix_ms: u64,
+) -> Result<AuditRecord, MarketDataError> {
+    report.validate()?;
+    let mut event = AuditEvent::new(
+        format!("market-data-quality-assessment-{}", report.assessment_id),
+        AuditEventKind::RuntimeLifecycle,
+        MARKET_DATA_STATE_SUBSYSTEM,
+        "market-data-provider",
+        "Market-data quality assessment recorded",
+    );
+    event.occurred_at_unix_ms = occurred_at_unix_ms;
+    event = event
+        .with_metadata(
+            "market_data_model_version",
+            AuditValue::Text(MARKET_DATA_MODEL_VERSION.to_owned()),
+        )
+        .with_metadata(
+            "assessment_id",
+            AuditValue::Text(report.assessment_id.clone()),
+        )
+        .with_metadata(
+            "provider_name",
+            AuditValue::Text(report.provider_name.clone()),
+        )
+        .with_metadata("status", AuditValue::Text(format!("{:?}", report.status)))
+        .with_metadata(
+            "quality_score",
+            AuditValue::Unsigned(u64::from(report.quality_score)),
+        )
+        .with_metadata("quote_age_ms", AuditValue::Unsigned(report.quote_age_ms))
+        .with_metadata(
+            "spread_within_limit",
+            AuditValue::Bool(report.spread_within_limit),
+        )
+        .with_metadata(
+            "depth_levels_available",
+            AuditValue::Unsigned(u64::from(report.depth_levels_available)),
+        )
+        .with_metadata(
+            "depth_levels_sufficient",
+            AuditValue::Bool(report.depth_levels_sufficient),
+        )
+        .with_metadata(
+            "capture_latency_within_limit",
+            AuditValue::Bool(report.capture_latency_within_limit),
+        )
+        .with_metadata(
+            "live_network_used",
+            AuditValue::Bool(report.live_network_used),
+        )
+        .with_metadata(
+            "credential_loaded",
+            AuditValue::Bool(report.credential_loaded),
+        )
+        .with_metadata(
+            "production_ready",
+            AuditValue::Bool(report.production_ready),
+        );
+    journal
+        .append_event(event)
+        .map_err(|error| MarketDataError::InvariantViolation {
+            reason: format!(
+                "failed to append market-data quality assessment audit record: {error}"
+            ),
+        })
+}
+
+/// Append one local historical market-data persistence report to the audit journal.
+pub fn append_historical_market_data_persistence_audit(
+    journal: &mut AppendOnlyAuditJournal,
+    report: &HistoricalMarketDataPersistenceReport,
+    occurred_at_unix_ms: u64,
+) -> Result<AuditRecord, MarketDataError> {
+    report.validate()?;
+    let mut event = AuditEvent::new(
+        format!("historical-market-data-persistence-{}", report.batch_id),
+        AuditEventKind::RuntimeLifecycle,
+        MARKET_DATA_STATE_SUBSYSTEM,
+        "market-data-provider",
+        "Historical market-data persistence recorded",
+    );
+    event.occurred_at_unix_ms = occurred_at_unix_ms;
+    event = event
+        .with_metadata(
+            "market_data_model_version",
+            AuditValue::Text(MARKET_DATA_MODEL_VERSION.to_owned()),
+        )
+        .with_metadata("batch_id", AuditValue::Text(report.batch_id.clone()))
+        .with_metadata(
+            "provider_name",
+            AuditValue::Text(report.provider_name.clone()),
+        )
+        .with_metadata("status", AuditValue::Text(format!("{:?}", report.status)))
+        .with_metadata(
+            "stored_quote_count",
+            AuditValue::Unsigned(report.stored_quotes.len() as u64),
+        )
+        .with_metadata(
+            "stored_order_book_count",
+            AuditValue::Unsigned(report.stored_order_books.len() as u64),
+        )
+        .with_metadata(
+            "quotes_truncated",
+            AuditValue::Bool(report.quotes_truncated),
+        )
+        .with_metadata(
+            "order_books_truncated",
+            AuditValue::Bool(report.order_books_truncated),
+        )
+        .with_metadata(
+            "window_span_ms",
+            AuditValue::Unsigned(report.window_span_ms),
+        )
+        .with_metadata(
+            "live_network_used",
+            AuditValue::Bool(report.live_network_used),
+        )
+        .with_metadata(
+            "credential_loaded",
+            AuditValue::Bool(report.credential_loaded),
+        )
+        .with_metadata(
+            "production_ready",
+            AuditValue::Bool(report.production_ready),
+        );
+    journal
+        .append_event(event)
+        .map_err(|error| MarketDataError::InvariantViolation {
+            reason: format!(
+                "failed to append historical market-data persistence audit record: {error}"
+            ),
         })
 }
 
@@ -1456,14 +2976,29 @@ fn is_positive_finite(value: f64) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        append_market_data_provider_preflight_audit, append_market_data_reconnect_plan_audit,
+        append_historical_market_data_persistence_audit,
+        append_market_data_provider_preflight_audit, append_market_data_quality_assessment_audit,
+        append_market_data_reconnect_plan_audit, append_paid_market_data_provider_evaluation_audit,
+        assess_market_data_quality, persist_historical_market_data_checkpoint,
         persist_market_data_provider_preflight_checkpoint,
-        persist_market_data_reconnect_plan_checkpoint, validate_market_data_provider_preflight,
-        validate_market_data_reconnect_plan, FreshnessStatus, MarketDataProviderHealthObservation,
+        persist_market_data_quality_assessment_checkpoint,
+        persist_market_data_reconnect_plan_checkpoint,
+        persist_paid_market_data_provider_evaluation_checkpoint,
+        validate_historical_market_data_persistence, validate_market_data_provider_preflight,
+        validate_market_data_reconnect_plan, validate_paid_market_data_provider_evaluation,
+        FreshnessStatus, HistoricalMarketDataPersistenceInput,
+        HistoricalMarketDataPersistenceReport, HistoricalMarketDataPersistenceStatus,
+        MarketDataCapabilities, MarketDataProviderHealthObservation,
         MarketDataProviderPreflightReport, MarketDataProviderPreflightStatus,
-        MarketDataReconnectPlanInput, MarketDataReconnectPlanReport, MarketDataReconnectPlanStatus,
-        MarketPair, NormalizedQuote, OrderBookSnapshot, PriceLevel,
+        MarketDataQualityAssessmentInput, MarketDataQualityAssessmentReport,
+        MarketDataQualityAssessmentStatus, MarketDataReconnectPlanInput,
+        MarketDataReconnectPlanReport, MarketDataReconnectPlanStatus, MarketDataRequest,
+        MarketPair, NormalizedQuote, OrderBookSnapshot, PaidMarketDataProviderEvaluationInput,
+        PaidMarketDataProviderEvaluationReport, PaidMarketDataProviderEvaluationStatus, PriceLevel,
+        MARKET_DATA_LAST_HISTORICAL_PERSISTENCE_CHECKPOINT_KEY,
+        MARKET_DATA_LAST_PAID_PROVIDER_EVALUATION_CHECKPOINT_KEY,
         MARKET_DATA_LAST_PROVIDER_PREFLIGHT_CHECKPOINT_KEY,
+        MARKET_DATA_LAST_QUALITY_ASSESSMENT_CHECKPOINT_KEY,
         MARKET_DATA_LAST_RECONNECT_PLAN_CHECKPOINT_KEY, MARKET_DATA_STATE_SUBSYSTEM,
     };
     use crate::{AppendOnlyAuditJournal, InMemoryStateStore, StateStore, VenueKind, VenueRef};
@@ -1745,6 +3280,706 @@ mod tests {
             .iter()
             .any(|code| code == "MARKET_DATA_RECONNECT_CREDENTIAL_LOADED"));
         assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn historical_market_data_persistence_retains_latest_records_locally() {
+        let venue = local_cex_venue("paper-history");
+        let pair = MarketPair::new("BTC", "USDC").expect("pair should validate");
+        let report =
+            validate_historical_market_data_persistence(HistoricalMarketDataPersistenceInput {
+                batch_id: "history-batch".to_owned(),
+                provider_name: "local-history-provider".to_owned(),
+                venue: venue.clone(),
+                pair: pair.clone(),
+                quotes: vec![
+                    NormalizedQuote {
+                        id: "quote-1".to_owned(),
+                        venue: venue.clone(),
+                        pair: pair.clone(),
+                        bid: PriceLevel::new(100.0, 1.0).expect("bid should validate"),
+                        ask: PriceLevel::new(100.1, 1.0).expect("ask should validate"),
+                        captured_at_unix_ms: 1_000,
+                        received_at_unix_ms: 1_010,
+                    },
+                    NormalizedQuote {
+                        id: "quote-2".to_owned(),
+                        venue: venue.clone(),
+                        pair: pair.clone(),
+                        bid: PriceLevel::new(101.0, 1.0).expect("bid should validate"),
+                        ask: PriceLevel::new(101.1, 1.0).expect("ask should validate"),
+                        captured_at_unix_ms: 2_000,
+                        received_at_unix_ms: 2_010,
+                    },
+                    NormalizedQuote {
+                        id: "quote-3".to_owned(),
+                        venue: venue.clone(),
+                        pair: pair.clone(),
+                        bid: PriceLevel::new(102.0, 1.0).expect("bid should validate"),
+                        ask: PriceLevel::new(102.1, 1.0).expect("ask should validate"),
+                        captured_at_unix_ms: 3_000,
+                        received_at_unix_ms: 3_010,
+                    },
+                ],
+                order_books: vec![
+                    OrderBookSnapshot {
+                        id: "book-1".to_owned(),
+                        venue: venue.clone(),
+                        pair: pair.clone(),
+                        captured_at_unix_ms: 1_000,
+                        received_at_unix_ms: 1_015,
+                        bids: vec![PriceLevel::new(100.0, 1.0).expect("bid should validate")],
+                        asks: vec![PriceLevel::new(100.1, 1.0).expect("ask should validate")],
+                        source_sequence: Some("book-seq-1".to_owned()),
+                    },
+                    OrderBookSnapshot {
+                        id: "book-2".to_owned(),
+                        venue: venue.clone(),
+                        pair: pair.clone(),
+                        captured_at_unix_ms: 2_000,
+                        received_at_unix_ms: 2_015,
+                        bids: vec![PriceLevel::new(101.0, 1.0).expect("bid should validate")],
+                        asks: vec![PriceLevel::new(101.1, 1.0).expect("ask should validate")],
+                        source_sequence: Some("book-seq-2".to_owned()),
+                    },
+                    OrderBookSnapshot {
+                        id: "book-3".to_owned(),
+                        venue: venue.clone(),
+                        pair: pair.clone(),
+                        captured_at_unix_ms: 3_000,
+                        received_at_unix_ms: 3_015,
+                        bids: vec![PriceLevel::new(102.0, 1.0).expect("bid should validate")],
+                        asks: vec![PriceLevel::new(102.1, 1.0).expect("ask should validate")],
+                        source_sequence: Some("book-seq-3".to_owned()),
+                    },
+                ],
+                max_retained_records_per_kind: 2,
+                persisted_at_unix_ms: 4_000,
+                live_network_used: false,
+                credential_loaded: false,
+                production_ready_claimed: false,
+            })
+            .expect("historical persistence should validate");
+
+        assert_eq!(
+            report.status,
+            HistoricalMarketDataPersistenceStatus::PersistedForLocalReplay
+        );
+        assert_eq!(report.stored_quotes.len(), 2);
+        assert_eq!(report.stored_order_books.len(), 2);
+        assert!(report.quotes_truncated);
+        assert!(report.order_books_truncated);
+        assert_eq!(report.stored_quotes[0].id, "quote-2");
+        assert_eq!(report.stored_quotes[1].id, "quote-3");
+        assert_eq!(report.stored_order_books[0].id, "book-2");
+        assert_eq!(report.stored_order_books[1].id, "book-3");
+        assert_eq!(report.oldest_received_at_unix_ms, Some(2_010));
+        assert_eq!(report.newest_received_at_unix_ms, Some(3_015));
+        assert_eq!(report.window_span_ms, 1_005);
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn historical_market_data_persistence_fails_closed_on_side_effect_flags() {
+        let venue = local_cex_venue("paper-history-blocked");
+        let pair = MarketPair::new("ETH", "USDC").expect("pair should validate");
+        let report =
+            validate_historical_market_data_persistence(HistoricalMarketDataPersistenceInput {
+                batch_id: "history-batch-blocked".to_owned(),
+                provider_name: "local-history-provider-blocked".to_owned(),
+                venue: venue.clone(),
+                pair: pair.clone(),
+                quotes: vec![NormalizedQuote {
+                    id: "quote-blocked".to_owned(),
+                    venue,
+                    pair,
+                    bid: PriceLevel::new(200.0, 1.0).expect("bid should validate"),
+                    ask: PriceLevel::new(200.1, 1.0).expect("ask should validate"),
+                    captured_at_unix_ms: 5_000,
+                    received_at_unix_ms: 5_010,
+                }],
+                order_books: Vec::new(),
+                max_retained_records_per_kind: 4,
+                persisted_at_unix_ms: 6_000,
+                live_network_used: true,
+                credential_loaded: true,
+                production_ready_claimed: true,
+            })
+            .expect("blocked historical persistence should still produce a report");
+
+        assert_eq!(
+            report.status,
+            HistoricalMarketDataPersistenceStatus::Blocked
+        );
+        assert!(report
+            .violation_codes
+            .iter()
+            .any(|code| code == "MARKET_DATA_HISTORY_LIVE_NETWORK_USED"));
+        assert!(report
+            .violation_codes
+            .iter()
+            .any(|code| code == "MARKET_DATA_HISTORY_CREDENTIAL_LOADED"));
+        assert!(report
+            .violation_codes
+            .iter()
+            .any(|code| code == "MARKET_DATA_HISTORY_PRODUCTION_READY_CLAIMED"));
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn market_data_quality_assessment_accepts_clean_local_quote_and_depth() {
+        let venue = local_cex_venue("paper-binance");
+        let pair = MarketPair::new("BTC", "USDC").expect("pair should validate");
+        let report = assess_market_data_quality(MarketDataQualityAssessmentInput {
+            assessment_id: "quality-ready".to_owned(),
+            provider_name: "local-market-data-quality".to_owned(),
+            request: MarketDataRequest {
+                venue: venue.clone(),
+                pair: pair.clone(),
+                max_age_ms: 250,
+            },
+            quote: NormalizedQuote {
+                id: "quality-quote-ready".to_owned(),
+                venue: venue.clone(),
+                pair: pair.clone(),
+                bid: PriceLevel::new(100.0, 1.0).expect("bid should validate"),
+                ask: PriceLevel::new(100.1, 1.0).expect("ask should validate"),
+                captured_at_unix_ms: 1_000,
+                received_at_unix_ms: 1_015,
+            },
+            order_book: Some(OrderBookSnapshot {
+                id: "quality-book-ready".to_owned(),
+                venue: venue.clone(),
+                pair,
+                captured_at_unix_ms: 1_000,
+                received_at_unix_ms: 1_015,
+                bids: vec![
+                    PriceLevel::new(100.0, 1.0).expect("bid should validate"),
+                    PriceLevel::new(99.9, 1.0).expect("bid should validate"),
+                ],
+                asks: vec![
+                    PriceLevel::new(100.1, 1.0).expect("ask should validate"),
+                    PriceLevel::new(100.2, 1.0).expect("ask should validate"),
+                ],
+                source_sequence: Some("seq-quality-ready".to_owned()),
+            }),
+            now_unix_ms: 1_120,
+            max_spread_bps: 20,
+            min_depth_levels: 2,
+            max_capture_latency_ms: 25,
+            live_network_used: false,
+            credential_loaded: false,
+            production_ready_claimed: false,
+        })
+        .expect("quality assessment should validate");
+
+        assert_eq!(report.status, MarketDataQualityAssessmentStatus::Acceptable);
+        assert!(report.freshness_status.is_fresh());
+        assert!(report.spread_within_limit);
+        assert!(report.depth_levels_sufficient);
+        assert!(report.capture_latency_within_limit);
+        assert_eq!(report.quality_score, 100);
+        assert!(report.violation_codes.is_empty());
+    }
+
+    #[test]
+    fn market_data_quality_assessment_degrades_on_spread_depth_and_latency() {
+        let venue = local_cex_venue("paper-coinbase");
+        let pair = MarketPair::new("ETH", "USDC").expect("pair should validate");
+        let report = assess_market_data_quality(MarketDataQualityAssessmentInput {
+            assessment_id: "quality-degraded".to_owned(),
+            provider_name: "local-market-data-quality-degraded".to_owned(),
+            request: MarketDataRequest {
+                venue: venue.clone(),
+                pair: pair.clone(),
+                max_age_ms: 500,
+            },
+            quote: NormalizedQuote {
+                id: "quality-quote-degraded".to_owned(),
+                venue: venue.clone(),
+                pair: pair.clone(),
+                bid: PriceLevel::new(200.0, 1.0).expect("bid should validate"),
+                ask: PriceLevel::new(201.0, 1.0).expect("ask should validate"),
+                captured_at_unix_ms: 10_000,
+                received_at_unix_ms: 10_060,
+            },
+            order_book: Some(OrderBookSnapshot {
+                id: "quality-book-degraded".to_owned(),
+                venue: venue.clone(),
+                pair,
+                captured_at_unix_ms: 10_000,
+                received_at_unix_ms: 10_060,
+                bids: vec![PriceLevel::new(200.0, 1.0).expect("bid should validate")],
+                asks: vec![PriceLevel::new(201.0, 1.0).expect("ask should validate")],
+                source_sequence: Some("seq-quality-degraded".to_owned()),
+            }),
+            now_unix_ms: 10_200,
+            max_spread_bps: 20,
+            min_depth_levels: 2,
+            max_capture_latency_ms: 25,
+            live_network_used: false,
+            credential_loaded: false,
+            production_ready_claimed: false,
+        })
+        .expect("degraded quality assessment should validate");
+
+        assert_eq!(report.status, MarketDataQualityAssessmentStatus::Degraded);
+        assert!(report.freshness_status.is_fresh());
+        assert!(!report.spread_within_limit);
+        assert!(!report.depth_levels_sufficient);
+        assert!(!report.capture_latency_within_limit);
+        assert!(report.quality_score < 100);
+        assert!(report
+            .violation_codes
+            .iter()
+            .any(|code| code == "MARKET_DATA_QUALITY_SPREAD_EXCEEDED"));
+        assert!(report
+            .violation_codes
+            .iter()
+            .any(|code| code == "MARKET_DATA_QUALITY_DEPTH_INSUFFICIENT"));
+        assert!(report
+            .violation_codes
+            .iter()
+            .any(|code| code == "MARKET_DATA_QUALITY_CAPTURE_LATENCY_EXCEEDED"));
+    }
+
+    #[test]
+    fn market_data_quality_assessment_blocks_stale_or_side_effect_records() {
+        let venue = local_cex_venue("paper-kraken");
+        let pair = MarketPair::new("SOL", "USDC").expect("pair should validate");
+        let report = assess_market_data_quality(MarketDataQualityAssessmentInput {
+            assessment_id: "quality-blocked".to_owned(),
+            provider_name: "local-market-data-quality-blocked".to_owned(),
+            request: MarketDataRequest {
+                venue: venue.clone(),
+                pair: pair.clone(),
+                max_age_ms: 100,
+            },
+            quote: NormalizedQuote {
+                id: "quality-quote-blocked".to_owned(),
+                venue,
+                pair,
+                bid: PriceLevel::new(50.0, 1.0).expect("bid should validate"),
+                ask: PriceLevel::new(50.2, 1.0).expect("ask should validate"),
+                captured_at_unix_ms: 20_000,
+                received_at_unix_ms: 20_010,
+            },
+            order_book: None,
+            now_unix_ms: 20_500,
+            max_spread_bps: 50,
+            min_depth_levels: 1,
+            max_capture_latency_ms: 30,
+            live_network_used: true,
+            credential_loaded: false,
+            production_ready_claimed: false,
+        })
+        .expect("blocked quality assessment should validate");
+
+        assert_eq!(report.status, MarketDataQualityAssessmentStatus::Blocked);
+        assert!(!report.freshness_status.is_fresh());
+        assert!(report
+            .violation_codes
+            .iter()
+            .any(|code| code == "MARKET_DATA_QUALITY_NOT_FRESH"));
+        assert!(report
+            .violation_codes
+            .iter()
+            .any(|code| code == "MARKET_DATA_QUALITY_LIVE_NETWORK_USED"));
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn paid_market_data_provider_evaluation_accepts_complete_local_comparison() {
+        let report =
+            validate_paid_market_data_provider_evaluation(PaidMarketDataProviderEvaluationInput {
+                evaluation_id: "paid-eval-ready".to_owned(),
+                provider_name: "local-paid-provider".to_owned(),
+                covered_venues: vec![
+                    local_cex_venue("paper-binance"),
+                    local_cex_venue("paper-coinbase"),
+                ],
+                covered_pairs: vec![
+                    MarketPair::new("BTC", "USDC").expect("pair should validate"),
+                    MarketPair::new("ETH", "USDC").expect("pair should validate"),
+                ],
+                capabilities: MarketDataCapabilities {
+                    order_book: true,
+                    top_of_book: true,
+                    fees: false,
+                    websocket: true,
+                    rest: true,
+                },
+                documented_latency_ms: 35,
+                max_allowed_latency_ms: 50,
+                max_requests_per_minute: 1_200,
+                monthly_cost_usd: 499,
+                failure_modes_reviewed: vec![
+                    "provider-outage".to_owned(),
+                    "stale-book".to_owned(),
+                    "rate-limit-burst".to_owned(),
+                ],
+                rate_limit_documentation_reviewed: true,
+                pricing_documentation_reviewed: true,
+                terms_reviewed: true,
+                credential_scope_reviewed: true,
+                live_network_used: false,
+                credential_loaded: false,
+                production_ready_claimed: false,
+            })
+            .expect("paid provider evaluation should validate");
+
+        assert_eq!(
+            report.status,
+            PaidMarketDataProviderEvaluationStatus::ReadyForLocalReview
+        );
+        assert!(report.coverage_review_passed);
+        assert!(report.latency_within_budget);
+        assert!(report.rate_limit_review_passed);
+        assert!(report.cost_review_passed);
+        assert!(report.failure_behavior_review_passed);
+        assert!(report.governance_review_passed);
+        assert!(!report.live_network_used);
+        assert!(!report.credential_loaded);
+        assert!(!report.production_ready);
+        assert!(report.violation_codes.is_empty());
+    }
+
+    #[test]
+    fn paid_market_data_provider_evaluation_blocks_missing_comparison_metadata() {
+        let report =
+            validate_paid_market_data_provider_evaluation(PaidMarketDataProviderEvaluationInput {
+                evaluation_id: "paid-eval-blocked".to_owned(),
+                provider_name: "local-incomplete-provider".to_owned(),
+                covered_venues: vec![local_cex_venue("paper-kraken")],
+                covered_pairs: vec![MarketPair::new("BTC", "USDT").expect("pair should validate")],
+                capabilities: MarketDataCapabilities {
+                    order_book: true,
+                    top_of_book: true,
+                    fees: false,
+                    websocket: false,
+                    rest: true,
+                },
+                documented_latency_ms: 120,
+                max_allowed_latency_ms: 50,
+                max_requests_per_minute: 600,
+                monthly_cost_usd: 250,
+                failure_modes_reviewed: vec!["provider-outage".to_owned()],
+                rate_limit_documentation_reviewed: false,
+                pricing_documentation_reviewed: false,
+                terms_reviewed: false,
+                credential_scope_reviewed: false,
+                live_network_used: false,
+                credential_loaded: false,
+                production_ready_claimed: false,
+            })
+            .expect("blocked evaluation should still produce a report");
+
+        assert_eq!(
+            report.status,
+            PaidMarketDataProviderEvaluationStatus::Blocked
+        );
+        assert!(!report.latency_within_budget);
+        assert!(!report.rate_limit_review_passed);
+        assert!(!report.cost_review_passed);
+        assert!(!report.governance_review_passed);
+        assert!(report
+            .violation_codes
+            .iter()
+            .any(|code| code == "PAID_MARKET_DATA_EVALUATION_LATENCY_EXCEEDED"));
+        assert!(report
+            .violation_codes
+            .iter()
+            .any(|code| code == "PAID_MARKET_DATA_EVALUATION_RATE_LIMIT_REVIEW_MISSING"));
+        assert!(report
+            .violation_codes
+            .iter()
+            .any(|code| code == "PAID_MARKET_DATA_EVALUATION_COST_REVIEW_MISSING"));
+        assert!(report
+            .violation_codes
+            .iter()
+            .any(|code| code == "PAID_MARKET_DATA_EVALUATION_TERMS_REVIEW_MISSING"));
+        assert!(report
+            .violation_codes
+            .iter()
+            .any(|code| code == "PAID_MARKET_DATA_EVALUATION_CREDENTIAL_SCOPE_REVIEW_MISSING"));
+    }
+
+    #[test]
+    fn paid_market_data_provider_evaluation_fails_closed_on_side_effect_flags() {
+        let report =
+            validate_paid_market_data_provider_evaluation(PaidMarketDataProviderEvaluationInput {
+                evaluation_id: "paid-eval-side-effect".to_owned(),
+                provider_name: "local-side-effect-provider".to_owned(),
+                covered_venues: vec![local_cex_venue("paper-binance")],
+                covered_pairs: vec![MarketPair::new("SOL", "USDC").expect("pair should validate")],
+                capabilities: MarketDataCapabilities {
+                    order_book: true,
+                    top_of_book: false,
+                    fees: false,
+                    websocket: true,
+                    rest: true,
+                },
+                documented_latency_ms: 40,
+                max_allowed_latency_ms: 60,
+                max_requests_per_minute: 900,
+                monthly_cost_usd: 399,
+                failure_modes_reviewed: vec!["rate-limit-burst".to_owned()],
+                rate_limit_documentation_reviewed: true,
+                pricing_documentation_reviewed: true,
+                terms_reviewed: true,
+                credential_scope_reviewed: true,
+                live_network_used: true,
+                credential_loaded: true,
+                production_ready_claimed: true,
+            })
+            .expect("side-effect evaluation should still produce a blocked report");
+
+        assert_eq!(
+            report.status,
+            PaidMarketDataProviderEvaluationStatus::Blocked
+        );
+        assert!(report
+            .violation_codes
+            .iter()
+            .any(|code| code == "PAID_MARKET_DATA_EVALUATION_LIVE_NETWORK_USED"));
+        assert!(report
+            .violation_codes
+            .iter()
+            .any(|code| code == "PAID_MARKET_DATA_EVALUATION_CREDENTIAL_LOADED"));
+        assert!(report
+            .violation_codes
+            .iter()
+            .any(|code| code == "PAID_MARKET_DATA_EVALUATION_PRODUCTION_READY_CLAIMED"));
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn paid_market_data_provider_evaluation_audit_and_state_reopen_locally() {
+        let report =
+            validate_paid_market_data_provider_evaluation(PaidMarketDataProviderEvaluationInput {
+                evaluation_id: "paid-eval-audit-state".to_owned(),
+                provider_name: "local-audit-provider".to_owned(),
+                covered_venues: vec![
+                    local_cex_venue("paper-binance"),
+                    local_cex_venue("paper-coinbase"),
+                ],
+                covered_pairs: vec![MarketPair::new("BTC", "USDC").expect("pair should validate")],
+                capabilities: MarketDataCapabilities {
+                    order_book: true,
+                    top_of_book: true,
+                    fees: false,
+                    websocket: true,
+                    rest: true,
+                },
+                documented_latency_ms: 25,
+                max_allowed_latency_ms: 40,
+                max_requests_per_minute: 1_000,
+                monthly_cost_usd: 350,
+                failure_modes_reviewed: vec!["provider-outage".to_owned(), "stale-book".to_owned()],
+                rate_limit_documentation_reviewed: true,
+                pricing_documentation_reviewed: true,
+                terms_reviewed: true,
+                credential_scope_reviewed: true,
+                live_network_used: false,
+                credential_loaded: false,
+                production_ready_claimed: false,
+            })
+            .expect("paid provider evaluation should validate");
+
+        let audit_path = unique_temp_path("paid-market-data-provider-evaluation-audit", "jsonl");
+        let mut journal = AppendOnlyAuditJournal::open(&audit_path).expect("journal opens");
+        let record =
+            append_paid_market_data_provider_evaluation_audit(&mut journal, &report, 1_700_000_039)
+                .expect("audit append should succeed");
+        assert_eq!(record.event.subsystem, MARKET_DATA_STATE_SUBSYSTEM);
+        assert_eq!(record.event.actor, "market-data-provider");
+
+        let mut invalid = report.clone();
+        invalid.production_ready = true;
+        assert!(append_paid_market_data_provider_evaluation_audit(
+            &mut journal,
+            &invalid,
+            1_700_000_040,
+        )
+        .is_err());
+
+        let mut store = InMemoryStateStore::new();
+        let checkpoint = persist_paid_market_data_provider_evaluation_checkpoint(
+            &mut store,
+            &report,
+            1_700_000_041,
+        )
+        .expect("checkpoint persist should succeed");
+        assert_eq!(
+            checkpoint.key,
+            MARKET_DATA_LAST_PAID_PROVIDER_EVALUATION_CHECKPOINT_KEY
+        );
+
+        let recovered = store
+            .get_checkpoint(MARKET_DATA_LAST_PAID_PROVIDER_EVALUATION_CHECKPOINT_KEY)
+            .expect("state read should succeed")
+            .expect("checkpoint should exist");
+        let recovered_report: PaidMarketDataProviderEvaluationReport =
+            serde_json::from_str(&recovered.value).expect("checkpoint JSON should decode");
+        assert_eq!(recovered_report, report);
+        assert_eq!(
+            recovered_report.status,
+            PaidMarketDataProviderEvaluationStatus::ReadyForLocalReview
+        );
+    }
+
+    #[test]
+    fn historical_market_data_persistence_audit_and_state_reopen_locally() {
+        let venue = local_cex_venue("paper-history-audit");
+        let pair = MarketPair::new("SOL", "USDC").expect("pair should validate");
+        let report =
+            validate_historical_market_data_persistence(HistoricalMarketDataPersistenceInput {
+                batch_id: "history-audit-state".to_owned(),
+                provider_name: "local-history-audit-provider".to_owned(),
+                venue: venue.clone(),
+                pair: pair.clone(),
+                quotes: vec![NormalizedQuote {
+                    id: "history-audit-quote".to_owned(),
+                    venue: venue.clone(),
+                    pair: pair.clone(),
+                    bid: PriceLevel::new(50.0, 1.0).expect("bid should validate"),
+                    ask: PriceLevel::new(50.1, 1.0).expect("ask should validate"),
+                    captured_at_unix_ms: 7_000,
+                    received_at_unix_ms: 7_010,
+                }],
+                order_books: vec![OrderBookSnapshot {
+                    id: "history-audit-book".to_owned(),
+                    venue,
+                    pair,
+                    captured_at_unix_ms: 7_000,
+                    received_at_unix_ms: 7_015,
+                    bids: vec![PriceLevel::new(50.0, 1.0).expect("bid should validate")],
+                    asks: vec![PriceLevel::new(50.1, 1.0).expect("ask should validate")],
+                    source_sequence: Some("history-audit-seq".to_owned()),
+                }],
+                max_retained_records_per_kind: 4,
+                persisted_at_unix_ms: 8_000,
+                live_network_used: false,
+                credential_loaded: false,
+                production_ready_claimed: false,
+            })
+            .expect("historical persistence should validate");
+
+        let audit_path = unique_temp_path("historical-market-data-persistence-audit", "jsonl");
+        let mut journal = AppendOnlyAuditJournal::open(&audit_path).expect("journal opens");
+        let record =
+            append_historical_market_data_persistence_audit(&mut journal, &report, 1_700_000_037)
+                .expect("audit append should succeed");
+        assert_eq!(record.event.subsystem, MARKET_DATA_STATE_SUBSYSTEM);
+        assert_eq!(record.event.actor, "market-data-provider");
+
+        let mut invalid = report.clone();
+        invalid.production_ready = true;
+        assert!(append_historical_market_data_persistence_audit(
+            &mut journal,
+            &invalid,
+            1_700_000_038
+        )
+        .is_err());
+
+        let mut store = InMemoryStateStore::new();
+        let checkpoint =
+            persist_historical_market_data_checkpoint(&mut store, &report, 1_700_000_039)
+                .expect("checkpoint persist should succeed");
+        assert_eq!(
+            checkpoint.key,
+            MARKET_DATA_LAST_HISTORICAL_PERSISTENCE_CHECKPOINT_KEY
+        );
+
+        let recovered = store
+            .get_checkpoint(MARKET_DATA_LAST_HISTORICAL_PERSISTENCE_CHECKPOINT_KEY)
+            .expect("state read should succeed")
+            .expect("checkpoint should exist");
+        let recovered_report: HistoricalMarketDataPersistenceReport =
+            serde_json::from_str(&recovered.value).expect("checkpoint JSON should decode");
+        assert_eq!(recovered_report, report);
+        assert_eq!(
+            recovered_report.status,
+            HistoricalMarketDataPersistenceStatus::PersistedForLocalReplay
+        );
+    }
+
+    #[test]
+    fn market_data_quality_assessment_audit_and_state_reopen_locally() {
+        let venue = local_cex_venue("paper-audit-quality");
+        let pair = MarketPair::new("BTC", "USDC").expect("pair should validate");
+        let report = assess_market_data_quality(MarketDataQualityAssessmentInput {
+            assessment_id: "quality-audit-state".to_owned(),
+            provider_name: "local-quality-audit-provider".to_owned(),
+            request: MarketDataRequest {
+                venue: venue.clone(),
+                pair: pair.clone(),
+                max_age_ms: 200,
+            },
+            quote: NormalizedQuote {
+                id: "quality-audit-quote".to_owned(),
+                venue: venue.clone(),
+                pair: pair.clone(),
+                bid: PriceLevel::new(100.0, 1.0).expect("bid should validate"),
+                ask: PriceLevel::new(100.1, 1.0).expect("ask should validate"),
+                captured_at_unix_ms: 50_000,
+                received_at_unix_ms: 50_010,
+            },
+            order_book: Some(OrderBookSnapshot {
+                id: "quality-audit-book".to_owned(),
+                venue,
+                pair,
+                captured_at_unix_ms: 50_000,
+                received_at_unix_ms: 50_010,
+                bids: vec![PriceLevel::new(100.0, 1.0).expect("bid should validate")],
+                asks: vec![PriceLevel::new(100.1, 1.0).expect("ask should validate")],
+                source_sequence: Some("seq-quality-audit".to_owned()),
+            }),
+            now_unix_ms: 50_100,
+            max_spread_bps: 20,
+            min_depth_levels: 1,
+            max_capture_latency_ms: 25,
+            live_network_used: false,
+            credential_loaded: false,
+            production_ready_claimed: false,
+        })
+        .expect("quality assessment should validate");
+
+        let audit_path = unique_temp_path("market-data-quality-assessment-audit", "jsonl");
+        let mut journal = AppendOnlyAuditJournal::open(&audit_path).expect("journal opens");
+        let record =
+            append_market_data_quality_assessment_audit(&mut journal, &report, 1_700_000_038)
+                .expect("audit append should succeed");
+        assert_eq!(record.event.subsystem, MARKET_DATA_STATE_SUBSYSTEM);
+        assert_eq!(record.event.actor, "market-data-provider");
+
+        let mut invalid = report.clone();
+        invalid.production_ready = true;
+        assert!(
+            append_market_data_quality_assessment_audit(&mut journal, &invalid, 1_700_000_039)
+                .is_err()
+        );
+
+        let mut store = InMemoryStateStore::new();
+        let checkpoint =
+            persist_market_data_quality_assessment_checkpoint(&mut store, &report, 1_700_000_040)
+                .expect("checkpoint persist should succeed");
+        assert_eq!(
+            checkpoint.key,
+            MARKET_DATA_LAST_QUALITY_ASSESSMENT_CHECKPOINT_KEY
+        );
+
+        let recovered = store
+            .get_checkpoint(MARKET_DATA_LAST_QUALITY_ASSESSMENT_CHECKPOINT_KEY)
+            .expect("state read should succeed")
+            .expect("checkpoint should exist");
+        let recovered_report: MarketDataQualityAssessmentReport =
+            serde_json::from_str(&recovered.value).expect("checkpoint JSON should decode");
+        assert_eq!(recovered_report, report);
+        assert_eq!(
+            recovered_report.status,
+            MarketDataQualityAssessmentStatus::Acceptable
+        );
     }
 
     #[test]

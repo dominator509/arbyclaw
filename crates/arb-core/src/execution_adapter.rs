@@ -1791,6 +1791,45 @@ redact_secrets = true
         cleanup_state_files(&state_path);
     }
 
+    #[test]
+    fn adapter_recovery_plan_models_no_fill_cancel_without_hedge() {
+        let planning_policy = policy();
+        let plan = planner_plan(&planning_policy);
+        let adapter_policy = PolicyEngine::new(
+            AgentConfig::from_toml_str(PAPER_CONFIG).expect("config should validate"),
+            PolicyContext {
+                kill_switch_engaged: true,
+                ..PolicyContext::default()
+            },
+        );
+        let request = ExecutionAdapterRequest {
+            id: "adapter-request-no-fill-recovery".to_owned(),
+            plan: plan.clone(),
+            config: ExecutionAdapterConfig::default(),
+            now_unix_ms: 20_100,
+        };
+
+        let run = DeterministicExecutionAdapterBoundary::new()
+            .evaluate_plan(&request, &adapter_policy)
+            .expect("adapter run should model no-fill outcomes");
+        let recovery = plan_execution_adapter_recovery(&plan, &run, 30_100)
+            .expect("no-fill run should produce a local recovery plan");
+
+        assert_eq!(recovery.partial_fill_count, 0);
+        assert_eq!(recovery.no_fill_count, plan.intents.len());
+        assert_eq!(recovery.cancel_remainder_steps, plan.intents.len());
+        assert_eq!(recovery.hedge_exposure_steps, 0);
+        assert!(recovery.operator_review_required);
+        assert!(!recovery.external_submission_performed);
+        assert!(!recovery.live_execution_performed);
+        assert!(!recovery.production_ready);
+        assert!(recovery.steps.iter().all(|step| {
+            step.action == ExecutionAdapterRecoveryAction::CancelUnfilledRemainder
+                && step.filled_notional_quote <= f64::EPSILON
+                && step.unfilled_notional_quote > f64::EPSILON
+        }));
+    }
+
     fn policy() -> PolicyEngine {
         PolicyEngine::from_config(
             AgentConfig::from_toml_str(PAPER_CONFIG).expect("config should validate"),

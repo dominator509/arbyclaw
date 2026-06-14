@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import configparser
+import json
 import pathlib
 import shutil
 import subprocess
@@ -58,6 +59,7 @@ def fail(message: str) -> int:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--json", action="store_true", help="emit JSON report")
     parser.add_argument(
         "--systemd-analyze",
         action="store_true",
@@ -192,24 +194,50 @@ def run_systemd_analyze_if_requested(enabled: bool, required: bool) -> str:
     return "systemd-analyze verify passed"
 
 
+def build_report(args: argparse.Namespace) -> dict[str, object]:
+    parser = read_unit()
+    warnings = validate_static_unit(parser)
+    systemd_result = run_systemd_analyze_if_requested(
+        args.systemd_analyze,
+        args.require_systemd_analyze,
+    )
+    systemd_analyze_requested = args.systemd_analyze
+    systemd_analyze_verified = systemd_result == "systemd-analyze verify passed"
+    systemd_analyze_available = "unavailable" not in systemd_result
+    return {
+        "schema": "arbyclaw.systemd_example_validation.v1",
+        "passed": True,
+        "static_validation_passed": True,
+        "warnings": warnings,
+        "systemd_analyze_requested": systemd_analyze_requested,
+        "systemd_analyze_required": args.require_systemd_analyze,
+        "systemd_analyze_available": systemd_analyze_available,
+        "systemd_analyze_verified": systemd_analyze_verified,
+        "systemd_analyze_result": systemd_result,
+        "service_actions_performed": False,
+        "external_calls_performed": False,
+        "secrets_loaded": False,
+        "production_readiness_claimed": False,
+    }
+
+
 def main() -> int:
     args = parse_args()
     if not UNIT_PATH.exists():
         return fail(f"missing unit template: {UNIT_PATH.relative_to(ROOT)}")
 
     try:
-        parser = read_unit()
-        warnings = validate_static_unit(parser)
-        systemd_result = run_systemd_analyze_if_requested(
-            args.systemd_analyze,
-            args.require_systemd_analyze,
-        )
+        report = build_report(args)
     except (configparser.Error, OSError, RuntimeError, ValueError) as error:
         return fail(str(error))
 
-    for warning in warnings:
+    if args.json:
+        print(json.dumps(report, indent=2, sort_keys=True))
+        return 0
+
+    for warning in report["warnings"]:
         print(f"warning: {warning}")
-    print(systemd_result)
+    print(report["systemd_analyze_result"])
     print("systemd example validation passed")
     return 0
 

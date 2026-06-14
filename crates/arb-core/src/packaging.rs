@@ -15,6 +15,9 @@ pub const PACKAGING_DEPLOYMENT_VERSION: &str = "phase-16-packaging-deployment-v1
 /// Stable local rollback execution transcript validation version.
 pub const PACKAGING_ROLLBACK_EXECUTION_TRANSCRIPT_VERSION: &str =
     "phase54-rollback-execution-transcript-local-v1";
+/// Stable local incident-response execution transcript validation version.
+pub const PACKAGING_INCIDENT_RESPONSE_EXECUTION_TRANSCRIPT_VERSION: &str =
+    "phase55-incident-response-execution-transcript-local-v1";
 
 /// State-store subsystem name for local packaging/deployment checkpoints.
 pub const PACKAGING_STATE_SUBSYSTEM: &str = "packaging";
@@ -705,6 +708,16 @@ pub enum RollbackExecutionTranscriptStatus {
     Blocked,
 }
 
+/// Local validation status for sanitized incident-response execution transcripts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum IncidentResponseExecutionTranscriptStatus {
+    /// Transcript contains all required incident-response execution evidence references.
+    ReadyForExternalReview,
+    /// Transcript is missing incident-response execution evidence or contains unsafe flags.
+    Blocked,
+}
+
 /// Deterministic package/deployment record.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -861,6 +874,120 @@ pub struct RollbackExecutionTranscriptReport {
     pub service_manager_action_performed_by_validator: bool,
     /// Whether this validator mutated files. Always false.
     pub files_mutated_by_validator: bool,
+    /// Whether this validator performed external calls. Always false.
+    pub external_calls_performed: bool,
+    /// Whether this validator performed live execution. Always false.
+    pub live_execution_performed: bool,
+    /// Whether this report approves production readiness. Always false.
+    pub production_ready: bool,
+    /// Transcript validation timestamp in Unix milliseconds.
+    pub validated_at_unix_ms: u64,
+}
+
+/// Sanitized incident-response execution evidence transcript.
+///
+/// This records only operator-supplied reference presence and outcome flags. It
+/// must not embed message bodies, host paths, artifact contents, command
+/// output, secrets, audit payloads, checkpoint values, or evidence artifacts.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct IncidentResponseExecutionTranscript {
+    /// Stable transcript id.
+    pub transcript_id: String,
+    /// Source deployment package plan id or incident package id.
+    pub plan_id: String,
+    /// Whether incident scenario reference is present.
+    pub incident_scenario_reference_present: bool,
+    /// Whether incident severity reference is present.
+    pub severity_reference_present: bool,
+    /// Whether responder reference is present.
+    pub responder_reference_present: bool,
+    /// Whether reviewer reference is present.
+    pub reviewer_reference_present: bool,
+    /// Whether detection/triage evidence reference is present.
+    pub detection_triage_reference_present: bool,
+    /// Whether containment/recovery evidence reference is present.
+    pub containment_recovery_reference_present: bool,
+    /// Whether post-incident runtime smoke evidence is present.
+    pub post_incident_runtime_smoke_passed: bool,
+    /// Whether audit replay after recovery evidence is present.
+    pub audit_replay_after_recovery_validated: bool,
+    /// Whether SQLite recovery after recovery evidence is present.
+    pub sqlite_recovery_after_recovery_validated: bool,
+    /// Whether communications/escalation evidence reference is present.
+    pub communications_reference_present: bool,
+    /// Whether operator approval/reference is present.
+    pub operator_approved: bool,
+    /// Whether reviewer approval/reference is present.
+    pub reviewer_approved: bool,
+    /// Count of non-secret evidence references.
+    pub non_secret_reference_count: u64,
+    /// Whether this validator executed incident-response actions. Must be false.
+    pub incident_response_executed_by_validator: bool,
+    /// Whether this validator performed service-manager actions. Must be false.
+    pub service_manager_action_performed_by_validator: bool,
+    /// Whether this validator mutated files. Must be false.
+    pub files_mutated_by_validator: bool,
+    /// Whether this validator sent alerts or escalation messages. Must be false.
+    pub alerts_sent_by_validator: bool,
+    /// Whether this validator performed external calls. Must be false.
+    pub external_calls_performed: bool,
+    /// Whether this validator performed live execution. Must be false.
+    pub live_execution_performed: bool,
+    /// Whether this transcript attempts to claim production readiness. Must be false.
+    pub production_ready_claimed: bool,
+    /// Transcript validation timestamp in Unix milliseconds.
+    pub validated_at_unix_ms: u64,
+}
+
+/// Non-secret local validation report for incident-response execution evidence.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct IncidentResponseExecutionTranscriptReport {
+    /// Incident-response execution transcript validation version.
+    pub validation_version: String,
+    /// Stable transcript id.
+    pub transcript_id: String,
+    /// Source deployment package plan id or incident package id.
+    pub plan_id: String,
+    /// Whether incident scenario reference is present.
+    pub incident_scenario_reference_present: bool,
+    /// Whether incident severity reference is present.
+    pub severity_reference_present: bool,
+    /// Whether responder reference is present.
+    pub responder_reference_present: bool,
+    /// Whether reviewer reference is present.
+    pub reviewer_reference_present: bool,
+    /// Whether detection/triage evidence reference is present.
+    pub detection_triage_reference_present: bool,
+    /// Whether containment/recovery evidence reference is present.
+    pub containment_recovery_reference_present: bool,
+    /// Whether post-incident runtime smoke evidence is present.
+    pub post_incident_runtime_smoke_passed: bool,
+    /// Whether audit replay after recovery evidence is present.
+    pub audit_replay_after_recovery_validated: bool,
+    /// Whether SQLite recovery after recovery evidence is present.
+    pub sqlite_recovery_after_recovery_validated: bool,
+    /// Whether communications/escalation evidence reference is present.
+    pub communications_reference_present: bool,
+    /// Whether operator approval/reference is present.
+    pub operator_approved: bool,
+    /// Whether reviewer approval/reference is present.
+    pub reviewer_approved: bool,
+    /// Count of non-secret evidence references.
+    pub non_secret_reference_count: u64,
+    /// Validation status.
+    pub status: IncidentResponseExecutionTranscriptStatus,
+    /// Non-secret blocker codes.
+    pub blocker_codes: Vec<String>,
+    /// Whether this validator executed incident-response actions. Always false.
+    pub incident_response_executed_by_validator: bool,
+    /// Whether this validator performed service-manager actions. Always false.
+    pub service_manager_action_performed_by_validator: bool,
+    /// Whether this validator mutated files. Always false.
+    pub files_mutated_by_validator: bool,
+    /// Whether this validator sent alerts or escalation messages. Always false.
+    pub alerts_sent_by_validator: bool,
     /// Whether this validator performed external calls. Always false.
     pub external_calls_performed: bool,
     /// Whether this validator performed live execution. Always false.
@@ -1165,6 +1292,109 @@ impl RollbackExecutionTranscriptReport {
     }
 }
 
+impl IncidentResponseExecutionTranscript {
+    /// Validate sanitized incident-response execution transcript input.
+    pub fn validate(&self) -> Result<(), PackagingBoundaryError> {
+        let mut violations = Vec::new();
+        if self.transcript_id.trim().is_empty() {
+            violations.push(PackagingBoundaryViolation::new(
+                "PACKAGING_INCIDENT_RESPONSE_EXECUTION_TRANSCRIPT_ID_EMPTY",
+                "incident-response execution transcript id must be non-empty",
+            ));
+        }
+        if self.plan_id.trim().is_empty() {
+            violations.push(PackagingBoundaryViolation::new(
+                "PACKAGING_INCIDENT_RESPONSE_EXECUTION_PLAN_ID_EMPTY",
+                "incident-response execution transcript plan id must be non-empty",
+            ));
+        }
+        if contains_secret_like_text(&self.transcript_id)
+            || contains_secret_like_text(&self.plan_id)
+        {
+            violations.push(PackagingBoundaryViolation::new(
+                "PACKAGING_INCIDENT_RESPONSE_EXECUTION_SECRET_LIKE",
+                "incident-response execution transcript ids must not contain secret-like text",
+            ));
+        }
+        if self.validated_at_unix_ms == 0 {
+            violations.push(PackagingBoundaryViolation::new(
+                "PACKAGING_INCIDENT_RESPONSE_EXECUTION_TIMESTAMP_EMPTY",
+                "incident-response execution transcript timestamp must be non-zero",
+            ));
+        }
+        if self.incident_response_executed_by_validator
+            || self.service_manager_action_performed_by_validator
+            || self.files_mutated_by_validator
+            || self.alerts_sent_by_validator
+            || self.external_calls_performed
+            || self.live_execution_performed
+        {
+            violations.push(PackagingBoundaryViolation::new(
+                "PACKAGING_INCIDENT_RESPONSE_EXECUTION_VALIDATOR_SIDE_EFFECT_DENIED",
+                "incident-response execution transcript validator must not execute incident actions, perform service actions, mutate files, send alerts, call externally, or perform live execution",
+            ));
+        }
+        if self.production_ready_claimed {
+            violations.push(PackagingBoundaryViolation::new(
+                "PACKAGING_INCIDENT_RESPONSE_EXECUTION_PRODUCTION_CLAIM_DENIED",
+                "incident-response execution transcript must not claim production readiness",
+            ));
+        }
+        finish_validation(violations)
+    }
+}
+
+impl IncidentResponseExecutionTranscriptReport {
+    /// Validate incident-response execution transcript report invariants.
+    pub fn validate(&self) -> Result<(), PackagingBoundaryError> {
+        let mut violations = Vec::new();
+        if self.validation_version != PACKAGING_INCIDENT_RESPONSE_EXECUTION_TRANSCRIPT_VERSION {
+            violations.push(PackagingBoundaryViolation::new(
+                "PACKAGING_INCIDENT_RESPONSE_EXECUTION_VERSION_MISMATCH",
+                format!(
+                    "validation_version must be {PACKAGING_INCIDENT_RESPONSE_EXECUTION_TRANSCRIPT_VERSION}"
+                ),
+            ));
+        }
+        if self.transcript_id.trim().is_empty() || self.plan_id.trim().is_empty() {
+            violations.push(PackagingBoundaryViolation::new(
+                "PACKAGING_INCIDENT_RESPONSE_EXECUTION_REPORT_ID_EMPTY",
+                "incident-response execution report requires transcript id and plan id",
+            ));
+        }
+        if self.incident_response_executed_by_validator
+            || self.service_manager_action_performed_by_validator
+            || self.files_mutated_by_validator
+            || self.alerts_sent_by_validator
+            || self.external_calls_performed
+            || self.live_execution_performed
+            || self.production_ready
+        {
+            violations.push(PackagingBoundaryViolation::new(
+                "PACKAGING_INCIDENT_RESPONSE_EXECUTION_REPORT_SIDE_EFFECT_DENIED",
+                "incident-response execution report must not contain validator side effects or production readiness",
+            ));
+        }
+        if self.status == IncidentResponseExecutionTranscriptStatus::ReadyForExternalReview
+            && !self.blocker_codes.is_empty()
+        {
+            violations.push(PackagingBoundaryViolation::new(
+                "PACKAGING_INCIDENT_RESPONSE_EXECUTION_READY_WITH_BLOCKERS",
+                "ready incident-response execution report must not contain blockers",
+            ));
+        }
+        if self.status == IncidentResponseExecutionTranscriptStatus::Blocked
+            && self.blocker_codes.is_empty()
+        {
+            violations.push(PackagingBoundaryViolation::new(
+                "PACKAGING_INCIDENT_RESPONSE_EXECUTION_BLOCKED_WITHOUT_BLOCKERS",
+                "blocked incident-response execution report requires blocker codes",
+            ));
+        }
+        finish_validation(violations)
+    }
+}
+
 /// Validate local rollback metadata without executing rollback steps.
 #[must_use]
 pub fn validate_local_deployment_rollback_plan(
@@ -1210,6 +1440,54 @@ pub fn validate_rollback_execution_transcript(
         rollback_executed_by_validator: false,
         service_manager_action_performed_by_validator: false,
         files_mutated_by_validator: false,
+        external_calls_performed: false,
+        live_execution_performed: false,
+        production_ready: false,
+        validated_at_unix_ms: transcript.validated_at_unix_ms,
+    };
+    report.validate()?;
+    Ok(report)
+}
+
+/// Validate sanitized incident-response execution evidence metadata.
+///
+/// This consumes operator-owned reference metadata only. It does not stop
+/// services, modify deployments, send alerts, mutate files, call external
+/// systems, perform live execution, or claim production readiness.
+pub fn validate_incident_response_execution_transcript(
+    transcript: IncidentResponseExecutionTranscript,
+) -> Result<IncidentResponseExecutionTranscriptReport, PackagingBoundaryError> {
+    transcript.validate()?;
+    let blocker_codes = incident_response_execution_blockers(&transcript);
+    let status = if blocker_codes.is_empty() {
+        IncidentResponseExecutionTranscriptStatus::ReadyForExternalReview
+    } else {
+        IncidentResponseExecutionTranscriptStatus::Blocked
+    };
+    let report = IncidentResponseExecutionTranscriptReport {
+        validation_version: PACKAGING_INCIDENT_RESPONSE_EXECUTION_TRANSCRIPT_VERSION.to_owned(),
+        transcript_id: transcript.transcript_id,
+        plan_id: transcript.plan_id,
+        incident_scenario_reference_present: transcript.incident_scenario_reference_present,
+        severity_reference_present: transcript.severity_reference_present,
+        responder_reference_present: transcript.responder_reference_present,
+        reviewer_reference_present: transcript.reviewer_reference_present,
+        detection_triage_reference_present: transcript.detection_triage_reference_present,
+        containment_recovery_reference_present: transcript.containment_recovery_reference_present,
+        post_incident_runtime_smoke_passed: transcript.post_incident_runtime_smoke_passed,
+        audit_replay_after_recovery_validated: transcript.audit_replay_after_recovery_validated,
+        sqlite_recovery_after_recovery_validated: transcript
+            .sqlite_recovery_after_recovery_validated,
+        communications_reference_present: transcript.communications_reference_present,
+        operator_approved: transcript.operator_approved,
+        reviewer_approved: transcript.reviewer_approved,
+        non_secret_reference_count: transcript.non_secret_reference_count,
+        status,
+        blocker_codes,
+        incident_response_executed_by_validator: false,
+        service_manager_action_performed_by_validator: false,
+        files_mutated_by_validator: false,
+        alerts_sent_by_validator: false,
         external_calls_performed: false,
         live_execution_performed: false,
         production_ready: false,
@@ -1587,17 +1865,65 @@ fn rollback_execution_blockers(transcript: &RollbackExecutionTranscript) -> Vec<
     blockers
 }
 
+fn incident_response_execution_blockers(
+    transcript: &IncidentResponseExecutionTranscript,
+) -> Vec<String> {
+    let mut blockers = Vec::new();
+    if !transcript.incident_scenario_reference_present {
+        blockers.push("missing-incident-scenario-reference".to_owned());
+    }
+    if !transcript.severity_reference_present {
+        blockers.push("missing-severity-reference".to_owned());
+    }
+    if !transcript.responder_reference_present {
+        blockers.push("missing-responder-reference".to_owned());
+    }
+    if !transcript.reviewer_reference_present {
+        blockers.push("missing-reviewer-reference".to_owned());
+    }
+    if !transcript.detection_triage_reference_present {
+        blockers.push("missing-detection-triage-reference".to_owned());
+    }
+    if !transcript.containment_recovery_reference_present {
+        blockers.push("missing-containment-recovery-reference".to_owned());
+    }
+    if !transcript.post_incident_runtime_smoke_passed {
+        blockers.push("missing-post-incident-runtime-smoke-evidence".to_owned());
+    }
+    if !transcript.audit_replay_after_recovery_validated {
+        blockers.push("missing-audit-replay-after-recovery-evidence".to_owned());
+    }
+    if !transcript.sqlite_recovery_after_recovery_validated {
+        blockers.push("missing-sqlite-recovery-after-recovery-evidence".to_owned());
+    }
+    if !transcript.communications_reference_present {
+        blockers.push("missing-communications-reference".to_owned());
+    }
+    if transcript.non_secret_reference_count < 6 {
+        blockers.push("insufficient-non-secret-references".to_owned());
+    }
+    if !transcript.operator_approved {
+        blockers.push("missing-operator-approval".to_owned());
+    }
+    if !transcript.reviewer_approved {
+        blockers.push("missing-reviewer-approval".to_owned());
+    }
+    blockers
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
         append_deployment_package_record_audit, append_rollback_validation_audit,
         persist_deployment_package_record_checkpoint, persist_rollback_validation_checkpoint,
-        validate_local_deployment_rollback_plan, validate_rollback_execution_transcript,
-        DeploymentNetworkExposure, DeploymentPackagePlan, DeploymentPackageRequest,
-        DeploymentPackageStatus, DeterministicPackagingDeploymentPlanner, PackageTargetPlan,
-        PackagingBoundaryConfig, PackagingBoundaryError, PackagingDeploymentPlanner,
-        RollbackExecutionTranscript, RollbackExecutionTranscriptStatus, RollbackValidationStatus,
-        RuntimeConfigurationStrategy, PACKAGING_LAST_PACKAGE_RECORD_CHECKPOINT_KEY,
+        validate_incident_response_execution_transcript, validate_local_deployment_rollback_plan,
+        validate_rollback_execution_transcript, DeploymentNetworkExposure, DeploymentPackagePlan,
+        DeploymentPackageRequest, DeploymentPackageStatus, DeterministicPackagingDeploymentPlanner,
+        IncidentResponseExecutionTranscript, IncidentResponseExecutionTranscriptStatus,
+        PackageTargetPlan, PackagingBoundaryConfig, PackagingBoundaryError,
+        PackagingDeploymentPlanner, RollbackExecutionTranscript, RollbackExecutionTranscriptStatus,
+        RollbackValidationStatus, RuntimeConfigurationStrategy,
+        PACKAGING_LAST_PACKAGE_RECORD_CHECKPOINT_KEY,
         PACKAGING_LAST_ROLLBACK_VALIDATION_CHECKPOINT_KEY,
     };
     use crate::{AppendOnlyAuditJournal, SqliteWalStateStore, StateStore};
@@ -1894,6 +2220,81 @@ mod tests {
         assert!(error.to_string().contains("must not execute rollback"));
     }
 
+    #[test]
+    fn incident_response_execution_transcript_validates_operator_evidence_shape() {
+        let report = validate_incident_response_execution_transcript(
+            incident_response_execution_transcript(true),
+        )
+        .expect("complete incident-response execution transcript should validate");
+
+        assert_eq!(
+            report.status,
+            IncidentResponseExecutionTranscriptStatus::ReadyForExternalReview
+        );
+        assert!(report.incident_scenario_reference_present);
+        assert!(report.severity_reference_present);
+        assert!(report.responder_reference_present);
+        assert!(report.reviewer_reference_present);
+        assert!(report.detection_triage_reference_present);
+        assert!(report.containment_recovery_reference_present);
+        assert!(report.post_incident_runtime_smoke_passed);
+        assert!(report.audit_replay_after_recovery_validated);
+        assert!(report.sqlite_recovery_after_recovery_validated);
+        assert!(report.communications_reference_present);
+        assert!(report.operator_approved);
+        assert!(report.reviewer_approved);
+        assert_eq!(report.non_secret_reference_count, 8);
+        assert!(report.blocker_codes.is_empty());
+        assert!(!report.incident_response_executed_by_validator);
+        assert!(!report.service_manager_action_performed_by_validator);
+        assert!(!report.files_mutated_by_validator);
+        assert!(!report.alerts_sent_by_validator);
+        assert!(!report.external_calls_performed);
+        assert!(!report.live_execution_performed);
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn incident_response_execution_transcript_blocks_missing_execution_evidence() {
+        let report = validate_incident_response_execution_transcript(
+            incident_response_execution_transcript(false),
+        )
+        .expect("incomplete incident-response execution transcript should produce blocked report");
+
+        assert_eq!(
+            report.status,
+            IncidentResponseExecutionTranscriptStatus::Blocked
+        );
+        assert!(!report.incident_scenario_reference_present);
+        assert!(!report.containment_recovery_reference_present);
+        assert!(report
+            .blocker_codes
+            .iter()
+            .any(|code| code == "missing-incident-scenario-reference"));
+        assert!(report
+            .blocker_codes
+            .iter()
+            .any(|code| code == "missing-containment-recovery-reference"));
+        assert!(report
+            .blocker_codes
+            .iter()
+            .any(|code| code == "insufficient-non-secret-references"));
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn incident_response_execution_transcript_rejects_validator_execution() {
+        let mut transcript = incident_response_execution_transcript(true);
+        transcript.alerts_sent_by_validator = true;
+
+        let error = validate_incident_response_execution_transcript(transcript)
+            .expect_err("validator alert sending must fail closed");
+
+        assert!(error
+            .to_string()
+            .contains("must not execute incident actions"));
+    }
+
     fn temp_audit_path(label: &str) -> PathBuf {
         let mut path = env::temp_dir();
         let nanos = std::time::SystemTime::now()
@@ -1951,6 +2352,40 @@ mod tests {
             live_execution_performed: false,
             production_ready_claimed: false,
             validated_at_unix_ms: 96_000,
+        }
+    }
+
+    fn incident_response_execution_transcript(
+        complete: bool,
+    ) -> IncidentResponseExecutionTranscript {
+        IncidentResponseExecutionTranscript {
+            transcript_id: if complete {
+                "incident-response-execution-ready".to_owned()
+            } else {
+                "incident-response-execution-blocked".to_owned()
+            },
+            plan_id: "phase-55-incident-response-execution".to_owned(),
+            incident_scenario_reference_present: complete,
+            severity_reference_present: complete,
+            responder_reference_present: complete,
+            reviewer_reference_present: complete,
+            detection_triage_reference_present: complete,
+            containment_recovery_reference_present: complete,
+            post_incident_runtime_smoke_passed: complete,
+            audit_replay_after_recovery_validated: complete,
+            sqlite_recovery_after_recovery_validated: complete,
+            communications_reference_present: complete,
+            operator_approved: complete,
+            reviewer_approved: complete,
+            non_secret_reference_count: if complete { 8 } else { 1 },
+            incident_response_executed_by_validator: false,
+            service_manager_action_performed_by_validator: false,
+            files_mutated_by_validator: false,
+            alerts_sent_by_validator: false,
+            external_calls_performed: false,
+            live_execution_performed: false,
+            production_ready_claimed: false,
+            validated_at_unix_ms: 97_000,
         }
     }
 }

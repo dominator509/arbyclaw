@@ -9,6 +9,7 @@ Add a typed, local-only production-runtime preflight that consumes existing runt
 - Added `RuntimeProductionPreflightRequest`, `RuntimeProductionPreflightReport`, and `RuntimeProductionPreflightStatus`.
 - Added `preflight_production_runtime_validation` as a non-mutating boundary over existing local smoke/load evidence.
 - Wired `arb-agent validate-runtime-smoke` to emit production-runtime preflight status and blocker counts after local smoke-load validation.
+- Wired `scripts/validate_deployment_host_runtime.py` to expose structured production-runtime preflight fields and `scripts/validate_deployment_runtime_gate.py` to enforce that blocked-safe contract inside the aggregate deployment/runtime gate.
 - Added unit coverage for blocked production-host evidence and fail-closed production-readiness claims.
 
 ## Deferred

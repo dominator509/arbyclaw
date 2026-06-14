@@ -16,7 +16,7 @@ Compose the existing local market-data, fee, and CEX/DEX connector lifecycle CLI
 
 - Created `PHASE_30_SUBROADMAP.md`.
 - Added `scripts/validate_connector_scenario_gate.py`.
-- The aggregate gate runs six existing connector-adjacent CLIs covering market-data provider preflight, reconnect planning, market-data audit/state recovery, fee verification, fee audit/state recovery, and CEX/DEX connector lifecycle audit/state recovery.
+- The aggregate gate now runs sixteen existing connector-adjacent CLIs covering market-data provider preflight, reconnect planning, market-data quality assessment, paid-provider evaluation, deterministic historical persistence, market-data audit/state recovery, fee verification, fee audit/state recovery, CEX governance and request/balance transcript validation, DEX request/response/transaction/protocol-risk validation, and CEX/DEX connector lifecycle audit/state recovery.
 - The gate fails closed if any nested command reports live network use, WebSocket connection opening, credential loading, live provider calls, external submission, RPC calls, signing, broadcasts, live execution, or production readiness.
 - Added the aggregate gate to CI after the existing connector lifecycle audit CLI.
 - Updated structure validation for Phase 30 files.

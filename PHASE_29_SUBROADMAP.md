@@ -11,20 +11,26 @@ Implemented for local deterministic aggregate opportunity scenario-corpus valida
 ## Goal
 
 Compose the existing local opportunity replay, quote-load, provider-ingestion,
-historical-fixture, planner-handoff, and trace-recovery CLI probes into one
-stronger gate that verifies the local opportunity scenario corpus remains
-deterministic, broad enough to cover the current built-in fixture families, and
-free of live/external side effects.
+historical-fixture, planner-handoff, strategy replay/profitability, local
+validation-run, local property-check, local fuzz-corpus replay,
+local validation-corpus, local paper-backtest, and trace-recovery CLI probes
+into one stronger gate that verifies the local opportunity scenario corpus
+remains deterministic, broad enough to cover the current built-in fixture
+families, and free of live/external side effects.
 
 ## Scope
 
 - Add `scripts/validate_opportunity_scenario_gate.py`.
 - Run the existing local-only opportunity CLIs as one aggregate gate.
 - Fail closed on external calls, external data downloads, adapter submission,
-  signing, broadcasts, live execution, or production-readiness claims.
+  external fuzzing, live network use, signing, broadcasts, live execution, or
+  production-readiness claims.
 - Verify replay iterations pass, quote-load backpressure is exercised,
-  historical fixtures pass, planner handoff trace counts match, and trace
-  recovery reports no missing checkpoints.
+  historical fixtures pass, planner handoff trace counts match, local
+  validation-run planning/checkpoint recovery remains intact, local
+  property-check and fuzz-corpus replay probes remain fully passing, local
+  validation-corpus property checks remain fully passing, local paper-backtest
+  replay remains validated, and trace recovery reports no missing checkpoints.
 - Wire the aggregate gate into CI.
 - Keep external/deployment scenario-corpus and sandbox/live calibration blockers
   open unless real external evidence exists.

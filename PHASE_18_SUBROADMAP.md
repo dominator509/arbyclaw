@@ -123,6 +123,6 @@ production readiness review
 
 ## Completion State
 
-Completed for ChatGPT Project Mode after Phase 18 handoff-package boundary patch, local audit/SQLite handoff-review gate, and available validation.
+Completed for ChatGPT Project Mode after Phase 18 handoff-package boundary patch, local audit/SQLite handoff-review gate, local handoff-candidate aggregate gate, and available validation.
 
 External agent execution, human production review, cloud/staging deployment, load, penetration, rollback, incident-response, live exchange/RPC, and production readiness validation remain external unless explicitly run in a capable environment.

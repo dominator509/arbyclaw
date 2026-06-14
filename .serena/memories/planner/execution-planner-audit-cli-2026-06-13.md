@@ -1,0 +1,9 @@
+# Execution-planner audit CLI (2026-06-13)
+
+- `crates/arb-agent/src/main.rs` now exposes `arb-agent validate-execution-planner-audit --workspace <fresh-dir>`.
+- The runner builds a deterministic local planner draft from `LOCAL_STRATEGY_PLANNER_CONFIG`, appends plan-draft plus per-intent redacted policy-outcome audit records via `append_execution_plan_draft_audit(...)`, persists the latest plan checkpoint via `persist_execution_plan_draft_checkpoint(...)`, reopens the append-only audit journal and SQLite WAL state store, and verifies the recovered checkpoint value matches the persisted draft.
+- Invalid planner audit writes now fail closed in the CLI gate by mutating `adapter_submission_enabled = true` on a cloned draft and confirming `append_execution_plan_draft_audit(...)` rejects it without advancing the journal sequence.
+- State persistence fail-closed behavior is covered by `PermissionDeniedLocalStateStore`, proving planner checkpoint persistence propagates denial after one put attempt.
+- Added `execution_planner_audit_runner_records_and_fails_closed_locally` in the `arb-agent` tests to prove the workspace runner emits `execution-planner.audit.jsonl` and `execution-planner.sqlite3`.
+- Docs reconciled: `ROADMAP.md`, `PHASE_10_SUBROADMAP.md`, `ARCHITECTURE.md`, and `PRODUCTION_GAP_TRACKER.md` now describe the local planner audit CLI instead of leaving planner audit/state validation vague.
+- Full validation after the change passed on 2026-06-13: `python3 scripts/generate_structure_manifest.py`, `python3 scripts/validate_structure.py`, `python3 -m py_compile scripts/validate_structure.py scripts/generate_structure_manifest.py scripts/validate_deployment_host_runtime.py scripts/validate_arm_cross_check.py`, `cargo fmt --check`, `cargo check --workspace`, `cargo test --workspace` (463 passed), and `cargo clippy --workspace --all-targets -- -D warnings`.

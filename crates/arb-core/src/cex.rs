@@ -417,6 +417,18 @@ pub struct CexCredentialScopeReviewInput {
     pub now_unix_ms: u64,
     /// Maximum allowed review age in milliseconds.
     pub max_review_age_ms: u64,
+    /// Whether local fee schedule verification metadata is present.
+    pub fee_schedule_reviewed: bool,
+    /// Whether local rate-limit documentation review metadata is present.
+    pub rate_limit_documentation_reviewed: bool,
+    /// Whether local terms-of-service review metadata is present.
+    pub terms_of_service_reviewed: bool,
+    /// Whether local jurisdiction review metadata is present.
+    pub jurisdiction_reviewed: bool,
+    /// Whether local API capability review metadata is present.
+    pub api_capabilities_reviewed: bool,
+    /// Whether local incident/reputation review metadata is present.
+    pub incident_reputation_reviewed: bool,
     /// Whether secret material was loaded. Must remain false.
     pub secret_material_loaded: bool,
     /// Whether plaintext credential material was seen. Must remain false.
@@ -455,6 +467,20 @@ pub struct CexCredentialScopeReviewReport {
     pub credential_reference_validated: bool,
     /// Whether the review age exceeded `max_review_age_ms`.
     pub stale_review: bool,
+    /// Whether local fee schedule verification metadata is present.
+    pub fee_schedule_reviewed: bool,
+    /// Whether local rate-limit documentation review metadata is present.
+    pub rate_limit_documentation_reviewed: bool,
+    /// Whether local terms-of-service review metadata is present.
+    pub terms_of_service_reviewed: bool,
+    /// Whether local jurisdiction review metadata is present.
+    pub jurisdiction_reviewed: bool,
+    /// Whether local API capability review metadata is present.
+    pub api_capabilities_reviewed: bool,
+    /// Whether local incident/reputation review metadata is present.
+    pub incident_reputation_reviewed: bool,
+    /// Whether local CEX governance metadata is coherent for local review.
+    pub governance_review_passed: bool,
     /// Whether secret material was loaded. Always false for ready reports.
     pub secret_material_loaded: bool,
     /// Whether plaintext credential material was seen. Always false for ready reports.
@@ -1456,6 +1482,12 @@ impl CexCredentialScopeReviewInput {
             reviewed_at_unix_ms,
             now_unix_ms,
             max_review_age_ms,
+            fee_schedule_reviewed: true,
+            rate_limit_documentation_reviewed: true,
+            terms_of_service_reviewed: true,
+            jurisdiction_reviewed: true,
+            api_capabilities_reviewed: true,
+            incident_reputation_reviewed: true,
             secret_material_loaded: false,
             credential_plaintext_seen: false,
             live_provider_call_performed: false,
@@ -1546,11 +1578,24 @@ impl CexCredentialScopeReviewReport {
             || !self.forbidden_permissions_present.is_empty()
             || !self.credential_reference_validated
             || self.stale_review
+            || !self.governance_review_passed
             || self.secret_material_loaded
             || self.credential_plaintext_seen
             || self.live_provider_call_performed
             || self.account_state_queried
             || self.live_execution_performed;
+        let expected_governance_review_passed = self.fee_schedule_reviewed
+            && self.rate_limit_documentation_reviewed
+            && self.terms_of_service_reviewed
+            && self.jurisdiction_reviewed
+            && self.api_capabilities_reviewed
+            && self.incident_reputation_reviewed;
+        if self.governance_review_passed != expected_governance_review_passed {
+            violations.push(CexConnectorViolation::new(
+                "CEX_CREDENTIAL_SCOPE_GOVERNANCE_STATUS_INCOHERENT",
+                "CEX credential-scope governance summary must match the detailed governance review flags",
+            ));
+        }
         if should_block && self.status != CexCredentialScopeReviewStatus::Blocked {
             violations.push(CexConnectorViolation::new(
                 "CEX_CREDENTIAL_SCOPE_STATUS_SHOULD_BLOCK",
@@ -1610,9 +1655,16 @@ pub fn validate_cex_credential_scope_review(
         .collect::<Vec<_>>();
     let stale_review =
         input.now_unix_ms.saturating_sub(input.reviewed_at_unix_ms) > input.max_review_age_ms;
+    let governance_review_passed = input.fee_schedule_reviewed
+        && input.rate_limit_documentation_reviewed
+        && input.terms_of_service_reviewed
+        && input.jurisdiction_reviewed
+        && input.api_capabilities_reviewed
+        && input.incident_reputation_reviewed;
     let blocked = !missing_required_permissions.is_empty()
         || !forbidden_permissions_present.is_empty()
         || stale_review
+        || !governance_review_passed
         || input.secret_material_loaded
         || input.credential_plaintext_seen
         || input.live_provider_call_performed
@@ -1634,6 +1686,36 @@ pub fn validate_cex_credential_scope_review(
         &mut violation_codes,
         stale_review,
         "CEX_CREDENTIAL_SCOPE_REVIEW_STALE",
+    );
+    push_code_if(
+        &mut violation_codes,
+        !input.fee_schedule_reviewed,
+        "CEX_CREDENTIAL_SCOPE_FEE_REVIEW_MISSING",
+    );
+    push_code_if(
+        &mut violation_codes,
+        !input.rate_limit_documentation_reviewed,
+        "CEX_CREDENTIAL_SCOPE_RATE_LIMIT_DOCUMENTATION_MISSING",
+    );
+    push_code_if(
+        &mut violation_codes,
+        !input.terms_of_service_reviewed,
+        "CEX_CREDENTIAL_SCOPE_TERMS_REVIEW_MISSING",
+    );
+    push_code_if(
+        &mut violation_codes,
+        !input.jurisdiction_reviewed,
+        "CEX_CREDENTIAL_SCOPE_JURISDICTION_REVIEW_MISSING",
+    );
+    push_code_if(
+        &mut violation_codes,
+        !input.api_capabilities_reviewed,
+        "CEX_CREDENTIAL_SCOPE_API_CAPABILITIES_REVIEW_MISSING",
+    );
+    push_code_if(
+        &mut violation_codes,
+        !input.incident_reputation_reviewed,
+        "CEX_CREDENTIAL_SCOPE_INCIDENT_REPUTATION_REVIEW_MISSING",
     );
     push_code_if(
         &mut violation_codes,
@@ -1681,6 +1763,13 @@ pub fn validate_cex_credential_scope_review(
         forbidden_permissions_present,
         credential_reference_validated: true,
         stale_review,
+        fee_schedule_reviewed: input.fee_schedule_reviewed,
+        rate_limit_documentation_reviewed: input.rate_limit_documentation_reviewed,
+        terms_of_service_reviewed: input.terms_of_service_reviewed,
+        jurisdiction_reviewed: input.jurisdiction_reviewed,
+        api_capabilities_reviewed: input.api_capabilities_reviewed,
+        incident_reputation_reviewed: input.incident_reputation_reviewed,
+        governance_review_passed,
         secret_material_loaded: input.secret_material_loaded,
         credential_plaintext_seen: input.credential_plaintext_seen,
         live_provider_call_performed: input.live_provider_call_performed,
@@ -5170,6 +5259,13 @@ redact_secrets = true
         assert!(report.missing_required_permissions.is_empty());
         assert!(report.forbidden_permissions_present.is_empty());
         assert!(report.credential_reference_validated);
+        assert!(report.fee_schedule_reviewed);
+        assert!(report.rate_limit_documentation_reviewed);
+        assert!(report.terms_of_service_reviewed);
+        assert!(report.jurisdiction_reviewed);
+        assert!(report.api_capabilities_reviewed);
+        assert!(report.incident_reputation_reviewed);
+        assert!(report.governance_review_passed);
         assert!(!report.secret_material_loaded);
         assert!(!report.credential_plaintext_seen);
         assert!(!report.live_provider_call_performed);
@@ -5181,27 +5277,33 @@ redact_secrets = true
 
     #[test]
     fn local_cex_credential_scope_review_blocks_forbidden_permissions() {
-        let report = validate_cex_credential_scope_review(
-            CexCredentialScopeReviewInput::new(
-                "coinbase-withdrawal-scope",
-                exchange_venue("coinbase"),
-                SecretRef::Keystore {
-                    alias: "coinbase-paper-api-key".to_owned(),
-                },
-                vec![CexCredentialPermission::ReadOnlyMarketData],
-                vec![
-                    CexCredentialPermission::ReadOnlyMarketData,
-                    CexCredentialPermission::Withdrawals,
-                    CexCredentialPermission::AccountAdmin,
-                ],
-                vec![CexCredentialPermission::Withdrawals],
-                1_700_000_000_000,
-                1_700_000_500_000,
-                86_400_000,
-            )
-            .expect("credential-scope input should validate"),
+        let mut input = CexCredentialScopeReviewInput::new(
+            "coinbase-withdrawal-scope",
+            exchange_venue("coinbase"),
+            SecretRef::Keystore {
+                alias: "coinbase-paper-api-key".to_owned(),
+            },
+            vec![CexCredentialPermission::ReadOnlyMarketData],
+            vec![
+                CexCredentialPermission::ReadOnlyMarketData,
+                CexCredentialPermission::Withdrawals,
+                CexCredentialPermission::AccountAdmin,
+            ],
+            vec![CexCredentialPermission::Withdrawals],
+            1_700_000_000_000,
+            1_700_000_500_000,
+            86_400_000,
         )
-        .expect("forbidden-permission report should validate");
+        .expect("credential-scope input should validate");
+        input.fee_schedule_reviewed = false;
+        input.rate_limit_documentation_reviewed = false;
+        input.terms_of_service_reviewed = false;
+        input.jurisdiction_reviewed = false;
+        input.api_capabilities_reviewed = false;
+        input.incident_reputation_reviewed = false;
+
+        let report = validate_cex_credential_scope_review(input)
+            .expect("forbidden-permission report should validate");
 
         assert_eq!(report.status, CexCredentialScopeReviewStatus::Blocked);
         assert!(report
@@ -5210,9 +5312,34 @@ redact_secrets = true
         assert!(report
             .forbidden_permissions_present
             .contains(&CexCredentialPermission::AccountAdmin));
+        assert!(!report.fee_schedule_reviewed);
+        assert!(!report.rate_limit_documentation_reviewed);
+        assert!(!report.terms_of_service_reviewed);
+        assert!(!report.jurisdiction_reviewed);
+        assert!(!report.api_capabilities_reviewed);
+        assert!(!report.incident_reputation_reviewed);
+        assert!(!report.governance_review_passed);
         assert!(report
             .violation_codes
             .contains(&"CEX_CREDENTIAL_SCOPE_FORBIDDEN_PERMISSION_PRESENT".to_owned()));
+        assert!(report
+            .violation_codes
+            .contains(&"CEX_CREDENTIAL_SCOPE_FEE_REVIEW_MISSING".to_owned()));
+        assert!(report
+            .violation_codes
+            .contains(&"CEX_CREDENTIAL_SCOPE_RATE_LIMIT_DOCUMENTATION_MISSING".to_owned()));
+        assert!(report
+            .violation_codes
+            .contains(&"CEX_CREDENTIAL_SCOPE_TERMS_REVIEW_MISSING".to_owned()));
+        assert!(report
+            .violation_codes
+            .contains(&"CEX_CREDENTIAL_SCOPE_JURISDICTION_REVIEW_MISSING".to_owned()));
+        assert!(report
+            .violation_codes
+            .contains(&"CEX_CREDENTIAL_SCOPE_API_CAPABILITIES_REVIEW_MISSING".to_owned()));
+        assert!(report
+            .violation_codes
+            .contains(&"CEX_CREDENTIAL_SCOPE_INCIDENT_REPUTATION_REVIEW_MISSING".to_owned()));
     }
 
     #[test]

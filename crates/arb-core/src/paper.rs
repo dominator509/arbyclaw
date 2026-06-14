@@ -444,11 +444,14 @@ impl PaperExecutionAdapter {
         ledger: &mut PaperBalanceLedger,
         journal: &mut AppendOnlyAuditJournal,
     ) -> Result<PaperAuditedLedgeredExecution, PaperConnectorError> {
+        let intent_record =
+            append_paper_execution_intent_audit(journal, &request.intent, request.now_unix_ms)?;
         let ledgered_execution = self.submit_with_fill_model_and_ledger(request, ledger)?;
         let audit_report = append_paper_ledgered_execution_audit(
             journal,
             &ledgered_execution,
             request.now_unix_ms.saturating_add(2),
+            Some(intent_record.sequence),
         )?;
         Ok(PaperAuditedLedgeredExecution {
             ledgered_execution,
@@ -489,6 +492,11 @@ impl PaperExecutionAdapter {
         ledger: &mut PaperBalanceLedger,
         journal: &mut AppendOnlyAuditJournal,
     ) -> Result<PaperAuditedVenueRealismLedgeredExecution, PaperConnectorError> {
+        let intent_record = append_paper_execution_intent_audit(
+            journal,
+            &request.fill_request.intent,
+            request.fill_request.now_unix_ms,
+        )?;
         let ledgered_execution = self.submit_with_venue_realism_and_ledger(request, ledger)?;
         let plain_ledgered_execution = PaperLedgeredExecution {
             report: ledgered_execution.execution.report.clone(),
@@ -499,6 +507,7 @@ impl PaperExecutionAdapter {
             journal,
             &plain_ledgered_execution,
             request.fill_request.now_unix_ms.saturating_add(2),
+            Some(intent_record.sequence),
         )?;
         Ok(PaperAuditedVenueRealismLedgeredExecution {
             ledgered_execution,
@@ -1611,6 +1620,8 @@ pub struct PaperAuditJournalWriteReport {
     pub execution_report_id: String,
     /// Source execution intent id.
     pub intent_id: String,
+    /// Audit record sequence for the pre-execution paper intent audit, when recorded.
+    pub intent_record_sequence: Option<u64>,
     /// Audit record sequence for the reserve ledger mutation.
     pub reserve_record_sequence: u64,
     /// Audit record sequence for the settlement ledger mutation.
@@ -1852,6 +1863,88 @@ pub fn append_paper_execution_report_audit(
         })
 }
 
+/// Append one local paper execution intent to the append-only audit journal.
+///
+/// This records sanitized intent metadata before local modeled execution. It
+/// does not call a venue, sign payloads, broadcast transactions, mutate real
+/// balances, or load secrets.
+pub fn append_paper_execution_intent_audit(
+    journal: &mut AppendOnlyAuditJournal,
+    intent: &ExecutionIntent,
+    occurred_at_unix_ms: u64,
+) -> Result<AuditRecord, PaperConnectorError> {
+    validate_audit_timestamp(occurred_at_unix_ms)?;
+    let mut event = AuditEvent::new(
+        format!("paper-intent-audit-{}", intent.id),
+        AuditEventKind::IntentLifecycle,
+        PAPER_EXECUTION_STATE_SUBSYSTEM,
+        "paper-execution-adapter",
+        "paper execution intent recorded before local modeling",
+    );
+    event.occurred_at_unix_ms = occurred_at_unix_ms;
+    event = event
+        .with_metadata(
+            "paper_audit_integration_version",
+            AuditValue::Text(PAPER_AUDIT_INTEGRATION_VERSION.to_owned()),
+        )
+        .with_metadata("intent_id", AuditValue::Text(intent.id.clone()))
+        .with_metadata("strategy_id", AuditValue::Text(intent.strategy_id.clone()))
+        .with_metadata(
+            "intent_kind",
+            AuditValue::Text(format!("{:?}", intent.kind)),
+        )
+        .with_metadata("scope", AuditValue::Text(format!("{:?}", intent.scope)))
+        .with_metadata("venue", AuditValue::Text(intent.venue.name.clone()))
+        .with_metadata("base_asset", AuditValue::Text(intent.base_asset.clone()))
+        .with_metadata("quote_asset", AuditValue::Text(intent.quote_asset.clone()))
+        .with_metadata(
+            "notional_quote",
+            AuditValue::Text(format_audit_amount(intent.notional_quote)),
+        )
+        .with_metadata(
+            "expected_profit_quote",
+            AuditValue::Text(format_audit_amount(intent.expected_profit_quote)),
+        )
+        .with_metadata(
+            "max_loss_quote",
+            AuditValue::Text(format_audit_amount(intent.max_loss_quote)),
+        )
+        .with_metadata(
+            "slippage_bps",
+            AuditValue::Unsigned(u64::from(intent.slippage_bps)),
+        )
+        .with_metadata(
+            "estimated_fee_quote",
+            AuditValue::Text(format_audit_amount(intent.estimated_fee_quote)),
+        )
+        .with_metadata(
+            "gas_fee_quote",
+            AuditValue::Text(format_audit_amount(intent.gas_fee_quote)),
+        )
+        .with_metadata(
+            "market_data_age_ms",
+            AuditValue::Unsigned(intent.market_data_age_ms),
+        )
+        .with_metadata(
+            "destination",
+            AuditValue::Text(format!("{:?}", intent.destination)),
+        )
+        .with_metadata(
+            "requires_signing",
+            AuditValue::Bool(intent.requires_signing),
+        )
+        .with_metadata("live_network_used", AuditValue::Bool(false))
+        .with_metadata("external_execution_performed", AuditValue::Bool(false));
+    if let Some(chain) = &intent.chain {
+        event = event.with_metadata("chain", AuditValue::Text(chain.clone()));
+    }
+    journal
+        .append_event(event)
+        .map_err(|source| PaperConnectorError::AuditJournalFailed {
+            reason: source.to_string(),
+        })
+}
+
 /// Append one local paper ledger mutation to the append-only audit journal.
 ///
 /// This records modeled paper balance deltas only and never reads or mutates
@@ -1918,6 +2011,7 @@ pub fn append_paper_ledgered_execution_audit(
     journal: &mut AppendOnlyAuditJournal,
     execution: &PaperLedgeredExecution,
     audited_at_unix_ms: u64,
+    intent_record_sequence: Option<u64>,
 ) -> Result<PaperAuditJournalWriteReport, PaperConnectorError> {
     validate_audit_timestamp(audited_at_unix_ms)?;
     let reserve_record = append_paper_ledger_entry_audit(journal, &execution.reserve_entry)?;
@@ -1936,10 +2030,11 @@ pub fn append_paper_ledgered_execution_audit(
         integration_version: PAPER_AUDIT_INTEGRATION_VERSION.to_owned(),
         execution_report_id: execution.report.id.clone(),
         intent_id: execution.report.intent_id.clone(),
+        intent_record_sequence,
         reserve_record_sequence: reserve_record.sequence,
         settlement_record_sequence: settlement_record.sequence,
         report_record_sequence: report_record.sequence,
-        records_appended: 3,
+        records_appended: 3 + usize::from(intent_record_sequence.is_some()),
         journal_replay_verified,
         live_network_used: false,
         external_execution_performed: false,
@@ -1995,6 +2090,8 @@ pub fn ledger_execution_adapter_run_paper_fills(
     {
         let intent = plan_intent_for_fill(plan, fill)?;
         validate_reconciliation_for_fill(run, fill)?;
+        let intent_record =
+            append_paper_execution_intent_audit(journal, intent, settled_at_unix_ms)?;
         let reserve_entry = ledger.reserve_for_intent(intent, settled_at_unix_ms)?;
         let report = adapter_fill_paper_report(plan, run, intent, fill)?;
         let settlement_entry =
@@ -2007,6 +2104,7 @@ pub fn ledger_execution_adapter_run_paper_fills(
                 settlement_entry,
             },
             settled_at_unix_ms.saturating_add(2),
+            Some(intent_record.sequence),
         )?;
         modeled_fills_settled = modeled_fills_settled.saturating_add(1);
         reconciliations_replayed = reconciliations_replayed.saturating_add(1);
@@ -3743,18 +3841,20 @@ redact_secrets = true
             )
             .expect("audited ledgered fill succeeds");
 
-        assert_eq!(execution.audit_report.records_appended, 3);
+        assert_eq!(execution.audit_report.records_appended, 4);
         assert!(execution.audit_report.journal_replay_verified);
-        assert_eq!(execution.audit_report.reserve_record_sequence, 1);
-        assert_eq!(execution.audit_report.settlement_record_sequence, 2);
-        assert_eq!(execution.audit_report.report_record_sequence, 3);
+        assert_eq!(execution.audit_report.intent_record_sequence, Some(1));
+        assert_eq!(execution.audit_report.reserve_record_sequence, 2);
+        assert_eq!(execution.audit_report.settlement_record_sequence, 3);
+        assert_eq!(execution.audit_report.report_record_sequence, 4);
         assert!(!execution.audit_report.live_network_used);
         assert!(!execution.audit_report.external_execution_performed);
 
         let reopened = AppendOnlyAuditJournal::open(&path).expect("audit journal replays");
-        assert_eq!(reopened.next_sequence(), 4);
+        assert_eq!(reopened.next_sequence(), 5);
         assert_eq!(journal.previous_hash(), reopened.previous_hash());
         let lines = fs::read_to_string(&path).expect("journal should be readable");
+        assert!(lines.contains("\"kind\":\"intent-lifecycle\""));
         assert!(lines.contains("\"kind\":\"reconciliation\""));
         assert!(lines.contains("\"kind\":\"execution-result\""));
         assert!(lines.contains("paper_audit_integration_version"));
@@ -3787,13 +3887,14 @@ redact_secrets = true
             .submit_with_venue_realism_ledger_and_audit(&request, &mut ledger, &mut journal)
             .expect("audited venue-realistic execution succeeds");
 
-        assert_eq!(execution.audit_report.records_appended, 3);
+        assert_eq!(execution.audit_report.records_appended, 4);
         assert!(execution.audit_report.journal_replay_verified);
+        assert_eq!(execution.audit_report.intent_record_sequence, Some(1));
         assert_eq!(
             execution.audit_report.execution_report_id,
             execution.ledgered_execution.execution.report.id
         );
-        assert_eq!(journal.next_sequence(), 4);
+        assert_eq!(journal.next_sequence(), 5);
 
         let _ = fs::remove_file(path);
     }
@@ -3968,6 +4069,61 @@ redact_secrets = true
         assert!(!report.external_execution_performed);
         assert!(report.local_fixture_only);
         assert!(report.historical_fixture_replay);
+    }
+
+    #[test]
+    fn paper_backtest_corpus_tracks_unfilled_failed_steps_locally() {
+        let config = AgentConfig::from_toml_str(PAPER_CONFIG).expect("config should validate");
+        let adapter = PaperExecutionAdapter::new("paper-exec", PolicyEngine::from_config(config))
+            .expect("adapter should validate");
+        let corpus = PaperBacktestCorpus {
+            corpus_id: "paper-history-corpus-unfilled".to_owned(),
+            historical_fixture_replay: true,
+            local_fixture_only: true,
+            external_data_downloaded: false,
+            scenarios: vec![PaperBacktestScenario {
+                scenario_id: "scenario-unfilled".to_owned(),
+                initial_balances: vec![PaperAssetBalance::available(venue(), "USDC", 1_000.0)
+                    .expect("balance validates")],
+                steps: vec![PaperBacktestStep {
+                    step_id: "step-unfilled".to_owned(),
+                    fill_request: fill_request(40.0, 80, false),
+                    matching_profile: None,
+                    adverse_selection: None,
+                    calibration: None,
+                }],
+            }],
+        };
+
+        let report = adapter
+            .run_backtest_corpus(&corpus, 1_700_000_001_500)
+            .expect("local backtest corpus should execute");
+
+        assert_eq!(report.scenarios_executed, 1);
+        assert_eq!(report.total_steps, 1);
+        assert_eq!(report.filled_steps, 0);
+        assert_eq!(report.partially_filled_steps, 0);
+        assert_eq!(report.unfilled_steps, 1);
+        assert!(report.net_profit_quote.abs() < f64::EPSILON);
+        assert!(report.replay_validated);
+        assert!(report.local_fixture_only);
+        assert!(report.historical_fixture_replay);
+        assert!(!report.external_data_downloaded);
+        assert!(!report.live_network_used);
+        assert!(!report.external_execution_performed);
+
+        let scenario = &report.scenario_reports[0];
+        assert_eq!(scenario.steps_executed, 1);
+        assert_eq!(scenario.filled_steps, 0);
+        assert_eq!(scenario.partially_filled_steps, 0);
+        assert_eq!(scenario.unfilled_steps, 1);
+        assert!(scenario.net_profit_quote.abs() < f64::EPSILON);
+        assert!(scenario.replay_validation.final_balances_match);
+        assert!(scenario.replay_validation.reservations_closed);
+        assert!(scenario.replay_validation.balanced);
+        assert_eq!(scenario.final_balances.len(), 1);
+        assert!((scenario.final_balances[0].available - 1_000.0).abs() < f64::EPSILON);
+        assert!(scenario.final_balances[0].reserved.abs() < f64::EPSILON);
     }
 
     #[test]
@@ -4174,7 +4330,7 @@ redact_secrets = true
         assert_eq!(report.modeled_fills_settled, 2);
         assert_eq!(report.reconciliations_replayed, 2);
         assert_eq!(report.ledger_entries_written, 4);
-        assert_eq!(report.audit_records_appended, 6);
+        assert_eq!(report.audit_records_appended, 8);
         assert!(report.ledger_checkpoint_persisted);
         assert_eq!(
             report.ledger_checkpoint_key,
@@ -4183,7 +4339,7 @@ redact_secrets = true
         assert!(!report.external_submission_performed);
         assert!(!report.live_execution_performed);
         assert!(!report.production_ready);
-        assert_eq!(journal.next_sequence(), 7);
+        assert_eq!(journal.next_sequence(), 9);
         assert!(ledger.reserved_balance(&venue(), "USDC").abs() < f64::EPSILON);
         let replay = ledger
             .validate_replay(1_700_000_001_400)
@@ -4195,7 +4351,9 @@ redact_secrets = true
         drop(journal);
 
         let reopened_journal = AppendOnlyAuditJournal::open(&audit_path).expect("journal reopens");
-        assert_eq!(reopened_journal.next_sequence(), 7);
+        assert_eq!(reopened_journal.next_sequence(), 9);
+        let lines = fs::read_to_string(&audit_path).expect("journal should be readable");
+        assert!(lines.contains("\"kind\":\"intent-lifecycle\""));
         let reopened_state = SqliteWalStateStore::open(&state_path).expect("sqlite store reopens");
         let checkpoint = reopened_state
             .get_checkpoint(PAPER_BALANCE_LEDGER_CHECKPOINT_KEY)
