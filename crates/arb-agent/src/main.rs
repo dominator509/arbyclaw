@@ -25,12 +25,12 @@ use arb_core::{
     append_policy_decision_audit, append_property_check_report_audit,
     append_remote_command_envelope_validation_audit, append_remote_command_security_review_audit,
     append_routed_operator_command_audit, append_runtime_failure_capture_audit,
-    append_secret_rotation_plan_audit, append_signer_authorization_envelope_audit,
-    append_signer_request_audit, append_signer_secret_scope_review_audit,
-    append_validation_corpus_report_audit, append_validation_run_audit,
-    append_web3_broadcast_adapter_control_review_audit, append_web3_broadcast_readiness_audit,
-    append_web3_nonce_reservation_audit, append_web3_pre_sign_safety_audit,
-    append_web3_provider_nonce_reconciliation_audit,
+    append_secret_backup_restore_review_audit, append_secret_rotation_plan_audit,
+    append_signer_authorization_envelope_audit, append_signer_request_audit,
+    append_signer_secret_scope_review_audit, append_validation_corpus_report_audit,
+    append_validation_run_audit, append_web3_broadcast_adapter_control_review_audit,
+    append_web3_broadcast_readiness_audit, append_web3_nonce_reservation_audit,
+    append_web3_pre_sign_safety_audit, append_web3_provider_nonce_reconciliation_audit,
     append_web3_raw_transaction_serialization_review_audit,
     append_web3_sandbox_live_discrepancy_calibration_audit,
     append_web3_unsigned_payload_review_audit, append_web3_unsigned_transaction_construction_audit,
@@ -64,10 +64,11 @@ use arb_core::{
     persist_policy_decision_checkpoint, persist_property_check_report_checkpoint,
     persist_remote_command_envelope_validation_checkpoint,
     persist_remote_command_security_review_checkpoint, persist_routed_operator_command_checkpoint,
-    persist_runtime_failure_capture_checkpoint, persist_secret_rotation_plan_checkpoint,
-    persist_signer_authorization_envelope_checkpoint, persist_signer_request_checkpoint,
-    persist_signer_secret_scope_review_checkpoint, persist_validation_corpus_report_checkpoint,
-    persist_validation_run_checkpoint, persist_web3_broadcast_adapter_control_review_checkpoint,
+    persist_runtime_failure_capture_checkpoint, persist_secret_backup_restore_review_checkpoint,
+    persist_secret_rotation_plan_checkpoint, persist_signer_authorization_envelope_checkpoint,
+    persist_signer_request_checkpoint, persist_signer_secret_scope_review_checkpoint,
+    persist_validation_corpus_report_checkpoint, persist_validation_run_checkpoint,
+    persist_web3_broadcast_adapter_control_review_checkpoint,
     persist_web3_broadcast_readiness_checkpoint, persist_web3_nonce_reservation_checkpoint,
     persist_web3_pre_sign_safety_checkpoint, persist_web3_provider_nonce_reconciliation_checkpoint,
     persist_web3_raw_transaction_serialization_review_checkpoint,
@@ -79,11 +80,11 @@ use arb_core::{
     preflight_dashboard_hosted_request, preflight_observability_endpoint,
     preflight_observability_metrics_scrape, record_observability_alert_route_dispatch,
     render_observability_export_dry_run, review_dashboard_hosted_security,
-    review_observability_operations, review_platform_adapter_controls,
-    review_platform_command_ingress, review_remote_command_security,
-    review_signer_runtime_isolation, review_signer_secret_scope, run_local_fuzz_corpus_replay,
-    run_local_graceful_shutdown_checkpoint, run_local_runtime_lifecycle,
-    run_local_validation_corpus, run_local_validation_property_checks,
+    review_local_secret_backup_restore, review_observability_operations,
+    review_platform_adapter_controls, review_platform_command_ingress,
+    review_remote_command_security, review_signer_runtime_isolation, review_signer_secret_scope,
+    run_local_fuzz_corpus_replay, run_local_graceful_shutdown_checkpoint,
+    run_local_runtime_lifecycle, run_local_validation_corpus, run_local_validation_property_checks,
     validate_audit_journal_durability, validate_cex_credential_scope_review,
     validate_cex_rate_limit, validate_channel_adapter, validate_channel_session,
     validate_dashboard_hosted_request, validate_dashboard_hosted_session,
@@ -177,22 +178,24 @@ use arb_core::{
     RuntimeLifecycleStatus, RuntimePanicHookInstallationRequest, RuntimeRestartRecoveryDisposition,
     RuntimeServiceManagerKind, RuntimeServiceManagerLifecycleEvent,
     RuntimeServiceManagerLifecycleEventKind, RuntimeServiceManagerLifecycleTranscript,
-    RuntimeServiceManagerLifecycleTranscriptStatus, SecretRef, SecretRotationPlanReport,
-    SecretRotationPlanRequest, SecretRotationPlanStatus, SignerAuthorizationEnvelopeReport,
-    SignerAuthorizationEnvelopeRequest, SignerAuthorizationEnvelopeStatus, SignerRequest,
-    SignerRequestRecord, SignerRequestStatus, SignerRuntimeIsolationReviewReport,
-    SignerRuntimeIsolationReviewRequest, SignerRuntimeIsolationReviewStatus,
-    SignerSecretScopeReviewReport, SignerSecretScopeReviewRequest, SignerSecretScopeReviewStatus,
-    SqliteWalStateStore, StateCheckpoint, StateStore, StateStoreError,
-    StrategyPolicyConstraintStatus, StrategyProfile, StrategyProfileReplayValidationStatus,
-    StrategyProfitabilityTuningValidationStatus, StructuredLogEvent, StructuredLogField,
-    ValidationExecutionMode, ValidationFixtureRecord, ValidationHarness, ValidationHarnessConfig,
-    ValidationPlan, ValidationRunRequest, ValidationRunStatus, ValidationSuiteKind,
-    ValidationTestCase, VenueKind, VenueRef, Web3BroadcastAdapterControlReviewReport,
-    Web3BroadcastAdapterControlReviewRequest, Web3BroadcastAdapterControlReviewStatus,
-    Web3BroadcastReadinessReport, Web3BroadcastReadinessRequest, Web3BroadcastReadinessStatus,
-    Web3NonceReservationReport, Web3NonceReservationRequest, Web3NonceReservationStatus,
-    Web3PreSignSafetyReviewReport, Web3PreSignSafetyReviewRequest, Web3PreSignSafetyReviewStatus,
+    RuntimeServiceManagerLifecycleTranscriptStatus, SecretBackupRestoreReviewReport,
+    SecretBackupRestoreReviewRequest, SecretBackupRestoreReviewStatus, SecretRef,
+    SecretRotationPlanReport, SecretRotationPlanRequest, SecretRotationPlanStatus,
+    SignerAuthorizationEnvelopeReport, SignerAuthorizationEnvelopeRequest,
+    SignerAuthorizationEnvelopeStatus, SignerRequest, SignerRequestRecord, SignerRequestStatus,
+    SignerRuntimeIsolationReviewReport, SignerRuntimeIsolationReviewRequest,
+    SignerRuntimeIsolationReviewStatus, SignerSecretScopeReviewReport,
+    SignerSecretScopeReviewRequest, SignerSecretScopeReviewStatus, SqliteWalStateStore,
+    StateCheckpoint, StateStore, StateStoreError, StrategyPolicyConstraintStatus, StrategyProfile,
+    StrategyProfileReplayValidationStatus, StrategyProfitabilityTuningValidationStatus,
+    StructuredLogEvent, StructuredLogField, ValidationExecutionMode, ValidationFixtureRecord,
+    ValidationHarness, ValidationHarnessConfig, ValidationPlan, ValidationRunRequest,
+    ValidationRunStatus, ValidationSuiteKind, ValidationTestCase, VenueKind, VenueRef,
+    Web3BroadcastAdapterControlReviewReport, Web3BroadcastAdapterControlReviewRequest,
+    Web3BroadcastAdapterControlReviewStatus, Web3BroadcastReadinessReport,
+    Web3BroadcastReadinessRequest, Web3BroadcastReadinessStatus, Web3NonceReservationReport,
+    Web3NonceReservationRequest, Web3NonceReservationStatus, Web3PreSignSafetyReviewReport,
+    Web3PreSignSafetyReviewRequest, Web3PreSignSafetyReviewStatus,
     Web3ProviderNonceReconciliationReport, Web3ProviderNonceReconciliationRequest,
     Web3ProviderNonceReconciliationStatus, Web3RawTransactionSerializationReviewReport,
     Web3RawTransactionSerializationReviewRequest, Web3RawTransactionSerializationReviewStatus,
@@ -241,12 +244,12 @@ use arb_core::{
     POLICY_LAST_DECISION_CHECKPOINT_KEY, RUNTIME_BACKUP_RESTORE_VALIDATION_VERSION,
     RUNTIME_DEPLOYMENT_SMOKE_VALIDATION_VERSION, RUNTIME_GRACEFUL_SHUTDOWN_CHECKPOINT_KEY,
     RUNTIME_GRACEFUL_SHUTDOWN_VERSION, RUNTIME_LIFECYCLE_VERSION,
-    RUNTIME_RESTART_RECOVERY_VALIDATION_VERSION, SECRET_LAST_ROTATION_PLAN_CHECKPOINT_KEY,
-    SIGNER_LAST_AUTHORIZATION_ENVELOPE_CHECKPOINT_KEY, SIGNER_LAST_REQUEST_CHECKPOINT_KEY,
-    SIGNER_LAST_SECRET_SCOPE_REVIEW_CHECKPOINT_KEY, SQLITE_WAL_DURABILITY_VERSION,
-    TESTING_BACKTESTING_VERSION, TESTING_LAST_FUZZ_CORPUS_REPLAY_REPORT_KEY,
-    TESTING_LAST_PROPERTY_CHECK_REPORT_KEY, TESTING_LAST_VALIDATION_CORPUS_REPORT_KEY,
-    TESTING_LAST_VALIDATION_RUN_CHECKPOINT_KEY,
+    RUNTIME_RESTART_RECOVERY_VALIDATION_VERSION, SECRET_LAST_BACKUP_RESTORE_REVIEW_CHECKPOINT_KEY,
+    SECRET_LAST_ROTATION_PLAN_CHECKPOINT_KEY, SIGNER_LAST_AUTHORIZATION_ENVELOPE_CHECKPOINT_KEY,
+    SIGNER_LAST_REQUEST_CHECKPOINT_KEY, SIGNER_LAST_SECRET_SCOPE_REVIEW_CHECKPOINT_KEY,
+    SQLITE_WAL_DURABILITY_VERSION, TESTING_BACKTESTING_VERSION,
+    TESTING_LAST_FUZZ_CORPUS_REPLAY_REPORT_KEY, TESTING_LAST_PROPERTY_CHECK_REPORT_KEY,
+    TESTING_LAST_VALIDATION_CORPUS_REPORT_KEY, TESTING_LAST_VALIDATION_RUN_CHECKPOINT_KEY,
 };
 use std::{
     env,
@@ -391,40 +394,9 @@ fn run_with_args(args: impl IntoIterator<Item = String>) -> Result<(), AgentCliE
         Some(command) if is_signer_web3_validation_command(command) => {
             run_signer_web3_validation_command(command)
         }
-        Some(
-            command @ ("validate-local-validation-run"
-            | "validate-local-property-checks"
-            | "validate-local-fuzz-corpus"
-            | "validate-local-validation-corpus"
-            | "validate-local-paper-backtest-corpus"
-            | "validate-market-data-boundary-audit"
-            | "validate-market-data-history-persistence"
-            | "validate-fee-boundary-audit"
-            | "validate-agentic-handoff-audit"
-            | "validate-policy-decision-audit"
-            | "validate-withdrawal-policy-boundary"
-            | "validate-secret-boundary-audit"
-            | "validate-execution-planner-audit"
-            | "validate-execution-adapter-audit"
-            | "validate-signer-boundary-audit"
-            | "validate-destination-boundary-audit"
-            | "validate-connector-lifecycle-audit"
-            | "validate-audit-retention-execution"
-            | "validate-audit-durability"
-            | "validate-runtime-graceful-shutdown"
-            | "validate-runtime-backup-restore"
-            | "validate-runtime-backup-restore-load"
-            | "validate-runtime-restart-recovery"
-            | "validate-runtime-incomplete-recovery"
-            | "validate-runtime-supervised-restart"
-            | "validate-runtime-permission-denial"
-            | "validate-runtime-blocked-state-preflight"
-            | "validate-runtime-blocked-audit-preflight"
-            | "validate-observability-runtime"
-            | "validate-runtime-panic-hook"
-            | "validate-dashboard-runtime"
-            | "validate-communications-runtime"),
-        ) => run_local_workspace_validation_command(command, args),
+        Some(command) if is_local_workspace_validation_command(command) => {
+            run_local_workspace_validation_command(command, args)
+        }
         Some("write-runtime-supervised-restart-child") => {
             let options = parse_local_validation_run_options(args)?;
             run_runtime_supervised_restart_child(&options)
@@ -496,6 +468,45 @@ fn is_signer_web3_validation_command(command: &str) -> bool {
             | "validate-web3-broadcast-adapter-control-review"
             | "validate-web3-sandbox-live-discrepancy-calibration"
             | "validate-signer-runtime-isolation"
+    )
+}
+
+fn is_local_workspace_validation_command(command: &str) -> bool {
+    matches!(
+        command,
+        "validate-local-validation-run"
+            | "validate-local-property-checks"
+            | "validate-local-fuzz-corpus"
+            | "validate-local-validation-corpus"
+            | "validate-local-paper-backtest-corpus"
+            | "validate-market-data-boundary-audit"
+            | "validate-market-data-history-persistence"
+            | "validate-fee-boundary-audit"
+            | "validate-agentic-handoff-audit"
+            | "validate-policy-decision-audit"
+            | "validate-withdrawal-policy-boundary"
+            | "validate-secret-boundary-audit"
+            | "validate-secret-backup-restore"
+            | "validate-execution-planner-audit"
+            | "validate-execution-adapter-audit"
+            | "validate-signer-boundary-audit"
+            | "validate-destination-boundary-audit"
+            | "validate-connector-lifecycle-audit"
+            | "validate-audit-retention-execution"
+            | "validate-audit-durability"
+            | "validate-runtime-graceful-shutdown"
+            | "validate-runtime-backup-restore"
+            | "validate-runtime-backup-restore-load"
+            | "validate-runtime-restart-recovery"
+            | "validate-runtime-incomplete-recovery"
+            | "validate-runtime-supervised-restart"
+            | "validate-runtime-permission-denial"
+            | "validate-runtime-blocked-state-preflight"
+            | "validate-runtime-blocked-audit-preflight"
+            | "validate-observability-runtime"
+            | "validate-runtime-panic-hook"
+            | "validate-dashboard-runtime"
+            | "validate-communications-runtime"
     )
 }
 
@@ -600,6 +611,7 @@ fn run_local_workspace_validation_command(
         "validate-policy-decision-audit" => run_policy_decision_audit_validation(&options),
         "validate-withdrawal-policy-boundary" => run_withdrawal_policy_validation(&options),
         "validate-secret-boundary-audit" => run_secret_boundary_audit_validation(&options),
+        "validate-secret-backup-restore" => run_secret_backup_restore_validation(&options),
         "validate-execution-planner-audit" => run_execution_planner_audit_validation(&options),
         "validate-execution-adapter-audit" => run_execution_adapter_audit_validation(&options),
         "validate-signer-boundary-audit" => run_signer_boundary_audit_validation(&options),
@@ -820,6 +832,7 @@ fn print_usage() {
     println!("       arb-agent validate-policy-decision-audit --workspace <fresh-dir>");
     println!("       arb-agent validate-withdrawal-policy-boundary --workspace <fresh-dir>");
     println!("       arb-agent validate-secret-boundary-audit --workspace <fresh-dir>");
+    println!("       arb-agent validate-secret-backup-restore --workspace <fresh-dir>");
     println!("       arb-agent validate-execution-planner-audit --workspace <fresh-dir>");
     println!("       arb-agent validate-execution-adapter-audit --workspace <fresh-dir>");
     println!("       arb-agent validate-signer-boundary-audit --workspace <fresh-dir>");
@@ -6625,6 +6638,190 @@ fn validate_secret_rotation_state_failure(report: &SecretRotationPlanReport) -> 
     failed && store.put_attempts == 1
 }
 
+struct SecretBackupRestorePersistence {
+    ready_sequence: u64,
+    blocked_sequence: u64,
+    checkpoint_value: String,
+    audit_failed_closed: bool,
+}
+
+fn run_secret_backup_restore_validation(
+    options: &LocalValidationRunOptions,
+) -> Result<(), AgentCliError> {
+    prepare_fresh_workspace(&options.workspace_dir)?;
+    let now_unix_ms = current_unix_ms()?;
+    let audit_path = options
+        .workspace_dir
+        .join("secret-backup-restore.audit.jsonl");
+    let state_path = options.workspace_dir.join("secret-backup-restore.sqlite3");
+    let ready = build_local_secret_backup_restore_review(now_unix_ms, false)?;
+    let blocked = build_local_secret_backup_restore_review(now_unix_ms.saturating_add(10), true)?;
+    let persisted =
+        persist_local_secret_backup_restore_case(&audit_path, &state_path, &ready, &blocked)?;
+    let audit_records_replayed =
+        verify_local_secret_backup_restore_case(&audit_path, &state_path, &persisted)?;
+    let state_failure_failed_closed = validate_secret_backup_restore_state_failure(&ready);
+
+    if ready.status != SecretBackupRestoreReviewStatus::ReadyForLocalReview
+        || blocked.status != SecretBackupRestoreReviewStatus::BlockedRestoreVerification
+        || ready.secret_material_loaded
+        || ready.plaintext_decrypted
+        || ready.keystore_entry_written
+        || ready.external_secret_restored
+        || ready.signing_or_broadcast_performed
+        || ready.production_ready
+        || blocked.secret_material_loaded
+        || blocked.plaintext_decrypted
+        || blocked.keystore_entry_written
+        || blocked.external_secret_restored
+        || blocked.signing_or_broadcast_performed
+        || blocked.production_ready
+        || !persisted.audit_failed_closed
+        || !state_failure_failed_closed
+    {
+        return Err(AgentCliError::Validation(
+            "secret backup/restore validation failed".to_owned(),
+        ));
+    }
+
+    println!("secret-backup-restore: validation passed");
+    println!("ready-backup-restore-review: {}", ready.review_id);
+    println!("blocked-backup-restore-review: {}", blocked.review_id);
+    println!(
+        "blocked-backup-restore-validation-codes: {}",
+        blocked.validation_count
+    );
+    println!(
+        "backup-reference-present: {}",
+        ready.backup_reference_present
+    );
+    println!(
+        "backup-payload-shape-verified: {}",
+        ready.backup_payload_shape_verified
+    );
+    println!(
+        "restore-verification-passed: {}",
+        ready.restore_verification_passed
+    );
+    println!("references-sanitized: {}", ready.references_sanitized);
+    println!("review-window-valid: {}", ready.review_window_valid);
+    println!(
+        "audit-append-failure-failed-closed: {}",
+        persisted.audit_failed_closed
+    );
+    println!("state-failure-failed-closed: {state_failure_failed_closed}");
+    println!("audit-records-replayed: {audit_records_replayed}");
+    println!("state-checkpoint-recovered: true");
+    println!("secret-material-loaded: false");
+    println!("plaintext-decrypted: false");
+    println!("keystore-entry-written: false");
+    println!("external-secret-restored: false");
+    println!("signing-or-broadcast-performed: false");
+    println!("production-ready: false");
+    Ok(())
+}
+
+fn build_local_secret_backup_restore_review(
+    reviewed_at_unix_ms: u64,
+    blocked: bool,
+) -> Result<SecretBackupRestoreReviewReport, AgentCliError> {
+    review_local_secret_backup_restore(SecretBackupRestoreReviewRequest {
+        review_id: if blocked {
+            "local-secret-backup-restore-blocked"
+        } else {
+            "local-secret-backup-restore-ready"
+        }
+        .to_owned(),
+        secret_purpose: "exchange-api-key".to_owned(),
+        source_reference: SecretRef::Keystore {
+            alias: "local-paper-cex-primary".to_owned(),
+        },
+        backup_reference: "actions-artifact:secret-backup-shape-v1".to_owned(),
+        restore_target_label: "local-restore-shape-check".to_owned(),
+        reviewed_by: "local-operator".to_owned(),
+        review_note: "local non-secret secret backup/restore audit/state validation".to_owned(),
+        backup_payload_shape_verified: !blocked,
+        restore_verification_passed: !blocked,
+        references_sanitized: true,
+        reviewed_at_unix_ms,
+        review_window_start_unix_ms: reviewed_at_unix_ms.saturating_add(1_000),
+        review_window_expires_unix_ms: reviewed_at_unix_ms.saturating_add(86_400_000),
+    })
+    .map_err(|error| AgentCliError::Validation(error.to_string()))
+}
+
+fn persist_local_secret_backup_restore_case(
+    audit_path: &Path,
+    state_path: &Path,
+    ready: &SecretBackupRestoreReviewReport,
+    blocked: &SecretBackupRestoreReviewReport,
+) -> Result<SecretBackupRestorePersistence, AgentCliError> {
+    let mut journal = AppendOnlyAuditJournal::open(audit_path)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let mut store = SqliteWalStateStore::open(state_path)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let ready_audit = append_secret_backup_restore_review_audit(&mut journal, ready)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let blocked_audit = append_secret_backup_restore_review_audit(&mut journal, blocked)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let checkpoint = persist_secret_backup_restore_review_checkpoint(&mut store, ready)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let audit_failed_closed =
+        validate_secret_backup_restore_invalid_audit_fails_closed(&mut journal, ready);
+
+    Ok(SecretBackupRestorePersistence {
+        ready_sequence: ready_audit.sequence,
+        blocked_sequence: blocked_audit.sequence,
+        checkpoint_value: checkpoint.value,
+        audit_failed_closed,
+    })
+}
+
+fn verify_local_secret_backup_restore_case(
+    audit_path: &Path,
+    state_path: &Path,
+    persisted: &SecretBackupRestorePersistence,
+) -> Result<u64, AgentCliError> {
+    let replayed = AppendOnlyAuditJournal::open(audit_path)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let reopened = SqliteWalStateStore::open(state_path)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let checkpoint = reopened
+        .get_checkpoint(SECRET_LAST_BACKUP_RESTORE_REVIEW_CHECKPOINT_KEY)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?
+        .ok_or_else(|| {
+            AgentCliError::Validation("secret backup/restore checkpoint missing".to_owned())
+        })?;
+
+    if replayed.next_sequence() <= persisted.ready_sequence
+        || replayed.next_sequence() <= persisted.blocked_sequence
+        || checkpoint.value != persisted.checkpoint_value
+        || !persisted.audit_failed_closed
+    {
+        return Err(AgentCliError::Validation(
+            "secret backup/restore validation failed".to_owned(),
+        ));
+    }
+    Ok(replayed.next_sequence() - 1)
+}
+
+fn validate_secret_backup_restore_invalid_audit_fails_closed(
+    journal: &mut AppendOnlyAuditJournal,
+    report: &SecretBackupRestoreReviewReport,
+) -> bool {
+    let next_sequence = journal.next_sequence();
+    let mut invalid = report.clone();
+    invalid.external_secret_restored = true;
+    let failed = append_secret_backup_restore_review_audit(journal, &invalid).is_err();
+    failed && journal.next_sequence() == next_sequence
+}
+
+fn validate_secret_backup_restore_state_failure(report: &SecretBackupRestoreReviewReport) -> bool {
+    let mut store = PermissionDeniedLocalStateStore::default();
+    let failed = persist_secret_backup_restore_review_checkpoint(&mut store, report).is_err();
+    failed && store.put_attempts == 1
+}
+
 struct LocalExecutionPlannerAuditCase {
     draft: arb_core::ExecutionPlanDraft,
 }
@@ -11936,6 +12133,22 @@ fn run_service_manager_lifecycle_transcript_validation() -> Result<(), AgentCliE
         ready.recovery_evidence_present
     );
     println!(
+        "ready-operator-lifecycle-rehearsal-reference-present: {}",
+        ready.operator_lifecycle_rehearsal_reference_present
+    );
+    println!(
+        "ready-emergency-stop-review-reference-present: {}",
+        ready.emergency_stop_review_reference_present
+    );
+    println!(
+        "ready-rollback-plan-review-reference-present: {}",
+        ready.rollback_plan_review_reference_present
+    );
+    println!(
+        "ready-operator-review-window-current: {}",
+        ready.operator_review_window_current
+    );
+    println!(
         "blocked-transcript-status: {}",
         service_manager_lifecycle_status_label(blocked.status)
     );
@@ -12489,6 +12702,10 @@ fn local_service_manager_lifecycle_transcript(
         sqlite_recovery_reference_present: complete,
         runtime_smoke_reference_present: complete,
         operator_approved: complete,
+        operator_lifecycle_rehearsal_reference_present: complete,
+        emergency_stop_review_reference_present: complete,
+        rollback_plan_review_reference_present: complete,
+        operator_review_window_current: complete,
         service_manager_action_performed_by_validator: false,
         external_submission_performed: false,
         live_execution_performed: false,
@@ -14134,15 +14351,16 @@ mod tests {
         run_runtime_blocked_state_preflight_validation, run_runtime_graceful_shutdown_validation,
         run_runtime_incomplete_recovery_validation, run_runtime_panic_hook_validation,
         run_runtime_permission_denial_validation, run_runtime_restart_recovery_validation,
-        run_secret_boundary_audit_validation, run_signer_boundary_audit_validation,
-        run_strategy_constrained_planner_validation, run_strategy_profitability_tuning_validation,
-        run_strategy_replay_corpus_validation, run_withdrawal_policy_validation,
-        runtime_recovery_disposition_status, runtime_supervised_restart_audit_path,
-        runtime_supervised_restart_state_path, strategy_profile_replay_status_label,
-        strategy_profitability_tuning_status_label, validation_corpus_status_label,
-        validation_run_status_label, write_runtime_supervised_restart_seed, ConfigMigrationStatus,
-        ExecutionAdapterRunStatus, FeeScheduleVerificationStatus, LocalFuzzCorpusReplayStatus,
-        LocalValidationCorpusStatus, LocalValidationRunOptions, MarketDataProviderPreflightStatus,
+        run_secret_backup_restore_validation, run_secret_boundary_audit_validation,
+        run_signer_boundary_audit_validation, run_strategy_constrained_planner_validation,
+        run_strategy_profitability_tuning_validation, run_strategy_replay_corpus_validation,
+        run_withdrawal_policy_validation, runtime_recovery_disposition_status,
+        runtime_supervised_restart_audit_path, runtime_supervised_restart_state_path,
+        strategy_profile_replay_status_label, strategy_profitability_tuning_status_label,
+        validation_corpus_status_label, validation_run_status_label,
+        write_runtime_supervised_restart_seed, ConfigMigrationStatus, ExecutionAdapterRunStatus,
+        FeeScheduleVerificationStatus, LocalFuzzCorpusReplayStatus, LocalValidationCorpusStatus,
+        LocalValidationRunOptions, MarketDataProviderPreflightStatus,
         MarketDataQualityAssessmentStatus, MarketDataReconnectPlanStatus,
         OpportunityPlannerHandoffStatus, OpportunityReplayStatus,
         PaidMarketDataProviderEvaluationStatus, RuntimeRestartRecoveryDisposition,
@@ -14957,6 +15175,19 @@ mod tests {
 
         assert!(workspace.join("secret-boundary.audit.jsonl").exists());
         assert!(workspace.join("secret-boundary.sqlite3").exists());
+        cleanup_workspace(&workspace);
+    }
+
+    #[test]
+    fn secret_backup_restore_runner_records_and_fails_closed_locally() {
+        let workspace = temp_workspace_path("secret-backup-restore-runner");
+        run_secret_backup_restore_validation(&LocalValidationRunOptions {
+            workspace_dir: workspace.clone(),
+        })
+        .expect("secret backup restore validation should pass");
+
+        assert!(workspace.join("secret-backup-restore.audit.jsonl").exists());
+        assert!(workspace.join("secret-backup-restore.sqlite3").exists());
         cleanup_workspace(&workspace);
     }
 

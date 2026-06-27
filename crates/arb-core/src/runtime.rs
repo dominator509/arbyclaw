@@ -991,6 +991,14 @@ pub struct RuntimeServiceManagerLifecycleTranscript {
     pub runtime_smoke_reference_present: bool,
     /// Whether operator approval/reference is present.
     pub operator_approved: bool,
+    /// Whether an operator lifecycle rehearsal reference is present.
+    pub operator_lifecycle_rehearsal_reference_present: bool,
+    /// Whether an emergency-stop or kill-switch review reference is present.
+    pub emergency_stop_review_reference_present: bool,
+    /// Whether a rollback-plan review reference is present.
+    pub rollback_plan_review_reference_present: bool,
+    /// Whether the operator review window is current.
+    pub operator_review_window_current: bool,
     /// Whether this validator performed a service-manager action. Must be false.
     pub service_manager_action_performed_by_validator: bool,
     /// Whether this validator submitted externally. Must be false.
@@ -1041,6 +1049,14 @@ pub struct RuntimeServiceManagerLifecycleTranscriptReport {
     pub sqlite_recovery_reference_present: bool,
     /// Whether operator approval/reference is present.
     pub operator_approved: bool,
+    /// Whether an operator lifecycle rehearsal reference is present.
+    pub operator_lifecycle_rehearsal_reference_present: bool,
+    /// Whether an emergency-stop or kill-switch review reference is present.
+    pub emergency_stop_review_reference_present: bool,
+    /// Whether a rollback-plan review reference is present.
+    pub rollback_plan_review_reference_present: bool,
+    /// Whether the operator review window is current.
+    pub operator_review_window_current: bool,
     /// Validation status.
     pub status: RuntimeServiceManagerLifecycleTranscriptStatus,
     /// Non-secret blocker codes.
@@ -3289,6 +3305,11 @@ pub fn validate_service_manager_lifecycle_transcript(
         audit_replay_reference_present: transcript.audit_replay_reference_present,
         sqlite_recovery_reference_present: transcript.sqlite_recovery_reference_present,
         operator_approved: transcript.operator_approved,
+        operator_lifecycle_rehearsal_reference_present: transcript
+            .operator_lifecycle_rehearsal_reference_present,
+        emergency_stop_review_reference_present: transcript.emergency_stop_review_reference_present,
+        rollback_plan_review_reference_present: transcript.rollback_plan_review_reference_present,
+        operator_review_window_current: transcript.operator_review_window_current,
         status,
         blocker_codes,
         service_manager_action_performed_by_validator: false,
@@ -4034,6 +4055,18 @@ fn service_manager_lifecycle_blockers(
     }
     if !transcript.operator_approved {
         blockers.push("missing-operator-approval".to_owned());
+    }
+    if !transcript.operator_lifecycle_rehearsal_reference_present {
+        blockers.push("missing-operator-lifecycle-rehearsal-reference".to_owned());
+    }
+    if !transcript.emergency_stop_review_reference_present {
+        blockers.push("missing-emergency-stop-review-reference".to_owned());
+    }
+    if !transcript.rollback_plan_review_reference_present {
+        blockers.push("missing-rollback-plan-review-reference".to_owned());
+    }
+    if !transcript.operator_review_window_current {
+        blockers.push("operator-review-window-not-current".to_owned());
     }
     blockers
 }
@@ -7025,6 +7058,10 @@ redact_secrets = true
         assert!(report.audit_replay_reference_present);
         assert!(report.sqlite_recovery_reference_present);
         assert!(report.operator_approved);
+        assert!(report.operator_lifecycle_rehearsal_reference_present);
+        assert!(report.emergency_stop_review_reference_present);
+        assert!(report.rollback_plan_review_reference_present);
+        assert!(report.operator_review_window_current);
         assert!(report.blocker_codes.is_empty());
         assert!(!report.service_manager_action_performed_by_validator);
         assert!(!report.external_submission_performed);
@@ -7465,6 +7502,10 @@ redact_secrets = true
             sqlite_recovery_reference_present: complete,
             runtime_smoke_reference_present: complete,
             operator_approved: complete,
+            operator_lifecycle_rehearsal_reference_present: complete,
+            emergency_stop_review_reference_present: complete,
+            rollback_plan_review_reference_present: complete,
+            operator_review_window_current: complete,
             service_manager_action_performed_by_validator: false,
             external_submission_performed: false,
             live_execution_performed: false,

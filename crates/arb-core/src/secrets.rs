@@ -25,6 +25,9 @@ pub const KEYRING_DIR_ENV: &str = "ARBYCLAW_KEYRING_DIR";
 pub const SECRET_LIFECYCLE_STATE_SUBSYSTEM: &str = "secret-lifecycle";
 /// State-store key for the latest local secret rotation plan.
 pub const SECRET_LAST_ROTATION_PLAN_CHECKPOINT_KEY: &str = "secret-lifecycle:last-rotation-plan";
+/// State-store key for the latest local secret backup/restore review.
+pub const SECRET_LAST_BACKUP_RESTORE_REVIEW_CHECKPOINT_KEY: &str =
+    "secret-lifecycle:last-backup-restore-review";
 const KEYRING_FILE_SUFFIX: &str = "secret";
 const KEYRING_DEFAULT_DIR: &str = ".arbyclaw/keyring";
 const KEYSTORE_PAYLOAD_VERSION_V1: &str = "v1";
@@ -313,6 +316,20 @@ pub enum SecretRotationPlanStatus {
     RejectedInvalidWindow,
 }
 
+/// Local non-secret secret backup/restore review status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SecretBackupRestoreReviewStatus {
+    /// Backup and restore references are coherent and ready for operator review.
+    ReadyForLocalReview,
+    /// Review is blocked because the backup locator is missing.
+    BlockedMissingBackupReference,
+    /// Review is blocked because restore verification did not pass.
+    BlockedRestoreVerification,
+    /// Review is blocked because the review window is invalid.
+    BlockedInvalidReviewWindow,
+}
+
 /// Non-secret local secret rotation planning request.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -385,6 +402,94 @@ pub struct SecretRotationPlanReport {
     pub not_before_unix_ms: u64,
     /// End of the operator review/cutover window.
     pub expires_at_unix_ms: u64,
+}
+
+/// Non-secret local secret backup/restore review request.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct SecretBackupRestoreReviewRequest {
+    /// Stable review id.
+    pub review_id: String,
+    /// Non-secret operator label for the secret purpose.
+    pub secret_purpose: String,
+    /// Reference-only source secret location.
+    pub source_reference: SecretRef,
+    /// Sanitized backup locator, such as an artifact name or approved store reference.
+    pub backup_reference: String,
+    /// Sanitized restore target label, never plaintext or material.
+    pub restore_target_label: String,
+    /// Operator/reviewer who prepared the local review.
+    pub reviewed_by: String,
+    /// Non-secret review note.
+    pub review_note: String,
+    /// Whether the copied backup payload shape was checked without decrypting.
+    pub backup_payload_shape_verified: bool,
+    /// Whether restore verification passed without exposing plaintext.
+    pub restore_verification_passed: bool,
+    /// Whether backup and restore locators were recorded as non-secret references only.
+    pub references_sanitized: bool,
+    /// Operator-supplied non-secret timestamp.
+    pub reviewed_at_unix_ms: u64,
+    /// Start of the review window.
+    pub review_window_start_unix_ms: u64,
+    /// End of the review window.
+    pub review_window_expires_unix_ms: u64,
+}
+
+/// Non-secret local secret backup/restore review report.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct SecretBackupRestoreReviewReport {
+    /// Stable review id.
+    pub review_id: String,
+    /// Non-secret operator label for the secret purpose.
+    pub secret_purpose: String,
+    /// Local backup/restore review status.
+    pub status: SecretBackupRestoreReviewStatus,
+    /// Source reference label only.
+    pub source_reference_source: String,
+    /// Source reference label only, never material.
+    pub source_reference_label: String,
+    /// Sanitized backup locator.
+    pub backup_reference: String,
+    /// Sanitized restore target label.
+    pub restore_target_label: String,
+    /// Whether the backup locator is present.
+    pub backup_reference_present: bool,
+    /// Whether the copied backup payload shape was checked without decrypting.
+    pub backup_payload_shape_verified: bool,
+    /// Whether restore verification passed without exposing plaintext.
+    pub restore_verification_passed: bool,
+    /// Whether backup and restore locators were recorded as non-secret references only.
+    pub references_sanitized: bool,
+    /// Whether the operator review window is coherent.
+    pub review_window_valid: bool,
+    /// Stable validation/denial codes.
+    pub validation_codes: Vec<String>,
+    /// Number of validation/denial codes.
+    pub validation_count: u64,
+    /// Local review never loads secret material.
+    pub secret_material_loaded: bool,
+    /// Local review never decrypts plaintext.
+    pub plaintext_decrypted: bool,
+    /// Local review never writes keystore entries.
+    pub keystore_entry_written: bool,
+    /// Local review never restores external credentials.
+    pub external_secret_restored: bool,
+    /// Local review never signs or broadcasts.
+    pub signing_or_broadcast_performed: bool,
+    /// Local review never claims production readiness.
+    pub production_ready: bool,
+    /// Operator/reviewer who prepared the local review.
+    pub reviewed_by: String,
+    /// Non-secret review note.
+    pub review_note: String,
+    /// Operator-supplied non-secret timestamp.
+    pub reviewed_at_unix_ms: u64,
+    /// Start of the review window.
+    pub review_window_start_unix_ms: u64,
+    /// End of the review window.
+    pub review_window_expires_unix_ms: u64,
 }
 
 impl LocalKeystoreEntryPreflightRequest {
@@ -517,6 +622,98 @@ impl SecretRotationPlanReport {
     }
 }
 
+impl SecretBackupRestoreReviewRequest {
+    /// Validate local secret backup/restore review request shape.
+    pub fn validate(&self) -> Result<(), SecretStoreError> {
+        validate_reference_name(&self.review_id, "secret backup restore review id")?;
+        validate_reference_name(&self.secret_purpose, "secret backup restore purpose")?;
+        validate_reference_name(&self.reviewed_by, "secret backup restore reviewer")?;
+        validate_reference_name(
+            &self.restore_target_label,
+            "secret backup restore target label",
+        )?;
+        if self.review_note.trim().is_empty() {
+            return Err(SecretStoreError::InvalidReference {
+                reason: "secret backup restore review note is required".to_owned(),
+            });
+        }
+        self.source_reference.validate_reference()?;
+        if self.reviewed_at_unix_ms == 0 {
+            return Err(SecretStoreError::InvalidReference {
+                reason: "secret backup restore review timestamp is required".to_owned(),
+            });
+        }
+        Ok(())
+    }
+}
+
+impl SecretBackupRestoreReviewReport {
+    /// Validate local backup/restore review invariants.
+    pub fn validate(&self) -> Result<(), SecretStoreError> {
+        validate_reference_name(&self.review_id, "secret backup restore review id")?;
+        validate_reference_name(&self.secret_purpose, "secret backup restore purpose")?;
+        validate_reference_name(&self.reviewed_by, "secret backup restore reviewer")?;
+        validate_reference_name(
+            &self.restore_target_label,
+            "secret backup restore target label",
+        )?;
+        if self.source_reference_label.trim().is_empty() {
+            return Err(SecretStoreError::InvalidReference {
+                reason: "secret backup restore source reference label is required".to_owned(),
+            });
+        }
+        if self.reviewed_at_unix_ms == 0 {
+            return Err(SecretStoreError::InvalidReference {
+                reason: "secret backup restore review timestamp is required".to_owned(),
+            });
+        }
+        if self.secret_material_loaded
+            || self.plaintext_decrypted
+            || self.keystore_entry_written
+            || self.external_secret_restored
+            || self.signing_or_broadcast_performed
+            || self.production_ready
+        {
+            return Err(SecretStoreError::InvalidReference {
+                reason:
+                    "secret backup restore review must not load material, decrypt plaintext, write keystore entries, restore external credentials, sign, broadcast, or claim production readiness"
+                        .to_owned(),
+            });
+        }
+        if self.validation_count != u64::try_from(self.validation_codes.len()).unwrap_or(u64::MAX) {
+            return Err(SecretStoreError::InvalidReference {
+                reason: "secret backup restore validation count mismatch".to_owned(),
+            });
+        }
+        match self.status {
+            SecretBackupRestoreReviewStatus::ReadyForLocalReview => {
+                if self.validation_count != 0
+                    || !self.backup_reference_present
+                    || !self.backup_payload_shape_verified
+                    || !self.restore_verification_passed
+                    || !self.references_sanitized
+                    || !self.review_window_valid
+                {
+                    return Err(SecretStoreError::InvalidReference {
+                        reason: "ready secret backup restore reviews require a sanitized backup reference, verified payload shape, restore verification, and a valid review window".to_owned(),
+                    });
+                }
+            }
+            SecretBackupRestoreReviewStatus::BlockedMissingBackupReference
+            | SecretBackupRestoreReviewStatus::BlockedRestoreVerification
+            | SecretBackupRestoreReviewStatus::BlockedInvalidReviewWindow => {
+                if self.validation_count == 0 {
+                    return Err(SecretStoreError::InvalidReference {
+                        reason: "blocked secret backup restore reviews require validation codes"
+                            .to_owned(),
+                    });
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
 /// Plan a local secret rotation using references only.
 ///
 /// This does not load material, decrypt plaintext, write keystore entries,
@@ -580,6 +777,82 @@ pub fn plan_local_secret_rotation(
         planned_at_unix_ms: request.planned_at_unix_ms,
         not_before_unix_ms: request.not_before_unix_ms,
         expires_at_unix_ms: request.expires_at_unix_ms,
+    };
+    report.validate()?;
+    Ok(report)
+}
+
+/// Review a local secret backup/restore operation using non-secret references only.
+///
+/// This does not load material, decrypt plaintext, write keystore entries,
+/// restore external credentials, call providers, sign, broadcast, or approve
+/// production readiness.
+pub fn review_local_secret_backup_restore(
+    request: SecretBackupRestoreReviewRequest,
+) -> Result<SecretBackupRestoreReviewReport, SecretStoreError> {
+    request.validate()?;
+    let (source_reference_source, source_reference_label) =
+        secret_reference_summary(&request.source_reference);
+    let backup_reference_present = !request.backup_reference.trim().is_empty();
+    let review_window_valid = request.review_window_start_unix_ms >= request.reviewed_at_unix_ms
+        && request.review_window_expires_unix_ms > request.review_window_start_unix_ms;
+    let mut validation_codes = Vec::new();
+
+    if !backup_reference_present {
+        validation_codes.push("SECRET_BACKUP_REFERENCE_REQUIRED".to_owned());
+    }
+    if !request.backup_payload_shape_verified {
+        validation_codes.push("SECRET_BACKUP_PAYLOAD_SHAPE_UNVERIFIED".to_owned());
+    }
+    if !request.restore_verification_passed {
+        validation_codes.push("SECRET_RESTORE_VERIFICATION_MISSING".to_owned());
+    }
+    if !request.references_sanitized {
+        validation_codes.push("SECRET_BACKUP_RESTORE_REFERENCES_UNSANITIZED".to_owned());
+    }
+    if !review_window_valid {
+        validation_codes.push("SECRET_BACKUP_RESTORE_REVIEW_WINDOW_INVALID".to_owned());
+    }
+
+    let status = if !backup_reference_present {
+        SecretBackupRestoreReviewStatus::BlockedMissingBackupReference
+    } else if !request.restore_verification_passed
+        || !request.backup_payload_shape_verified
+        || !request.references_sanitized
+    {
+        SecretBackupRestoreReviewStatus::BlockedRestoreVerification
+    } else if !review_window_valid {
+        SecretBackupRestoreReviewStatus::BlockedInvalidReviewWindow
+    } else {
+        SecretBackupRestoreReviewStatus::ReadyForLocalReview
+    };
+
+    let report = SecretBackupRestoreReviewReport {
+        review_id: request.review_id,
+        secret_purpose: request.secret_purpose,
+        status,
+        source_reference_source,
+        source_reference_label,
+        backup_reference: request.backup_reference,
+        restore_target_label: request.restore_target_label,
+        backup_reference_present,
+        backup_payload_shape_verified: request.backup_payload_shape_verified,
+        restore_verification_passed: request.restore_verification_passed,
+        references_sanitized: request.references_sanitized,
+        review_window_valid,
+        validation_count: u64::try_from(validation_codes.len()).unwrap_or(u64::MAX),
+        validation_codes,
+        secret_material_loaded: false,
+        plaintext_decrypted: false,
+        keystore_entry_written: false,
+        external_secret_restored: false,
+        signing_or_broadcast_performed: false,
+        production_ready: false,
+        reviewed_by: request.reviewed_by,
+        review_note: request.review_note,
+        reviewed_at_unix_ms: request.reviewed_at_unix_ms,
+        review_window_start_unix_ms: request.review_window_start_unix_ms,
+        review_window_expires_unix_ms: request.review_window_expires_unix_ms,
     };
     report.validate()?;
     Ok(report)
@@ -712,6 +985,28 @@ pub fn persist_secret_rotation_plan_checkpoint(
     Ok(checkpoint)
 }
 
+/// Persist the latest local secret backup/restore review through the typed state boundary.
+pub fn persist_secret_backup_restore_review_checkpoint(
+    store: &mut impl StateStore,
+    report: &SecretBackupRestoreReviewReport,
+) -> Result<StateCheckpoint, StateStoreError> {
+    report
+        .validate()
+        .map_err(|error| StateStoreError::ValidationFailed {
+            reason: error.to_string(),
+        })?;
+    let checkpoint = StateCheckpoint {
+        key: SECRET_LAST_BACKUP_RESTORE_REVIEW_CHECKPOINT_KEY.to_owned(),
+        subsystem: SECRET_LIFECYCLE_STATE_SUBSYSTEM.to_owned(),
+        value: serde_json::to_string(report).map_err(|error| StateStoreError::BackendFailed {
+            reason: format!("failed to serialize secret backup restore review: {error}"),
+        })?,
+        updated_at_unix_ms: report.reviewed_at_unix_ms,
+    };
+    store.put_checkpoint(checkpoint.clone())?;
+    Ok(checkpoint)
+}
+
 /// Append a local secret rotation plan to the audit journal.
 pub fn append_secret_rotation_plan_audit(
     journal: &mut AppendOnlyAuditJournal,
@@ -778,6 +1073,89 @@ pub fn append_secret_rotation_plan_audit(
     .with_metadata(
         "external_reference_revoked",
         AuditValue::Bool(report.external_secret_revoked),
+    )
+    .with_metadata(
+        "production_ready",
+        AuditValue::Bool(report.production_ready),
+    );
+
+    journal.append_event(event)
+}
+
+/// Append a local secret backup/restore review to the audit journal.
+pub fn append_secret_backup_restore_review_audit(
+    journal: &mut AppendOnlyAuditJournal,
+    report: &SecretBackupRestoreReviewReport,
+) -> Result<AuditRecord, AuditError> {
+    report
+        .validate()
+        .map_err(|error| AuditError::ValidationFailed {
+            violations: vec![crate::AuditViolation::new_owned(
+                "SECRET_BACKUP_RESTORE_REVIEW_INVALID",
+                error.to_string(),
+            )],
+        })?;
+
+    let event = AuditEvent::new(
+        format!("secret-backup-restore-{}", report.review_id),
+        AuditEventKind::SecurityAlert,
+        SECRET_LIFECYCLE_STATE_SUBSYSTEM,
+        "local-secret-backup-restore-review",
+        "local secret backup restore review recorded without material access or keystore mutation",
+    )
+    .with_metadata("review_id", AuditValue::Text(report.review_id.clone()))
+    .with_metadata(
+        "purpose_label",
+        AuditValue::Text(report.secret_purpose.clone()),
+    )
+    .with_metadata("status", AuditValue::Text(format!("{:?}", report.status)))
+    .with_metadata(
+        "source_reference_source",
+        AuditValue::Text(report.source_reference_source.clone()),
+    )
+    .with_metadata(
+        "backup_reference_present",
+        AuditValue::Bool(report.backup_reference_present),
+    )
+    .with_metadata(
+        "backup_payload_shape_verified",
+        AuditValue::Bool(report.backup_payload_shape_verified),
+    )
+    .with_metadata(
+        "restore_verification_passed",
+        AuditValue::Bool(report.restore_verification_passed),
+    )
+    .with_metadata(
+        "references_sanitized",
+        AuditValue::Bool(report.references_sanitized),
+    )
+    .with_metadata(
+        "review_window_valid",
+        AuditValue::Bool(report.review_window_valid),
+    )
+    .with_metadata(
+        "validation_count",
+        AuditValue::Unsigned(report.validation_count),
+    )
+    .with_metadata(
+        "material_loaded",
+        AuditValue::Bool(report.secret_material_loaded),
+    )
+    .with_metadata(
+        "plaintext_decrypted",
+        AuditValue::Bool(report.plaintext_decrypted),
+    )
+    .with_metadata(
+        "keystore_entry_written",
+        AuditValue::Bool(report.keystore_entry_written),
+    )
+    .with_metadata(
+        "external_reference_restored",
+        AuditValue::Bool(report.external_secret_restored),
+    )
+    .with_metadata(
+        "signing_or_broadcast_performed",
+        AuditValue::Bool(report.signing_or_broadcast_performed),
     )
     .with_metadata(
         "production_ready",
@@ -987,15 +1365,19 @@ impl std::error::Error for SecretStoreError {}
 #[cfg(test)]
 mod tests {
     use super::{
-        append_secret_rotation_plan_audit, decode_hex_bytes,
+        append_secret_backup_restore_review_audit, append_secret_rotation_plan_audit,
+        decode_hex_bytes, persist_secret_backup_restore_review_checkpoint,
         persist_secret_rotation_plan_checkpoint, plan_local_secret_rotation,
-        preflight_local_keystore_entry, EncryptedKeystoreSecretProvider,
-        LocalKeystoreEntryPreflightRequest, SecretMaterial, SecretProvider, SecretRef,
+        preflight_local_keystore_entry, review_local_secret_backup_restore,
+        EncryptedKeystoreSecretProvider, LocalKeystoreEntryPreflightRequest,
+        SecretBackupRestoreReviewReport, SecretBackupRestoreReviewRequest,
+        SecretBackupRestoreReviewStatus, SecretMaterial, SecretProvider, SecretRef,
         SecretRotationPlanReport, SecretRotationPlanRequest, SecretRotationPlanStatus,
         SecretStoreError, KEYRING_DIR_ENV, KEYRING_MASTER_KEY_ENV,
     };
     use crate::{
-        AppendOnlyAuditJournal, AuditValue, SqliteWalStateStore, StateStore,
+        AppendOnlyAuditJournal, AuditValue, SqliteWalStateStore, StateCheckpoint, StateStore,
+        StateStoreError, SECRET_LAST_BACKUP_RESTORE_REVIEW_CHECKPOINT_KEY,
         SECRET_LAST_ROTATION_PLAN_CHECKPOINT_KEY,
     };
     use std::{
@@ -1374,6 +1756,139 @@ mod tests {
     }
 
     #[test]
+    fn secret_backup_restore_review_accepts_sanitized_reference_only_recovery() {
+        let report = ready_backup_restore_review();
+
+        assert_eq!(
+            report.status,
+            SecretBackupRestoreReviewStatus::ReadyForLocalReview
+        );
+        assert!(report.backup_reference_present);
+        assert!(report.backup_payload_shape_verified);
+        assert!(report.restore_verification_passed);
+        assert!(report.references_sanitized);
+        assert!(report.review_window_valid);
+        assert_eq!(report.validation_count, 0);
+        assert!(!report.secret_material_loaded);
+        assert!(!report.plaintext_decrypted);
+        assert!(!report.keystore_entry_written);
+        assert!(!report.external_secret_restored);
+        assert!(!report.signing_or_broadcast_performed);
+        assert!(!report.production_ready);
+        report.validate().expect("ready backup restore validates");
+    }
+
+    #[test]
+    fn secret_backup_restore_review_blocks_missing_backup_reference() {
+        let report = review_local_secret_backup_restore(SecretBackupRestoreReviewRequest {
+            backup_reference: String::new(),
+            ..ready_backup_restore_request()
+        })
+        .expect("blocked backup restore review still reports");
+
+        assert_eq!(
+            report.status,
+            SecretBackupRestoreReviewStatus::BlockedMissingBackupReference
+        );
+        assert!(!report.backup_reference_present);
+        assert!(report
+            .validation_codes
+            .iter()
+            .any(|code| code == "SECRET_BACKUP_REFERENCE_REQUIRED"));
+        assert!(!report.secret_material_loaded);
+        assert!(!report.external_secret_restored);
+        report
+            .validate()
+            .expect("missing-reference backup restore report validates");
+    }
+
+    #[test]
+    fn secret_backup_restore_review_blocks_unverified_restore_without_side_effects() {
+        let report = review_local_secret_backup_restore(SecretBackupRestoreReviewRequest {
+            restore_verification_passed: false,
+            references_sanitized: false,
+            ..ready_backup_restore_request()
+        })
+        .expect("blocked backup restore review still reports");
+
+        assert_eq!(
+            report.status,
+            SecretBackupRestoreReviewStatus::BlockedRestoreVerification
+        );
+        assert!(report
+            .validation_codes
+            .iter()
+            .any(|code| code == "SECRET_RESTORE_VERIFICATION_MISSING"));
+        assert!(report
+            .validation_codes
+            .iter()
+            .any(|code| code == "SECRET_BACKUP_RESTORE_REFERENCES_UNSANITIZED"));
+        assert!(!report.plaintext_decrypted);
+        assert!(!report.signing_or_broadcast_performed);
+        report
+            .validate()
+            .expect("unverified backup restore report validates");
+    }
+
+    #[test]
+    fn secret_backup_restore_review_audit_and_state_reopen_locally() {
+        let report = ready_backup_restore_review();
+        let audit_path = unique_temp_path("secret-backup-restore-audit", "jsonl");
+        let state_path = unique_temp_path("secret-backup-restore-state", "sqlite");
+        let mut journal = AppendOnlyAuditJournal::open(&audit_path).expect("journal opens");
+        let mut store = SqliteWalStateStore::open(&state_path).expect("sqlite opens");
+
+        let audit_record = append_secret_backup_restore_review_audit(&mut journal, &report)
+            .expect("backup restore audit appends");
+        let checkpoint = persist_secret_backup_restore_review_checkpoint(&mut store, &report)
+            .expect("backup restore checkpoint persists");
+
+        assert_eq!(audit_record.sequence, 1);
+        assert_eq!(
+            checkpoint.key,
+            SECRET_LAST_BACKUP_RESTORE_REVIEW_CHECKPOINT_KEY
+        );
+        assert!(matches!(
+            audit_record
+                .event
+                .metadata
+                .get("external_reference_restored"),
+            Some(AuditValue::Bool(false))
+        ));
+        assert!(matches!(
+            audit_record.event.metadata.get("material_loaded"),
+            Some(AuditValue::Bool(false))
+        ));
+
+        let next_sequence = journal.next_sequence();
+        let mut invalid = report.clone();
+        invalid.secret_material_loaded = true;
+        assert!(append_secret_backup_restore_review_audit(&mut journal, &invalid).is_err());
+        assert_eq!(journal.next_sequence(), next_sequence);
+
+        let mut denied_store = DeniedSecretStateStore::default();
+        assert!(
+            persist_secret_backup_restore_review_checkpoint(&mut denied_store, &report).is_err()
+        );
+
+        let reopened_journal = AppendOnlyAuditJournal::open(&audit_path).expect("journal reopens");
+        assert_eq!(reopened_journal.next_sequence(), 2);
+        let reopened_store = SqliteWalStateStore::open(&state_path).expect("state reopens");
+        let checkpoint = reopened_store
+            .get_checkpoint(SECRET_LAST_BACKUP_RESTORE_REVIEW_CHECKPOINT_KEY)
+            .expect("checkpoint lookup succeeds")
+            .expect("checkpoint exists");
+        let recovered: SecretBackupRestoreReviewReport =
+            serde_json::from_str(&checkpoint.value).expect("backup restore report json");
+        assert_eq!(recovered, report);
+        assert!(!recovered.secret_material_loaded);
+        assert!(!recovered.external_secret_restored);
+
+        let _ = fs::remove_file(audit_path);
+        let _ = fs::remove_file(state_path);
+    }
+
+    #[test]
     fn decode_hex_bytes_rejects_invalid_length_and_characters() {
         assert!(decode_hex_bytes("label", "abc").is_err());
         assert!(decode_hex_bytes("label", "zz").is_err());
@@ -1397,6 +1912,49 @@ mod tests {
             expires_at_unix_ms: 1_700_000_003_000,
         })
         .expect("ready rotation plan succeeds")
+    }
+
+    fn ready_backup_restore_request() -> SecretBackupRestoreReviewRequest {
+        SecretBackupRestoreReviewRequest {
+            review_id: "backup-restore-ready".to_owned(),
+            secret_purpose: "wallet-signer".to_owned(),
+            source_reference: SecretRef::Keystore {
+                alias: "signer-active".to_owned(),
+            },
+            backup_reference: "actions-artifact:secret-backup-shape-v1".to_owned(),
+            restore_target_label: "local-restore-shape-check".to_owned(),
+            reviewed_by: "operator-a".to_owned(),
+            review_note: "sanitized backup and restore shape review".to_owned(),
+            backup_payload_shape_verified: true,
+            restore_verification_passed: true,
+            references_sanitized: true,
+            reviewed_at_unix_ms: 1_700_000_010_000,
+            review_window_start_unix_ms: 1_700_000_011_000,
+            review_window_expires_unix_ms: 1_700_000_012_000,
+        }
+    }
+
+    fn ready_backup_restore_review() -> SecretBackupRestoreReviewReport {
+        review_local_secret_backup_restore(ready_backup_restore_request())
+            .expect("ready backup restore review succeeds")
+    }
+
+    #[derive(Default)]
+    struct DeniedSecretStateStore {
+        put_attempts: u64,
+    }
+
+    impl StateStore for DeniedSecretStateStore {
+        fn put_checkpoint(&mut self, _checkpoint: StateCheckpoint) -> Result<(), StateStoreError> {
+            self.put_attempts = self.put_attempts.saturating_add(1);
+            Err(StateStoreError::BackendFailed {
+                reason: "permission denied".to_owned(),
+            })
+        }
+
+        fn get_checkpoint(&self, _key: &str) -> Result<Option<StateCheckpoint>, StateStoreError> {
+            Ok(None)
+        }
     }
 
     fn unique_temp_path(label: &str, extension: &str) -> PathBuf {

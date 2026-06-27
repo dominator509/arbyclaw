@@ -57,6 +57,10 @@ TRANSCRIPT_COMPONENTS = [
         "expected": {
             "service-manager-lifecycle-transcript": "validation passed",
             "ready-transcript-status": "ready-for-external-review",
+            "ready-operator-lifecycle-rehearsal-reference-present": "true",
+            "ready-emergency-stop-review-reference-present": "true",
+            "ready-rollback-plan-review-reference-present": "true",
+            "ready-operator-review-window-current": "true",
             "blocked-transcript-status": "blocked",
             "service-manager-action-performed-by-validator": "false",
             "external-submission-performed": "false",

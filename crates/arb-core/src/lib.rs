@@ -210,12 +210,15 @@ pub use config::{
     VenueAllowlistsConfig, CONFIG_SCHEMA_VERSION, LIVE_ACKNOWLEDGEMENT,
 };
 pub use secrets::{
-    append_secret_rotation_plan_audit, persist_secret_rotation_plan_checkpoint,
-    plan_local_secret_rotation, preflight_local_keystore_entry, EnvSecretProvider,
-    LocalKeystoreEntryPreflightReport, LocalKeystoreEntryPreflightRequest, SecretMaterial,
-    SecretProvider, SecretRef, SecretRotationPlanReport, SecretRotationPlanRequest,
-    SecretRotationPlanStatus, SecretStoreError, SECRET_LAST_ROTATION_PLAN_CHECKPOINT_KEY,
-    SECRET_LIFECYCLE_STATE_SUBSYSTEM,
+    append_secret_backup_restore_review_audit, append_secret_rotation_plan_audit,
+    persist_secret_backup_restore_review_checkpoint, persist_secret_rotation_plan_checkpoint,
+    plan_local_secret_rotation, preflight_local_keystore_entry, review_local_secret_backup_restore,
+    EnvSecretProvider, LocalKeystoreEntryPreflightReport, LocalKeystoreEntryPreflightRequest,
+    SecretBackupRestoreReviewReport, SecretBackupRestoreReviewRequest,
+    SecretBackupRestoreReviewStatus, SecretMaterial, SecretProvider, SecretRef,
+    SecretRotationPlanReport, SecretRotationPlanRequest, SecretRotationPlanStatus,
+    SecretStoreError, SECRET_LAST_BACKUP_RESTORE_REVIEW_CHECKPOINT_KEY,
+    SECRET_LAST_ROTATION_PLAN_CHECKPOINT_KEY, SECRET_LIFECYCLE_STATE_SUBSYSTEM,
 };
 
 pub use signer::{
