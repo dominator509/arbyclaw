@@ -29,7 +29,7 @@ Live execution remains blocked until all of the following exist and are validate
 4. Market-data freshness checks and externally verified fee models
 5. Draft-only execution planner
 6. Simulated or paper-trading validation
-7. Paper execution audit integration and scenario validation
+7. Paper execution replay/backtest validation, direct audit integration, and external sandbox/live calibration evidence
 8. Constrained signer boundary
 9. Deterministic opportunity discovery and policy-preflight execution planning
 10. Execution adapters with durable audit/state preconditions
@@ -52,7 +52,7 @@ The policy engine is deny-by-default and must be called by every future executio
 
 ## Phase 4 Audit Boundary
 
-The audit subsystem provides typed redacted events, secret-like metadata rejection, append-only JSONL records, and a local hash chain. This improves accountability but is not yet sufficient for live funds. Current workspace Rust validation exists for the modeled boundary, while crash recovery testing, concurrent append testing, filesystem permission hardening, production SQLite WAL durability validation, retention policy, and execution-adapter integration remain required before production use.
+The audit subsystem provides typed redacted events, secret-like metadata rejection, append-only JSONL records, and a local hash chain. This improves accountability but is not yet sufficient for live funds. Current workspace Rust validation exists for the modeled boundary, the SQLite WAL state store has local integrity/checkpoint/reopen/backup-restore/multi-handle durability validation, and Phase 26 adds local audit append locking, `sync_all`, truncated replay rejection, tamper rejection, concurrent append replay, invalid-filesystem failure checks, disk-full error classification, simulated disk-full fail-closed state validation, side-effect-free retention/rotation planning, and side-effect-free stale-lock restart recheck planning. Deployment-host audit validation, physical disk-full behavior, retention/rotation execution policy, service-manager restart execution behavior, external production-host SQLite validation, and full execution-adapter integration remain required before production use.
 
 
 ## Phase 5 Market Data and Fee Boundary
@@ -62,7 +62,7 @@ The market-data and fee subsystems provide normalized read-only models and provi
 
 ## Phase 6 Paper Connector Boundary
 
-The paper connector subsystem provides deterministic in-memory market data, static paper fee schedules, policy-gated paper execution reports, and local report checkpoint helpers only. It does not call live venues, connect to Web3 RPCs, load secrets, sign transactions, withdraw funds, or mutate real balances. Paper execution is not proof of production profitability. Paper balance ledgering, realistic fill/slippage/latency modeling, audit/runtime lifecycle integration, and backtesting scenario validation remain required before strategy decisions may be trusted.
+The paper connector subsystem provides deterministic in-memory market data, static paper fee schedules, policy-gated paper execution reports, local report checkpoint helpers, local simulated balance ledgering, local realistic fill modeling, local venue matching profiles, adverse-selection modeling, reference-only calibration records, paper ledger replay validation, local paper backtest execution, and local append-only audit records for paper reports plus reserve/settlement ledger mutations only. It can consume caller-supplied order-book depth, model partial and unfilled outcomes, apply latency and queue-position assumptions, release unfilled reserved notional through the paper ledger, and reopen the local audit journal for hash-chain replay checks. It does not call live venues, connect to Web3 RPCs, load secrets, sign transactions, withdraw funds, or mutate real balances. Paper execution is not proof of production profitability. External sandbox/live calibration evidence, production-host runtime validation, and deployment-host audit validation remain required before strategy decisions may be trusted beyond local paper fixtures.
 
 ## Phase 7 CEX Connector Framework Boundary
 
@@ -80,11 +80,11 @@ The opportunity engine defines deterministic discovery and ranking models only. 
 
 ## Phase 10 Execution Planner Boundary
 
-The execution planner defines draft-only planning models. It converts validated opportunity candidates into per-leg `ExecutionIntent` records, evaluates each draft intent through the policy engine, captures redacted policy outcomes, models sequencing plus failure boundaries, and can checkpoint draft plans to local SQLite WAL state. It does not submit to execution adapters, place orders, sign transactions, broadcast transactions, withdraw funds, bridge assets, call exchange APIs, call DEX/router/RPC APIs, or mutate balances. Live scope is rejected by the planner. Durable audit/runtime lifecycle integration, adapter handoff, partial-fill/cancellation handling, and runtime orchestration remain required before any plan can be used beyond draft review.
+The execution planner defines draft-only planning models. It converts validated opportunity candidates into per-leg `ExecutionIntent` records, evaluates each draft intent through the policy engine, captures redacted policy outcomes, models sequencing plus failure boundaries, and can checkpoint draft plans to local SQLite WAL state. It does not submit to execution adapters, place orders, sign transactions, broadcast transactions, withdraw funds, bridge assets, call exchange APIs, call DEX/router/RPC APIs, or mutate balances. Live scope is rejected by the planner. Local runtime lifecycle wiring can now audit and checkpoint the plan before deterministic adapter-boundary evaluation, and Phase 23 direct paper reports can model local partial fills. Production runtime validation, planner-integrated partial-fill/cancellation handling, and real adapter orchestration remain required before any plan can be used beyond local deterministic lifecycle review.
 
 ## Phase 11 Execution Adapter Framework Boundary
 
-The execution-adapter framework defines deterministic adapter-boundary records only. It consumes `ExecutionPlanDraft` records, revalidates each intent through the policy engine, and produces attempt, fill, and reconciliation records without external submission. It does not call exchange APIs, call DEX/router/RPC APIs, sign transactions, broadcast transactions, withdraw funds, bridge assets, mutate real balances, or load secrets. Live scope and external adapter submission are explicitly unavailable in Phase 11. Durable audit/state integration, paper balance ledgering, sandbox adapters, exchange-specific live adapters, signer/custody integration, kill-switch enforcement, and duplicate-submission prevention remain required before any real execution use.
+The execution-adapter framework defines deterministic adapter-boundary records only. It consumes `ExecutionPlanDraft` records, revalidates each intent through the policy engine, and produces attempt, fill, and reconciliation records without external submission. It does not call exchange APIs, call DEX/router/RPC APIs, sign transactions, broadcast transactions, withdraw funds, bridge assets, mutate real balances, or load secrets. Live scope and external adapter submission are explicitly unavailable in Phase 11. Durable audit/state integration, sandbox adapters, exchange-specific live adapters, signer/custody integration, kill-switch enforcement, and duplicate-submission prevention remain required before any real execution use.
 
 
 ## Phase 12 Communications and CLI Boundary
@@ -103,11 +103,11 @@ The observability/runbook subsystem provides deterministic local health, structu
 
 ## Phase 15 Testing, Fuzzing, and Backtesting Boundary
 
-The testing/fuzzing/backtesting subsystem provides deterministic validation planning models only. It does not invoke external fuzzers, run live-network tests, download live market data, load credentials, submit orders or swaps, sign transactions, broadcast transactions, withdraw funds, bridge funds, or call exchanges/RPC providers. Credential-bearing fixtures are rejected, and secret-like operator labels are redacted in local validation records. Property-testing dependencies, fuzzing engine setup, curated corpus review, deterministic replay validation, backtest correctness checks, load tests, and penetration tests remain required before production validation claims.
+The testing/fuzzing/backtesting subsystem provides deterministic validation planning models, and Phase 24 adds local paper backtest execution over caller-supplied fixtures. It does not invoke external fuzzers, run live-network tests, download live market data, load credentials, submit orders or swaps, sign transactions, broadcast transactions, withdraw funds, bridge funds, or call exchanges/RPC providers. Credential-bearing fixtures are rejected, and secret-like operator labels are redacted in local validation records. Property-testing dependencies, fuzzing engine setup, broader curated corpus review, CI-scale replay validation, production backtest correctness checks, load tests, and penetration tests remain required before production validation claims.
 
 ## Phase 16 Packaging and Deployment Boundary
 
-The packaging/deployment boundary provides deterministic plan records and example deployment templates only. It must not be treated as a completed release process. The boundary rejects public network exposure, live trading enablement, embedded secret material, build claims, deployment claims, and production deployment claims. Container recipes, systemd units, ARM notes, and deployment notes require external validation before use. Do not place secrets in container build contexts, service units, environment files, Markdown, logs, shell history, or release artifacts.
+The packaging/deployment boundary provides deterministic plan records and example deployment templates only. It must not be treated as a completed release process. The boundary rejects public network exposure, live trading enablement, embedded secret material, build claims, deployment claims, and production deployment claims. `scripts/validate_container_example.py` may build and scan the example image locally when Docker is available, and `scripts/validate_systemd_example.py` may statically check the committed example systemd unit plus run `systemd-analyze verify` against a temporary fake root without installing, enabling, reloading, or starting services. Production container images, deployment-host systemd units, ARM notes, and deployment notes require external validation before use. Do not place secrets in container build contexts, service units, environment files, Markdown, logs, shell history, or release artifacts.
 
 
 
@@ -118,3 +118,35 @@ The external hardening boundary provides local evidence plans and review records
 ## Phase 18 Agentic Handoff Boundary
 
 The agentic handoff package is documentation and deterministic local model state only. It must not contain credentials, secret-bearing evidence, production approvals, live-funds approvals, public-exposure approvals, or instructions to bypass policy. Future-agent prompts must preserve governance reconciliation, unresolved gaps, external validation blockers, and live-trading denials. External coding agents, CI systems, cloud services, exchanges, RPC providers, and messaging systems are not invoked by Phase 18.
+
+## Phase 19 Runtime Lifecycle Boundary
+
+The runtime lifecycle boundary is local and deterministic only. It appends redacted audit events, persists the execution-plan draft before adapter evaluation, runs the deterministic execution-adapter boundary, persists the adapter run, appends adapter-completion audit evidence, validates concurrent local lifecycle access over shared audit and SQLite WAL paths, fails closed before adapter evaluation when simulated state permission persistence fails, can persist a local graceful-shutdown audit/state checkpoint that reopens through SQLite WAL, can validate local backup-restore copies of non-secret audit/SQLite artifacts without embedding paths or contents in the report, and can produce local restart recovery summaries from audit replay plus SQLite checkpoint reopen checks without resuming services. Restart recovery classifies locally coherent state as ready-for-local-review or needs-operator-review, surfaces those labels through CLI status for local operator review, and fails closed when required local lifecycle checkpoints are missing. It rejects live-scope lifecycle requests before audit/state mutation and preserves `external_submission_performed = false` and `live_execution_performed = false`. It does not call exchanges, call RPC providers, submit orders, sign transactions, broadcast transactions, withdraw funds, bridge funds, load secrets, stop or start services, expose public interfaces, or approve production readiness.
+
+## Phase 20 SQLite WAL Durability Boundary
+
+The SQLite WAL durability boundary is local and non-secret only. It validates WAL mode, synchronous FULL, SQLite integrity check, WAL checkpoint truncate, primary reopen, checkpointed backup/restore, and multi-handle checkpoint visibility. It records outcome booleans rather than database contents or filesystem paths, and preserves `live_execution_performed = false`, `external_network_used = false`, and `secret_material_recorded = false`. It does not validate production-host crash/restart behavior, disk-full handling, service deployment, live trading, signing, broadcasts, wallet custody, or production readiness.
+
+## Phase 21 Paper Balance Ledger Boundary
+
+The paper balance ledger boundary is local and simulated only. It tracks caller-supplied paper balances, reserves quote notional for paper intents, settles filled paper reports with net paper P&L, and fails closed on insufficient balances or missing reservations. It does not read real balances, mutate real accounts, call exchanges or RPC providers, sign transactions, broadcast transactions, withdraw funds, bridge funds, load secrets, or approve production readiness.
+
+## Phase 22 Crash/Restart Durability Boundary
+
+The crash/restart durability boundary is local and non-secret only. It validates that committed SQLite WAL checkpoints survive abrupt child-process termination and can be reopened with integrity checks by a fresh parent process. It does not simulate power loss, disk-full conditions, deployment service managers, public exposure, live trading, real exchange/RPC calls, signing, broadcasts, withdrawals, bridges, wallet custody, or production readiness.
+
+## Phase 23 Realistic Paper Fill Boundary
+
+The realistic paper fill boundary is local-only. It uses supplied normalized order-book snapshots to model full, partial, or unfilled paper outcomes with deterministic depth consumption, latency, queue-position haircuts, average price, slippage, and ledger settlement. It does not call exchanges, RPC providers, routers, wallets, signers, or external adapters, and it does not approve live execution or production readiness.
+
+## Phase 24 Paper Replay, Calibration, Backtest, and Runtime Validation Boundary
+
+The Phase 24 paper validation boundary is local-only. It models venue tick/step/min-notional behavior, adverse-selection penalties, reference-only calibration records, paper ledger replay, local historical-fixture backtests, and runtime validation records while preserving `production_ready = false`. It does not call sandbox or live exchanges, use live networks, download data, embed artifact contents, store secrets, mutate real balances, submit external orders, sign transactions, broadcast transactions, withdraw funds, bridge funds, or approve production readiness.
+
+## Phase 25 Paper Audit Journal Integration Boundary
+
+The Phase 25 paper audit boundary is local-only. It appends sanitized paper execution report records and paper reserve/settlement ledger mutation records to the existing append-only audit journal and verifies local replay by reopening the journal. It does not call exchanges, use live networks, load credentials, store secrets, mutate real balances, submit external orders, sign transactions, broadcast transactions, withdraw funds, bridge funds, or approve production readiness. Deployment-host audit validation, physical disk-full behavior, retention, rotation, and service-manager restart evidence remain required.
+
+## Phase 26 Audit Crash, Concurrency, and Filesystem Validation Boundary
+
+The Phase 26 audit durability boundary is local and non-secret only. It serializes local audit appends through a lock file, flushes and syncs appended JSONL records, validates append/reopen replay, rejects crash-like truncated records, rejects tampered hash chains, verifies concurrent local append replay, fails closed when the journal path is an invalid filesystem shape, classifies likely disk-full append errors, validates simulated disk-full append failure without advancing in-memory or replayed journal state, plans retention/rotation without deleting or mutating logs, and plans stale-lock restart rechecks without deleting lock files, inspecting live processes, or starting services. It does not call networks, submit orders, sign transactions, broadcast transactions, store secrets, simulate every production filesystem, prove physical disk-full behavior, execute retention/rotation, prove service-manager restart execution after supervisor restarts, or approve production readiness.

@@ -21,7 +21,7 @@ Authoritative files reconciled for this phase:
 
 ## Scope
 
-Create dashboard state, rendering, and safety boundaries without adding an actual web server or remote operator surface.
+Create dashboard state, rendering, and safety boundaries without adding a persistent production web server or remote operator surface.
 
 In scope:
 
@@ -31,6 +31,9 @@ In scope:
 - Dashboard panel, item, severity, and snapshot models.
 - Deterministic dashboard renderer trait and implementation.
 - Local-only render records.
+- Local audit-journal and SQLite WAL checkpoint helpers for sanitized render outcomes.
+- Bounded local one-shot loopback hosted-request validation that serves sanitized rendered-dashboard body content and records byte/digest metadata.
+- Local hosted-session validation summary that records accepted loopback traffic plus unauthenticated, CSRF-rejected, and rate-limited request controls without a persistent server.
 - Secret-like dashboard text redaction.
 - Live-control denial flags.
 - Structure validator update.
@@ -40,7 +43,7 @@ Out of scope:
 
 - Live trading.
 - Public web exposure.
-- Real HTTP server startup.
+- Persistent or production HTTP server startup.
 - WebSocket, SSE, or polling endpoints.
 - Authentication, sessions, cookies, OAuth, SSO, or platform identity integrations.
 - Remote command execution.
@@ -131,6 +134,7 @@ Remain draft-only and external-submission-disabled. Phase 13 dashboard models ca
 - Dashboard rendering never starts an HTTP server.
 - Dashboard rendering never exposes a public network binding.
 - Dashboard rendering never enables live controls.
+- Dashboard render outcomes can be locally journaled and checkpointed, then recovered after audit/SQLite reopen.
 - Secret-like dashboard text is redacted before render records are produced.
 - Documentation clearly states that public web exposure, real server startup, authentication/session handling, and live execution controls remain unavailable.
 
@@ -178,4 +182,4 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 ## Completion Notes
 
-Phase 13 is complete for ChatGPT Project Mode framework scope only. Real dashboard hosting, authentication/session design, CSRF protection, durable dashboard state, runtime UX validation, public-exposure validation, and penetration testing remain future work.
+Phase 13 is complete for ChatGPT Project Mode framework scope only, including local sanitized dashboard render audit journal records, local hosted-dashboard security review records for CSRF/header/rate-limit controls, local hosted-request preflight records for loopback/auth/CSRF/header/rate-limit accounting, local one-shot authenticated loopback hosted-request validation that serves sanitized rendered-dashboard body content with byte/digest metadata, local hosted-session validation summaries for accepted/unauthenticated/CSRF/rate-limit request accounting, a repeatable `validate-dashboard-runtime` CLI audit/SQLite reopen gate, deployment-host report wrapper composition, and SQLite WAL checkpoint helpers. Real dashboard hosting, production authentication/session implementation, authorization implementation, CSRF token serving/enforcement from a live server, secure-header serving from a live server, runtime rate limiting beyond the bounded local probe, runtime UX validation, public-exposure validation, command-injection testing, and penetration testing remain future work.

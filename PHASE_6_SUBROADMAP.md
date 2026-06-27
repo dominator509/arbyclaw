@@ -89,7 +89,7 @@ Future external validation:
 - policy-denial path tests
 - paper execution report consistency tests
 - opportunity-engine integration tests
-- audit integration tests once execution paths begin writing journals
+- audit integration tests for paper report and ledger mutation journal writes exist in Phase 25; production audit durability tests remain future work
 
 ## Rollback Strategy
 
@@ -123,15 +123,15 @@ No secrets, external accounts, runtime state, wallets, infrastructure, or networ
 
 - Rust validation remains deferred.
 - Paper connectors are not production execution connectors.
-- Paper execution does not model full order-book slippage, partial fills, latency, or real settlement.
-- Audit/state integration remains deferred.
+- Phase 23 models local supplied-depth slippage, partial fills, latency, queue position, and unfilled notional release. Phase 24 adds local venue matching profiles, adverse-selection modeling, reference-only calibration records, paper replay validation, and local historical-fixture backtest execution; external sandbox/live calibration evidence and real settlement remain deferred.
+- Production audit durability and broader audit/state lifecycle validation remain deferred.
 - Live connectors remain unimplemented.
 
 ## Expected Future Continuation Tasks
 
 - Add opportunity detection using paper market data.
-- Add paper balance ledger and fill simulation.
-- Add audit journaling for every paper execution event.
+- Paper balance ledgering was added in Phase 21 for local simulated balances, quote-notional reservation, deterministic settlement, insufficient-balance denial, missing-reservation denial, and SQLite checkpoint persistence. Phase 23 added local supplied-depth fill simulation with partial fills and latency, and Phase 24 added local venue realism, replay validation, and local historical-fixture scenario execution. Future work still needs external sandbox/live calibration evidence and production-host validation.
+- Expand audit journaling only where future paper lifecycle records add new event types.
 - Add deterministic scenario fixtures.
 - Add CEX sandbox connectors after validation.
 - Add DEX quote-only connectors before signer work.

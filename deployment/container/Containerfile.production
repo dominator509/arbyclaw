@@ -1,0 +1,13 @@
+# Production-intent container recipe for local/CI validation only.
+# Building this image is not a deployment, service install, live-funds approval,
+# or production-readiness claim.
+
+FROM rust:1.78-slim AS builder
+WORKDIR /workspace
+COPY . .
+RUN cargo build --release --locked
+
+FROM gcr.io/distroless/cc-debian12:nonroot AS runtime
+COPY --from=builder /workspace/target/release/arb-agent /usr/local/bin/arb-agent
+ENTRYPOINT ["/usr/local/bin/arb-agent"]
+CMD ["--help"]

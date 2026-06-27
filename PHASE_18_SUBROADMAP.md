@@ -68,6 +68,7 @@ Phase 18 is documentation- and handoff-focused only. It must preserve live-funds
 - `handoff/EXTERNAL_VALIDATION_CHECKLIST.md` exists.
 - Handoff package records explicitly preserve unresolved gaps and live-funds blockers.
 - Handoff package records reject secret-bearing artifacts, live-funds approval, public-exposure approval, external execution claims, and production-readiness claims.
+- Local handoff review records can be appended to the audit journal, persisted to SQLite WAL-backed state, reopened, and verified with `arb-agent validate-agentic-handoff-audit --workspace <fresh-dir>` while external-agent execution and production-readiness claims remain denied.
 - Structure validator passes.
 - Cargo/Rust validation is attempted only if toolchain exists and otherwise tracked as deferred.
 
@@ -87,6 +88,7 @@ cargo fmt --check
 cargo check --workspace
 cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
+cargo run -p arb-agent -- validate-agentic-handoff-audit --workspace <fresh-dir>
 cargo build --release --locked
 cargo audit or approved dependency audit equivalent
 SBOM generation and review
@@ -121,6 +123,6 @@ production readiness review
 
 ## Completion State
 
-Completed for ChatGPT Project Mode after Phase 18 handoff-package boundary patch and available validation.
+Completed for ChatGPT Project Mode after Phase 18 handoff-package boundary patch, local audit/SQLite handoff-review gate, local handoff-candidate aggregate gate, and available validation.
 
-Rust, Cargo, CI, external agent execution, container, systemd, ARM, SAST, dependency audit, SBOM, image scan, cloud/staging deployment, load, penetration, rollback, incident-response, live exchange/RPC, and production readiness validation remain external unless explicitly run in a capable environment.
+External agent execution, human production review, cloud/staging deployment, load, penetration, rollback, incident-response, live exchange/RPC, and production readiness validation remain external unless explicitly run in a capable environment.

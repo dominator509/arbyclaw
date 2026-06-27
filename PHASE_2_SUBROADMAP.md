@@ -79,6 +79,11 @@ Phase 2 — Config, Secrets, and Mode Gates
 9. Update architecture, roadmap, and gap tracker.
 10. Run available validation and record unavailable Rust validation honestly.
 
+## Later Local Boundary Additions
+
+- Local authenticated keystore payload validation, metadata-only keystore preflight, non-mutating secret rotation planning, and `arb-agent validate-secret-boundary-audit --workspace <fresh-dir>` now exist as local-only safety gates.
+- The secret-boundary audit runner records ready and rejected rotation plans, reopens the append-only audit journal, recovers the SQLite WAL rotation-plan checkpoint, and proves invalid material-loading audit records plus state-write failures fail closed without loading material, decrypting plaintext, writing keystore entries, revoking external credentials, or claiming production readiness.
+
 ## Validation Sequence
 
 ### Completed In ChatGPT Project Mode

@@ -1,0 +1,26 @@
+# Operator-surface aggregate gate (2026-06-13)
+
+- Added `scripts/validate_operator_surface_gate.py` as a bounded local aggregate validator for the operator-facing runtime stack.
+- The gate emits schema `arbyclaw.operator_surface_aggregate_gate.v1` and composes 7 local-only components:
+  - `cargo run -p arb-agent -- validate-communications-runtime --workspace <fresh-dir>`
+  - `cargo run -p arb-agent -- validate-dashboard-runtime --workspace <fresh-dir>`
+  - `cargo run -p arb-agent -- validate-observability-runtime --workspace <fresh-dir>`
+  - `python3 scripts/validate_deployment_host_runtime.py --run-communications-runtime --communications-workspace <fresh-dir> --json`
+  - `python3 scripts/validate_deployment_host_runtime.py --run-dashboard-runtime --dashboard-workspace <fresh-dir> --json`
+  - `python3 scripts/validate_deployment_host_runtime.py --run-observability-runtime --observability-workspace <fresh-dir> --json`
+  - `cargo run -p arb-agent -- validate-runtime-smoke --config config.example.toml --workspace <fresh-dir> --iterations 1`
+- It verifies communications/dashboard/observability CLI invariants, deployment-host wrapper report invariants, and runtime-smoke recovery/integration fields while asserting all aggregate unsafe fields are false (`outbound_network_used`, `public_network_exposed`, `service_actions_performed`, `external_submission_performed`, `signing_or_broadcast_performed`, `live_execution_performed`, `production_ready`).
+- Wired CI to run `python3 scripts/validate_operator_surface_gate.py` and removed the now-redundant standalone CI steps for local communications/dashboard/observability runtime CLIs, their deployment-host wrapper validations, and the separate standalone runtime-smoke load step.
+- Updated `scripts/validate_structure.py`, `STRUCTURE_MANIFEST.md`, `ROADMAP.md`, `HANDOFF_CONTEXT.md`, `ARCHITECTURE.md`, and `PRODUCTION_GAP_TRACKER.md` so the repo now accurately describes the local operator-surface aggregate gate.
+- Validation after the change passed:
+  - `rtk python3 -m py_compile scripts/validate_operator_surface_gate.py`
+  - `rtk python3 scripts/validate_operator_surface_gate.py`
+  - `rtk python3 scripts/generate_structure_manifest.py`
+  - `rtk python3 scripts/validate_structure.py`
+  - `rtk python3 scripts/validate_execution_path_gate.py`
+  - `rtk python3 scripts/validate_agentic_handoff_candidate_gate.py --json`
+  - `rtk cargo fmt --check`
+  - `rtk cargo check --workspace`
+  - `rtk cargo test --workspace` (495 passed)
+  - `rtk cargo clippy --workspace --all-targets -- -D warnings`
+- This strengthens the local proof surface for GAP-0060, GAP-0062, and GAP-0064, but real platform auth/delivery, daemon-hosted dashboard/observability runtime, and deployment-host restart/AppSec review remain external blockers.

@@ -6,7 +6,7 @@ This runbook is a checklist for external operators or future coding agents. It i
 
 1. Run all Rust validation commands in a clean checkout.
 2. Build release artifacts with locked dependencies.
-3. Run dependency audit and SBOM review.
+3. Run dependency audit, dependency license policy review, and SBOM review.
 4. Build and scan any container image in an approved environment.
 5. Validate systemd/service hardening on a Linux host.
 6. Validate ARM target build/runtime behavior where applicable.
@@ -117,7 +117,7 @@ When evidence is rejected or marked incomplete, record only non-secret reason ca
 
 1. Scope mismatch: repository, branch, commit, workflow run, artifact, or reviewer scope does not match the release under review.
 2. Missing or expired evidence: expected job result, artifact, retention record, SBOM review, code-scanning setting review, or sign-off is unavailable.
-3. Failed gate: CI job, dependency audit, SBOM generation, SAST, image scan, secret scan, or structure validation failed.
+3. Failed gate: CI job, dependency audit, dependency license policy validation, SBOM generation, SAST, image scan, secret scan, or structure validation failed.
 4. Secret-handling concern: evidence may contain credentials, private URLs, wallet material, raw sensitive logs, screenshots, or unredacted findings.
 5. Unresolved blocker: open gaps still require production image validation, systemd or ARM validation, staging, load, penetration, rollback, incident, custody, compliance, or production-readiness review.
 6. Review-process issue: reviewer identity, review date, retention decision, refresh reason, or unresolved-gap list is missing or inconsistent.
@@ -159,16 +159,17 @@ Before retaining CI artifacts outside GitHub Actions:
 
 Retention location classification is routing metadata only. `Actions artifact` means the evidence remains in GitHub Actions short-retention artifacts, `approved external evidence store` means a sanitized external evidence reference exists, `unavailable` means no retained non-secret evidence is currently available, and `deferred` means retention requires later external approval or infrastructure.
 
-## Dependency Audit Review Checklist
+## Dependency Audit And License Review Checklist
 
-Before treating `cargo audit` evidence as release-review input:
+Before treating `cargo audit` and dependency license policy evidence as release-review input:
 
 1. Confirm the dependency audit gate came from the expected repository, branch, workflow run URL, commit, and `rust-validation` job.
 2. Confirm the `cargo audit` CI step completed successfully or record the failed gate as non-secret reference metadata only.
-3. Record only the run URL, job name, gate name, commit hash, reviewer, review date, outcome, and unresolved follow-up gaps in release-review documentation.
-4. Record the dependency-audit review decision as non-secret reference metadata only: `accepted`, `rejected`, `follow-up required`, `deferred`, or `not applicable`.
-5. Do not copy advisory tables, dependency details, vulnerable package lists, CVE text, private registry URLs, internal hostnames, credentials, wallet material, or raw sensitive logs into repository files.
-6. Keep production-readiness, deployment-readiness, and live-funds claims blocked until dependency-audit review is combined with the rest of the external hardening gates.
+3. Confirm the dependency license policy gate completed successfully for the locked Cargo graph or record the failed gate as non-secret reference metadata only.
+4. Record only the run URL, job name, gate name, commit hash, reviewer, review date, outcome, and unresolved follow-up gaps in release-review documentation.
+5. Record the dependency-audit or license-policy review decision as non-secret reference metadata only: `accepted`, `rejected`, `follow-up required`, `deferred`, or `not applicable`.
+6. Do not copy advisory tables, dependency details, package inventories, license texts, CVE text, private registry URLs, internal hostnames, credentials, wallet material, or raw sensitive logs into repository files.
+7. Keep production-readiness, deployment-readiness, and live-funds claims blocked until dependency-audit and license-policy review are combined with the rest of the external hardening gates.
 
 ## SBOM Review Checklist
 

@@ -7,8 +7,10 @@ use std::{
     collections::BTreeMap,
     fmt,
     fs::{self, File, OpenOptions},
-    io::{BufRead, BufReader, Write},
+    io::{BufRead, BufReader, Error as IoError, ErrorKind, Write},
     path::{Path, PathBuf},
+    thread,
+    time::Duration,
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -18,11 +20,27 @@ pub const AUDIT_GENESIS_HASH: &str = "GENESIS";
 /// Current audit journal format version.
 pub const AUDIT_JOURNAL_FORMAT_VERSION: &str = "audit-jsonl-hash-chain-v1";
 
+/// Current local audit durability validation version.
+pub const AUDIT_DURABILITY_VALIDATION_VERSION: &str =
+    "phase-26-audit-crash-concurrency-filesystem-disk-full-stale-lock-v1";
+
+/// Current local deployment disk-full transcript validation version.
+pub const AUDIT_DEPLOYMENT_DISK_FULL_TRANSCRIPT_VERSION: &str =
+    "phase51-audit-deployment-disk-full-transcript-local-v1";
+
+/// Current local deployment retention/rotation transcript validation version.
+pub const AUDIT_DEPLOYMENT_RETENTION_TRANSCRIPT_VERSION: &str =
+    "phase52-audit-deployment-retention-transcript-local-v1";
+
+const AUDIT_LOCK_RETRY_COUNT: usize = 200;
+const AUDIT_LOCK_RETRY_DELAY: Duration = Duration::from_millis(5);
+
 /// Append-only local audit journal with hash-chained JSONL records.
 ///
 /// The journal is intentionally small and local-first for the single-binary
 /// runtime. It is not a replacement for later SQLite WAL storage, external log
-/// shipping, crash testing, filesystem permission hardening, or SIEM ingestion.
+/// shipping, deployment-host durability validation, disk-full validation,
+/// retention/rotation validation, or SIEM ingestion.
 #[derive(Debug)]
 pub struct AppendOnlyAuditJournal {
     path: PathBuf,
@@ -78,10 +96,20 @@ impl AppendOnlyAuditJournal {
 
     /// Append one validated event and return the immutable audit record.
     pub fn append_event(&mut self, event: AuditEvent) -> Result<AuditRecord, AuditError> {
-        event.validate()?;
+        self.append_event_with_fault(event, AuditAppendFault::None)
+    }
 
-        let sequence = self.next_sequence;
-        let previous_hash = self.previous_hash.clone();
+    fn append_event_with_fault(
+        &mut self,
+        event: AuditEvent,
+        fault: AuditAppendFault,
+    ) -> Result<AuditRecord, AuditError> {
+        event.validate()?;
+        let _lock = AuditJournalFileLock::acquire(&self.path)?;
+        let replay = replay_journal(&self.path)?;
+
+        let sequence = replay.next_sequence;
+        let previous_hash = replay.previous_hash;
         let record_hash = compute_record_hash(sequence, &previous_hash, &event)?;
         let record = AuditRecord {
             format_version: AUDIT_JOURNAL_FORMAT_VERSION.to_owned(),
@@ -95,31 +123,1115 @@ impl AppendOnlyAuditJournal {
             reason: source.to_string(),
         })?;
 
+        match fault {
+            AuditAppendFault::None => {}
+            AuditAppendFault::DiskFullBeforeWrite => {
+                return Err(AuditError::DiskFull {
+                    path: self.path.display().to_string(),
+                    reason: "simulated disk-full before audit append write".to_owned(),
+                });
+            }
+            #[cfg(test)]
+            AuditAppendFault::PermissionDeniedBeforeWrite => {
+                return Err(AuditError::Io {
+                    path: self.path.display().to_string(),
+                    reason: "simulated permission-denied before audit append write".to_owned(),
+                });
+            }
+        }
+
         let mut file = OpenOptions::new()
             .create(true)
             .append(true)
             .open(&self.path)
-            .map_err(|source| AuditError::Io {
-                path: self.path.display().to_string(),
-                reason: source.to_string(),
-            })?;
-        writeln!(file, "{line}").map_err(|source| AuditError::Io {
-            path: self.path.display().to_string(),
-            reason: source.to_string(),
-        })?;
-        file.flush().map_err(|source| AuditError::Io {
-            path: self.path.display().to_string(),
-            reason: source.to_string(),
-        })?;
+            .map_err(|source| audit_io_error(&self.path, source))?;
+        writeln!(file, "{line}").map_err(|source| audit_io_error(&self.path, source))?;
+        file.flush()
+            .map_err(|source| audit_io_error(&self.path, source))?;
+        file.sync_all()
+            .map_err(|source| audit_io_error(&self.path, source))?;
 
-        self.next_sequence = self
-            .next_sequence
+        self.next_sequence = sequence
             .checked_add(1)
             .ok_or(AuditError::SequenceOverflow)?;
         self.previous_hash = record.record_hash.clone();
 
         Ok(record)
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AuditAppendFault {
+    None,
+    DiskFullBeforeWrite,
+    #[cfg(test)]
+    PermissionDeniedBeforeWrite,
+}
+
+/// Local audit journal durability validation report.
+///
+/// This is a local filesystem validation harness. It does not prove behavior on
+/// every production filesystem, container runtime, service manager, or remote
+/// storage layer.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct AuditDurabilityValidationReport {
+    /// Validation version.
+    pub validation_version: String,
+    /// Workspace directory used for non-secret test journals.
+    pub workspace_dir: String,
+    /// Whether basic append/reopen replay passed.
+    pub append_replay_validated: bool,
+    /// Whether a crash-like truncated JSONL line was rejected on replay.
+    pub truncated_replay_rejected: bool,
+    /// Whether a tampered record was rejected on replay.
+    pub tamper_replay_rejected: bool,
+    /// Whether concurrent local appenders produced a replayable hash chain.
+    pub concurrent_append_validated: bool,
+    /// Whether an invalid filesystem shape failed closed.
+    pub filesystem_failure_validated: bool,
+    /// Whether simulated disk-full append failure failed closed.
+    pub disk_full_failure_validated: bool,
+    /// Number of records appended by the append/replay probe.
+    pub append_records: usize,
+    /// Number of records appended by the concurrent append probe.
+    pub concurrent_records: usize,
+    /// Whether live network access was used.
+    pub live_network_used: bool,
+    /// Whether external execution was performed.
+    pub external_execution_performed: bool,
+    /// Whether this report approves production use.
+    pub production_ready: bool,
+    /// Remaining blockers in non-secret wording.
+    pub unresolved_blockers: Vec<String>,
+    /// Validation timestamp in Unix milliseconds.
+    pub validated_at_unix_ms: u64,
+}
+
+/// Local validation status for sanitized deployment-host disk-full transcripts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum AuditDeploymentDiskFullTranscriptStatus {
+    /// Transcript has enough non-secret references for external review.
+    ReadyForExternalReview,
+    /// Transcript is missing physical-host evidence or required fail-closed proof.
+    Blocked,
+}
+
+/// Sanitized deployment-host disk-full evidence transcript.
+///
+/// This records only operator-supplied reference presence and outcome flags. It
+/// must not embed host paths, logs, filesystem dumps, secrets, audit payloads,
+/// checkpoint values, or command output.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct AuditDeploymentDiskFullTranscript {
+    /// Stable transcript id.
+    pub transcript_id: String,
+    /// Non-secret deployment-host or runner label.
+    pub host_label: String,
+    /// Whether evidence came from a physical/deployment-like host, not only a local simulation.
+    pub physical_host_evidence: bool,
+    /// Whether audit append failed closed under disk-full conditions.
+    pub audit_append_failed_closed: bool,
+    /// Whether SQLite/state writes failed closed under disk-full conditions.
+    pub state_write_failed_closed: bool,
+    /// Whether the runtime quiesced or degraded without live execution.
+    pub runtime_quiesced_or_degraded: bool,
+    /// Whether audit replay/reopen was validated after freeing capacity.
+    pub audit_replay_after_recovery_validated: bool,
+    /// Whether SQLite reopen/integrity was validated after freeing capacity.
+    pub sqlite_reopen_after_recovery_validated: bool,
+    /// Whether recovery/runbook reference is present.
+    pub recovery_runbook_reference_present: bool,
+    /// Count of non-secret evidence references.
+    pub non_secret_reference_count: u64,
+    /// Whether operator approval/reference is present.
+    pub operator_approved: bool,
+    /// Whether this validator filled a disk. Must be false.
+    pub disk_filled_by_validator: bool,
+    /// Whether this validator mutated production paths. Must be false.
+    pub production_path_mutated_by_validator: bool,
+    /// Whether live execution occurred. Must be false.
+    pub live_execution_performed: bool,
+    /// Whether this transcript attempts to claim production readiness. Must be false.
+    pub production_ready_claimed: bool,
+    /// Validation timestamp in Unix milliseconds.
+    pub validated_at_unix_ms: u64,
+}
+
+/// Non-secret local validation report for deployment-host disk-full evidence.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct AuditDeploymentDiskFullTranscriptReport {
+    /// Validation version.
+    pub validation_version: String,
+    /// Stable transcript id.
+    pub transcript_id: String,
+    /// Non-secret deployment-host or runner label.
+    pub host_label: String,
+    /// Whether physical/deployment-like host evidence is present.
+    pub physical_host_evidence: bool,
+    /// Whether audit append fail-closed evidence is present.
+    pub audit_append_failed_closed: bool,
+    /// Whether state write fail-closed evidence is present.
+    pub state_write_failed_closed: bool,
+    /// Whether runtime quiesce/degrade evidence is present.
+    pub runtime_quiesced_or_degraded: bool,
+    /// Whether audit recovery validation evidence is present.
+    pub audit_replay_after_recovery_validated: bool,
+    /// Whether SQLite recovery validation evidence is present.
+    pub sqlite_reopen_after_recovery_validated: bool,
+    /// Whether recovery/runbook reference is present.
+    pub recovery_runbook_reference_present: bool,
+    /// Count of non-secret references.
+    pub non_secret_reference_count: u64,
+    /// Whether operator approval/reference is present.
+    pub operator_approved: bool,
+    /// Validation status.
+    pub status: AuditDeploymentDiskFullTranscriptStatus,
+    /// Non-secret blocker codes.
+    pub blocker_codes: Vec<String>,
+    /// Whether this validator filled a disk. Always false.
+    pub disk_filled_by_validator: bool,
+    /// Whether this validator mutated production paths. Always false.
+    pub production_path_mutated_by_validator: bool,
+    /// Whether live execution occurred. Always false.
+    pub live_execution_performed: bool,
+    /// Whether this report approves production readiness. Always false.
+    pub production_ready: bool,
+    /// Validation timestamp in Unix milliseconds.
+    pub validated_at_unix_ms: u64,
+}
+
+impl AuditDeploymentDiskFullTranscript {
+    /// Validate sanitized deployment disk-full transcript input.
+    pub fn validate(&self) -> Result<(), AuditError> {
+        if self.transcript_id.trim().is_empty() {
+            return Err(AuditError::ValidationHarnessFailed {
+                reason: "deployment disk-full transcript id is required".to_owned(),
+            });
+        }
+        if self.host_label.trim().is_empty() {
+            return Err(AuditError::ValidationHarnessFailed {
+                reason: "deployment disk-full host label is required".to_owned(),
+            });
+        }
+        if self.validated_at_unix_ms == 0 {
+            return Err(AuditError::ValidationHarnessFailed {
+                reason: "deployment disk-full transcript timestamp must be non-zero".to_owned(),
+            });
+        }
+        if self.disk_filled_by_validator
+            || self.production_path_mutated_by_validator
+            || self.live_execution_performed
+        {
+            return Err(AuditError::ValidationHarnessFailed {
+                reason: "deployment disk-full transcript validator must not fill disks, mutate production paths, or perform live execution".to_owned(),
+            });
+        }
+        if self.production_ready_claimed {
+            return Err(AuditError::ValidationHarnessFailed {
+                reason: "deployment disk-full transcript must not claim production readiness"
+                    .to_owned(),
+            });
+        }
+        Ok(())
+    }
+}
+
+impl AuditDeploymentDiskFullTranscriptReport {
+    /// Validate deployment disk-full transcript report invariants.
+    pub fn validate(&self) -> Result<(), AuditError> {
+        if self.validation_version != AUDIT_DEPLOYMENT_DISK_FULL_TRANSCRIPT_VERSION {
+            return Err(AuditError::ValidationHarnessFailed {
+                reason: format!(
+                    "validation_version must be {AUDIT_DEPLOYMENT_DISK_FULL_TRANSCRIPT_VERSION}"
+                ),
+            });
+        }
+        if self.transcript_id.trim().is_empty() || self.host_label.trim().is_empty() {
+            return Err(AuditError::ValidationHarnessFailed {
+                reason: "deployment disk-full report requires id and host label".to_owned(),
+            });
+        }
+        if self.disk_filled_by_validator
+            || self.production_path_mutated_by_validator
+            || self.live_execution_performed
+            || self.production_ready
+        {
+            return Err(AuditError::ValidationHarnessFailed {
+                reason: "deployment disk-full report must not contain validator side effects or production readiness".to_owned(),
+            });
+        }
+        if self.status == AuditDeploymentDiskFullTranscriptStatus::ReadyForExternalReview
+            && !self.blocker_codes.is_empty()
+        {
+            return Err(AuditError::ValidationHarnessFailed {
+                reason: "ready deployment disk-full report must not contain blockers".to_owned(),
+            });
+        }
+        if self.status == AuditDeploymentDiskFullTranscriptStatus::Blocked
+            && self.blocker_codes.is_empty()
+        {
+            return Err(AuditError::ValidationHarnessFailed {
+                reason: "blocked deployment disk-full report requires blocker codes".to_owned(),
+            });
+        }
+        Ok(())
+    }
+}
+
+/// Local validation status for sanitized deployment-host retention transcripts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum AuditDeploymentRetentionTranscriptStatus {
+    /// Transcript has enough non-secret references for external review.
+    ReadyForExternalReview,
+    /// Transcript is missing deployment-host retention or recovery proof.
+    Blocked,
+}
+
+/// Sanitized deployment-host audit retention/rotation evidence transcript.
+///
+/// This records only operator-supplied reference presence and outcome flags. It
+/// must not embed host paths, logs, filesystem dumps, secrets, audit payloads,
+/// checkpoint values, or command output.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct AuditDeploymentRetentionTranscript {
+    /// Stable transcript id.
+    pub transcript_id: String,
+    /// Non-secret deployment-host or runner label.
+    pub host_label: String,
+    /// Whether evidence came from a physical/deployment-like host.
+    pub physical_host_evidence: bool,
+    /// Whether active audit journal rotation was observed.
+    pub active_rotation_observed: bool,
+    /// Whether retained archive evidence was observed.
+    pub archive_retention_observed: bool,
+    /// Whether expired archive deletion evidence was observed.
+    pub expired_archive_deletion_observed: bool,
+    /// Whether appending after rotation was validated.
+    pub post_rotation_append_validated: bool,
+    /// Whether audit replay after rotation was validated.
+    pub audit_replay_after_rotation_validated: bool,
+    /// Whether a retention policy reference is present.
+    pub retention_policy_reference_present: bool,
+    /// Whether a recovery/runbook reference is present.
+    pub recovery_runbook_reference_present: bool,
+    /// Count of non-secret evidence references.
+    pub non_secret_reference_count: u64,
+    /// Whether operator approval/reference is present.
+    pub operator_approved: bool,
+    /// Whether this validator performed rotation. Must be false.
+    pub rotation_performed_by_validator: bool,
+    /// Whether this validator mutated production paths. Must be false.
+    pub production_path_mutated_by_validator: bool,
+    /// Whether live execution occurred. Must be false.
+    pub live_execution_performed: bool,
+    /// Whether this transcript attempts to claim production readiness. Must be false.
+    pub production_ready_claimed: bool,
+    /// Validation timestamp in Unix milliseconds.
+    pub validated_at_unix_ms: u64,
+}
+
+/// Non-secret local validation report for deployment-host retention evidence.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct AuditDeploymentRetentionTranscriptReport {
+    /// Validation version.
+    pub validation_version: String,
+    /// Stable transcript id.
+    pub transcript_id: String,
+    /// Non-secret deployment-host or runner label.
+    pub host_label: String,
+    /// Whether physical/deployment-like host evidence is present.
+    pub physical_host_evidence: bool,
+    /// Whether active rotation evidence is present.
+    pub active_rotation_observed: bool,
+    /// Whether archive retention evidence is present.
+    pub archive_retention_observed: bool,
+    /// Whether expired archive deletion evidence is present.
+    pub expired_archive_deletion_observed: bool,
+    /// Whether post-rotation append validation evidence is present.
+    pub post_rotation_append_validated: bool,
+    /// Whether audit replay after rotation evidence is present.
+    pub audit_replay_after_rotation_validated: bool,
+    /// Whether retention policy reference is present.
+    pub retention_policy_reference_present: bool,
+    /// Whether recovery/runbook reference is present.
+    pub recovery_runbook_reference_present: bool,
+    /// Count of non-secret references.
+    pub non_secret_reference_count: u64,
+    /// Whether operator approval/reference is present.
+    pub operator_approved: bool,
+    /// Validation status.
+    pub status: AuditDeploymentRetentionTranscriptStatus,
+    /// Non-secret blocker codes.
+    pub blocker_codes: Vec<String>,
+    /// Whether this validator performed rotation. Always false.
+    pub rotation_performed_by_validator: bool,
+    /// Whether this validator mutated production paths. Always false.
+    pub production_path_mutated_by_validator: bool,
+    /// Whether live execution occurred. Always false.
+    pub live_execution_performed: bool,
+    /// Whether this report approves production readiness. Always false.
+    pub production_ready: bool,
+    /// Validation timestamp in Unix milliseconds.
+    pub validated_at_unix_ms: u64,
+}
+
+impl AuditDeploymentRetentionTranscript {
+    /// Validate sanitized deployment retention transcript input.
+    pub fn validate(&self) -> Result<(), AuditError> {
+        if self.transcript_id.trim().is_empty() {
+            return Err(AuditError::ValidationHarnessFailed {
+                reason: "deployment retention transcript id is required".to_owned(),
+            });
+        }
+        if self.host_label.trim().is_empty() {
+            return Err(AuditError::ValidationHarnessFailed {
+                reason: "deployment retention host label is required".to_owned(),
+            });
+        }
+        if self.validated_at_unix_ms == 0 {
+            return Err(AuditError::ValidationHarnessFailed {
+                reason: "deployment retention transcript timestamp must be non-zero".to_owned(),
+            });
+        }
+        if self.rotation_performed_by_validator
+            || self.production_path_mutated_by_validator
+            || self.live_execution_performed
+        {
+            return Err(AuditError::ValidationHarnessFailed {
+                reason: "deployment retention transcript validator must not rotate logs, mutate production paths, or perform live execution".to_owned(),
+            });
+        }
+        if self.production_ready_claimed {
+            return Err(AuditError::ValidationHarnessFailed {
+                reason: "deployment retention transcript must not claim production readiness"
+                    .to_owned(),
+            });
+        }
+        Ok(())
+    }
+}
+
+impl AuditDeploymentRetentionTranscriptReport {
+    /// Validate deployment retention transcript report invariants.
+    pub fn validate(&self) -> Result<(), AuditError> {
+        if self.validation_version != AUDIT_DEPLOYMENT_RETENTION_TRANSCRIPT_VERSION {
+            return Err(AuditError::ValidationHarnessFailed {
+                reason: format!(
+                    "validation_version must be {AUDIT_DEPLOYMENT_RETENTION_TRANSCRIPT_VERSION}"
+                ),
+            });
+        }
+        if self.transcript_id.trim().is_empty() || self.host_label.trim().is_empty() {
+            return Err(AuditError::ValidationHarnessFailed {
+                reason: "deployment retention report requires id and host label".to_owned(),
+            });
+        }
+        if self.rotation_performed_by_validator
+            || self.production_path_mutated_by_validator
+            || self.live_execution_performed
+            || self.production_ready
+        {
+            return Err(AuditError::ValidationHarnessFailed {
+                reason: "deployment retention report must not contain validator side effects or production readiness".to_owned(),
+            });
+        }
+        if self.status == AuditDeploymentRetentionTranscriptStatus::ReadyForExternalReview
+            && !self.blocker_codes.is_empty()
+        {
+            return Err(AuditError::ValidationHarnessFailed {
+                reason: "ready deployment retention report must not contain blockers".to_owned(),
+            });
+        }
+        if self.status == AuditDeploymentRetentionTranscriptStatus::Blocked
+            && self.blocker_codes.is_empty()
+        {
+            return Err(AuditError::ValidationHarnessFailed {
+                reason: "blocked deployment retention report requires blocker codes".to_owned(),
+            });
+        }
+        Ok(())
+    }
+}
+
+/// Local audit retention and rotation policy.
+///
+/// This model plans retention decisions only. It never deletes files, renames
+/// files, compresses archives, or starts a background rotation task.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct AuditRetentionPolicy {
+    /// Maximum active journal size before a rotation should be requested.
+    pub max_active_bytes: u64,
+    /// Maximum archived journals to retain after age filtering.
+    pub max_archived_files: usize,
+    /// Maximum archive age in milliseconds.
+    pub retention_window_ms: u64,
+}
+
+/// Metadata for one local audit journal file supplied to the retention model.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct AuditJournalFileMetadata {
+    /// Local path or sanitized file label.
+    pub path: String,
+    /// File size in bytes.
+    pub size_bytes: u64,
+    /// Last modified timestamp in Unix milliseconds.
+    pub modified_at_unix_ms: u64,
+    /// Whether this is the active append target.
+    pub active: bool,
+}
+
+/// Local retention/rotation plan for audit journals.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct AuditRetentionPlan {
+    /// Whether the active journal should be rotated by a future operator/runtime.
+    pub rotate_active: bool,
+    /// Active journal path or label.
+    pub active_path: String,
+    /// Archive paths retained by the model.
+    pub retained_archives: Vec<String>,
+    /// Archive paths marked expired by the model.
+    pub expired_archives: Vec<String>,
+    /// Whether this model deleted files.
+    pub deletion_performed: bool,
+    /// Whether this model changed the filesystem.
+    pub filesystem_mutated: bool,
+    /// Whether this plan approves production readiness.
+    pub production_ready: bool,
+}
+
+/// Local sandbox-only audit retention execution request.
+///
+/// This validator may rotate/delete only explicit files that are already inside
+/// `workspace_dir`. It is for local test/smoke validation only and must not be
+/// pointed at production audit paths.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct AuditRetentionExecutionRequest {
+    /// Sandbox workspace that bounds every mutation.
+    pub workspace_dir: PathBuf,
+    /// Retention/rotation policy to execute locally.
+    pub policy: AuditRetentionPolicy,
+    /// Caller-supplied metadata for local journal files.
+    pub files: Vec<AuditJournalFileMetadata>,
+    /// Execution timestamp in Unix milliseconds.
+    pub now_unix_ms: u64,
+}
+
+/// Local sandbox-only audit retention execution report.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct AuditRetentionExecutionReport {
+    /// Whether active journal rotation was requested by the plan.
+    pub rotate_active_requested: bool,
+    /// Original active journal path when rotation occurred.
+    pub rotated_active_from: Option<String>,
+    /// New archive path for the rotated active journal.
+    pub rotated_active_to: Option<String>,
+    /// Whether a new empty active journal was created after rotation.
+    pub new_active_created: bool,
+    /// Archive files retained by the execution.
+    pub retained_archives: Vec<String>,
+    /// Archive files deleted by the execution.
+    pub expired_archives_deleted: Vec<String>,
+    /// Number of files removed from the sandbox.
+    pub deleted_file_count: u64,
+    /// Whether any file deletion was performed.
+    pub deletion_performed: bool,
+    /// Whether any filesystem mutation was performed.
+    pub filesystem_mutated: bool,
+    /// Whether any path outside the sandbox was touched. Always false on success.
+    pub out_of_workspace_path_touched: bool,
+    /// Whether live network access was used. Always false in this boundary.
+    pub live_network_used: bool,
+    /// Whether external execution was performed. Always false in this boundary.
+    pub external_execution_performed: bool,
+    /// Whether this report approves production use. Always false.
+    pub production_ready: bool,
+}
+
+/// Local stale-lock recheck policy for audit journal restart planning.
+///
+/// This model never removes lock files or starts services. It only records
+/// whether a caller-supplied lock observation should be rechecked by a future
+/// operator or service manager after restart.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct AuditStaleLockPolicy {
+    /// Age threshold after which a lock should be treated as stale.
+    pub stale_after_ms: u64,
+}
+
+/// Caller-supplied metadata for one observed audit journal lock file.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct AuditLockFileMetadata {
+    /// Local path or sanitized file label for the lock.
+    pub path: String,
+    /// Process id recorded in the lock metadata.
+    pub owner_pid: u32,
+    /// Timestamp when the lock was acquired in Unix milliseconds.
+    pub acquired_at_unix_ms: u64,
+}
+
+/// Side-effect-free stale-lock recheck plan.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct AuditStaleLockPlan {
+    /// Lock path or sanitized file label.
+    pub lock_path: String,
+    /// Lock owner process id from caller-supplied metadata.
+    pub owner_pid: u32,
+    /// Observed lock age in milliseconds.
+    pub lock_age_ms: u64,
+    /// Whether the lock age exceeds the configured stale threshold.
+    pub stale: bool,
+    /// Whether a future operator/service-manager restart recheck is required.
+    pub service_manager_recheck_required: bool,
+    /// Whether this model removed the lock file.
+    pub lock_removal_performed: bool,
+    /// Whether this model changed the filesystem.
+    pub filesystem_mutated: bool,
+    /// Whether this plan approves production readiness.
+    pub production_ready: bool,
+}
+
+/// Build a local audit retention/rotation plan from caller-supplied metadata.
+///
+/// The plan is intentionally side-effect free. It records which archives would
+/// be retained or marked expired by a future runtime, but it does not mutate or
+/// delete local files.
+pub fn plan_audit_journal_retention(
+    policy: &AuditRetentionPolicy,
+    files: &[AuditJournalFileMetadata],
+    now_unix_ms: u64,
+) -> Result<AuditRetentionPlan, AuditError> {
+    if policy.max_active_bytes == 0 {
+        return Err(AuditError::ValidationHarnessFailed {
+            reason: "audit retention max_active_bytes must be non-zero".to_owned(),
+        });
+    }
+    if policy.retention_window_ms == 0 {
+        return Err(AuditError::ValidationHarnessFailed {
+            reason: "audit retention window must be non-zero".to_owned(),
+        });
+    }
+    if now_unix_ms == 0 {
+        return Err(AuditError::ValidationHarnessFailed {
+            reason: "audit retention timestamp must be non-zero".to_owned(),
+        });
+    }
+
+    let active_files = files.iter().filter(|file| file.active).collect::<Vec<_>>();
+    if active_files.len() != 1 {
+        return Err(AuditError::ValidationHarnessFailed {
+            reason: "audit retention plan requires exactly one active journal".to_owned(),
+        });
+    }
+    if files.iter().any(|file| file.path.trim().is_empty()) {
+        return Err(AuditError::ValidationHarnessFailed {
+            reason: "audit retention file paths must be non-empty".to_owned(),
+        });
+    }
+
+    let active = active_files[0];
+    let rotate_active = active.size_bytes > policy.max_active_bytes;
+    let cutoff = now_unix_ms.saturating_sub(policy.retention_window_ms);
+    let mut archives = files.iter().filter(|file| !file.active).collect::<Vec<_>>();
+    archives.sort_by(|left, right| {
+        right
+            .modified_at_unix_ms
+            .cmp(&left.modified_at_unix_ms)
+            .then_with(|| left.path.cmp(&right.path))
+    });
+
+    let mut retained_archives = Vec::new();
+    let mut expired_archives = Vec::new();
+    for archive in archives {
+        if archive.modified_at_unix_ms < cutoff
+            || retained_archives.len() >= policy.max_archived_files
+        {
+            expired_archives.push(archive.path.clone());
+        } else {
+            retained_archives.push(archive.path.clone());
+        }
+    }
+
+    Ok(AuditRetentionPlan {
+        rotate_active,
+        active_path: active.path.clone(),
+        retained_archives,
+        expired_archives,
+        deletion_performed: false,
+        filesystem_mutated: false,
+        production_ready: false,
+    })
+}
+
+/// Validate sanitized deployment-host disk-full evidence metadata.
+///
+/// This function consumes operator-owned reference metadata only. It does not
+/// fill disks, mount filesystems, mutate production paths, inspect host logs,
+/// call networks, perform live execution, or claim production readiness.
+pub fn validate_deployment_disk_full_transcript(
+    transcript: AuditDeploymentDiskFullTranscript,
+) -> Result<AuditDeploymentDiskFullTranscriptReport, AuditError> {
+    transcript.validate()?;
+    let blocker_codes = deployment_disk_full_blockers(&transcript);
+    let status = if blocker_codes.is_empty() {
+        AuditDeploymentDiskFullTranscriptStatus::ReadyForExternalReview
+    } else {
+        AuditDeploymentDiskFullTranscriptStatus::Blocked
+    };
+    let report = AuditDeploymentDiskFullTranscriptReport {
+        validation_version: AUDIT_DEPLOYMENT_DISK_FULL_TRANSCRIPT_VERSION.to_owned(),
+        transcript_id: transcript.transcript_id,
+        host_label: transcript.host_label,
+        physical_host_evidence: transcript.physical_host_evidence,
+        audit_append_failed_closed: transcript.audit_append_failed_closed,
+        state_write_failed_closed: transcript.state_write_failed_closed,
+        runtime_quiesced_or_degraded: transcript.runtime_quiesced_or_degraded,
+        audit_replay_after_recovery_validated: transcript.audit_replay_after_recovery_validated,
+        sqlite_reopen_after_recovery_validated: transcript.sqlite_reopen_after_recovery_validated,
+        recovery_runbook_reference_present: transcript.recovery_runbook_reference_present,
+        non_secret_reference_count: transcript.non_secret_reference_count,
+        operator_approved: transcript.operator_approved,
+        status,
+        blocker_codes,
+        disk_filled_by_validator: false,
+        production_path_mutated_by_validator: false,
+        live_execution_performed: false,
+        production_ready: false,
+        validated_at_unix_ms: transcript.validated_at_unix_ms,
+    };
+    report.validate()?;
+    Ok(report)
+}
+
+/// Validate sanitized deployment-host retention/rotation evidence metadata.
+///
+/// This function consumes operator-owned reference metadata only. It does not
+/// rotate logs, delete deployment archives, mutate production paths, inspect
+/// host logs, call networks, perform live execution, or claim production
+/// readiness.
+pub fn validate_deployment_retention_transcript(
+    transcript: AuditDeploymentRetentionTranscript,
+) -> Result<AuditDeploymentRetentionTranscriptReport, AuditError> {
+    transcript.validate()?;
+    let blocker_codes = deployment_retention_blockers(&transcript);
+    let status = if blocker_codes.is_empty() {
+        AuditDeploymentRetentionTranscriptStatus::ReadyForExternalReview
+    } else {
+        AuditDeploymentRetentionTranscriptStatus::Blocked
+    };
+    let report = AuditDeploymentRetentionTranscriptReport {
+        validation_version: AUDIT_DEPLOYMENT_RETENTION_TRANSCRIPT_VERSION.to_owned(),
+        transcript_id: transcript.transcript_id,
+        host_label: transcript.host_label,
+        physical_host_evidence: transcript.physical_host_evidence,
+        active_rotation_observed: transcript.active_rotation_observed,
+        archive_retention_observed: transcript.archive_retention_observed,
+        expired_archive_deletion_observed: transcript.expired_archive_deletion_observed,
+        post_rotation_append_validated: transcript.post_rotation_append_validated,
+        audit_replay_after_rotation_validated: transcript.audit_replay_after_rotation_validated,
+        retention_policy_reference_present: transcript.retention_policy_reference_present,
+        recovery_runbook_reference_present: transcript.recovery_runbook_reference_present,
+        non_secret_reference_count: transcript.non_secret_reference_count,
+        operator_approved: transcript.operator_approved,
+        status,
+        blocker_codes,
+        rotation_performed_by_validator: false,
+        production_path_mutated_by_validator: false,
+        live_execution_performed: false,
+        production_ready: false,
+        validated_at_unix_ms: transcript.validated_at_unix_ms,
+    };
+    report.validate()?;
+    Ok(report)
+}
+
+/// Execute audit retention/rotation against an explicit local sandbox only.
+///
+/// This validates the mechanics of rotation and archive deletion using
+/// caller-supplied local files. It refuses paths outside `workspace_dir`, does
+/// not recurse, does not inspect deployment state, does not remove production
+/// logs, and never approves production readiness.
+pub fn execute_local_audit_retention(
+    request: &AuditRetentionExecutionRequest,
+) -> Result<AuditRetentionExecutionReport, AuditError> {
+    let workspace = canonical_workspace(&request.workspace_dir)?;
+    if request.files.is_empty() {
+        return Err(AuditError::ValidationHarnessFailed {
+            reason: "audit retention execution requires at least one journal file".to_owned(),
+        });
+    }
+    for file in &request.files {
+        let path = PathBuf::from(&file.path);
+        ensure_file_inside_workspace(&workspace, &path)?;
+    }
+
+    let plan = plan_audit_journal_retention(&request.policy, &request.files, request.now_unix_ms)?;
+    let active_path = PathBuf::from(&plan.active_path);
+    let mut rotated_active_to = None;
+    let mut new_active_created = false;
+    let mut filesystem_mutated = false;
+
+    if plan.rotate_active {
+        let rotated_path = rotated_audit_path(&active_path, request.now_unix_ms)?;
+        ensure_parent_inside_workspace(&workspace, &rotated_path)?;
+        if rotated_path.exists() {
+            return Err(AuditError::ValidationHarnessFailed {
+                reason: "audit retention rotated archive path already exists".to_owned(),
+            });
+        }
+        fs::rename(&active_path, &rotated_path)
+            .map_err(|source| audit_io_error(&active_path, source))?;
+        File::create(&active_path).map_err(|source| audit_io_error(&active_path, source))?;
+        rotated_active_to = Some(rotated_path.display().to_string());
+        new_active_created = true;
+        filesystem_mutated = true;
+    }
+
+    let mut expired_archives_deleted = Vec::new();
+    for expired in &plan.expired_archives {
+        let expired_path = PathBuf::from(expired);
+        ensure_file_inside_workspace(&workspace, &expired_path)?;
+        fs::remove_file(&expired_path).map_err(|source| audit_io_error(&expired_path, source))?;
+        expired_archives_deleted.push(expired.clone());
+        filesystem_mutated = true;
+    }
+
+    let deleted_file_count = u64::try_from(expired_archives_deleted.len()).map_err(|_| {
+        AuditError::ValidationHarnessFailed {
+            reason: "audit retention deleted file count overflowed".to_owned(),
+        }
+    })?;
+    Ok(AuditRetentionExecutionReport {
+        rotate_active_requested: plan.rotate_active,
+        rotated_active_from: plan.rotate_active.then_some(plan.active_path),
+        rotated_active_to,
+        new_active_created,
+        retained_archives: plan.retained_archives,
+        expired_archives_deleted,
+        deleted_file_count,
+        deletion_performed: deleted_file_count > 0,
+        filesystem_mutated,
+        out_of_workspace_path_touched: false,
+        live_network_used: false,
+        external_execution_performed: false,
+        production_ready: false,
+    })
+}
+
+/// Build a side-effect-free stale-lock recheck plan from caller-supplied lock metadata.
+///
+/// The plan intentionally does not inspect processes, remove lock files, start
+/// services, or mutate deployment state. A stale result is only a request for a
+/// future operator/runtime to recheck the lock under deployment-specific rules.
+pub fn plan_audit_stale_lock_recheck(
+    policy: &AuditStaleLockPolicy,
+    lock: &AuditLockFileMetadata,
+    now_unix_ms: u64,
+) -> Result<AuditStaleLockPlan, AuditError> {
+    if policy.stale_after_ms == 0 {
+        return Err(AuditError::ValidationHarnessFailed {
+            reason: "audit stale-lock threshold must be non-zero".to_owned(),
+        });
+    }
+    if lock.path.trim().is_empty() {
+        return Err(AuditError::ValidationHarnessFailed {
+            reason: "audit stale-lock path must be non-empty".to_owned(),
+        });
+    }
+    if lock.owner_pid == 0 {
+        return Err(AuditError::ValidationHarnessFailed {
+            reason: "audit stale-lock owner pid must be non-zero".to_owned(),
+        });
+    }
+    if lock.acquired_at_unix_ms == 0 || now_unix_ms == 0 {
+        return Err(AuditError::ValidationHarnessFailed {
+            reason: "audit stale-lock timestamps must be non-zero".to_owned(),
+        });
+    }
+    if lock.acquired_at_unix_ms > now_unix_ms {
+        return Err(AuditError::ValidationHarnessFailed {
+            reason: "audit stale-lock acquired timestamp cannot be in the future".to_owned(),
+        });
+    }
+
+    let lock_age_ms = now_unix_ms - lock.acquired_at_unix_ms;
+    let stale = lock_age_ms >= policy.stale_after_ms;
+
+    Ok(AuditStaleLockPlan {
+        lock_path: lock.path.clone(),
+        owner_pid: lock.owner_pid,
+        lock_age_ms,
+        stale,
+        service_manager_recheck_required: stale,
+        lock_removal_performed: false,
+        filesystem_mutated: false,
+        production_ready: false,
+    })
+}
+
+/// Run local audit crash/concurrency/filesystem validation probes.
+///
+/// The supplied workspace directory must be empty or absent. The harness creates
+/// local JSONL files only, uses no network, and stores no secrets.
+pub fn validate_audit_journal_durability(
+    workspace_dir: impl AsRef<Path>,
+    validated_at_unix_ms: u64,
+) -> Result<AuditDurabilityValidationReport, AuditError> {
+    if validated_at_unix_ms == 0 {
+        return Err(AuditError::ValidationHarnessFailed {
+            reason: "audit validation timestamp must be non-zero".to_owned(),
+        });
+    }
+
+    let workspace_dir = workspace_dir.as_ref().to_path_buf();
+    if workspace_dir.exists() {
+        return Err(AuditError::ValidationHarnessFailed {
+            reason: format!(
+                "audit validation workspace already exists: {}",
+                workspace_dir.display()
+            ),
+        });
+    }
+    fs::create_dir_all(&workspace_dir).map_err(|source| AuditError::Io {
+        path: workspace_dir.display().to_string(),
+        reason: source.to_string(),
+    })?;
+
+    let main_path = workspace_dir.join("audit-validation.jsonl");
+    let append_replay_validated = validate_append_replay_probe(&main_path)?;
+    let truncated_replay_rejected = validate_truncated_replay_probe(&main_path, &workspace_dir)?;
+    let tamper_replay_rejected = validate_tamper_replay_probe(&main_path, &workspace_dir)?;
+    let concurrent_records = 32;
+    let concurrent_append_validated =
+        validate_concurrent_append_probe(&workspace_dir, concurrent_records)?;
+    let filesystem_failure_validated = validate_filesystem_failure_probe(&workspace_dir)?;
+    let disk_full_failure_validated = validate_disk_full_failure_probe(&workspace_dir)?;
+
+    let mut unresolved_blockers = Vec::new();
+    if !append_replay_validated {
+        unresolved_blockers.push("audit append/reopen replay probe failed".to_owned());
+    }
+    if !truncated_replay_rejected {
+        unresolved_blockers.push("audit truncated-record replay was not rejected".to_owned());
+    }
+    if !tamper_replay_rejected {
+        unresolved_blockers.push("audit tamper replay was not rejected".to_owned());
+    }
+    if !concurrent_append_validated {
+        unresolved_blockers.push("audit concurrent append replay probe failed".to_owned());
+    }
+    if !filesystem_failure_validated {
+        unresolved_blockers.push("audit filesystem failure probe did not fail closed".to_owned());
+    }
+    if !disk_full_failure_validated {
+        unresolved_blockers.push("audit disk-full failure probe did not fail closed".to_owned());
+    }
+    unresolved_blockers.push(
+        "deployment-host audit validation, physical disk-full evidence, retention/rotation validation, and service-manager restart validation remain external".to_owned(),
+    );
+
+    Ok(AuditDurabilityValidationReport {
+        validation_version: AUDIT_DURABILITY_VALIDATION_VERSION.to_owned(),
+        workspace_dir: workspace_dir.display().to_string(),
+        append_replay_validated,
+        truncated_replay_rejected,
+        tamper_replay_rejected,
+        concurrent_append_validated,
+        filesystem_failure_validated,
+        disk_full_failure_validated,
+        append_records: 2,
+        concurrent_records,
+        live_network_used: false,
+        external_execution_performed: false,
+        production_ready: false,
+        unresolved_blockers,
+        validated_at_unix_ms,
+    })
+}
+
+fn validate_append_replay_probe(path: &Path) -> Result<bool, AuditError> {
+    let mut journal = AppendOnlyAuditJournal::open(path)?;
+    journal.append_event(validation_event("append-1"))?;
+    journal.append_event(validation_event("append-2"))?;
+    let reopened = AppendOnlyAuditJournal::open(path)?;
+    Ok(reopened.next_sequence() == 3 && reopened.previous_hash() == journal.previous_hash())
+}
+
+fn validate_truncated_replay_probe(
+    main_path: &Path,
+    workspace_dir: &Path,
+) -> Result<bool, AuditError> {
+    let truncated_path = workspace_dir.join("audit-validation-truncated.jsonl");
+    fs::copy(main_path, &truncated_path).map_err(|source| AuditError::Io {
+        path: truncated_path.display().to_string(),
+        reason: source.to_string(),
+    })?;
+    let mut file = OpenOptions::new()
+        .append(true)
+        .open(&truncated_path)
+        .map_err(|source| AuditError::Io {
+            path: truncated_path.display().to_string(),
+            reason: source.to_string(),
+        })?;
+    write!(file, "{{\"partial-crash-record\"").map_err(|source| AuditError::Io {
+        path: truncated_path.display().to_string(),
+        reason: source.to_string(),
+    })?;
+    file.flush().map_err(|source| AuditError::Io {
+        path: truncated_path.display().to_string(),
+        reason: source.to_string(),
+    })?;
+    file.sync_all().map_err(|source| AuditError::Io {
+        path: truncated_path.display().to_string(),
+        reason: source.to_string(),
+    })?;
+    Ok(matches!(
+        AppendOnlyAuditJournal::open(&truncated_path),
+        Err(AuditError::Deserialize { .. })
+    ))
+}
+
+fn validate_tamper_replay_probe(
+    main_path: &Path,
+    workspace_dir: &Path,
+) -> Result<bool, AuditError> {
+    let tampered_path = workspace_dir.join("audit-validation-tampered.jsonl");
+    let tampered = fs::read_to_string(main_path)
+        .map_err(|source| AuditError::Io {
+            path: main_path.display().to_string(),
+            reason: source.to_string(),
+        })?
+        .replace(
+            "audit durability validation event",
+            "audit durability tampered event",
+        );
+    fs::write(&tampered_path, tampered).map_err(|source| AuditError::Io {
+        path: tampered_path.display().to_string(),
+        reason: source.to_string(),
+    })?;
+    Ok(matches!(
+        AppendOnlyAuditJournal::open(&tampered_path),
+        Err(AuditError::IntegrityViolation { .. })
+    ))
+}
+
+fn validate_concurrent_append_probe(
+    workspace_dir: &Path,
+    concurrent_records: usize,
+) -> Result<bool, AuditError> {
+    let concurrent_path = workspace_dir.join("audit-validation-concurrent.jsonl");
+    let concurrent_writers = 4_usize;
+    let events_per_writer = concurrent_records / concurrent_writers;
+    let mut handles = Vec::with_capacity(concurrent_writers);
+    for writer_index in 0..concurrent_writers {
+        let path = concurrent_path.clone();
+        handles.push(thread::spawn(move || -> Result<(), AuditError> {
+            for event_index in 0..events_per_writer {
+                append_validation_event_with_retry(
+                    &path,
+                    format!("concurrent-{writer_index}-{event_index}"),
+                )?;
+            }
+            Ok(())
+        }));
+    }
+    for handle in handles {
+        handle
+            .join()
+            .map_err(|_| AuditError::ValidationHarnessFailed {
+                reason: "audit concurrent validation thread panicked".to_owned(),
+            })??;
+    }
+    let concurrent_replay = AppendOnlyAuditJournal::open(&concurrent_path)?;
+    Ok(concurrent_replay.next_sequence()
+        == u64::try_from(concurrent_records)
+            .unwrap_or(u64::MAX)
+            .saturating_add(1))
+}
+
+fn append_validation_event_with_retry(path: &Path, label: String) -> Result<(), AuditError> {
+    const VALIDATION_APPEND_RETRY_COUNT: usize = 5;
+
+    for attempt in 0..VALIDATION_APPEND_RETRY_COUNT {
+        match AppendOnlyAuditJournal::open(path) {
+            Ok(mut journal) => match journal.append_event(validation_event(label.clone())) {
+                Ok(_) => return Ok(()),
+                Err(error) if is_audit_lock_timeout(&error) => {
+                    if attempt + 1 == VALIDATION_APPEND_RETRY_COUNT {
+                        return Err(error);
+                    }
+                }
+                Err(error) => return Err(error),
+            },
+            Err(error) if is_audit_lock_timeout(&error) => {
+                if attempt + 1 == VALIDATION_APPEND_RETRY_COUNT {
+                    return Err(error);
+                }
+            }
+            Err(error) => return Err(error),
+        }
+        thread::sleep(AUDIT_LOCK_RETRY_DELAY);
+    }
+
+    Err(AuditError::ValidationHarnessFailed {
+        reason: "validation append retry loop exited unexpectedly".to_owned(),
+    })
+}
+
+fn is_audit_lock_timeout(error: &AuditError) -> bool {
+    matches!(
+        error,
+        AuditError::Io { reason, .. } if reason == "timed out waiting for audit journal lock"
+    )
+}
+
+fn validate_filesystem_failure_probe(workspace_dir: &Path) -> Result<bool, AuditError> {
+    let file_parent = workspace_dir.join("not-a-directory");
+    fs::write(&file_parent, "not a directory").map_err(|source| AuditError::Io {
+        path: file_parent.display().to_string(),
+        reason: source.to_string(),
+    })?;
+    let invalid_path = file_parent.join("audit.jsonl");
+    Ok(matches!(
+        AppendOnlyAuditJournal::open(&invalid_path),
+        Err(AuditError::Io { .. })
+    ))
+}
+
+fn validate_disk_full_failure_probe(workspace_dir: &Path) -> Result<bool, AuditError> {
+    let path = workspace_dir.join("audit-validation-disk-full.jsonl");
+    let mut journal = AppendOnlyAuditJournal::open(&path)?;
+    let first = journal.append_event(validation_event("disk-full-before"))?;
+    let next_sequence_before = journal.next_sequence();
+    let previous_hash_before = journal.previous_hash().to_owned();
+    let error = journal
+        .append_event_with_fault(
+            validation_event("disk-full-denied"),
+            AuditAppendFault::DiskFullBeforeWrite,
+        )
+        .expect_err("simulated disk-full append should fail closed");
+
+    let in_memory_unchanged = journal.next_sequence() == next_sequence_before
+        && journal.previous_hash() == previous_hash_before;
+    let replay = AppendOnlyAuditJournal::open(&path)?;
+    let replay_unchanged = replay.next_sequence() == next_sequence_before
+        && replay.previous_hash() == first.record_hash;
+
+    Ok(matches!(error, AuditError::DiskFull { .. }) && in_memory_unchanged && replay_unchanged)
 }
 
 /// One immutable audit record stored as a JSONL line.
@@ -324,6 +1436,8 @@ impl AuditViolation {
 pub enum AuditError {
     /// Filesystem failure.
     Io { path: String, reason: String },
+    /// Disk-full or no-space-left failure.
+    DiskFull { path: String, reason: String },
     /// JSON serialization failure.
     Serialize { reason: String },
     /// JSON parsing failure.
@@ -332,6 +1446,8 @@ pub enum AuditError {
     ValidationFailed { violations: Vec<AuditViolation> },
     /// Hash chain failed during replay.
     IntegrityViolation { line: u64, reason: String },
+    /// Local validation harness failed before it could produce a report.
+    ValidationHarnessFailed { reason: String },
     /// Sequence would overflow.
     SequenceOverflow,
 }
@@ -340,6 +1456,9 @@ impl fmt::Display for AuditError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Io { path, reason } => write!(formatter, "audit I/O failed for {path}: {reason}"),
+            Self::DiskFull { path, reason } => {
+                write!(formatter, "audit disk-full failure for {path}: {reason}")
+            }
             Self::Serialize { reason } => write!(formatter, "audit serialization failed: {reason}"),
             Self::Deserialize { line, reason } => {
                 write!(
@@ -360,6 +1479,9 @@ impl fmt::Display for AuditError {
                     "audit integrity violation on line {line}: {reason}"
                 )
             }
+            Self::ValidationHarnessFailed { reason } => {
+                write!(formatter, "audit validation harness failed: {reason}")
+            }
             Self::SequenceOverflow => write!(formatter, "audit sequence overflow"),
         }
     }
@@ -371,6 +1493,220 @@ impl std::error::Error for AuditError {}
 struct ReplayState {
     next_sequence: u64,
     previous_hash: String,
+}
+
+struct AuditJournalFileLock {
+    path: PathBuf,
+}
+
+impl AuditJournalFileLock {
+    fn acquire(journal_path: &Path) -> Result<Self, AuditError> {
+        let path = journal_lock_path(journal_path);
+        for _ in 0..AUDIT_LOCK_RETRY_COUNT {
+            match OpenOptions::new().write(true).create_new(true).open(&path) {
+                Ok(mut file) => {
+                    write!(
+                        file,
+                        "pid={} acquired_at_unix_ms={}",
+                        std::process::id(),
+                        unix_timestamp_ms()
+                    )
+                    .map_err(|source| AuditError::Io {
+                        path: path.display().to_string(),
+                        reason: source.to_string(),
+                    })?;
+                    file.sync_all().map_err(|source| AuditError::Io {
+                        path: path.display().to_string(),
+                        reason: source.to_string(),
+                    })?;
+                    return Ok(Self { path });
+                }
+                Err(source)
+                    if matches!(
+                        source.kind(),
+                        ErrorKind::AlreadyExists | ErrorKind::PermissionDenied
+                    ) =>
+                {
+                    thread::sleep(AUDIT_LOCK_RETRY_DELAY);
+                }
+                Err(source) => {
+                    return Err(AuditError::Io {
+                        path: path.display().to_string(),
+                        reason: source.to_string(),
+                    });
+                }
+            }
+        }
+        Err(AuditError::Io {
+            path: path.display().to_string(),
+            reason: "timed out waiting for audit journal lock".to_owned(),
+        })
+    }
+}
+
+impl Drop for AuditJournalFileLock {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.path);
+    }
+}
+
+fn audit_io_error(path: &Path, source: IoError) -> AuditError {
+    let reason = source.to_string();
+    if is_disk_full_error(&source, &reason) {
+        AuditError::DiskFull {
+            path: path.display().to_string(),
+            reason,
+        }
+    } else {
+        AuditError::Io {
+            path: path.display().to_string(),
+            reason,
+        }
+    }
+}
+
+fn canonical_workspace(workspace: &Path) -> Result<PathBuf, AuditError> {
+    if workspace.as_os_str().is_empty() {
+        return Err(AuditError::ValidationHarnessFailed {
+            reason: "audit retention execution workspace is required".to_owned(),
+        });
+    }
+    let canonical = fs::canonicalize(workspace).map_err(|source| AuditError::Io {
+        path: workspace.display().to_string(),
+        reason: source.to_string(),
+    })?;
+    if !canonical.is_dir() {
+        return Err(AuditError::ValidationHarnessFailed {
+            reason: "audit retention execution workspace must be a directory".to_owned(),
+        });
+    }
+    Ok(canonical)
+}
+
+fn ensure_file_inside_workspace(workspace: &Path, path: &Path) -> Result<PathBuf, AuditError> {
+    let canonical = fs::canonicalize(path).map_err(|source| AuditError::Io {
+        path: path.display().to_string(),
+        reason: source.to_string(),
+    })?;
+    if !canonical.is_file() || !canonical.starts_with(workspace) {
+        return Err(AuditError::ValidationHarnessFailed {
+            reason: "audit retention execution path must be a file inside the workspace".to_owned(),
+        });
+    }
+    Ok(canonical)
+}
+
+fn ensure_parent_inside_workspace(workspace: &Path, path: &Path) -> Result<(), AuditError> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| AuditError::ValidationHarnessFailed {
+            reason: "audit retention execution path must have a parent directory".to_owned(),
+        })?;
+    let canonical_parent = fs::canonicalize(parent).map_err(|source| AuditError::Io {
+        path: parent.display().to_string(),
+        reason: source.to_string(),
+    })?;
+    if !canonical_parent.starts_with(workspace) {
+        return Err(AuditError::ValidationHarnessFailed {
+            reason: "audit retention execution destination must remain inside the workspace"
+                .to_owned(),
+        });
+    }
+    Ok(())
+}
+
+fn rotated_audit_path(active_path: &Path, now_unix_ms: u64) -> Result<PathBuf, AuditError> {
+    let file_name = active_path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .ok_or_else(|| AuditError::ValidationHarnessFailed {
+            reason: "audit retention active path must have a UTF-8 file name".to_owned(),
+        })?;
+    Ok(active_path.with_file_name(format!("{file_name}.rotated-{now_unix_ms}")))
+}
+
+fn deployment_disk_full_blockers(transcript: &AuditDeploymentDiskFullTranscript) -> Vec<String> {
+    let mut blockers = Vec::new();
+    if !transcript.physical_host_evidence {
+        blockers.push("missing-physical-host-evidence".to_owned());
+    }
+    if !transcript.audit_append_failed_closed {
+        blockers.push("missing-audit-append-fail-closed-evidence".to_owned());
+    }
+    if !transcript.state_write_failed_closed {
+        blockers.push("missing-state-write-fail-closed-evidence".to_owned());
+    }
+    if !transcript.runtime_quiesced_or_degraded {
+        blockers.push("missing-runtime-quiesce-or-degrade-evidence".to_owned());
+    }
+    if !transcript.audit_replay_after_recovery_validated {
+        blockers.push("missing-audit-replay-recovery-evidence".to_owned());
+    }
+    if !transcript.sqlite_reopen_after_recovery_validated {
+        blockers.push("missing-sqlite-reopen-recovery-evidence".to_owned());
+    }
+    if !transcript.recovery_runbook_reference_present {
+        blockers.push("missing-recovery-runbook-reference".to_owned());
+    }
+    if transcript.non_secret_reference_count < 3 {
+        blockers.push("insufficient-non-secret-references".to_owned());
+    }
+    if !transcript.operator_approved {
+        blockers.push("missing-operator-approval".to_owned());
+    }
+    blockers
+}
+
+fn deployment_retention_blockers(transcript: &AuditDeploymentRetentionTranscript) -> Vec<String> {
+    let mut blockers = Vec::new();
+    if !transcript.physical_host_evidence {
+        blockers.push("missing-physical-host-evidence".to_owned());
+    }
+    if !transcript.active_rotation_observed {
+        blockers.push("missing-active-rotation-evidence".to_owned());
+    }
+    if !transcript.archive_retention_observed {
+        blockers.push("missing-archive-retention-evidence".to_owned());
+    }
+    if !transcript.expired_archive_deletion_observed {
+        blockers.push("missing-expired-archive-deletion-evidence".to_owned());
+    }
+    if !transcript.post_rotation_append_validated {
+        blockers.push("missing-post-rotation-append-validation".to_owned());
+    }
+    if !transcript.audit_replay_after_rotation_validated {
+        blockers.push("missing-audit-replay-after-rotation-evidence".to_owned());
+    }
+    if !transcript.retention_policy_reference_present {
+        blockers.push("missing-retention-policy-reference".to_owned());
+    }
+    if !transcript.recovery_runbook_reference_present {
+        blockers.push("missing-recovery-runbook-reference".to_owned());
+    }
+    if transcript.non_secret_reference_count < 4 {
+        blockers.push("insufficient-non-secret-references".to_owned());
+    }
+    if !transcript.operator_approved {
+        blockers.push("missing-operator-approval".to_owned());
+    }
+    blockers
+}
+
+fn is_disk_full_error(source: &IoError, reason: &str) -> bool {
+    matches!(source.raw_os_error(), Some(28 | 39 | 112))
+        || reason.contains("No space left")
+        || reason.contains("There is not enough space")
+        || reason.contains("disk full")
+}
+
+fn journal_lock_path(journal_path: &Path) -> PathBuf {
+    let mut lock_path = journal_path.to_path_buf();
+    let extension = journal_path
+        .extension()
+        .and_then(|value| value.to_str())
+        .map_or_else(|| "lock".to_owned(), |value| format!("{value}.lock"));
+    lock_path.set_extension(extension);
+    lock_path
 }
 
 fn replay_journal(path: &Path) -> Result<ReplayState, AuditError> {
@@ -526,17 +1862,45 @@ fn contains_obvious_secret_assignment(value: &str) -> bool {
     .any(|needle| normalized.contains(needle))
 }
 
+fn validation_event(id: impl Into<String>) -> AuditEvent {
+    AuditEvent::new(
+        id,
+        AuditEventKind::SecurityAlert,
+        "audit",
+        "validation-harness",
+        "audit durability validation event",
+    )
+    .with_metadata("validation", AuditValue::Text("local-only".to_owned()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        AppendOnlyAuditJournal, AuditError, AuditEvent, AuditEventKind, AuditValue,
+        execute_local_audit_retention, plan_audit_journal_retention, plan_audit_stale_lock_recheck,
+        validate_audit_journal_durability, validate_deployment_disk_full_transcript,
+        validate_deployment_retention_transcript, validate_disk_full_failure_probe,
+        AppendOnlyAuditJournal, AuditAppendFault, AuditDeploymentDiskFullTranscript,
+        AuditDeploymentDiskFullTranscriptStatus, AuditDeploymentRetentionTranscript,
+        AuditDeploymentRetentionTranscriptStatus, AuditError, AuditEvent, AuditEventKind,
+        AuditJournalFileMetadata, AuditLockFileMetadata, AuditRetentionExecutionRequest,
+        AuditRetentionPolicy, AuditStaleLockPolicy, AuditValue,
+        AUDIT_DEPLOYMENT_DISK_FULL_TRANSCRIPT_VERSION,
+        AUDIT_DEPLOYMENT_RETENTION_TRANSCRIPT_VERSION, AUDIT_DURABILITY_VALIDATION_VERSION,
         AUDIT_GENESIS_HASH,
     };
-    use std::{env, fs, process};
+    use std::{env, fs, fs::OpenOptions, io::Write, process};
 
     fn temp_path(name: &str) -> std::path::PathBuf {
         env::temp_dir().join(format!(
             "arb-agent-{name}-{}-{}.jsonl",
+            process::id(),
+            super::unix_timestamp_ms()
+        ))
+    }
+
+    fn temp_dir(name: &str) -> std::path::PathBuf {
+        env::temp_dir().join(format!(
+            "arb-agent-{name}-{}-{}",
             process::id(),
             super::unix_timestamp_ms()
         ))
@@ -551,6 +1915,57 @@ mod tests {
             "policy decision recorded",
         )
         .with_metadata("intent_id", AuditValue::Text("intent-1".to_owned()))
+    }
+
+    fn deployment_disk_full_transcript(complete: bool) -> AuditDeploymentDiskFullTranscript {
+        AuditDeploymentDiskFullTranscript {
+            transcript_id: if complete {
+                "deployment-disk-full-ready".to_owned()
+            } else {
+                "deployment-disk-full-blocked".to_owned()
+            },
+            host_label: "deployment-host-a".to_owned(),
+            physical_host_evidence: complete,
+            audit_append_failed_closed: true,
+            state_write_failed_closed: complete,
+            runtime_quiesced_or_degraded: complete,
+            audit_replay_after_recovery_validated: complete,
+            sqlite_reopen_after_recovery_validated: complete,
+            recovery_runbook_reference_present: complete,
+            non_secret_reference_count: if complete { 5 } else { 1 },
+            operator_approved: complete,
+            disk_filled_by_validator: false,
+            production_path_mutated_by_validator: false,
+            live_execution_performed: false,
+            production_ready_claimed: false,
+            validated_at_unix_ms: 1_700_000_002_000,
+        }
+    }
+
+    fn deployment_retention_transcript(complete: bool) -> AuditDeploymentRetentionTranscript {
+        AuditDeploymentRetentionTranscript {
+            transcript_id: if complete {
+                "deployment-retention-ready".to_owned()
+            } else {
+                "deployment-retention-blocked".to_owned()
+            },
+            host_label: "deployment-host-a".to_owned(),
+            physical_host_evidence: complete,
+            active_rotation_observed: complete,
+            archive_retention_observed: complete,
+            expired_archive_deletion_observed: complete,
+            post_rotation_append_validated: complete,
+            audit_replay_after_rotation_validated: complete,
+            retention_policy_reference_present: complete,
+            recovery_runbook_reference_present: complete,
+            non_secret_reference_count: if complete { 6 } else { 1 },
+            operator_approved: complete,
+            rotation_performed_by_validator: false,
+            production_path_mutated_by_validator: false,
+            live_execution_performed: false,
+            production_ready_claimed: false,
+            validated_at_unix_ms: 1_700_000_003_000,
+        }
     }
 
     #[test]
@@ -587,5 +2002,536 @@ mod tests {
             other => panic!("unexpected error: {other:?}"),
         }
         let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn durability_validation_covers_crash_concurrency_and_filesystem_failures() {
+        let workspace = temp_dir("audit-durability");
+        let report = validate_audit_journal_durability(&workspace, 1_700_000_001_000)
+            .expect("durability validation should complete");
+
+        assert_eq!(
+            report.validation_version,
+            AUDIT_DURABILITY_VALIDATION_VERSION
+        );
+        assert!(report.append_replay_validated);
+        assert!(report.truncated_replay_rejected);
+        assert!(report.tamper_replay_rejected);
+        assert!(report.concurrent_append_validated);
+        assert!(report.filesystem_failure_validated);
+        assert!(report.disk_full_failure_validated);
+        assert_eq!(report.append_records, 2);
+        assert_eq!(report.concurrent_records, 32);
+        assert!(!report.live_network_used);
+        assert!(!report.external_execution_performed);
+        assert!(!report.production_ready);
+        assert!(report
+            .unresolved_blockers
+            .iter()
+            .any(|blocker| blocker.contains("deployment-host audit validation")));
+
+        let _ = fs::remove_dir_all(workspace);
+    }
+
+    #[test]
+    fn durability_validation_refuses_existing_workspace() {
+        let workspace = temp_dir("audit-durability-existing");
+        fs::create_dir_all(&workspace).expect("workspace should be created");
+        let error = validate_audit_journal_durability(&workspace, 1_700_000_001_000)
+            .expect_err("existing workspace must fail closed");
+        assert!(matches!(error, AuditError::ValidationHarnessFailed { .. }));
+        let _ = fs::remove_dir_all(workspace);
+    }
+
+    #[test]
+    fn disk_full_validation_keeps_journal_state_unchanged() {
+        let workspace = temp_dir("audit-disk-full");
+        fs::create_dir_all(&workspace).expect("workspace should be created");
+        assert!(
+            validate_disk_full_failure_probe(&workspace).expect("disk-full probe should complete")
+        );
+        let _ = fs::remove_dir_all(workspace);
+    }
+
+    #[test]
+    fn deployment_disk_full_transcript_validates_physical_host_evidence_shape() {
+        let report =
+            validate_deployment_disk_full_transcript(deployment_disk_full_transcript(true))
+                .expect("complete deployment disk-full transcript should validate");
+
+        assert_eq!(
+            report.validation_version,
+            AUDIT_DEPLOYMENT_DISK_FULL_TRANSCRIPT_VERSION
+        );
+        assert_eq!(
+            report.status,
+            AuditDeploymentDiskFullTranscriptStatus::ReadyForExternalReview
+        );
+        assert!(report.physical_host_evidence);
+        assert!(report.audit_append_failed_closed);
+        assert!(report.state_write_failed_closed);
+        assert!(report.runtime_quiesced_or_degraded);
+        assert!(report.audit_replay_after_recovery_validated);
+        assert!(report.sqlite_reopen_after_recovery_validated);
+        assert!(report.recovery_runbook_reference_present);
+        assert_eq!(report.non_secret_reference_count, 5);
+        assert!(report.operator_approved);
+        assert!(report.blocker_codes.is_empty());
+        assert!(!report.disk_filled_by_validator);
+        assert!(!report.production_path_mutated_by_validator);
+        assert!(!report.live_execution_performed);
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn deployment_disk_full_transcript_blocks_simulation_only_evidence() {
+        let report =
+            validate_deployment_disk_full_transcript(deployment_disk_full_transcript(false))
+                .expect("incomplete deployment disk-full transcript should produce blocked report");
+
+        assert_eq!(
+            report.status,
+            AuditDeploymentDiskFullTranscriptStatus::Blocked
+        );
+        assert!(!report.physical_host_evidence);
+        assert!(!report.state_write_failed_closed);
+        assert!(report
+            .blocker_codes
+            .iter()
+            .any(|code| code == "missing-physical-host-evidence"));
+        assert!(report
+            .blocker_codes
+            .iter()
+            .any(|code| code == "missing-state-write-fail-closed-evidence"));
+        assert!(report
+            .blocker_codes
+            .iter()
+            .any(|code| code == "insufficient-non-secret-references"));
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn deployment_disk_full_transcript_rejects_validator_disk_fill() {
+        let mut transcript = deployment_disk_full_transcript(true);
+        transcript.disk_filled_by_validator = true;
+
+        let error = validate_deployment_disk_full_transcript(transcript)
+            .expect_err("validator disk-fill action must fail closed");
+
+        assert!(error.to_string().contains("must not fill disks"));
+    }
+
+    #[test]
+    fn deployment_retention_transcript_validates_rotation_evidence_shape() {
+        let report =
+            validate_deployment_retention_transcript(deployment_retention_transcript(true))
+                .expect("complete deployment retention transcript should validate");
+
+        assert_eq!(
+            report.validation_version,
+            AUDIT_DEPLOYMENT_RETENTION_TRANSCRIPT_VERSION
+        );
+        assert_eq!(
+            report.status,
+            AuditDeploymentRetentionTranscriptStatus::ReadyForExternalReview
+        );
+        assert!(report.physical_host_evidence);
+        assert!(report.active_rotation_observed);
+        assert!(report.archive_retention_observed);
+        assert!(report.expired_archive_deletion_observed);
+        assert!(report.post_rotation_append_validated);
+        assert!(report.audit_replay_after_rotation_validated);
+        assert!(report.retention_policy_reference_present);
+        assert!(report.recovery_runbook_reference_present);
+        assert_eq!(report.non_secret_reference_count, 6);
+        assert!(report.operator_approved);
+        assert!(report.blocker_codes.is_empty());
+        assert!(!report.rotation_performed_by_validator);
+        assert!(!report.production_path_mutated_by_validator);
+        assert!(!report.live_execution_performed);
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn deployment_retention_transcript_blocks_missing_host_rotation_evidence() {
+        let report =
+            validate_deployment_retention_transcript(deployment_retention_transcript(false))
+                .expect("incomplete deployment retention transcript should produce blocked report");
+
+        assert_eq!(
+            report.status,
+            AuditDeploymentRetentionTranscriptStatus::Blocked
+        );
+        assert!(!report.physical_host_evidence);
+        assert!(!report.active_rotation_observed);
+        assert!(report
+            .blocker_codes
+            .iter()
+            .any(|code| code == "missing-physical-host-evidence"));
+        assert!(report
+            .blocker_codes
+            .iter()
+            .any(|code| code == "missing-active-rotation-evidence"));
+        assert!(report
+            .blocker_codes
+            .iter()
+            .any(|code| code == "insufficient-non-secret-references"));
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn deployment_retention_transcript_rejects_validator_rotation() {
+        let mut transcript = deployment_retention_transcript(true);
+        transcript.rotation_performed_by_validator = true;
+
+        let error = validate_deployment_retention_transcript(transcript)
+            .expect_err("validator rotation action must fail closed");
+
+        assert!(error.to_string().contains("must not rotate logs"));
+    }
+
+    #[test]
+    fn partial_jsonl_tail_is_rejected_on_replay() {
+        let path = temp_path("partial-jsonl-tail");
+        let mut journal = AppendOnlyAuditJournal::open(&path).expect("journal opens");
+        journal
+            .append_event(event("before-partial-tail"))
+            .expect("first event appends");
+
+        let mut file = OpenOptions::new()
+            .append(true)
+            .open(&path)
+            .expect("journal opens for partial tail append");
+        write!(file, "{{\"format_version\":\"audit-jsonl-hash-chain-v1\"")
+            .expect("partial tail writes");
+        file.flush().expect("partial tail flushes");
+        file.sync_all().expect("partial tail syncs");
+
+        assert!(matches!(
+            AppendOnlyAuditJournal::open(&path),
+            Err(AuditError::Deserialize { .. })
+        ));
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn permission_failure_keeps_journal_state_unchanged() {
+        let path = temp_path("permission-failure");
+        let mut journal = AppendOnlyAuditJournal::open(&path).expect("journal opens");
+        let first = journal
+            .append_event(event("before-permission-failure"))
+            .expect("first event appends");
+        let next_sequence_before = journal.next_sequence();
+        let previous_hash_before = journal.previous_hash().to_owned();
+
+        let error = journal
+            .append_event_with_fault(
+                event("permission-denied"),
+                AuditAppendFault::PermissionDeniedBeforeWrite,
+            )
+            .expect_err("permission failure must fail closed");
+
+        assert!(matches!(error, AuditError::Io { .. }));
+        assert_eq!(journal.next_sequence(), next_sequence_before);
+        assert_eq!(journal.previous_hash(), previous_hash_before);
+
+        let reopened = AppendOnlyAuditJournal::open(&path).expect("journal reopens");
+        assert_eq!(reopened.next_sequence(), next_sequence_before);
+        assert_eq!(reopened.previous_hash(), first.record_hash);
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn retention_plan_marks_rotation_without_deleting_logs() {
+        let policy = AuditRetentionPolicy {
+            max_active_bytes: 100,
+            max_archived_files: 2,
+            retention_window_ms: 1_000,
+        };
+        let files = vec![
+            AuditJournalFileMetadata {
+                path: "audit.jsonl".to_owned(),
+                size_bytes: 101,
+                modified_at_unix_ms: 10_000,
+                active: true,
+            },
+            AuditJournalFileMetadata {
+                path: "audit.3.jsonl".to_owned(),
+                size_bytes: 40,
+                modified_at_unix_ms: 9_900,
+                active: false,
+            },
+            AuditJournalFileMetadata {
+                path: "audit.2.jsonl".to_owned(),
+                size_bytes: 40,
+                modified_at_unix_ms: 9_800,
+                active: false,
+            },
+            AuditJournalFileMetadata {
+                path: "audit.1.jsonl".to_owned(),
+                size_bytes: 40,
+                modified_at_unix_ms: 8_000,
+                active: false,
+            },
+        ];
+
+        let plan =
+            plan_audit_journal_retention(&policy, &files, 10_000).expect("plan should build");
+        assert!(plan.rotate_active);
+        assert_eq!(plan.active_path, "audit.jsonl");
+        assert_eq!(
+            plan.retained_archives,
+            vec!["audit.3.jsonl", "audit.2.jsonl"]
+        );
+        assert_eq!(plan.expired_archives, vec!["audit.1.jsonl"]);
+        assert!(!plan.deletion_performed);
+        assert!(!plan.filesystem_mutated);
+        assert!(!plan.production_ready);
+    }
+
+    #[test]
+    fn retention_plan_expires_over_count_without_filesystem_mutation() {
+        let policy = AuditRetentionPolicy {
+            max_active_bytes: 1_000,
+            max_archived_files: 1,
+            retention_window_ms: 10_000,
+        };
+        let files = vec![
+            AuditJournalFileMetadata {
+                path: "active.jsonl".to_owned(),
+                size_bytes: 12,
+                modified_at_unix_ms: 20_000,
+                active: true,
+            },
+            AuditJournalFileMetadata {
+                path: "newer.jsonl".to_owned(),
+                size_bytes: 1,
+                modified_at_unix_ms: 19_000,
+                active: false,
+            },
+            AuditJournalFileMetadata {
+                path: "older.jsonl".to_owned(),
+                size_bytes: 1,
+                modified_at_unix_ms: 18_000,
+                active: false,
+            },
+        ];
+
+        let plan =
+            plan_audit_journal_retention(&policy, &files, 20_000).expect("plan should build");
+        assert!(!plan.rotate_active);
+        assert_eq!(plan.retained_archives, vec!["newer.jsonl"]);
+        assert_eq!(plan.expired_archives, vec!["older.jsonl"]);
+        assert!(!plan.deletion_performed);
+        assert!(!plan.filesystem_mutated);
+    }
+
+    #[test]
+    fn retention_execution_rotates_and_deletes_only_inside_local_workspace() {
+        let workspace = temp_dir("audit-retention-execution");
+        fs::create_dir_all(&workspace).expect("workspace should be created");
+        let active = workspace.join("active.jsonl");
+        let retained = workspace.join("retained.jsonl");
+        let expired = workspace.join("expired.jsonl");
+        fs::write(&active, "active audit record\n").expect("active journal writes");
+        fs::write(&retained, "retained audit record\n").expect("retained archive writes");
+        fs::write(&expired, "expired audit record\n").expect("expired archive writes");
+
+        let report = execute_local_audit_retention(&AuditRetentionExecutionRequest {
+            workspace_dir: workspace.clone(),
+            policy: AuditRetentionPolicy {
+                max_active_bytes: 1,
+                max_archived_files: 1,
+                retention_window_ms: 1_000,
+            },
+            files: vec![
+                AuditJournalFileMetadata {
+                    path: active.display().to_string(),
+                    size_bytes: 20,
+                    modified_at_unix_ms: 10_000,
+                    active: true,
+                },
+                AuditJournalFileMetadata {
+                    path: retained.display().to_string(),
+                    size_bytes: 10,
+                    modified_at_unix_ms: 9_900,
+                    active: false,
+                },
+                AuditJournalFileMetadata {
+                    path: expired.display().to_string(),
+                    size_bytes: 10,
+                    modified_at_unix_ms: 8_000,
+                    active: false,
+                },
+            ],
+            now_unix_ms: 10_000,
+        })
+        .expect("local retention execution should succeed inside workspace");
+
+        assert!(report.rotate_active_requested);
+        assert_eq!(
+            report.rotated_active_from.as_deref(),
+            Some(active.to_str().unwrap())
+        );
+        let rotated = report
+            .rotated_active_to
+            .as_ref()
+            .expect("rotation target should be reported");
+        assert!(rotated.ends_with("active.jsonl.rotated-10000"));
+        assert!(std::path::Path::new(rotated).exists());
+        assert!(active.exists());
+        assert_eq!(
+            fs::read_to_string(&active).expect("new active reads"),
+            String::new()
+        );
+        assert_eq!(
+            report.retained_archives,
+            vec![retained.display().to_string()]
+        );
+        assert_eq!(
+            report.expired_archives_deleted,
+            vec![expired.display().to_string()]
+        );
+        assert!(!expired.exists());
+        assert!(retained.exists());
+        assert_eq!(report.deleted_file_count, 1);
+        assert!(report.deletion_performed);
+        assert!(report.filesystem_mutated);
+        assert!(!report.out_of_workspace_path_touched);
+        assert!(!report.live_network_used);
+        assert!(!report.external_execution_performed);
+        assert!(!report.production_ready);
+
+        let _ = fs::remove_dir_all(workspace);
+    }
+
+    #[test]
+    fn retention_execution_rejects_paths_outside_workspace_before_mutation() {
+        let workspace = temp_dir("audit-retention-execution-blocked");
+        fs::create_dir_all(&workspace).expect("workspace should be created");
+        let active = workspace.join("active.jsonl");
+        let outside = temp_path("audit-retention-outside");
+        fs::write(&active, "active audit record\n").expect("active journal writes");
+        fs::write(&outside, "outside audit record\n").expect("outside archive writes");
+
+        let error = execute_local_audit_retention(&AuditRetentionExecutionRequest {
+            workspace_dir: workspace.clone(),
+            policy: AuditRetentionPolicy {
+                max_active_bytes: 1_000,
+                max_archived_files: 0,
+                retention_window_ms: 1_000,
+            },
+            files: vec![
+                AuditJournalFileMetadata {
+                    path: active.display().to_string(),
+                    size_bytes: 10,
+                    modified_at_unix_ms: 10_000,
+                    active: true,
+                },
+                AuditJournalFileMetadata {
+                    path: outside.display().to_string(),
+                    size_bytes: 10,
+                    modified_at_unix_ms: 8_000,
+                    active: false,
+                },
+            ],
+            now_unix_ms: 10_000,
+        })
+        .expect_err("out-of-workspace archive must fail closed");
+
+        assert!(matches!(error, AuditError::ValidationHarnessFailed { .. }));
+        assert!(active.exists());
+        assert!(outside.exists());
+
+        let _ = fs::remove_dir_all(workspace);
+        let _ = fs::remove_file(outside);
+    }
+
+    #[test]
+    fn retention_plan_rejects_ambiguous_active_journals() {
+        let policy = AuditRetentionPolicy {
+            max_active_bytes: 100,
+            max_archived_files: 1,
+            retention_window_ms: 1_000,
+        };
+        let files = vec![
+            AuditJournalFileMetadata {
+                path: "active-a.jsonl".to_owned(),
+                size_bytes: 1,
+                modified_at_unix_ms: 1,
+                active: true,
+            },
+            AuditJournalFileMetadata {
+                path: "active-b.jsonl".to_owned(),
+                size_bytes: 1,
+                modified_at_unix_ms: 1,
+                active: true,
+            },
+        ];
+
+        let error = plan_audit_journal_retention(&policy, &files, 2)
+            .expect_err("ambiguous active journals must fail closed");
+        assert!(matches!(error, AuditError::ValidationHarnessFailed { .. }));
+    }
+
+    #[test]
+    fn stale_lock_plan_marks_restart_recheck_without_removing_lock() {
+        let policy = AuditStaleLockPolicy {
+            stale_after_ms: 5_000,
+        };
+        let lock = AuditLockFileMetadata {
+            path: "audit.jsonl.lock".to_owned(),
+            owner_pid: 42,
+            acquired_at_unix_ms: 10_000,
+        };
+
+        let plan =
+            plan_audit_stale_lock_recheck(&policy, &lock, 16_000).expect("plan should build");
+
+        assert_eq!(plan.lock_path, "audit.jsonl.lock");
+        assert_eq!(plan.owner_pid, 42);
+        assert_eq!(plan.lock_age_ms, 6_000);
+        assert!(plan.stale);
+        assert!(plan.service_manager_recheck_required);
+        assert!(!plan.lock_removal_performed);
+        assert!(!plan.filesystem_mutated);
+        assert!(!plan.production_ready);
+    }
+
+    #[test]
+    fn fresh_lock_plan_does_not_request_restart_recheck() {
+        let policy = AuditStaleLockPolicy {
+            stale_after_ms: 5_000,
+        };
+        let lock = AuditLockFileMetadata {
+            path: "audit.jsonl.lock".to_owned(),
+            owner_pid: 42,
+            acquired_at_unix_ms: 10_000,
+        };
+
+        let plan =
+            plan_audit_stale_lock_recheck(&policy, &lock, 14_999).expect("plan should build");
+
+        assert_eq!(plan.lock_age_ms, 4_999);
+        assert!(!plan.stale);
+        assert!(!plan.service_manager_recheck_required);
+        assert!(!plan.lock_removal_performed);
+        assert!(!plan.filesystem_mutated);
+    }
+
+    #[test]
+    fn stale_lock_plan_rejects_future_timestamp() {
+        let policy = AuditStaleLockPolicy {
+            stale_after_ms: 5_000,
+        };
+        let lock = AuditLockFileMetadata {
+            path: "audit.jsonl.lock".to_owned(),
+            owner_pid: 42,
+            acquired_at_unix_ms: 20_000,
+        };
+
+        let error = plan_audit_stale_lock_recheck(&policy, &lock, 19_999)
+            .expect_err("future timestamp must fail closed");
+        assert!(matches!(error, AuditError::ValidationHarnessFailed { .. }));
     }
 }

@@ -107,11 +107,11 @@ Current workspace Rust/Cargo validation has local and GitHub Actions evidence fo
 ## Expected Unresolved Gaps
 
 - Rust/Cargo validation deferred.
-- Policy engine not integrated with audit journal yet.
-- No persistent destination allowlist exists yet.
+- Policy decisions have local audit/checkpoint helpers and a CLI validation gate; future live execution paths still need mandatory before/after audit enforcement.
+- Persistent destination allowlist records, ownership-reference review records, policy enforcement, audit/checkpoint helpers, and `arb-agent validate-destination-boundary-audit --workspace <fresh-dir>` now exist locally; real address ownership proof, operator address-book UX, signer-scoped enforcement, and external wallet/RPC validation remain future work.
 - No market-data provenance subsystem exists yet.
 - No execution adapter calls policy yet.
-- No signer boundary exists yet.
+- Local signer request and secret-scope review boundaries now exist; production custody-backed signing, signer-scoped runtime execution, and external wallet validation remain future work.
 - No property/fuzz test framework exists yet.
 
 ## Expected Future Continuation Tasks
@@ -125,4 +125,4 @@ Current workspace Rust/Cargo validation has local and GitHub Actions evidence fo
 
 ## Phase 3 Completion Status
 
-Implemented in ChatGPT Project Mode with Python structure validation only. Rust/Cargo validation is deferred and tracked in `PRODUCTION_GAP_TRACKER.md`.
+Implemented in ChatGPT Project Mode. Current workspace Rust/CI validation evidence exists for the policy engine, `arb-agent validate-policy-decision-audit --workspace <fresh-dir>` validates local policy-decision audit/checkpoint/reopen behavior without live execution, and `arb-agent validate-destination-boundary-audit --workspace <fresh-dir>` validates local destination allowlist plus ownership-reference audit/checkpoint/reopen behavior without address ownership proof, signing, RPC, transfers, withdrawals, or production-readiness claims.

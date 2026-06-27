@@ -6,11 +6,11 @@ ArbyClaw
 
 ## Architecture Status
 
-- Status: Phase 18 agentic handoff package boundary implemented; current workspace Rust/CI validation evidence exists, while external agent execution and real production hardening validation remain deferred.
-- Production readiness: 87% unchanged; Phase 18 adds handoff governance but no externally executed validation or production approval.
-- Implementation status: Minimal Rust workspace, typed config, redacted secret-reference abstractions, CLI config loading, isolated policy engine, append-only audit journal primitives, state-store trait boundary, normalized market-data models, freshness classification, fee models, provider trait boundaries, deterministic paper connectors, CEX connector framework types/traits, DEX/Web3 framework types/traits, deterministic opportunity-engine types/traits, draft-only execution-planner types/traits with local plan-draft checkpoint persistence, execution-adapter boundary records/traits, communications/CLI command and notification boundaries, embedded-dashboard local render boundaries, observability/runbook local record boundaries, testing/fuzzing/backtesting validation-plan boundaries, packaging/deployment plan boundaries, external hardening evidence/checklist boundaries, and agentic handoff package boundaries exist; current local and GitHub Actions validation covers structure, formatting, workspace compilation, tests, clippy, locked release build, dependency audit, SBOM generation, local-SARIF SAST evidence, example image scan, secret-pattern scan, and hardening evidence indexing. Production container validation, service installation, ARM cross-build validation, runtime deployment, validation runner execution, external fuzzing engine, backtest corpus execution, observability runtime, real dashboard hosting, outbound messaging integrations, external adapter submission, exchange-specific live adapters, live RPC adapters, wallet signer, transaction broadcasts, bridges, and live trading adapters remain unimplemented or unvalidated.
-- Safety posture: Design-time controls, Phase 2 mode gates, Phase 3 policy checks, Phase 4 redacted audit/hash-chain primitives and SQLite WAL checkpoint persistence, Phase 5 read-only market-data/fee boundaries, Phase 6 paper-only simulation boundaries with local paper-report checkpoint persistence, Phase 7 CEX framework live-order denial, Phase 8 DEX/Web3 framework live-swap/RPC/broadcast denial, Phase 9 opportunity discovery, Phase 10 draft-only execution planning with policy preflight outcomes, Phase 11 execution-adapter boundary records with policy revalidation, Phase 12 command/notification boundaries with outbound-network denial, Phase 13 dashboard render records with server/public-exposure/live-control denial, Phase 14 observability records with metrics-endpoint/outbound-alert denial, Phase 15 validation plans with external-fuzzer/live-network/live-execution denial, Phase 16 packaging records with build/deployment/public-exposure/production-claim denial, Phase 17 hardening records with external-action/production-claim/live-funds/public-exposure denial, and Phase 18 handoff records with external-agent-execution/external-validation-claim/production-claim/live-funds/public-exposure denial exist; signer boundary, live connector integrations, live execution controls, production durability validation, external adapter submission, real communication delivery, real dashboard hosting/authentication, real metrics/exporter/alert runtime, actual property/fuzz/backtest execution, production container/systemd/ARM deployment validation, broader Phase 17 production hardening review, future-agent execution validation, and external validation are not yet implemented or externally validated.
-- Current mode: Config/policy/audit/market-data/paper/CEX-framework/DEX-Web3-framework/opportunity-engine/execution-planner/execution-adapter-framework/communications-CLI/dashboard/observability/testing/packaging/hardening/handoff-ready greenfield construction with live trading disabled until later custody, exchange-specific live connector, DEX RPC adapter, signer, live adapter submission, execution hardening, real communications adapters, dashboard hosting hardening, observability runtime hardening, validation runner execution, packaging/deployment validation, production hardening review, and external validation phases are complete.
+- Status: Phase 55 local incident-response execution transcript validation is implemented after Phase 54 local rollback execution transcript validation, Phase 53 local deployment permission transcript validation, Phase 52 local deployment retention transcript validation, Phase 51 local deployment disk-full transcript validation, Phase 50 local service-manager lifecycle transcript validation, Phase 49 local production runtime preflight, and earlier local connector/runtime validation phases. The current architecture includes typed local Web3 sandbox/live discrepancy calibration, typed local production-runtime preflight boundaries, and sanitized local transcript validators for service-manager lifecycle, deployment disk-full, deployment retention/rotation, deployment permission-denial, rollback execution, and incident-response execution evidence. Current workspace Rust/CI validation evidence exists, while live exchange/RPC adapter implementation, real provider-backed nonce retrieval, provider-backed validation, broader external/deployment scenario-corpus validation, deployment-host audit validation under service lifecycle, physical disk-full evidence, deployment-host retention/rotation execution evidence, operator-controlled service-manager lifecycle execution evidence, rollback execution evidence, incident-response execution evidence, external sandbox/live calibration evidence, deployment-host durability validation, external agent execution, and real production hardening validation remain deferred.
+- Production readiness: Not approved; local validation coverage has expanded, but there is still no live-funds approval, deployment approval, production audit durability approval, or externally executed production validation.
+- Implementation status: Minimal Rust workspace, typed config, typed local strategy profile constraints, local persistent destination allowlist records with ownership-evidence reference reviews, redacted secret-reference abstractions, local fail-closed signer request records, signer secret-scope reviews, signer runtime isolation reviews, signer authorization envelope reviews with audit/state checkpoints, local Web3 nonce reservation reviews with audit/state checkpoints, local Web3 unsigned payload reviews with audit/state checkpoints, local Web3 pre-sign safety reviews with audit/state checkpoints, and local Web3 unsigned transaction construction records with audit/state checkpoints, local Web3 provider nonce reconciliation records with audit/state checkpoints, local Web3 raw transaction serialization review records with audit/state checkpoints, local Web3 broadcast adapter control review records with audit/state checkpoints, local Web3 sandbox/live discrepancy calibration records with audit/state checkpoints, CLI config loading, isolated policy engine, append-only audit journal primitives with local lock/sync appends, audit durability validation probes including simulated disk-full fail-closed behavior, side-effect-free retention/rotation planning, and side-effect-free stale-lock restart recheck planning, state-store trait boundary with SQLite WAL checkpoint persistence, local durability validation, process-level crash/restart recovery tests, and local runtime state-permission fail-closed validation, normalized market-data models, freshness classification, local market-data provider preflight records, fee models, local fee-schedule verification records, provider trait boundaries, local provider-to-opportunity ingestion for non-REST/non-WebSocket market-data and fee providers, deterministic paper connectors with local paper balance ledgering, realistic local fill simulation, venue matching profiles, adverse-selection modeling, reference-only calibration records, paper replay validation, local historical-fixture backtest execution, and local paper report/ledger-mutation audit journal records, CEX connector framework types/traits with a deterministic local CEX adapter, local Binance/Coinbase/Kraken-shaped fixture matching validation, mocked Binance/Coinbase/Kraken order-book transcript parsing, local Binance/Coinbase/Kraken balance snapshot transcript parsing, local rate-limit validation, local credential/API-scope review, and local validation audit/state checkpoints, DEX/Web3 framework types/traits with a deterministic local DEX adapter, local validation audit/state checkpoints, local EVM receipt/Solana signature-status transaction lifecycle transcript parsing with nonce/confirmation accounting, and local protocol risk review for chain/pair scope allowlists, router/spender contract hygiene, gas/slippage caps, MEV controls, token metadata/contract/decimals, and terms/jurisdiction/incident review, deterministic opportunity-engine types/traits with local replay/false-positive reports, local strategy replay/profitability-tuning validation over the historical opportunity corpus, draft-only execution-planner types/traits with local plan-draft audit/checkpoint persistence and per-intent policy-outcome audit records, a local execution-path aggregate gate over planner handoff, strategy constraints, planner audit, policy/destination audit, adapter audit, signer controls, and Web3 non-broadcast controls, execution-adapter boundary records/traits with local adapter-run checkpoint persistence, local fail-closed runtime lifecycle wiring for audit/state/adapter sequencing, local concurrent runtime lifecycle access checks, local graceful-shutdown audit/state checkpointing, local runtime audit/SQLite backup-restore validation, local runtime restart recovery summaries with recovered connector-lifecycle and opportunity-trace summary accounting, CLI-visible operator-review dispositions, and incomplete-checkpoint fail-closed coverage, local deployment-like runtime smoke validation with concurrent lifecycle reporting, blocked audit/state preflight checks, communications command/review/platform-ingress/envelope/channel-adapter/channel-session/platform-adapter/notification, embedded-dashboard render/security/preflight/request/session flows, observability collection/operations/export/alert-route/endpoint/bind/scrape/tracing/failure-capture flows, and a local operator-surface aggregate gate over communications, dashboard, observability, deployment-host wrapper reporting, and runtime-smoke integration, communications/CLI command, notification, and local authenticated channel-adapter boundaries with local audit/state checkpoints plus caller-supplied local notification rate-limit/outage gating, embedded-dashboard local render and hosted-security review boundaries with local audit/state checkpoints, observability/runbook local collection, operations-review, export dry-run, local alert-route dispatch through the deterministic communications notification boundary, endpoint preflight, loopback-bind validation, authenticated scrape preflight, one-shot loopback metrics endpoint validation, scoped panic-hook, and runtime failure-capture boundaries with local audit/state checkpoints plus a repeatable local observability-runtime CLI gate, testing/fuzzing/backtesting validation-plan boundaries with local validation-runner, property-check, and validation-corpus CLI audit/state/reopen checks, packaging/deployment plan boundaries with repeatable local example-container validation, static deployment hardening validation, static example systemd-unit validation, manual non-mutating systemd lifecycle plan/inspect evidence tooling, combined deployment-host runtime report tooling with non-mutating audit/state filesystem preflight and audit retention active/archive path preflight reporting, the aggregate deployment-runtime gate composing 24 local probes including six sanitized runtime/deployment transcript validators, sanitized service-manager lifecycle, deployment disk-full, deployment retention, deployment permission, rollback execution, and incident-response execution transcript validators, non-mutating rollback-drill evidence tooling, non-mutating incident-response drill evidence tooling, non-mutating deployment evidence bundle indexing with rollback/incident execution transcript components, and non-mutating deployment evidence checklist validation, external hardening evidence/checklist boundaries, deterministic agentic handoff package boundaries, and a local handoff-candidate aggregate gate over handoff audit, hardening core, and deployment-evidence checklist exist; current local and GitHub Actions validation covers structure, formatting, workspace compilation, tests, clippy, locked release build, dependency audit, dependency license policy validation, SBOM generation, local-SARIF SAST evidence, example image scan, static deployment hardening/config-loading/redaction checks, static example systemd-unit checks, secret-pattern scan, deployment evidence checklist artifact generation, hardening evidence indexing, the local operator-surface aggregate gate, the local execution-path aggregate gate, and the local handoff-candidate aggregate gate. Production container validation, service installation, deployment-host systemd lifecycle execution validation, rollback execution validation, incident-response execution validation, ARM cross-build validation, runtime deployment, live/provider-backed market-data and fee validation, external fuzzing engine, larger opportunity scenario-corpus execution, external backtest corpus execution, daemon-hosted production observability runtime/exporters/alerting, daemon-wide/deployment-host panic hooks, real dashboard hosting, outbound messaging integrations, external adapter submission, real exchange-specific live adapters, live RPC adapters, custody-backed wallet signer, transaction broadcasts, bridges, external address ownership validation, deployment-host audit validation, physical disk-full and retention/rotation execution evidence, service-manager restart execution evidence, deployment-host durability validation, external sandbox/live fill calibration evidence, and live trading adapters remain unimplemented or unvalidated.
+- Safety posture: Design-time controls, Phase 2 mode gates, Phase 3 policy checks, Phase 4 redacted audit/hash-chain primitives, local audit lock/sync/replay/disk-full-failure validation, side-effect-free retention planning, side-effect-free stale-lock restart recheck planning, and SQLite WAL checkpoint persistence, Phase 5 read-only market-data/fee boundaries, Phase 6 paper-only simulation boundaries with local paper-report, paper-ledger checkpoint, and paper audit journal persistence, Phase 7 CEX framework live-order denial plus local validation audit/state persistence, Phase 8 DEX/Web3 framework live-swap/RPC/broadcast denial plus local validation audit/state persistence and local signer-request rejection records, Phase 9 opportunity discovery, Phase 10 draft-only execution planning with policy preflight outcomes plus local plan-draft and policy-outcome audit journaling, Phase 11 execution-adapter boundary records with policy revalidation, Phase 12 command/notification boundaries with outbound-network denial plus local audit/state persistence, Phase 13 dashboard render records with server/public-exposure/live-control denial plus local audit/state persistence, Phase 14 observability records with metrics-endpoint/outbound-alert denial plus local audit/state persistence, Phase 15 validation plans and local property checks with external-fuzzer/live-network/live-execution denial, Phase 16 packaging records with build/deployment/public-exposure/production-claim denial plus non-mutating systemd lifecycle inspection tooling, Phase 17 hardening records with external-action/production-claim/live-funds/public-exposure denial, Phase 18 handoff records with external-agent-execution/external-validation-claim/production-claim/live-funds/public-exposure denial, Phase 19 runtime lifecycle records with audit-before-adapter and state-before-adapter checks, Phase 20 SQLite WAL durability checks with non-secret probes, Phase 21 paper balance ledger checks, Phase 22 process-level crash/restart recovery checks, Phase 23 realistic paper fill checks, Phase 24 paper replay/calibration/backtest validation checks, Phase 25 local paper audit append/replay checks, and Phase 26 local audit durability probes exist; custody-backed signer implementation, live connector integrations, live execution controls, deployment-host audit validation, physical disk-full and retention/rotation execution evidence, operator-controlled service-manager lifecycle execution evidence, external sandbox/live fill calibration evidence, deployment-host durability validation, external adapter submission, real communication delivery, real dashboard hosting/authentication, real metrics/exporter/alert runtime, external property/fuzz execution, production container/systemd/ARM deployment validation, broader Phase 17 production hardening review, future-agent execution validation, and external validation are not yet implemented or externally validated.
+- Current mode: Config/policy/audit/market-data/paper/CEX-framework/DEX-Web3-framework/opportunity-engine/execution-planner/execution-adapter-framework/runtime-lifecycle/communications-CLI/dashboard/observability/testing/packaging/hardening/handoff-ready greenfield construction with live trading disabled until later custody, exchange-specific live connector, DEX RPC adapter, custody-backed signer, live adapter submission, production execution hardening, real communications adapters, dashboard hosting hardening, observability runtime hardening, production-host runtime validation, packaging/deployment validation, production hardening review, and external validation phases are complete.
 
 ## Mission
 
@@ -202,11 +202,25 @@ Responsibilities:
 - Expose CLI commands
 - Trigger graceful shutdown
 
+Phase 19 implementation status:
+
+- `arb-core::runtime` defines local `RuntimeLifecycleRequest`, `RuntimeLifecycleRecord`, lifecycle status/error types, and `run_local_runtime_lifecycle`.
+- The lifecycle appends an audit event, persists the execution-plan draft, appends a plan-checkpoint audit event, evaluates the deterministic execution-adapter boundary, persists the adapter run, and appends an adapter-complete audit event.
+- Local tests cover concurrent lifecycle access through shared audit journal and SQLite WAL state paths without service startup.
+- Local tests cover simulated state permission failure and verify the lifecycle stops before adapter evaluation.
+- The runtime boundary also defines a local graceful-shutdown checkpoint model that appends shutdown audit records and persists a non-secret state checkpoint without stopping services.
+- The runtime boundary also defines local backup-restore validation reports that copy non-secret audit/SQLite artifacts after WAL checkpoints, reopen the copies, verify restored planner and adapter checkpoints, and expose both one-shot and concurrent-load CLI gates without touching production files.
+- The runtime boundary also defines a local restart recovery validation report and standalone CLI that replay audit records, reopen SQLite checkpoints, carry compact recovered connector-lifecycle and opportunity-trace summaries alongside planner/adapter/graceful-shutdown checkpoint outcomes, classify local recovery as ready-for-local-review or needs-operator-review without resuming services, surface those labels through CLI/report status for local operator review, and fail closed when required checkpoints are missing. A local process-supervised restart CLI writes lifecycle checkpoints in a child process and validates restart recovery from the parent without service-manager actions.
+- The runtime boundary also defines a local deployment-like smoke validation report, a repeated-iteration load/latency aggregate report, and CLI runners that run lifecycle, graceful-shutdown, backup/restore, permission-denial fail-closed validation, incomplete-recovery missing-checkpoint fail-closed validation, restart recovery with opportunity-trace summary accounting, local communications command-route, remote-command review, platform command-ingress, remote-command envelope, channel-adapter validation, channel-session validation, platform-adapter review, and notification-dispatch checkpoint recovery, local dashboard render, hosted-security review, hosted-request preflight, bounded one-shot hosted-request checkpoint recovery, and hosted-session validation summary recovery for accepted/unauthenticated/CSRF/rate-limit request accounting, local observability collection, operations review, export dry-run, alert-route dispatch, endpoint preflight, loopback-bind validation, metrics scrape preflight, bounded one-shot metrics endpoint validation, scoped tracing subscriber capture, local failure-capture checkpoint recovery, standalone local runtime panic-hook failure-capture validation, audit durability probes, and blocked-state preflight fail-closed checks together without starting services, public dashboard servers, long-lived metrics endpoints, exporters, alert delivery, outbound-network notification delivery, service-manager actions, deployment-state inspection, external adapter submission, live execution, or production-readiness claims.
+- Live-scope lifecycle requests are rejected before audit/state mutation.
+- Lifecycle records preserve `external_submission_performed = false` and `live_execution_performed = false`.
+
 Boundaries:
 
 - Does not sign transactions
 - Does not bypass policy
 - Does not directly mutate secrets
+- Does not submit external adapter requests or live orders
 
 ### 2. Configuration Subsystem
 
@@ -234,8 +248,18 @@ Boundaries:
 - Does not submit orders
 - Does not sign transactions
 - Does not load secrets
-- Does not persist audit events yet
+- Does not itself persist audit events; runtime lifecycle and audit modules own durable audit writes
 - Does not replace connector-specific validation
+
+Destination allowlist implementation status:
+
+- `arb-core::destination` defines local approved-destination entries, destination allowlist snapshots, append-only audit records, and SQLite WAL checkpoint helpers.
+- Destination entries reject LLM-generated approval sources, require enabled entries to reference ownership evidence, and validate chain/label/fingerprint/operator approval metadata without storing secrets.
+- Local ownership-evidence review reports audit and checkpoint reference presence only; they do not verify chain ownership, load signers, sign challenges, or approve production readiness.
+- `arb-agent validate-withdrawal-policy-boundary --workspace <fresh-dir>` verifies local config, strategy-profile, policy-engine, destination-allowlist, signer-reference, and audit/state fail-closed withdrawal denial without enabling withdrawals, signing, wallet custody, RPC calls, or production-readiness claims.
+- `arb-agent validate-destination-boundary-audit --workspace <fresh-dir>` verifies local destination allowlist and ownership-reference review audit replay, SQLite checkpoint recovery, and fail-closed invalid-audit/state-write behavior without address ownership proof, signer loading, challenge signing, RPC calls, transfers, withdrawals, or production-readiness claims.
+- `PolicyContext` carries local approved destination entries, and `PolicyEngine` rejects `DestinationPolicy::ApprovedAddress` unless the chain/label matches an enabled allowlist entry.
+- The boundary does not prove address ownership, administer a production address book, sign transactions, withdraw funds, bridge assets, or call wallet/RPC services.
 
 Phase 2 implementation status:
 
@@ -261,8 +285,13 @@ Responsibilities:
 
 Phase 2 implementation status:
 
-- `arb-core::secrets` now defines reference-only secret identifiers, redacted `SecretMaterial`, a `SecretProvider` trait, and an environment-variable provider skeleton.
-- The encrypted keystore backend is not implemented yet; only the typed boundary exists.
+- `arb-core::secrets` now defines reference-only secret identifiers, non-cloneable redacted `SecretMaterial` with local clear/drop byte clearing, a `SecretProvider` trait, an environment-variable provider skeleton, a local keystore alias loader using versioned XChaCha20-Poly1305 authenticated encryption with alias-bound associated data, temporary master-key/plaintext clearing after use, authenticated-ciphertext tamper rejection tests, metadata-only local keystore entry preflight reports, and non-mutating local rotation plan records with audit/SQLite checkpoint helpers.
+- `arb-agent validate-secret-boundary-audit --workspace <fresh-dir>` verifies local secret-rotation plan audit replay, SQLite checkpoint recovery, and fail-closed invalid-audit/state-write behavior without secret material loading, plaintext decryption, keystore entry writes, external credential revocation, or production-readiness claims.
+- `arb-core::signer` adds local signer secret-scope review records that require an approved keystore alias, strategy id, and chain before future signer work can proceed, with audit/SQLite checkpoint helpers and explicit no-key-load/no-plaintext-decrypt/no-sign/no-broadcast/no-RPC side-effect fields.
+- The local keystore, rotation-plan, and signer-scope boundaries are not production custody: OS keyring behavior, production key derivation policy, runtime signer-scoped key use, actual secret generation/keystore writes/revocation, deployment filesystem validation, panic-path review, and external custody review remain future work.
+- `arb-core::signer` now defines a local fail-closed signer request boundary with policy-decision matching, append-only audit records, SQLite WAL checkpoints, and explicit no-key-load/no-sign/no-broadcast/no-RPC side-effect fields.
+- `arb-agent validate-signer-boundary-audit --workspace <fresh-dir>` verifies local signer request and signer secret-scope audit replay, SQLite checkpoint recovery, and fail-closed invalid-audit/state-write behavior without key loading, plaintext decryption, signing, broadcasts, RPC calls, custody, or production-readiness claims.
+- The signer boundary never loads wallet material, signs payloads, broadcasts transactions, calls RPC endpoints, or claims production readiness.
 
 Boundaries:
 
@@ -270,6 +299,7 @@ Boundaries:
 - Messaging subsystem cannot access raw secrets
 - Strategy subsystem cannot access raw secrets
 - Dashboard cannot display raw secrets
+- Local signer request records are evidence of fail-closed request handling only; they are not custody or signing implementation.
 
 ### 4. Policy and Trust Contract Subsystem
 
@@ -294,6 +324,14 @@ Boundaries:
 - Must not depend on LLM judgment for safety-critical decisions
 - Must deny by default
 
+Implementation status:
+
+- `arb-core::policy` defines deterministic execution intents, policy decisions, trust-contract denials, and non-secret `PolicyDecisionRecord` summaries.
+- Local policy decision records can be appended to the hash-chained audit journal and persisted through the typed SQLite WAL/state checkpoint boundary.
+- `arb-agent validate-policy-decision-audit --workspace <fresh-dir>` records approved and denied local policy decisions, verifies audit replay plus SQLite checkpoint recovery, proves invalid side-effectful policy-decision audit records fail closed without advancing the journal, and proves state-write failure is surfaced without external submission, secrets, or live execution.
+- Policy decision recording explicitly reports no external submission and no secret material recording.
+- Live connector submission, signer/custody enforcement, production runtime wiring, and external policy validation remain future work.
+
 ### 5. Strategy and Command Library Subsystem
 
 Responsibilities:
@@ -313,6 +351,18 @@ Boundaries:
 - Cannot sign
 - Cannot disable policy
 
+Implementation status:
+
+- `arb-core::strategy` defines `StrategyProfile`, typed capital/risk/opportunity/execution/venue/alert parameter groups, `StrategyPolicyConstraintReport`, and `STRATEGY_PROFILE_VERSION`.
+- Strategy profiles validate mode, capital allocation, risk ceilings, opportunity thresholds, execution-shape toggles, venue/chain/router/asset allowlists, and destination labels.
+- Local strategy constraint reports reject candidate intents outside the profile without executing, signing, broadcasting, calling live networks, or replacing the policy engine.
+- `DeterministicExecutionPlanner::plan_with_strategy_profile` composes draft-only planning, policy preflight, and typed strategy constraint checks before any adapter boundary; rejected strategy constraints leave the draft in a denied state.
+- `validate_strategy_profile_replay_corpus` replays the local historical opportunity fixture corpus through accepted and rejected strategy profiles, proving draft-ready vs policy-denied outcomes without adapter submission, signing, broadcasting, or live network calls.
+- `validate_strategy_profitability_tuning` derives a deterministic low/median/high profitability-threshold sweep from local replay intent net profit and proves monotonic draft-ready vs policy-denied behavior across the historical corpus without adapter submission, signing, broadcasting, or live network calls.
+- `migrate_config_toml_to_current` validates current configs and upgrades known local legacy `[markets]` and `[notifications]` aliases plus legacy venue allowlist field names under `[venues]` into the current non-secret schema without loading secret material or enabling live execution.
+- Live-armed strategy scope, withdrawals, bridges, and flashloans are denied in this boundary.
+- External calibration remains future work.
+
 ### 6. Market Data Subsystem
 
 Responsibilities:
@@ -328,8 +378,13 @@ Responsibilities:
 
 Phase 5 implementation status:
 
-- `arb-core::market_data` defines normalized market pairs, price levels, top-of-book quotes, order-book snapshots, freshness classification, market-data requests, provider capabilities, and a read-only `MarketDataProvider` trait.
-- `arb-core::fees` defines fee schedules, fee estimates, fee-adjusted edge calculation, liquidity-role classification, and a read-only `FeeProvider` trait.
+- `arb-core::market_data` defines normalized market pairs, price levels, top-of-book quotes, order-book snapshots, freshness classification, market-data requests, provider capabilities, local provider preflight records, local reconnect/backoff plan validation records, local quality-assessment records, local historical-persistence batch records, local paid-provider evaluation records, audit/state checkpoint helpers for preflight, reconnect, quality-assessment, historical persistence, and paid-provider evaluation reports, and a read-only `MarketDataProvider` trait.
+- `arb-agent validate-market-data-boundary-audit --workspace <fresh-dir>` verifies local clean/degraded provider-preflight and ready/blocked reconnect-plan audit replay, SQLite checkpoint recovery, and fail-closed invalid-audit/state-write behavior without REST calls, WebSocket connections, provider credentials, downloaded market data, or production-readiness claims.
+- `arb-agent validate-market-data-quality-assessment` verifies local acceptable/degraded/blocked market-data quality scoring over normalized quotes and optional order books for freshness, spread, depth, and capture-latency thresholds without provider accounts, REST calls, WebSocket connections, or production-readiness claims.
+- `arb-agent validate-market-data-history-persistence --workspace <fresh-dir>` verifies local normalized quote/order-book history batches persist through SQLite WAL checkpoints, replay through audit summaries, retain the latest records per kind under deterministic truncation, and fail closed on invalid audit/state writes without provider accounts, REST calls, WebSocket connections, or production-readiness claims.
+- `arb-agent validate-paid-market-data-provider-evaluation` verifies local ready/blocked paid-provider comparison dossiers for coverage, latency, rate-limit, cost, failure-behavior, and governance metadata without provider accounts, billing setup, API keys, REST calls, WebSocket connections, or production-readiness claims.
+- `arb-core::fees` defines fee schedules, fee estimates, fee-adjusted edge calculation, liquidity-role classification, reference-only fee verification records, audit/state checkpoint helpers for fee verification reports, and a read-only `FeeProvider` trait.
+- `arb-agent validate-fee-boundary-audit --workspace <fresh-dir>` verifies local current/blocked fee-verification audit replay, SQLite checkpoint recovery, and fail-closed invalid-audit/state-write behavior without provider API calls, chain RPC calls, credentials, account queries, or production-readiness claims.
 - These models are local deterministic primitives only; they do not open sockets, call exchanges, call chain RPCs, load credentials, or execute trades.
 
 Boundaries:
@@ -337,7 +392,7 @@ Boundaries:
 - Must track data provenance
 - Must never treat stale data as executable
 - Must not place orders, sign transactions, mutate balances, or load trading secrets
-- Live provider validation, rate-limit handling, WebSocket reconnect behavior, and paid-data integrations are deferred
+- Live provider validation, provider-side rate-limit reconciliation, live WebSocket reconnect behavior, and paid-data integrations are deferred
 
 
 ### 6A. Paper Connector Subsystem
@@ -347,6 +402,7 @@ Responsibilities:
 - Provide deterministic in-memory market-data fixtures
 - Provide static paper fee schedules
 - Produce policy-gated paper execution reports
+- Track local simulated paper balances, notional reservations, and modeled fill settlement
 - Support future opportunity-engine and backtesting phases without live funds
 
 Phase 6 implementation status:
@@ -356,6 +412,15 @@ Phase 6 implementation status:
 - Paper fees implement the Phase 5 `FeeProvider` trait using static schedules.
 - Paper execution requires `PolicyEngine` approval and rejects non-paper scopes before producing a report.
 - `persist_paper_execution_report_checkpoint` stores the latest deterministic paper report through the typed local `StateStore` boundary and can use `SqliteWalStateStore` for non-secret local checkpoint persistence.
+- `PaperBalanceLedger` tracks caller-supplied simulated balances, reserves quote notional for paper intents, settles filled, partial, or unfilled reports with net paper P&L, releases unfilled reserved notional, and fails closed on insufficient balances or missing reservations.
+- `PaperFillSimulationRequest` and `PaperFillSimulationReport` consume caller-supplied local order-book depth, model buy/sell side fills, partial fills, unfilled outcomes, average fill price, slippage, latency, queue-position haircuts, and consumed levels without network calls.
+- `PaperExchangeMatchingProfile`, `PaperVenueRealismRequest`, adverse-selection records, and calibration records model local venue-specific tick/step/min-notional behavior, P&L haircuts, and reference-only sandbox/live discrepancy data without calling venues or embedding evidence contents.
+- `PaperAuditReplayValidationReport` reconstructs paper ledger balances from local ledger entries and detects replay mismatches.
+- `append_paper_execution_intent_audit`, `append_paper_execution_report_audit`, `append_paper_ledger_entry_audit`, and audited ledgered execution helpers append paper intent, report, and reserve/settlement mutation records to the local append-only audit journal and reopen it for hash-chain replay checks.
+- `ledger_execution_adapter_run_paper_fills` replays adapter reconciliation records against modeled fills, settles local deterministic execution-adapter modeled fills into the paper ledger, appends paper intent, report, and reserve/settlement audit records, persists the final ledger checkpoint, rejects duplicate modeled-fill settlement after SQLite checkpoint reopen before ledger/audit mutation, and refuses live/external-submission records.
+- `PaperBacktestCorpus` execution runs local historical-fixture paper steps through the existing paper adapter and ledger without data downloads, live networks, or external execution.
+- `PaperRuntimeValidationReport` distinguishes local replay/backtest validation from missing production-host evidence and never marks production readiness.
+- `persist_paper_balance_ledger_checkpoint` stores the latest deterministic paper ledger through the typed local `StateStore` boundary and can use `SqliteWalStateStore` for non-secret local checkpoint persistence.
 
 Boundaries:
 
@@ -363,9 +428,9 @@ Boundaries:
 - Does not load secrets
 - Does not sign transactions
 - Does not mutate real balances
-- Does not model production-grade depth, partial fills, latency, or settlement yet
+- Local exchange matching, adverse selection, reference-only calibration records, paper replay, and fixture backtesting are modeled deterministically, but external sandbox/live evidence is still missing
 - Must call policy before paper execution reports are produced
-- Does not replace future mandatory audit-before-action, fail-closed state writes, balance reconciliation, or production durability validation
+- Provides local paper audit-before-action coverage for audited paper execution paths, but does not replace broader future mandatory audit-before-action journal integration across live connectors, external sandbox/live realism checks, or external production-host durability validation
 
 ### 6B. CEX Connector Framework Subsystem
 
@@ -383,6 +448,11 @@ Phase 7 implementation status:
 
 - `arb-core::cex` defines `CexVenueProfile`, `CexConnectorCapabilities`, `CexConnectorRegistry`, `CexOrderRequest`, CEX order enums, `CexPolicyGate`, and connector traits.
 - `CexPolicyGate` validates paper/sandbox-scoped CEX order requests through the Phase 3 `PolicyEngine`.
+- Local CEX validation records can be appended to the audit journal and persisted as SQLite WAL checkpoints for policy-approved framework validation outcomes.
+- Local/mock CEX lifecycle responses can be reconciled through deterministic status-transition, fill-quantity/price/fee, cancelled-after-partial remainder accounting, lifecycle audit/state checkpoint, and duplicate-client-order-id checks without exchange calls, credentials, external submission, live cancellation, or live execution.
+- Local CEX balance snapshot transcripts can normalize caller-supplied Binance account, Coinbase accounts, and Kraken balance payloads without exchange calls, credentials, account-state queries, balance mutation, or live execution.
+- `arb-agent validate-connector-lifecycle-audit --workspace <fresh-dir>` verifies local/mock CEX lifecycle and local DEX/Web3 quote/simulation lifecycle audit replay, SQLite checkpoint recovery, and fail-closed invalid-audit/state-write behavior without exchange calls, RPC calls, credentials, signing, broadcasts, external submission, live execution, or production-readiness claims.
+- `LocalDeterministicCexAdapter` serves caller-supplied local quote/fee fixtures through read-only traits and validates paper orders through policy, returning only `LocallyValidated`.
 - Live CEX order requests are explicitly denied in Phase 7.
 
 Boundaries:
@@ -390,11 +460,12 @@ Boundaries:
 - Does not call exchange REST APIs
 - Does not open WebSocket streams
 - Does not load credentials
-- Does not read live balances
+- Does not read live balances or query account state
 - Does not submit or cancel live orders
 - Does not mutate balances
+- Local deterministic adapter does not prove exchange-specific REST, WebSocket, sandbox, fee-tier, rate-limit, cancel, or reconciliation behavior
 - Does not validate terms, jurisdiction, rate limits, or fees externally
-- Future live adapters must integrate audit-before-action, state checkpointing, rate-limit control, and credential-scope validation before any production use
+- Future live adapters must integrate real response lifecycle audit/state transitions, sandbox/live fill and cancel reconciliation, provider-backed rate-limit control, external credential/account validation, and deployment restart idempotency before any production use
 
 ### 6C. DEX/Web3 Connector Framework Subsystem
 
@@ -413,6 +484,11 @@ Phase 8 implementation status:
 
 - `arb-core::dex` defines `Web3ChainProfile`, `DexTokenProfile`, `DexRouterProfile`, `DexRouterCapabilities`, `DexConnectorRegistry`, `DexSwapQuoteRequest`, `DexSwapQuoteResponse`, `Web3TransactionSimulationRequest`, `Web3TransactionSimulationResponse`, `DexPolicyGate`, and connector traits.
 - `DexPolicyGate` validates paper/simulation-scoped DEX swap quote requests through the Phase 3 `PolicyEngine`.
+- Local DEX/Web3 validation records can be appended to the audit journal and persisted as SQLite WAL checkpoints for policy-approved framework validation outcomes.
+- Local DEX/Web3 quote/simulation lifecycle records can reconcile deterministic quote and local transaction-simulation responses, output shortfall, gas usage, duplicate intent ids, audit replay, and SQLite WAL checkpoint recovery without RPC calls, signer material, signing, broadcasts, bridges, live execution, or production-readiness claims.
+- Local DEX/Web3 protocol risk review records check caller-supplied chain/pair scope allowlists, router/spender contract hygiene, allowance denial, approval revocation planning, gas/slippage caps, MEV controls, token metadata/contract/decimals review, and terms/jurisdiction/incident review without RPC calls, signer material, signing, broadcasts, bridges, live execution, or production-readiness claims.
+- `arb-agent validate-connector-lifecycle-audit --workspace <fresh-dir>` covers this local DEX/Web3 lifecycle path together with the local/mock CEX lifecycle path as one repeatable no-live connector lifecycle gate.
+- `LocalDeterministicDexAdapter` serves caller-supplied quote/fee/simulation fixtures, validates paper swap quotes through policy, and returns only non-broadcastable local simulation responses.
 - Live DEX swaps, live RPC transaction simulation, signing, transaction broadcast, and bridges are explicitly unavailable in Phase 8.
 
 Boundaries:
@@ -424,8 +500,9 @@ Boundaries:
 - Does not sign transactions
 - Does not broadcast transactions
 - Does not execute bridges or withdrawals
-- Does not validate router contracts, token metadata, slippage, MEV risk, gas, or protocol terms externally
-- Future live adapters must integrate audit-before-action, state checkpointing, simulation, signer policy, spender/approval hygiene, and external protocol review before any production use
+- Local deterministic adapter and local protocol risk review do not prove live RPC, router/aggregator, gas, nonce, confirmation, approval/spender, MEV, or protocol-specific behavior against real venues or chains
+- Local protocol risk review checks caller-supplied metadata for chain/pair scope, router/spender contract hygiene, token metadata/contract/decimals, slippage, MEV risk, gas, and terms/jurisdiction/incident review, but does not validate router contracts, token metadata, jurisdiction, incident history, slippage, MEV risk, gas, or protocol terms externally
+- Future live adapters must integrate RPC/simulation/signing/broadcast lifecycle audit/state transitions, signer policy, spender/approval hygiene, nonce/confirmation tracking, and external protocol review before any production use
 
 ### 7. Opportunity Engine
 
@@ -440,11 +517,16 @@ Responsibilities:
 
 Phase 9 implementation status:
 
-- `arb-core::opportunity` defines `OpportunityDiscoveryConfig`, `OpportunityDiscoveryRequest`, `OpportunityCandidate`, `OpportunityLeg`, `OpportunityScore`, `OpportunityRouteKind`, `OpportunityEngine`, and `DeterministicOpportunityEngine`.
+- `arb-core::opportunity` defines `OpportunityDiscoveryConfig`, `OpportunityDiscoveryRequest`, `OpportunityCandidate`, `OpportunityLeg`, `OpportunityScore`, `OpportunityRouteKind`, local replay corpus/report records, the Phase 27 local regression corpus builder, `OpportunityEngine`, and `DeterministicOpportunityEngine`.
 - The deterministic engine consumes supplied `NormalizedQuote` and `FeeSchedule` values only.
 - Market-data freshness failures are fail-closed.
 - Ranking is deterministic and fee-aware.
-- Triangular arbitrage has a typed route boundary, but full triangular path search is deferred.
+- Same-venue triangular arbitrage search is implemented over supplied local quotes and fee schedules only.
+- Local opportunity replay reports can check expected route presence, no-candidate false-positive scenarios, and forbidden route kinds against supplied non-secret records.
+- Local historical opportunity fixture reports aggregate deterministic replay windows without downloading market data, calling exchanges/RPC endpoints, submitting orders, or mutating balances.
+- Local opportunity discovery ranking collapses duplicate candidates by stable candidate id before planner handoff, and local opportunity planner handoff reports append one local audit record and persist one SQLite WAL state checkpoint for each deduplicated replay candidate before converting it into a draft-only plan, then fail closed on missing traces, missing recovered trace checkpoints after audit/state reopen, planner failures, adapter-submission flags, external-call flags, or live-execution flags.
+- The built-in local regression corpus exercises cross-venue, no-candidate, triangular, depth/inventory, transfer-risk, DEX/DEX, CEX/DEX, candidate-truncation, and stale-data fail-closed scenarios without live data or execution.
+- `arb-agent validate-opportunity-replay` runs the built-in local corpus and fails closed on failed scenarios or forbidden side-effect flags; `arb-agent validate-opportunity-historical-fixtures` runs the local historical fixture corpus and fails closed on failed windows or forbidden side-effect flags; `arb-agent validate-opportunity-planner-handoff` converts replay candidates into draft-only plans and fails closed on planner failures or forbidden side-effect flags; `arb-agent validate-opportunity-trace-recovery` reopens local audit/state traces and fails closed on missing recovered trace evidence or forbidden side-effect flags; `arb-agent validate-local-validation-run --workspace <fresh-dir>` validates the local deterministic validation-runner audit/state/reopen path; `arb-agent validate-local-property-checks --workspace <fresh-dir>` validates local plan invariants; `arb-agent validate-local-fuzz-corpus --workspace <fresh-dir>` replays deterministic local fuzz seed metadata with audit/state recovery while denying external fuzzer invocation; `arb-agent validate-local-validation-corpus --workspace <fresh-dir>` aggregates multiple deterministic plans through local validation/property-check boundaries; `arb-agent validate-local-paper-backtest-corpus --workspace <fresh-dir>` executes a local paper backtest corpus with filled, partial, and unfilled modeled outcomes, sanitized audit records, SQLite checkpoint recovery, and no live network or external execution; CI runs these commands as hard local gates.
 
 Boundaries:
 
@@ -474,7 +556,7 @@ Phase 10 implementation status:
 - The deterministic planner converts each validated `OpportunityCandidate` leg into one draft `ExecutionIntent`.
 - Live planner scope is rejected fail-closed.
 - Every generated draft intent is evaluated through `PolicyEngine` and stored as a redacted policy outcome.
-- `persist_execution_plan_draft_checkpoint` stores the latest deterministic plan draft through the typed local `StateStore` boundary and can use `SqliteWalStateStore` for non-secret local checkpoint persistence.
+- `append_execution_plan_draft_audit` writes one deterministic plan-draft audit event plus one redacted policy-decision audit event per generated intent, `persist_execution_plan_draft_checkpoint` stores the latest deterministic plan draft through the typed local `StateStore` boundary and can use `SqliteWalStateStore` for non-secret local checkpoint persistence, and `arb-agent validate-execution-planner-audit --workspace <fresh-dir>` verifies local planner audit replay, SQLite checkpoint recovery, and fail-closed invalid-audit/state-write behavior without adapter submission, signing, broadcasts, withdrawals, bridges, or live execution.
 - `adapter_submission_enabled` is always false.
 
 Boundaries:
@@ -486,7 +568,7 @@ Boundaries:
 - Does not withdraw or bridge funds
 - Does not call CEX APIs
 - Does not call DEX/router/RPC APIs
-- Does not provide mandatory fail-closed audit/state lifecycle orchestration yet
+- Does not provide mandatory fail-closed live audit/state lifecycle orchestration yet
 - Must write to audit journal before any future live execution adapter receives a plan
 
 ### 9. Execution Adapter Subsystem
@@ -508,6 +590,11 @@ Phase 11 implementation status:
 - Paper fills and reconciliation records are deterministic model records only.
 - `external_submission_enabled` and every per-attempt `submitted_to_external_adapter` flag remain false.
 - Live scope and external adapter submission are rejected fail-closed.
+- `ExecutionPlanDraft` validation rejects duplicate draft intent ids and duplicate policy-outcome intent ids before adapter handoff.
+- Each `ExecutionAdapterAttempt` records `policy_revalidated = true`; adapter run validation rejects records without adapter-boundary policy revalidation evidence, and local tests cover kill-switch denial at adapter time without modeled fills or submission.
+- `ExecutionAdapterRunRecord` validation rejects duplicate attempt sequences, attempt intent ids, fill ids, fill intent ids, reconciliation ids, reconciliation intent ids, and unknown fill/reconciliation intent references before audit or checkpoint persistence.
+- `append_execution_adapter_run_audit` writes sanitized deterministic adapter-run metadata to the local append-only audit journal, `persist_execution_adapter_run_checkpoint` stores the latest deterministic adapter run through the typed local `StateStore` boundary using `SqliteWalStateStore` for non-secret local checkpoint persistence when configured, `arb-agent validate-execution-adapter-audit --workspace <fresh-dir>` verifies adapter-run and recovery-plan audit replay, SQLite checkpoint recovery, and fail-closed invalid-audit/state-write behavior without external submission, and `ledger_execution_adapter_run_paper_fills` can locally replay reconciliations and settle modeled paper fills into the paper ledger with audit/state recovery plus duplicate-settlement rejection after checkpoint reopen.
+- `ExecutionAdapterRecoveryPlan` records local no-op, cancel-remainder, and hedge-exposure follow-up plans for full-fill, no-fill, and partial-fill adapter outcomes; `append_execution_adapter_recovery_plan_audit` and `persist_execution_adapter_recovery_plan_checkpoint` persist sanitized local recovery metadata without submitting cancels, hedges, orders, swaps, transactions, broadcasts, withdrawals, or bridges.
 
 Boundaries:
 
@@ -519,7 +606,7 @@ Boundaries:
 - Does not sign or broadcast transactions
 - Does not withdraw or bridge funds
 - Does not submit external orders or transactions
-- Does not provide durable audit/state persistence yet
+- Does not provide production-validated durable audit/state persistence yet
 
 ### 10. Audit Journal Subsystem
 
@@ -540,6 +627,8 @@ Phase 4 implementation status:
 
 - `arb-core::audit` defines typed audit events, redacted metadata values, validation errors, append-only JSONL records, and a hash-chained local audit journal.
 - Existing records are replayed on open and rejected if sequence, previous-hash, format-version, redaction, or record-hash checks fail.
+- Audit appends now acquire a local lock before replay/sequence/hash calculation and call `sync_all` after writing.
+- `validate_audit_journal_durability` creates local non-secret journals to validate append/reopen replay, crash-like truncated replay rejection, tamper rejection, concurrent append replay, and invalid filesystem failure behavior.
 - `arb-core::state` defines a state-store trait and checkpoint model with an in-memory non-production implementation for tests and early wiring only.
 
 Boundaries:
@@ -547,8 +636,8 @@ Boundaries:
 - Must avoid secret leakage
 - Must be efficient and non-blocking where possible
 - Must support durable flush semantics for live-fund operations
-- Phase 4 JSONL audit is not yet SQLite WAL storage, externally crash-tested durability, concurrent append validation, or log shipping
-- State persistence is not production-ready until the SQLite WAL-backed implementation is crash/concurrency/filesystem validated and wired into runtime lifecycle paths
+- Phase 4 JSONL audit is not SQLite WAL storage, externally crash-tested deployment durability, physical disk-full/deployment-host retention/rotation execution validated, or log shipping
+- State persistence has local SQLite WAL integrity/checkpoint/reopen/backup-restore/multi-handle validation, but is not production-ready until crash/restart, filesystem failure, and deployment-host validation are executed with non-secret evidence references
 
 ### 11. Communications Subsystem
 
@@ -563,10 +652,17 @@ Responsibilities:
 
 Phase 12 implementation status:
 
-- `arb-core::communications` defines `CommunicationBoundaryConfig`, `NotificationChannelProfile`, `OperatorCommand`, `OperatorCommandRouter`, `DeterministicOperatorCommandRouter`, `OperatorNotification`, `NotificationPublisher`, `DeterministicNotificationBoundary`, and `NotificationDispatchRecord`.
+- `arb-core::communications` defines `CommunicationBoundaryConfig`, `NotificationChannelProfile`, `NotificationChannelSafetyState`, `OperatorCommand`, `OperatorCommandAuthorizationStatus`, `OperatorCommandRouter`, `DeterministicOperatorCommandRouter`, `OperatorNotification`, `NotificationPublisher`, `DeterministicNotificationBoundary`, `NotificationDispatchRecord`, `ChannelAdapterValidationRequest`, and `ChannelAdapterValidationReport`.
 - The deterministic command router accepts local status/help/config/safety/roadmap/plan-only commands as typed boundaries.
+- The command router requires local operator command-source authorization, rejects disabled local CLI routing, and rejects direct remote/scheduled/dashboard command routing. Separate local remote-command security review, mocked platform command-ingress, and envelope validation records model authentication, token-reference/raw-material controls, platform signature/identity verification, platform authorization, channel permission, replay protection, command allowlisting, command-injection marker detection, freshness, provider state, and unsafe-command denial without enabling remote execution, platform calls, or outbound delivery.
+- Local authenticated channel-adapter validation records connect ready remote envelopes to local notification dispatch records with replay, provider-rate-limit, provider-outage, no-delivery, no-network, and audit/state recovery checks, without platform tokens or real delivery.
+- Local channel-session validation summaries aggregate accepted, unauthenticated, replayed, and provider-unavailable adapter outcomes so local runtime validation can prove those denial paths without outbound delivery.
+- Local mocked platform command-ingress validation records prove token-reference metadata, raw-token-material denial, platform-signature verification, identity authorization, channel permission, replay nonce, freshness, provider-state, command-injection, and side-effect controls before a ready local ingress record is converted into remote envelope validation input.
+- Local platform-adapter control review records model non-secret token-reference metadata, raw-token-material denial, platform identity verification/authorization, channel permission, command-injection blocking, token revocation, provider rate-limit, and provider outage controls without storing tokens, calling platform APIs, or delivering messages.
+- `arb-agent validate-communications-runtime --workspace <fresh-dir>` replays and recovers local route, remote-review, platform-ingress, remote-envelope, channel-adapter, channel-session, platform-adapter review, and notification records through the append-only audit journal and SQLite WAL state store without outbound delivery.
 - The deterministic command router rejects live execution, withdrawals, bridges, signing, and broadcast command requests.
 - The deterministic notification boundary creates local dispatch records only and preserves `outbound_network_used = false`.
+- Caller-supplied local notification channel safety observations can block dispatch records for rate limits or outages before any future delivery adapter would be considered.
 - Secret-like command and notification text is rejected or redacted before local dispatch records are produced.
 
 Boundaries:
@@ -613,8 +709,12 @@ Responsibilities:
 
 Phase 13 implementation status:
 
-- `arb-core::dashboard` defines `DashboardBoundaryConfig`, `DashboardServerBinding`, `DashboardSnapshot`, `DashboardPanel`, `DashboardPanelItem`, `DashboardRenderer`, `DeterministicDashboardRenderer`, and `DashboardRenderRecord`.
+- `arb-core::dashboard` defines `DashboardBoundaryConfig`, `DashboardServerBinding`, `DashboardAccessContext`, `DashboardAccessAuthorizationStatus`, `DashboardSnapshot`, `DashboardPanel`, `DashboardPanelItem`, `DashboardRenderer`, `DeterministicDashboardRenderer`, `DashboardRenderRecord`, hosted-dashboard security review records, hosted-dashboard request preflight records, a bounded one-shot authenticated loopback hosted-request validation path that serves sanitized rendered-dashboard body content with byte/digest accounting, and local hosted-session validation summaries for accepted, unauthenticated, CSRF-rejected, and rate-limited request accounting.
 - The deterministic renderer creates local in-process render records only.
+- The deterministic renderer requires local access authorization and rejects hosted/browser session sources until real authentication is implemented.
+- The dashboard boundary also defines local hosted-security review records that require authentication, authorization, CSRF protection, CSRF token rotation/scoping, secure headers, clickjacking protection, rate limits, loopback-only defaults, and side-effect denial before future hosted work can be locally reviewed.
+- Local hosted-request preflight records account for loopback-only binding, browser-session source, hosted authentication/authorization, CSRF enforcement for state-changing methods, secure response headers, clickjacking/header coverage, and rate-limit windows without starting a server or binding sockets.
+- Local hosted-session validation records summarize multiple local hosted-request validations so `validate-dashboard-runtime` can prove one accepted authenticated loopback request plus unauthenticated, CSRF-invalid, and rate-limited rejections through audit replay and SQLite WAL checkpoint recovery without starting a persistent server or exposing public routes.
 - The boundary rejects HTTP server startup, public network exposure, non-loopback bind hosts, live controls, and secret rendering.
 - Render records preserve `server_started = false`, `public_network_exposed = false`, and `live_controls_enabled = false`.
 - Secret-like dashboard text is redacted before render records are produced.
@@ -645,11 +745,15 @@ Responsibilities:
 
 Phase 14 implementation status:
 
-- `arb-core::observability` defines `ObservabilityBoundaryConfig`, `ObservabilityEndpointBinding`, `HealthStatus`, `ComponentHealthStatus`, `StructuredLogEvent`, `MetricSample`, `Runbook`, `ObservabilitySnapshot`, `ObservabilityCollector`, `DeterministicObservabilityCollector`, and `ObservabilityRecord`.
+- `arb-core::observability` defines `ObservabilityBoundaryConfig`, `ObservabilityEndpointBinding`, `ObservabilityAccessContext`, `ObservabilityAccessAuthorizationStatus`, `HealthStatus`, `ComponentHealthStatus`, `StructuredLogEvent`, `MetricSample`, `Runbook`, `ObservabilitySnapshot`, `ObservabilityCollector`, `DeterministicObservabilityCollector`, `ObservabilityRecord`, local export/alert dry-run records, local endpoint/exporter preflight records, local ephemeral loopback bind validation records, local authenticated metrics scrape preflight records, local one-shot loopback metrics endpoint validation records, local scoped tracing subscriber validation records, sandbox-only observability log retention/rotation execution records, local scoped panic-hook capture records, and local runtime failure-capture records.
 - The deterministic collector creates local in-process observability records only.
-- The boundary rejects metrics endpoint startup, public network exposure, non-loopback bind hosts, outbound alert delivery, and secret observability.
-- Observability records preserve `metrics_endpoint_started = false`, `public_network_exposed = false`, and `outbound_alerts_sent = false`.
-- Secret-like health/log/metric/runbook text is redacted before collection records are produced.
+- The deterministic collector requires local collection authorization and rejects metrics endpoint/exporter/alert delivery session sources until real authentication is implemented.
+- The observability boundary also defines local operations review records for retention, redaction, alert-route references, incident runbook references, and loopback/authenticated endpoint policy, plus deterministic non-network Prometheus-style metric rendering and alert-route dry-run accounting while preserving no-export/no-alert side-effect denial.
+- Alert-route dry-run decisions can be bridged into the deterministic local communications notification boundary through `ObservabilityAlertRouteDispatchRequest`/`ObservabilityAlertRouteDispatchReport`, with append-only audit and SQLite WAL checkpoint helpers; accepted reports require local notification dispatch records and preserve no outbound alert delivery, no outbound network usage, no telemetry export, no live execution, and no production-readiness claims.
+- Local endpoint/exporter preflight records account for loopback binding, authentication, authorization, transport protection, telemetry redaction, alert-route references, exporter backpressure/fail-closed controls, endpoint-start denial, public-exposure denial, telemetry-export denial, and outbound-alert denial without exporting telemetry. Local loopback bind validation records can open and immediately close an ephemeral numeric-loopback listener. Local metrics scrape preflight records validate authenticated loopback `GET /metrics` behavior in-process against rendered metric lines, and local one-shot endpoint validation briefly serves exactly one authenticated loopback socket scrape before closing the listener.
+- The boundary rejects public network exposure, non-loopback bind hosts, outbound alert delivery, telemetry export, exporter sessions, and secret observability.
+- Observability collection/export/failure records preserve `public_network_exposed = false` and `outbound_alerts_sent = false`; the one-shot endpoint validation separately records `local_metrics_endpoint_started = true` and `network_request_served = true` for the bounded loopback probe only.
+- Secret-like health/log/metric/runbook/failure-capture text is redacted before local records are produced.
 
 Default future approach:
 
@@ -660,7 +764,7 @@ Default future approach:
 
 Boundaries:
 
-- No metrics endpoint startup in Phase 14
+- No long-lived or public metrics endpoint startup in Phase 14
 - No public telemetry exposure
 - No log shipping, SIEM delivery, OpenTelemetry exporter, Prometheus endpoint, or outbound alert delivery
 - No secret telemetry
@@ -684,11 +788,12 @@ Responsibilities:
 
 Phase 15 implementation status:
 
-- `arb-core::testing` defines `ValidationHarnessConfig`, `ValidationTestCase`, `ValidationFixtureRecord`, `FuzzSeedRecord`, `FuzzCorpusDefinition`, `BacktestDatasetDefinition`, `BacktestScenarioDefinition`, `ValidationPlan`, `ValidationHarness`, `DeterministicValidationHarness`, and `ValidationRunRecord`.
+- `arb-core::testing` defines `ValidationHarnessConfig`, `ValidationTestCase`, `ValidationFixtureRecord`, `FuzzSeedRecord`, `FuzzCorpusDefinition`, `BacktestDatasetDefinition`, `BacktestScenarioDefinition`, `ValidationPlan`, `ValidationHarness`, `DeterministicValidationHarness`, `ValidationRunRecord`, `LocalPropertyCheckReport`, `LocalFuzzCorpusReplayReport`, `LocalValidationCorpusReport`, and local validation-run/property-check/fuzz-corpus-replay/validation-corpus audit/state checkpoint helpers; `arb-agent validate-local-validation-run --workspace <fresh-dir>`, `arb-agent validate-local-property-checks --workspace <fresh-dir>`, `arb-agent validate-local-fuzz-corpus --workspace <fresh-dir>`, `arb-agent validate-local-validation-corpus --workspace <fresh-dir>`, and `arb-agent validate-local-paper-backtest-corpus --workspace <fresh-dir>` execute deterministic local runner boundaries and verify audit/state reopen recovery without external tooling, while local `proptest` coverage exercises opportunity-engine invariants under `cargo test`.
 - The deterministic harness validates plans and returns local records only.
 - The boundary rejects external fuzzer invocation, live network tests, live execution tests, credential-bearing fixtures, live order submission, signing, and transaction broadcasts.
 - Validation records preserve `external_fuzzer_invoked = false`, `live_network_used = false`, `live_execution_submitted = false`, and `signing_or_broadcast_performed = false`.
 - Secret-like operator labels are redacted before validation records are produced.
+- Local validation run, property-check, and validation-corpus records can be appended to the audit journal, recovered from SQLite WAL checkpoints, and exercised through local CLI runners without launching external fuzzers or live tooling.
 
 Default future approach:
 
@@ -696,7 +801,7 @@ Default future approach:
 - property tests after explicit dependency and corpus design
 - fuzzing with reviewed local harnesses after explicit future scope
 - deterministic fixture replay and backtesting against curated local corpora
-- CI gating after actual runner validation
+- CI gating after actual runner validation beyond the current local deterministic CLI audit/state/reopen and validation-corpus checks
 
 Boundaries:
 
@@ -722,10 +827,10 @@ Responsibilities:
 Phase 16 implementation status:
 
 - `arb-core::packaging` defines `PackagingBoundaryConfig`, `PackageTargetPlan`, `ServiceHardeningProfile`, `ReleaseGate`, `RollbackStep`, `DeploymentPackagePlan`, `DeploymentPackageRequest`, `DeploymentPackageRecord`, `PackagingDeploymentPlanner`, and `DeterministicPackagingDeploymentPlanner`.
-- The deterministic planner validates local package/deployment plans and returns records only.
+- The deterministic planner validates local package/deployment plans and returns records only; local rollback-validation records can be audited and checkpointed without executing rollback steps.
 - The boundary rejects public network exposure, embedded secret material, live trading deployment, build claims, deployment claims, and production deployment claims.
 - Package records preserve `build_performed = false`, `deployment_performed = false`, `public_network_exposed = false`, `live_trading_enabled = false`, `secret_material_embedded = false`, and `production_deployment_claimed = false`.
-- Example container, systemd, ARM, and deployment notes exist as templates only. Current CI builds and scans the example container image, but that does not prove production container, service, ARM, runtime deployment, or rollback readiness.
+- Example container, production-intent container, unsigned release artifact, systemd, ARM, and deployment notes exist as local/CI validation artifacts only. Current CI builds and scans the example container image, packages and verifies an unsigned locked release binary with SHA-256 manifest and unsigned provenance record, statically validates the example systemd unit, runs `systemd-analyze verify` syntax checks for the example unit against a temporary fake root, statically validates the ARM build-profile target/command/no-claim notes, and now defines production-container image-scan/hardened-smoke and ARM cross-target check jobs; `scripts/validate_release_artifact.py` can repeat the local unsigned release-artifact package/provenance/integrity/smoke gate with bounded build/smoke/metadata helper commands, `scripts/validate_container_example.py` can repeat the local example Docker/Trivy smoke gate with bounded Docker command timeouts and fail-closed unavailable-Docker reporting, `scripts/validate_production_container.py` can repeat the production-intent Docker/Trivy/help smoke gate and hardened read-only/no-network help smoke where Docker is healthy and fail closed with explicit non-claims when Docker is unavailable or unresponsive, `scripts/validate_systemd_example.py` can repeat static or optional syntax example-unit checks with bounded `systemd-analyze` execution, `scripts/validate_deployment_static_hardening.py` can repeat static deployment hardening and optional config/status smoke with bounded smoke execution, `scripts/validate_arm_build_profiles.py` can repeat ARM profile validation without installing targets or cross-building, `scripts/validate_arm_cross_check.py` can run `cargo check --workspace --target aarch64-unknown-linux-gnu --locked` through a host compiler when present or a bounded Docker fallback when it is not, `scripts/validate_systemd_lifecycle.py` can produce a manual lifecycle plan or bounded read-only deployment-host `systemctl show` inspection, `scripts/validate_deployment_host_runtime.py` can compose lifecycle evidence with a bounded lifecycle helper call, the local runtime-smoke CLI, local audit durability CLI, local sandbox audit-retention execution CLI, local graceful-shutdown checkpoint/reopen CLI, local backup/restore copy/reopen CLI, local blocked-state preflight CLI, non-mutating audit/state filesystem preflight reporting, non-mutating audit retention active/archive path preflight reporting, and local observability-runtime CLI reporting when explicitly requested, `scripts/validate_rollback_drill.py` can validate a non-mutating rollback-drill evidence plan, `scripts/validate_incident_response_drill.py` can validate a non-mutating incident-response drill evidence plan, `scripts/validate_deployment_evidence_bundle.py` can summarize the non-mutating helper outputs, including the deployment-host retention preflight component, into a compact bounded local evidence index, and `scripts/validate_deployment_evidence_checklist.py` can map remaining production evidence categories to sanitized locator references or explicit missing statuses through a bounded bundle call. These checks do not prove artifact signing, attestation upload, release publishing, image registry publishing, service lifecycle execution, ARM binary execution, ARM target-class runtime behavior, runtime deployment, deployment-host retention execution, observability exporter/alert operation, rollback readiness, incident-response readiness, physical disk-full behavior, or production readiness.
 
 Default future approach:
 
@@ -737,7 +842,7 @@ Default future approach:
 
 Boundaries:
 
-- No production container build execution in Phase 16
+- No image push, service install, or production deployment execution in Phase 16
 - No service installation or daemon start
 - No public dashboard, metrics, command, or control exposure
 - No embedded secrets in artifacts
@@ -841,7 +946,7 @@ Initial mandatory controls:
 
 ## Strategy Profile Parameter Library: Initial Design
 
-Strategy profiles should support typed parameters such as:
+The local strategy profile module now supports typed parameters such as:
 
 - `mode`
 - `capital.base_asset`
@@ -933,24 +1038,24 @@ Every phase must preserve rollback safety by:
 ## Current Hard Blockers to Production
 
 - Rust/Cargo validation must be rerun for every changed workspace state and does not imply production readiness
-- No encrypted secret manager or custody backend
-- No wallet signer boundary
+- No production encrypted-at-rest secret manager or custody backend beyond local alias loading and metadata preflight
+- No custody-backed wallet signer beyond local fail-closed signer request records
 - No exchange-specific live CEX adapters
-- No live DEX/Web3 RPC adapters, signer, transaction simulation integrations, or broadcasts
+- No live DEX/Web3 RPC adapters, signer, transaction simulation integrations, or broadcasts; local DEX/Web3 request plans, response transcript parsers, transaction lifecycle transcript parsers, and protocol risk reviews now exist only as side-effect-free metadata/fixture parsing
 - No live execution adapter submissions
-- SQLite WAL state store exists for local checkpoints, but production durability validation and runtime lifecycle wiring are missing
-- Audit journal is not crash/concurrency/filesystem validated
-- CEX framework is not connected to real REST/WebSocket APIs or sandboxes
-- DEX/Web3 framework is not connected to real RPC, router, aggregator, signer, simulation, or broadcast adapters
-- Opportunity engine has current workspace Rust validation evidence but does not yet model inventory, transfer latency, full triangular path discovery, or depth-aware slippage
-- Execution planner and execution-adapter framework have current workspace Rust validation evidence but do not provide durable audit/state lifecycle integration
+- SQLite WAL state store exists for local checkpoints, is wired into the local runtime lifecycle, adapter recovery-plan checkpoint recovery, graceful-shutdown checkpoint, local backup-restore validation, local restart recovery summary boundaries, and local deployment-smoke blocked-state preflight checks, and has local integrity/checkpoint/reopen/backup-restore/multi-handle plus process-level crash/restart and concurrent lifecycle access validation, but deployment-host crash/restart/filesystem validation is missing
+- Audit journal has local paper intent/report/ledger mutation append/replay wiring, local crash/concurrency/filesystem/simulated-disk-full validation probes, side-effect-free retention planning, local sandbox-only retention/rotation execution, and side-effect-free stale-lock restart recheck planning, but deployment-host audit validation, physical disk-full behavior, deployment-host retention/rotation execution, and service-manager restart execution evidence are missing
+- CEX framework has local named exchange fixture matching, local Binance/Coinbase/Kraken REST/WebSocket market-data request plans, mocked order-book transcript parsing, local balance snapshot transcript parsing, local rate-limit validation, local credential/API-scope review, and local governance review for fee/rate-limit/terms/jurisdiction/API-capability/incident metadata only and is not connected to live REST/WebSocket APIs, account queries, or sandboxes
+- DEX/Web3 framework has local Uniswap V3 quoter, 0x quote, Jupiter quote, and EVM simulation request plans, local response transcript parsing, local transaction lifecycle transcript parsing, and local protocol risk review only and is not connected to real RPC, router, aggregator, signer, simulation, or broadcast adapters
+- Opportunity engine has current workspace Rust validation evidence and now models local caller-supplied order-book depth, paper inventory caps, transfer-risk penalties, same-venue triangular path discovery, duplicate-candidate collapse by stable candidate id, local replay/false-positive reports, a built-in local regression corpus, local historical fixture replay aggregation, local replay CLI validation commands, local candidate audit/state traces, local candidate trace restart/reopen recovery validation, and replay-candidate planner handoff validation wired into CI, but broader external/deployment scenario-corpus validation and external sandbox/live calibration remain missing
+- Execution planner and execution-adapter framework have current workspace Rust validation evidence, local audit/state lifecycle wiring, and local adapter recovery-plan restart/smoke checkpoint recovery, and paper execution has local replay/backtest/audit-journal wiring, but production runtime validation and live/sandbox adapter integration remain missing
 - No runtime deployment validation
-- No container, systemd, ARM, or rollback-drill validation
-- CI/CD execution validation exists for structure, Rust validation, locked release build, dependency audit, SBOM generation, local-SARIF SAST evidence, example image scan, secret-pattern scan, and hardening evidence indexing only
+- No production container, systemd, ARM, rollback-drill, or incident-response drill validation
+- CI/CD execution validation exists for structure, Rust validation, locked release build, dependency audit, dependency license policy validation, SBOM generation, local-SARIF SAST evidence, example image scan, secret-pattern scan, and hardening evidence indexing only
 - No external security review
 - No live exchange API keys
 - No production deployment environment
 
 ## Phase 18 Agentic Handoff Boundary
 
-The agentic handoff subsystem provides deterministic package records, continuation prompts, governance checklists, external validation checklists, and future-agent instructions only. It does not execute external agents, call coding-agent APIs, deploy infrastructure, approve production readiness, approve public exposure, approve live funds, or store credentials. Handoff records may reference current local/CI validation evidence, but they preserve unresolved gaps and live-funds blockers so future agents cannot silently erase deferred validation work.
+The agentic handoff subsystem provides deterministic package records, continuation prompts, governance checklists, external validation checklists, future-agent instructions, and local handoff-review audit/state checkpoints only. `arb-agent validate-agentic-handoff-audit --workspace <fresh-dir>` appends a sanitized handoff review to the local audit journal, persists the review through SQLite WAL state, reopens both stores, and verifies fail-closed invalid-audit and state-write behavior. It does not execute external agents, call coding-agent APIs, deploy infrastructure, approve production readiness, approve public exposure, approve live funds, or store credentials. Handoff records may reference current local/CI validation evidence, but they preserve unresolved gaps and live-funds blockers so future agents cannot silently erase deferred validation work.

@@ -27,10 +27,193 @@ jobs:
         run: cargo check --workspace
       - name: Tests
         run: cargo test --workspace
+      - name: Config migration CLI validation
+        run: cargo run -p arb-agent -- validate-config-migration
+      - name: Opportunity replay CLI validation
+        run: cargo run -p arb-agent -- validate-opportunity-replay --iterations 2
+      - name: Opportunity quote-load CLI validation
+        run: cargo run -p arb-agent -- validate-opportunity-quote-load --venue-pairs 8 --max-candidates 3
+      - name: Opportunity provider-ingestion CLI validation
+        run: cargo run -p arb-agent -- validate-opportunity-provider-ingestion
+      - name: Market-data provider preflight CLI validation
+        run: cargo run -p arb-agent -- validate-market-data-provider-preflight
+      - name: Market-data reconnect plan CLI validation
+        run: cargo run -p arb-agent -- validate-market-data-reconnect-plan
+      - name: Market-data quality assessment CLI validation
+        run: cargo run -p arb-agent -- validate-market-data-quality-assessment
+      - name: Paid market-data provider evaluation CLI validation
+        run: cargo run -p arb-agent -- validate-paid-market-data-provider-evaluation
+      - name: Market-data boundary audit CLI validation
+        run: cargo run -p arb-agent -- validate-market-data-boundary-audit --workspace target/ci-market-data-boundary-audit
+      - name: Market-data history persistence CLI validation
+        run: cargo run -p arb-agent -- validate-market-data-history-persistence --workspace target/ci-market-data-history-persistence
+      - name: Fee schedule verification CLI validation
+        run: cargo run -p arb-agent -- validate-fee-schedule-verification
+      - name: Fee boundary audit CLI validation
+        run: cargo run -p arb-agent -- validate-fee-boundary-audit --workspace target/ci-fee-boundary-audit
+      - name: Opportunity historical fixture CLI validation
+        run: cargo run -p arb-agent -- validate-opportunity-historical-fixtures
+      - name: Opportunity trace recovery CLI validation
+        run: cargo run -p arb-agent -- validate-opportunity-trace-recovery
+      - name: Opportunity scenario aggregate gate validation
+        run: python3 scripts/validate_opportunity_scenario_gate.py --json
+      - name: Local validation-runner CLI validation
+        run: cargo run -p arb-agent -- validate-local-validation-run --workspace target/ci-local-validation-runner
+      - name: Local property-check CLI validation
+        run: cargo run -p arb-agent -- validate-local-property-checks --workspace target/ci-local-property-checks
+      - name: Local fuzz corpus replay CLI validation
+        run: cargo run -p arb-agent -- validate-local-fuzz-corpus --workspace target/ci-local-fuzz-corpus
+      - name: Local validation corpus CLI validation
+        run: cargo run -p arb-agent -- validate-local-validation-corpus --workspace target/ci-local-validation-corpus
+      - name: Local paper backtest corpus CLI validation
+        run: cargo run -p arb-agent -- validate-local-paper-backtest-corpus --workspace target/ci-local-paper-backtest-corpus
+      - name: Secret boundary audit CLI validation
+        run: cargo run -p arb-agent -- validate-secret-boundary-audit --workspace target/ci-secret-boundary-audit
+      - name: Execution path aggregate gate validation
+        run: python3 scripts/validate_execution_path_gate.py
+      - name: Connector lifecycle audit CLI validation
+        run: cargo run -p arb-agent -- validate-connector-lifecycle-audit --workspace target/ci-connector-lifecycle-audit
+      - name: CEX market-data request-plan CLI validation
+        run: cargo run -p arb-agent -- validate-cex-market-data-request-plans
+      - name: CEX balance-snapshot CLI validation
+        run: cargo run -p arb-agent -- validate-cex-balance-snapshots
+      - name: CEX governance review CLI validation
+        run: cargo run -p arb-agent -- validate-cex-governance-review
+      - name: DEX request-plan CLI validation
+        run: cargo run -p arb-agent -- validate-dex-request-plans
+      - name: DEX response-transcript CLI validation
+        run: cargo run -p arb-agent -- validate-dex-response-transcripts
+      - name: DEX transaction lifecycle transcript CLI validation
+        run: cargo run -p arb-agent -- validate-dex-transaction-lifecycle-transcripts
+      - name: DEX protocol risk review CLI validation
+        run: cargo run -p arb-agent -- validate-dex-protocol-risk-review
+      - name: Connector scenario aggregate gate validation
+        run: python3 scripts/validate_connector_scenario_gate.py --json
+      - name: Local audit durability CLI validation
+        run: cargo run -p arb-agent -- validate-audit-durability --workspace target/ci-audit-durability
+      - name: Local audit retention execution CLI validation
+        run: cargo run -p arb-agent -- validate-audit-retention-execution --workspace target/ci-audit-retention-execution
+      - name: Local deployment disk-full transcript validation
+        run: cargo run -p arb-agent -- validate-deployment-disk-full-transcript
+      - name: Local deployment permission transcript validation
+        run: cargo run -p arb-agent -- validate-deployment-permission-transcript
+      - name: Local deployment retention transcript validation
+        run: cargo run -p arb-agent -- validate-deployment-retention-transcript
+      - name: Local rollback execution transcript validation
+        run: cargo run -p arb-agent -- validate-rollback-execution-transcript
+      - name: Local incident-response execution transcript validation
+        run: cargo run -p arb-agent -- validate-incident-response-execution-transcript
+      - name: Local runtime graceful-shutdown CLI validation
+        run: cargo run -p arb-agent -- validate-runtime-graceful-shutdown --workspace target/ci-runtime-graceful-shutdown
+      - name: Local runtime backup-restore CLI validation
+        run: cargo run -p arb-agent -- validate-runtime-backup-restore --workspace target/ci-runtime-backup-restore
+      - name: Local runtime backup-restore load CLI validation
+        run: cargo run -p arb-agent -- validate-runtime-backup-restore-load --workspace target/ci-runtime-backup-restore-load
+      - name: Local runtime restart-recovery CLI validation
+        run: cargo run -p arb-agent -- validate-runtime-restart-recovery --workspace target/ci-runtime-restart-recovery
+      - name: Local runtime incomplete-recovery CLI validation
+        run: cargo run -p arb-agent -- validate-runtime-incomplete-recovery --workspace target/ci-runtime-incomplete-recovery
+      - name: Local runtime supervised-restart CLI validation
+        run: cargo run -p arb-agent -- validate-runtime-supervised-restart --workspace target/ci-runtime-supervised-restart
+      - name: Local runtime permission-denial CLI validation
+        run: cargo run -p arb-agent -- validate-runtime-permission-denial --workspace target/ci-runtime-permission-denial
+      - name: Local runtime blocked-state preflight CLI validation
+        run: cargo run -p arb-agent -- validate-runtime-blocked-state-preflight --workspace target/ci-runtime-blocked-state-preflight
+
+      - name: Deployment graceful-shutdown report validation
+        run: |
+          python3 scripts/validate_deployment_host_runtime.py \
+            --run-graceful-shutdown \
+            --graceful-shutdown-workspace target/ci-deployment-graceful-shutdown \
+            --json
+
+      - name: Deployment backup-restore report validation
+        run: |
+          python3 scripts/validate_deployment_host_runtime.py \
+            --run-backup-restore \
+            --backup-restore-workspace target/ci-deployment-backup-restore \
+            --json
+
+      - name: Deployment backup-restore load report validation
+        run: |
+          python3 scripts/validate_deployment_host_runtime.py \
+            --run-backup-restore-load \
+            --backup-restore-load-workspace target/ci-deployment-backup-restore-load \
+            --json
+
+      - name: Deployment restart-recovery report validation
+        run: |
+          python3 scripts/validate_deployment_host_runtime.py \
+            --run-restart-recovery \
+            --restart-recovery-workspace target/ci-deployment-restart-recovery \
+            --json
+
+      - name: Deployment incomplete-recovery report validation
+        run: |
+          python3 scripts/validate_deployment_host_runtime.py \
+            --run-incomplete-recovery \
+            --incomplete-recovery-workspace target/ci-deployment-incomplete-recovery \
+            --json
+
+      - name: Deployment supervised-restart report validation
+        run: |
+          python3 scripts/validate_deployment_host_runtime.py \
+            --run-supervised-restart \
+            --supervised-restart-workspace target/ci-deployment-supervised-restart \
+            --json
+
+      - name: Deployment permission-denial report validation
+        run: |
+          python3 scripts/validate_deployment_host_runtime.py \
+            --run-permission-denial \
+            --permission-denial-workspace target/ci-deployment-permission-denial \
+            --json
+
+      - name: Operator surface aggregate gate validation
+        run: python3 scripts/validate_operator_surface_gate.py
+      - name: Local runtime panic-hook CLI validation
+        run: cargo run -p arb-agent -- validate-runtime-panic-hook --workspace target/ci-runtime-panic-hook
+
+      - name: Deployment runtime panic-hook report validation
+        run: |
+          python3 scripts/validate_deployment_host_runtime.py \
+            --run-runtime-panic-hook \
+            --runtime-panic-hook-workspace target/ci-deployment-runtime-panic-hook \
+            --json
+
+      - name: Deployment runtime aggregate gate validation
+        run: python3 scripts/validate_deployment_runtime_gate.py --json
+
+      - name: Deployment filesystem preflight report validation
+        run: |
+          mkdir -p target/ci-deployment-filesystem-preflight
+          python3 scripts/validate_deployment_host_runtime.py \
+            --run-filesystem-preflight \
+            --filesystem-audit-path target/ci-deployment-filesystem-preflight/runtime-audit.jsonl \
+            --filesystem-state-path target/ci-deployment-filesystem-preflight/runtime-state.sqlite3 \
+            --json
+      - name: Local service-manager lifecycle transcript validation
+        run: cargo run -p arb-agent -- validate-service-manager-lifecycle-transcript
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Locked release build
         run: cargo build --release --locked
+      - name: Repository structure validation
+        run: python3 scripts/validate_structure.py
+      - name: Install ARM cross-check toolchain
+        run: |
+          rustup target add aarch64-unknown-linux-gnu
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu
+      - name: Agentic handoff candidate aggregate gate validation
+        run: python3 scripts/validate_agentic_handoff_candidate_gate.py --json --require-systemd-analyze
+      - name: Upload release artifact bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: arbyclaw-release-artifact
+          path: target/release-artifacts/*
+          if-no-files-found: error
+          retention-days: 14
       - name: Install hardening tools
         run: cargo install cargo-audit cargo-cyclonedx --locked
       - name: Dependency audit
@@ -41,8 +224,6 @@ jobs:
           test -s crates/arb-core/arbyclaw.cdx.json
           test -s crates/arb-agent/arbyclaw.cdx.json
           rm crates/arb-core/arbyclaw.cdx.json crates/arb-agent/arbyclaw.cdx.json
-      - name: Repository structure validation
-        run: python3 scripts/validate_structure.py
 
   codeql:
     name: codeql-sast
@@ -121,14 +302,68 @@ jobs:
         run: |
           rm -f trivy-image-scan.txt
 
+  production-container:
+    name: production-container-image-scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Build production container image
+        uses: docker/build-push-action@v7.1.0
+        with:
+          context: .
+          file: deployment/container/Containerfile.production
+          tags: arbyclaw-production:ci
+          load: true
+          push: false
+      - name: Smoke production container help path
+        run: |
+          docker run --rm arbyclaw-production:ci | tee production-container-smoke.txt
+          grep -q "usage: arb-agent \[--config <path>\]" production-container-smoke.txt
+      - name: Smoke hardened production container help path
+        run: |
+          docker run --rm --read-only --network none --cap-drop ALL --security-opt no-new-privileges arbyclaw-production:ci | tee production-container-hardened-smoke.txt
+          grep -q "usage: arb-agent \[--config <path>\]" production-container-hardened-smoke.txt
+      - name: Generate production Trivy image scan evidence
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: arbyclaw-production:ci
+          format: table
+          output: trivy-production-image-scan.txt
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: 0
+      - name: Enforce no fixable critical production image vulnerabilities
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: arbyclaw-production:ci
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: 1
+      - name: Upload production image scan evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: trivy-production-image-scan-evidence
+          path: |
+            trivy-production-image-scan.txt
+            production-container-smoke.txt
+            production-container-hardened-smoke.txt
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Remove production image scan evidence
+        if: always()
+        run: |
+          rm -f trivy-production-image-scan.txt production-container-smoke.txt production-container-hardened-smoke.txt
+
   secrets:
     name: secret-pattern-scan
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
       - name: Install Gitleaks
         run: |
           set -euo pipefail
@@ -142,7 +377,7 @@ jobs:
           gitleaks version
       - name: Generate redacted secret scan evidence
         run: |
-          gitleaks detect --source . --redact --report-format json --report-path gitleaks-secret-scan.json --exit-code 0
+          gitleaks detect --source . --no-git --redact --report-format json --report-path gitleaks-secret-scan.json --exit-code 1
           test -s gitleaks-secret-scan.json
       - name: Upload secret scan evidence
         if: always()
@@ -157,10 +392,52 @@ jobs:
         run: |
           rm -f gitleaks-secret-scan.json
 
+  deployment-evidence:
+    name: deployment-evidence-checklist
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Generate deployment evidence checklist
+        run: |
+          python3 scripts/validate_deployment_evidence_checklist.py --json > deployment-evidence-checklist.json
+          python3 scripts/validate_deployment_evidence_checklist.py > deployment-evidence-checklist.txt
+          test -s deployment-evidence-checklist.json
+          test -s deployment-evidence-checklist.txt
+      - name: Write deployment evidence job summary
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          # ArbyClaw deployment evidence checklist
+
+          This summary points to a non-secret checklist artifact for remaining external deployment evidence. It is a missing-evidence index only and is not a production-readiness claim.
+
+          - Artifact: `deployment-evidence-checklist`
+          - Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          - Commit: `${{ github.sha }}`
+          - Ref: `${{ github.ref_name }}`
+
+          ## Explicit Non-Claims
+
+          This does not validate production deployment, live funds, signing, broadcasts, withdrawals, bridges, live exchange/RPC calls, production container readiness, systemd or ARM deployment, load testing, penetration testing, rollback drills, incident drills, custody review, compliance review, or production readiness.
+          EOF
+      - name: Upload deployment evidence checklist
+        uses: actions/upload-artifact@v7
+        with:
+          name: deployment-evidence-checklist
+          path: |
+            deployment-evidence-checklist.json
+            deployment-evidence-checklist.txt
+          if-no-files-found: error
+          retention-days: 14
+      - name: Remove deployment evidence checklist
+        if: always()
+        run: |
+          rm -f deployment-evidence-checklist.json deployment-evidence-checklist.txt
+
   evidence-index:
     name: hardening-evidence-index
     runs-on: ubuntu-latest
-    needs: [rust, codeql, container, secrets]
+    needs: [rust, codeql, container, production-container, secrets, deployment-evidence]
     if: always()
     steps:
       - name: Create hardening evidence index
@@ -181,7 +458,9 @@ jobs:
           | `rust-validation` | `${{ needs.rust.result }}` |
           | `codeql-sast` | `${{ needs.codeql.result }}` |
           | `example-container-image-scan` | `${{ needs.container.result }}` |
+          | `production-container-image-scan` | `${{ needs['production-container'].result }}` |
           | `secret-pattern-scan` | `${{ needs.secrets.result }}` |
+          | `deployment-evidence-checklist` | `${{ needs.deployment-evidence.result }}` |
 
           ## Evidence Artifacts And Gates
 
@@ -189,14 +468,19 @@ jobs:
           |---|---|---|
           | `codeql-sarif-evidence` | `codeql-sast` | Local-SARIF CodeQL SAST output; GitHub code-scanning upload remains disabled/unvalidated. |
           | `trivy-image-scan-evidence` | `example-container-image-scan` | Example container image scan evidence only; not production image readiness. |
+          | `trivy-production-image-scan-evidence` | `production-container-image-scan` | Production-intent container build, inert and hardened read-only/no-network help smoke, and Trivy scan evidence; not service install, deployment, or production readiness. |
           | `gitleaks-secret-scan-evidence` | `secret-pattern-scan` | Redacted repository secret-pattern scan evidence. |
+          | `deployment-evidence-checklist` | `deployment-evidence-checklist` | Missing-or-referenced external deployment evidence checklist; not deployment or production readiness. |
           | Docker build record artifact | `example-container-image-scan` | Docker Buildx build record for the example image when emitted by the action. |
+          | Example systemd unit gate | `rust-validation` | Static and `systemd-analyze verify` syntax checks for the example unit only; not service installation or deployment readiness. |
           | CycloneDX SBOM gate | `rust-validation` | Non-empty per-crate SBOM generation check; SBOM files are removed from the runner and not retained as artifacts. |
           | Dependency audit gate | `rust-validation` | `cargo audit` gate over `Cargo.lock`; no separate artifact retained. |
+          | Dependency license policy gate | `rust-validation` | Locked `cargo metadata` license-policy check over workspace and transitive crates; no separate artifact retained. |
+          | `arbyclaw-release-artifact` | `rust-validation` | Unsigned locked release binary plus SHA-256 manifest, unsigned provenance record, and bundle-integrity verification; not signing, publishing, deployment, or readiness. |
 
           ## Explicit Non-Claims
 
-          This does not validate production deployment, live funds, signing, broadcasts, withdrawals, bridges, live exchange/RPC calls, production container readiness, systemd or ARM deployment, load testing, penetration testing, rollback drills, incident drills, custody review, compliance review, or production readiness.
+          This does not validate production deployment, live funds, signing, broadcasts, withdrawals, bridges, live exchange/RPC calls, service installation, systemd or ARM deployment, load testing, penetration testing, rollback drills, incident drills, custody review, compliance review, or production readiness.
           EOF
           test -s hardening-evidence-index.md
       - name: Write hardening evidence job summary
@@ -217,7 +501,9 @@ jobs:
           | `rust-validation` | `${{ needs.rust.result }}` |
           | `codeql-sast` | `${{ needs.codeql.result }}` |
           | `example-container-image-scan` | `${{ needs.container.result }}` |
+          | `production-container-image-scan` | `${{ needs['production-container'].result }}` |
           | `secret-pattern-scan` | `${{ needs.secrets.result }}` |
+          | `deployment-evidence-checklist` | `${{ needs.deployment-evidence.result }}` |
 
           ## Evidence Artifacts And Gates
 
@@ -226,14 +512,19 @@ jobs:
           | `hardening-evidence-index` | `hardening-evidence-index` | Downloadable copy of this evidence navigation index. |
           | `codeql-sarif-evidence` | `codeql-sast` | Local-SARIF CodeQL SAST output; GitHub code-scanning upload remains disabled/unvalidated. |
           | `trivy-image-scan-evidence` | `example-container-image-scan` | Example container image scan evidence only; not production image readiness. |
+          | `trivy-production-image-scan-evidence` | `production-container-image-scan` | Production-intent container build, inert and hardened read-only/no-network help smoke, and Trivy scan evidence; not service install, deployment, or production readiness. |
           | `gitleaks-secret-scan-evidence` | `secret-pattern-scan` | Redacted repository secret-pattern scan evidence. |
+          | `deployment-evidence-checklist` | `deployment-evidence-checklist` | Missing-or-referenced external deployment evidence checklist; not deployment or production readiness. |
           | Docker build record artifact | `example-container-image-scan` | Docker Buildx build record for the example image when emitted by the action. |
+          | Example systemd unit gate | `rust-validation` | Static and `systemd-analyze verify` syntax checks for the example unit only; not service installation or deployment readiness. |
           | CycloneDX SBOM gate | `rust-validation` | Non-empty per-crate SBOM generation check; SBOM files are removed from the runner and not retained as artifacts. |
           | Dependency audit gate | `rust-validation` | `cargo audit` gate over `Cargo.lock`; no separate artifact retained. |
+          | Dependency license policy gate | `rust-validation` | Locked `cargo metadata` license-policy check over workspace and transitive crates; no separate artifact retained. |
+          | `arbyclaw-release-artifact` | `rust-validation` | Unsigned locked release binary plus SHA-256 manifest, unsigned provenance record, and bundle-integrity verification; not signing, publishing, deployment, or readiness. |
 
           ## Explicit Non-Claims
 
-          This does not validate production deployment, live funds, signing, broadcasts, withdrawals, bridges, live exchange/RPC calls, production container readiness, systemd or ARM deployment, load testing, penetration testing, rollback drills, incident drills, custody review, compliance review, or production readiness.
+          This does not validate production deployment, live funds, signing, broadcasts, withdrawals, bridges, live exchange/RPC calls, service installation, systemd or ARM deployment, load testing, penetration testing, rollback drills, incident drills, custody review, compliance review, or production readiness.
           EOF
       - name: Upload hardening evidence index
         uses: actions/upload-artifact@v7
