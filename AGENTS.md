@@ -4,6 +4,7 @@
 
 Repository: arbyclaw
 Path: C:\dev\arbyclaw
+Durable repo context: docs/ai/REPO_BRIEF.md
 
 ## Role Split
 
