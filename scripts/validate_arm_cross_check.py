@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import pathlib
 import shutil
 import subprocess
@@ -33,7 +34,12 @@ DOCKER_RUST_PATH = (
 )
 
 
-def run(command: list[str], *, timeout: int) -> subprocess.CompletedProcess[str]:
+def run(
+    command: list[str],
+    *,
+    timeout: int,
+    env: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
     print(f"+ {' '.join(command)}", flush=True)
     try:
         return subprocess.run(
@@ -45,6 +51,7 @@ def run(command: list[str], *, timeout: int) -> subprocess.CompletedProcess[str]
             stderr=subprocess.STDOUT,
             text=True,
             timeout=timeout,
+            env=env,
         )
     except subprocess.TimeoutExpired as error:
         return subprocess.CompletedProcess(
@@ -131,9 +138,14 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
     effective_cross_compiler_path = host_cross_compiler_path
     external_calls_performed = target_install_attempted
     if host_check_attempted:
+        cargo_env = os.environ.copy()
+        cargo_env["CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER"] = TARGET_CC
+        cargo_env["CC_aarch64_unknown_linux_gnu"] = TARGET_CC
+        cargo_env["PKG_CONFIG_ALLOW_CROSS"] = "1"
         check = run(
             ["cargo", "check", "--workspace", "--target", TARGET, "--locked"],
             timeout=CARGO_CHECK_TIMEOUT_SECONDS,
+            env=cargo_env,
         )
         check_returncode = check.returncode
         check_output_tail = check.stdout.splitlines()[-20:]

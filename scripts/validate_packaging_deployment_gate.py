@@ -96,8 +96,10 @@ def run_component(name: str, command: list[str]) -> dict[str, Any]:
     )
     output = f"{completed.stdout}\n{completed.stderr}".strip()
     parsed: dict[str, Any] | None = None
-    if completed.returncode == 0:
+    try:
         parsed = extract_json_report(output)
+    except (json.JSONDecodeError, RuntimeError):
+        parsed = None
     return {
         "name": name,
         "command": " ".join(command),
