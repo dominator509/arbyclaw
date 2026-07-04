@@ -13155,6 +13155,10 @@ fn run_dashboard_runtime_validation(
         rate_limit_required: true,
         max_requests_per_minute: 60,
         loopback_only_required: true,
+        audit_state_preflight_required: true,
+        session_revocation_required: true,
+        operator_role_review_required: true,
+        read_only_controls_required: true,
         public_exposure_requested: false,
         server_start_requested: false,
         live_controls_requested: false,
@@ -13436,6 +13440,22 @@ fn run_dashboard_runtime_validation(
     println!(
         "dashboard-hosted-security-ready: {}",
         security_review.status == DashboardHostedSecurityReviewStatus::ReadyForLocalReview
+    );
+    println!(
+        "dashboard-hosted-audit-state-preflight-required: {}",
+        security_review.audit_state_preflight_required
+    );
+    println!(
+        "dashboard-hosted-session-revocation-required: {}",
+        security_review.session_revocation_required
+    );
+    println!(
+        "dashboard-hosted-operator-role-review-required: {}",
+        security_review.operator_role_review_required
+    );
+    println!(
+        "dashboard-hosted-read-only-controls-required: {}",
+        security_review.read_only_controls_required
     );
     println!(
         "dashboard-hosted-request-preflight-ready: {}",

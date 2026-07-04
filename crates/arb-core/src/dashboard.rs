@@ -196,6 +196,14 @@ pub struct DashboardHostedSecurityPolicy {
     pub max_requests_per_minute: u32,
     /// Whether future hosting must remain loopback-only unless separately approved.
     pub loopback_only_required: bool,
+    /// Whether future hosted startup requires audit/state preflight.
+    pub audit_state_preflight_required: bool,
+    /// Whether future hosted sessions require revocation/logout controls.
+    pub session_revocation_required: bool,
+    /// Whether future hosted access requires operator role review.
+    pub operator_role_review_required: bool,
+    /// Whether future hosted controls must remain read-only until separately approved.
+    pub read_only_controls_required: bool,
     /// Whether the reviewed policy requested public exposure. Must be false here.
     pub public_exposure_requested: bool,
     /// Whether the reviewed policy requested server startup. Must be false here.
@@ -242,6 +250,14 @@ pub struct DashboardHostedSecurityReviewReport {
     pub max_requests_per_minute: u32,
     /// Whether loopback-only hosting is required by the policy.
     pub loopback_only_required: bool,
+    /// Whether future hosted startup requires audit/state preflight.
+    pub audit_state_preflight_required: bool,
+    /// Whether future hosted sessions require revocation/logout controls.
+    pub session_revocation_required: bool,
+    /// Whether future hosted access requires operator role review.
+    pub operator_role_review_required: bool,
+    /// Whether future hosted controls must remain read-only until separately approved.
+    pub read_only_controls_required: bool,
     /// Number of missing or unsafe control findings.
     pub missing_control_count: u32,
     /// Whether a server was started. Always false for this review.
@@ -762,6 +778,32 @@ impl DashboardHostedSecurityPolicy {
                 "hosted dashboard rate limit must be positive when required",
             ));
         }
+        for (enabled, code, message) in [
+            (
+                self.audit_state_preflight_required,
+                "DASHBOARD_HOSTED_AUDIT_STATE_PREFLIGHT_REQUIRED",
+                "future hosted dashboard startup requires audit/state preflight",
+            ),
+            (
+                self.session_revocation_required,
+                "DASHBOARD_HOSTED_SESSION_REVOCATION_REQUIRED",
+                "future hosted dashboard sessions require revocation/logout controls",
+            ),
+            (
+                self.operator_role_review_required,
+                "DASHBOARD_HOSTED_OPERATOR_ROLE_REVIEW_REQUIRED",
+                "future hosted dashboard access requires operator role review",
+            ),
+            (
+                self.read_only_controls_required,
+                "DASHBOARD_HOSTED_READ_ONLY_CONTROLS_REQUIRED",
+                "future hosted dashboard controls must remain read-only until separately approved",
+            ),
+        ] {
+            if !enabled {
+                violations.push(DashboardViolation::new(code, message));
+            }
+        }
         finish_validation(violations)
     }
 }
@@ -808,6 +850,10 @@ impl DashboardHostedSecurityReviewReport {
                     || !self.rate_limit_required
                     || self.max_requests_per_minute == 0
                     || !self.loopback_only_required
+                    || !self.audit_state_preflight_required
+                    || !self.session_revocation_required
+                    || !self.operator_role_review_required
+                    || !self.read_only_controls_required
                 {
                     violations.push(DashboardViolation::new(
                         "DASHBOARD_HOSTED_SECURITY_REVIEW_READY_MISMATCH",
@@ -935,6 +981,10 @@ pub fn review_dashboard_hosted_security(
         !policy.rate_limit_required,
         policy.max_requests_per_minute == 0,
         !policy.loopback_only_required,
+        !policy.audit_state_preflight_required,
+        !policy.session_revocation_required,
+        !policy.operator_role_review_required,
+        !policy.read_only_controls_required,
         policy.public_exposure_requested,
         policy.server_start_requested,
         policy.live_controls_requested,
@@ -961,6 +1011,10 @@ pub fn review_dashboard_hosted_security(
         rate_limit_required: policy.rate_limit_required,
         max_requests_per_minute: policy.max_requests_per_minute,
         loopback_only_required: policy.loopback_only_required,
+        audit_state_preflight_required: policy.audit_state_preflight_required,
+        session_revocation_required: policy.session_revocation_required,
+        operator_role_review_required: policy.operator_role_review_required,
+        read_only_controls_required: policy.read_only_controls_required,
         missing_control_count,
         server_started: false,
         public_network_exposed: false,
@@ -2054,6 +2108,22 @@ pub fn append_dashboard_hosted_security_review_audit(
             AuditValue::Bool(report.rate_limit_required),
         )
         .with_metadata(
+            "audit_state_preflight_required",
+            AuditValue::Bool(report.audit_state_preflight_required),
+        )
+        .with_metadata(
+            "session_revocation_required",
+            AuditValue::Bool(report.session_revocation_required),
+        )
+        .with_metadata(
+            "operator_role_review_required",
+            AuditValue::Bool(report.operator_role_review_required),
+        )
+        .with_metadata(
+            "read_only_controls_required",
+            AuditValue::Bool(report.read_only_controls_required),
+        )
+        .with_metadata(
             "missing_control_count",
             AuditValue::Text(report.missing_control_count.to_string()),
         )
@@ -2885,6 +2955,10 @@ mod tests {
             rate_limit_required: true,
             max_requests_per_minute: 60,
             loopback_only_required: true,
+            audit_state_preflight_required: true,
+            session_revocation_required: true,
+            operator_role_review_required: true,
+            read_only_controls_required: true,
             public_exposure_requested: false,
             server_start_requested: false,
             live_controls_requested: false,
@@ -2901,6 +2975,10 @@ mod tests {
         assert!(report.secure_headers_required);
         assert!(report.clickjacking_protection_required);
         assert!(report.rate_limit_required);
+        assert!(report.audit_state_preflight_required);
+        assert!(report.session_revocation_required);
+        assert!(report.operator_role_review_required);
+        assert!(report.read_only_controls_required);
         assert!(!report.server_started);
         assert!(!report.public_network_exposed);
         assert!(!report.live_controls_enabled);
@@ -2920,6 +2998,10 @@ mod tests {
             rate_limit_required: false,
             max_requests_per_minute: 0,
             loopback_only_required: false,
+            audit_state_preflight_required: true,
+            session_revocation_required: true,
+            operator_role_review_required: true,
+            read_only_controls_required: true,
             public_exposure_requested: true,
             server_start_requested: true,
             live_controls_requested: true,
@@ -2934,10 +3016,55 @@ mod tests {
         assert!(!report.csrf_protection_required);
         assert!(!report.secure_headers_required);
         assert!(!report.rate_limit_required);
+        assert!(report.audit_state_preflight_required);
+        assert!(report.session_revocation_required);
+        assert!(report.operator_role_review_required);
+        assert!(report.read_only_controls_required);
         assert!(!report.server_started);
         assert!(!report.public_network_exposed);
         assert!(!report.live_controls_enabled);
         assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn hosted_dashboard_security_review_requires_future_hosting_preconditions() {
+        let error = review_dashboard_hosted_security(&DashboardHostedSecurityPolicy {
+            review_id: "dashboard-hosted-security-missing-preconditions".to_owned(),
+            authentication_required: true,
+            authorization_required: true,
+            csrf_protection_required: true,
+            csrf_token_rotation_required: true,
+            secure_headers_required: true,
+            clickjacking_protection_required: true,
+            rate_limit_required: true,
+            max_requests_per_minute: 60,
+            loopback_only_required: true,
+            audit_state_preflight_required: false,
+            session_revocation_required: false,
+            operator_role_review_required: false,
+            read_only_controls_required: false,
+            public_exposure_requested: false,
+            server_start_requested: false,
+            live_controls_requested: false,
+        })
+        .expect_err("hosted dashboard security must require future hosting preconditions");
+
+        let DashboardError::ValidationFailed { violations } = error else {
+            panic!("expected hosted dashboard validation failure");
+        };
+        for expected in [
+            "DASHBOARD_HOSTED_AUDIT_STATE_PREFLIGHT_REQUIRED",
+            "DASHBOARD_HOSTED_SESSION_REVOCATION_REQUIRED",
+            "DASHBOARD_HOSTED_OPERATOR_ROLE_REVIEW_REQUIRED",
+            "DASHBOARD_HOSTED_READ_ONLY_CONTROLS_REQUIRED",
+        ] {
+            assert!(
+                violations
+                    .iter()
+                    .any(|violation| violation.code() == expected),
+                "missing expected violation {expected}"
+            );
+        }
     }
 
     #[test]
@@ -2955,6 +3082,10 @@ mod tests {
             rate_limit_required: true,
             max_requests_per_minute: 30,
             loopback_only_required: true,
+            audit_state_preflight_required: true,
+            session_revocation_required: true,
+            operator_role_review_required: true,
+            read_only_controls_required: true,
             public_exposure_requested: false,
             server_start_requested: false,
             live_controls_requested: false,

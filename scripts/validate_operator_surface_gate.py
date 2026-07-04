@@ -171,6 +171,10 @@ def validate_dashboard_cli(parsed: dict[str, str]) -> list[str]:
     for key in (
         "dashboard-render-access-authorized",
         "dashboard-hosted-security-ready",
+        "dashboard-hosted-audit-state-preflight-required",
+        "dashboard-hosted-session-revocation-required",
+        "dashboard-hosted-operator-role-review-required",
+        "dashboard-hosted-read-only-controls-required",
         "dashboard-hosted-request-preflight-ready",
         "dashboard-hosted-request-validation-ready",
         "dashboard-hosted-session-validation-ready",
