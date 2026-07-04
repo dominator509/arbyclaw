@@ -13672,6 +13672,12 @@ fn run_observability_runtime_validation(
         incident_runbook_required: true,
         incident_runbook_count: 1,
         loopback_or_authenticated_endpoint_required: true,
+        audit_state_preflight_required: true,
+        exporter_kill_switch_required: true,
+        alert_authorization_required: true,
+        rate_limit_backpressure_required: true,
+        retry_backoff_required: true,
+        no_secret_telemetry_required: true,
         metrics_endpoint_requested: false,
         outbound_alert_delivery_requested: false,
         telemetry_export_requested: false,
@@ -14061,6 +14067,12 @@ fn run_observability_runtime_validation(
     if replayed_records != u64::try_from(audit_records.len()).unwrap_or(u64::MAX)
         || recovered_checkpoint_count != checkpoint_keys.len()
         || operations_review.status != ObservabilityOperationsReviewStatus::ReadyForLocalReview
+        || !operations_review.audit_state_preflight_required
+        || !operations_review.exporter_kill_switch_required
+        || !operations_review.alert_authorization_required
+        || !operations_review.rate_limit_backpressure_required
+        || !operations_review.retry_backoff_required
+        || !operations_review.no_secret_telemetry_required
         || !record.access_authorized
         || !log_retention_report.rotate_active_requested
         || !log_retention_report.new_active_created
@@ -14132,6 +14144,30 @@ fn run_observability_runtime_validation(
     println!("observability-runtime-version: {OBSERVABILITY_RUNBOOK_VERSION}");
     println!("observability-runtime-audit-records-replayed: {replayed_records}");
     println!("observability-runtime-checkpoints-recovered: {recovered_checkpoint_count}");
+    println!(
+        "observability-runtime-audit-state-preflight-required: {}",
+        operations_review.audit_state_preflight_required
+    );
+    println!(
+        "observability-runtime-exporter-kill-switch-required: {}",
+        operations_review.exporter_kill_switch_required
+    );
+    println!(
+        "observability-runtime-alert-authorization-required: {}",
+        operations_review.alert_authorization_required
+    );
+    println!(
+        "observability-runtime-rate-limit-backpressure-required: {}",
+        operations_review.rate_limit_backpressure_required
+    );
+    println!(
+        "observability-runtime-retry-backoff-required: {}",
+        operations_review.retry_backoff_required
+    );
+    println!(
+        "observability-runtime-no-secret-telemetry-required: {}",
+        operations_review.no_secret_telemetry_required
+    );
     println!(
         "observability-log-retention-rotate-active-requested: {}",
         log_retention_report.rotate_active_requested

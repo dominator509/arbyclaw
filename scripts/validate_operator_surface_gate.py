@@ -216,6 +216,12 @@ def validate_observability_cli(parsed: dict[str, str]) -> list[str]:
     for key in (
         "observability-log-retention-rotate-active-requested",
         "observability-log-retention-new-active-created",
+        "observability-runtime-audit-state-preflight-required",
+        "observability-runtime-exporter-kill-switch-required",
+        "observability-runtime-alert-authorization-required",
+        "observability-runtime-rate-limit-backpressure-required",
+        "observability-runtime-retry-backoff-required",
+        "observability-runtime-no-secret-telemetry-required",
         "observability-runtime-loopback-bind-validated",
         "observability-runtime-listener-opened-and-closed",
         "observability-runtime-tracing-subscriber-captured",

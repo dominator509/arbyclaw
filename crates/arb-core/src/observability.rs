@@ -254,6 +254,18 @@ pub struct ObservabilityOperationsPolicy {
     pub incident_runbook_count: u32,
     /// Whether metrics/exporter endpoints must remain loopback/authenticated.
     pub loopback_or_authenticated_endpoint_required: bool,
+    /// Whether audit/state preflight must pass before future observability runtime activation.
+    pub audit_state_preflight_required: bool,
+    /// Whether future exporter sessions require an explicit kill switch.
+    pub exporter_kill_switch_required: bool,
+    /// Whether future alert routes require an authorization review.
+    pub alert_authorization_required: bool,
+    /// Whether future exporter/alert paths require rate-limit or backpressure controls.
+    pub rate_limit_backpressure_required: bool,
+    /// Whether future exporter/alert paths require retry and outage backoff controls.
+    pub retry_backoff_required: bool,
+    /// Whether future telemetry paths require non-secret telemetry controls.
+    pub no_secret_telemetry_required: bool,
     /// Whether a metrics endpoint was requested. Must remain false here.
     pub metrics_endpoint_requested: bool,
     /// Whether outbound alert delivery was requested. Must remain false here.
@@ -298,6 +310,18 @@ pub struct ObservabilityOperationsReviewReport {
     pub incident_runbook_count: u32,
     /// Whether loopback/authenticated endpoint policy is required.
     pub loopback_or_authenticated_endpoint_required: bool,
+    /// Whether audit/state preflight is required before future observability runtime activation.
+    pub audit_state_preflight_required: bool,
+    /// Whether future exporter sessions require an explicit kill switch.
+    pub exporter_kill_switch_required: bool,
+    /// Whether future alert routes require an authorization review.
+    pub alert_authorization_required: bool,
+    /// Whether future exporter/alert paths require rate-limit or backpressure controls.
+    pub rate_limit_backpressure_required: bool,
+    /// Whether future exporter/alert paths require retry and outage backoff controls.
+    pub retry_backoff_required: bool,
+    /// Whether future telemetry paths require non-secret telemetry controls.
+    pub no_secret_telemetry_required: bool,
     /// Number of missing or unsafe controls.
     pub missing_control_count: u32,
     /// Whether a metrics endpoint was started. Always false for this review.
@@ -2011,10 +2035,16 @@ impl ObservabilityOperationsReviewReport {
                     || !self.incident_runbook_required
                     || self.incident_runbook_count == 0
                     || !self.loopback_or_authenticated_endpoint_required
+                    || !self.audit_state_preflight_required
+                    || !self.exporter_kill_switch_required
+                    || !self.alert_authorization_required
+                    || !self.rate_limit_backpressure_required
+                    || !self.retry_backoff_required
+                    || !self.no_secret_telemetry_required
                 {
                     violations.push(ObservabilityViolation::new(
                         "OBSERVABILITY_OPERATIONS_REVIEW_READY_MISMATCH",
-                        "ready observability operations reviews require retention, redaction, alert routing, incident runbooks, endpoint policy, and zero missing controls",
+                        "ready observability operations reviews require retention, redaction, alert routing, incident runbooks, endpoint policy, future runtime controls, and zero missing controls",
                     ));
                 }
             }
@@ -2875,6 +2905,12 @@ pub fn review_observability_operations(
         !policy.incident_runbook_required,
         policy.incident_runbook_count == 0,
         !policy.loopback_or_authenticated_endpoint_required,
+        !policy.audit_state_preflight_required,
+        !policy.exporter_kill_switch_required,
+        !policy.alert_authorization_required,
+        !policy.rate_limit_backpressure_required,
+        !policy.retry_backoff_required,
+        !policy.no_secret_telemetry_required,
         policy.metrics_endpoint_requested,
         policy.outbound_alert_delivery_requested,
         policy.telemetry_export_requested,
@@ -2901,6 +2937,12 @@ pub fn review_observability_operations(
         incident_runbook_count: policy.incident_runbook_count,
         loopback_or_authenticated_endpoint_required: policy
             .loopback_or_authenticated_endpoint_required,
+        audit_state_preflight_required: policy.audit_state_preflight_required,
+        exporter_kill_switch_required: policy.exporter_kill_switch_required,
+        alert_authorization_required: policy.alert_authorization_required,
+        rate_limit_backpressure_required: policy.rate_limit_backpressure_required,
+        retry_backoff_required: policy.retry_backoff_required,
+        no_secret_telemetry_required: policy.no_secret_telemetry_required,
         missing_control_count,
         metrics_endpoint_started: false,
         public_network_exposed: false,
@@ -4565,6 +4607,30 @@ pub fn append_observability_operations_review_audit(
             AuditValue::Text(report.incident_runbook_count.to_string()),
         )
         .with_metadata(
+            "audit_state_preflight_required",
+            AuditValue::Bool(report.audit_state_preflight_required),
+        )
+        .with_metadata(
+            "exporter_kill_switch_required",
+            AuditValue::Bool(report.exporter_kill_switch_required),
+        )
+        .with_metadata(
+            "alert_authorization_required",
+            AuditValue::Bool(report.alert_authorization_required),
+        )
+        .with_metadata(
+            "rate_limit_backpressure_required",
+            AuditValue::Bool(report.rate_limit_backpressure_required),
+        )
+        .with_metadata(
+            "retry_backoff_required",
+            AuditValue::Bool(report.retry_backoff_required),
+        )
+        .with_metadata(
+            "telemetry_sanitization_required",
+            AuditValue::Bool(report.no_secret_telemetry_required),
+        )
+        .with_metadata(
             "missing_control_count",
             AuditValue::Text(report.missing_control_count.to_string()),
         )
@@ -5823,6 +5889,12 @@ mod tests {
             incident_runbook_required: true,
             incident_runbook_count: 1,
             loopback_or_authenticated_endpoint_required: true,
+            audit_state_preflight_required: true,
+            exporter_kill_switch_required: true,
+            alert_authorization_required: true,
+            rate_limit_backpressure_required: true,
+            retry_backoff_required: true,
+            no_secret_telemetry_required: true,
             metrics_endpoint_requested: false,
             outbound_alert_delivery_requested: false,
             telemetry_export_requested: false,
@@ -5851,6 +5923,12 @@ mod tests {
             incident_runbook_required: true,
             incident_runbook_count: 1,
             loopback_or_authenticated_endpoint_required: true,
+            audit_state_preflight_required: true,
+            exporter_kill_switch_required: true,
+            alert_authorization_required: true,
+            rate_limit_backpressure_required: true,
+            retry_backoff_required: true,
+            no_secret_telemetry_required: true,
             metrics_endpoint_requested: false,
             outbound_alert_delivery_requested: false,
             telemetry_export_requested: false,
@@ -6073,6 +6151,12 @@ mod tests {
             incident_runbook_required: true,
             incident_runbook_count: 1,
             loopback_or_authenticated_endpoint_required: true,
+            audit_state_preflight_required: true,
+            exporter_kill_switch_required: true,
+            alert_authorization_required: true,
+            rate_limit_backpressure_required: true,
+            retry_backoff_required: true,
+            no_secret_telemetry_required: true,
             metrics_endpoint_requested: false,
             outbound_alert_delivery_requested: false,
             telemetry_export_requested: false,
@@ -6090,6 +6174,12 @@ mod tests {
         assert_eq!(report.alert_route_count, 2);
         assert!(report.incident_runbook_required);
         assert_eq!(report.incident_runbook_count, 1);
+        assert!(report.audit_state_preflight_required);
+        assert!(report.exporter_kill_switch_required);
+        assert!(report.alert_authorization_required);
+        assert!(report.rate_limit_backpressure_required);
+        assert!(report.retry_backoff_required);
+        assert!(report.no_secret_telemetry_required);
         assert!(!report.metrics_endpoint_started);
         assert!(!report.public_network_exposed);
         assert!(!report.outbound_alerts_sent);
@@ -6109,6 +6199,12 @@ mod tests {
             incident_runbook_required: false,
             incident_runbook_count: 0,
             loopback_or_authenticated_endpoint_required: false,
+            audit_state_preflight_required: false,
+            exporter_kill_switch_required: false,
+            alert_authorization_required: false,
+            rate_limit_backpressure_required: false,
+            retry_backoff_required: false,
+            no_secret_telemetry_required: false,
             metrics_endpoint_requested: true,
             outbound_alert_delivery_requested: true,
             telemetry_export_requested: true,
@@ -6123,6 +6219,12 @@ mod tests {
         assert!(!report.log_retention_required);
         assert!(!report.alert_routing_required);
         assert!(!report.incident_runbook_required);
+        assert!(!report.audit_state_preflight_required);
+        assert!(!report.exporter_kill_switch_required);
+        assert!(!report.alert_authorization_required);
+        assert!(!report.rate_limit_backpressure_required);
+        assert!(!report.retry_backoff_required);
+        assert!(!report.no_secret_telemetry_required);
         assert!(!report.metrics_endpoint_started);
         assert!(!report.public_network_exposed);
         assert!(!report.outbound_alerts_sent);
@@ -6144,6 +6246,12 @@ mod tests {
             incident_runbook_required: true,
             incident_runbook_count: 1,
             loopback_or_authenticated_endpoint_required: true,
+            audit_state_preflight_required: true,
+            exporter_kill_switch_required: true,
+            alert_authorization_required: true,
+            rate_limit_backpressure_required: true,
+            retry_backoff_required: true,
+            no_secret_telemetry_required: true,
             metrics_endpoint_requested: false,
             outbound_alert_delivery_requested: false,
             telemetry_export_requested: false,
@@ -6187,6 +6295,22 @@ mod tests {
         assert!(recovered
             .value
             .contains("\"incident_runbook_required\":true"));
+        assert!(recovered
+            .value
+            .contains("\"audit_state_preflight_required\":true"));
+        assert!(recovered
+            .value
+            .contains("\"exporter_kill_switch_required\":true"));
+        assert!(recovered
+            .value
+            .contains("\"alert_authorization_required\":true"));
+        assert!(recovered
+            .value
+            .contains("\"rate_limit_backpressure_required\":true"));
+        assert!(recovered.value.contains("\"retry_backoff_required\":true"));
+        assert!(recovered
+            .value
+            .contains("\"no_secret_telemetry_required\":true"));
         assert!(recovered.value.contains("\"outbound_alerts_sent\":false"));
         assert!(recovered.value.contains("\"telemetry_exported\":false"));
         assert!(recovered.value.contains("\"production_ready\":false"));
@@ -6245,6 +6369,12 @@ mod tests {
             incident_runbook_required: true,
             incident_runbook_count: 1,
             loopback_or_authenticated_endpoint_required: true,
+            audit_state_preflight_required: true,
+            exporter_kill_switch_required: true,
+            alert_authorization_required: true,
+            rate_limit_backpressure_required: true,
+            retry_backoff_required: true,
+            no_secret_telemetry_required: true,
             metrics_endpoint_requested: false,
             outbound_alert_delivery_requested: false,
             telemetry_export_requested: false,
@@ -6305,6 +6435,12 @@ mod tests {
             incident_runbook_required: true,
             incident_runbook_count: 1,
             loopback_or_authenticated_endpoint_required: true,
+            audit_state_preflight_required: true,
+            exporter_kill_switch_required: true,
+            alert_authorization_required: true,
+            rate_limit_backpressure_required: true,
+            retry_backoff_required: true,
+            no_secret_telemetry_required: true,
             metrics_endpoint_requested: false,
             outbound_alert_delivery_requested: false,
             telemetry_export_requested: false,
@@ -6378,6 +6514,12 @@ mod tests {
             incident_runbook_required: false,
             incident_runbook_count: 0,
             loopback_or_authenticated_endpoint_required: false,
+            audit_state_preflight_required: false,
+            exporter_kill_switch_required: false,
+            alert_authorization_required: false,
+            rate_limit_backpressure_required: false,
+            retry_backoff_required: false,
+            no_secret_telemetry_required: false,
             metrics_endpoint_requested: true,
             outbound_alert_delivery_requested: true,
             telemetry_export_requested: true,
