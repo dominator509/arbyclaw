@@ -7061,6 +7061,9 @@ fn run_execution_adapter_audit_validation(
     if !state_failure_failed_closed
         || !all_attempts_policy_revalidated
         || adapter_case.run.external_submission_enabled
+        || !adapter_case.run.submission_kill_switch_required
+        || !adapter_case.run.submission_audit_state_preflight_required
+        || !adapter_case.run.submission_idempotency_required
         || adapter_case.recovery_plan.external_submission_performed
         || adapter_case.recovery_plan.live_execution_performed
         || adapter_case.recovery_plan.production_ready
@@ -7087,6 +7090,18 @@ fn run_execution_adapter_audit_validation(
     );
     println!("adapter-policy-revalidated: {all_attempts_policy_revalidated}");
     println!("adapter-policy-denied-attempts: {policy_denied_attempts}");
+    println!(
+        "adapter-submission-kill-switch-required: {}",
+        adapter_case.run.submission_kill_switch_required
+    );
+    println!(
+        "adapter-submission-audit-state-preflight-required: {}",
+        adapter_case.run.submission_audit_state_preflight_required
+    );
+    println!(
+        "adapter-submission-idempotency-required: {}",
+        adapter_case.run.submission_idempotency_required
+    );
     println!(
         "adapter-recovery-steps: {}",
         adapter_case.recovery_plan.steps.len()

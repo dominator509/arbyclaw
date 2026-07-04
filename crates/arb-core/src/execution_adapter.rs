@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, error::Error, fmt};
 
 /// Stable execution-adapter framework version for audit, replay, and handoff surfaces.
-pub const EXECUTION_ADAPTER_FRAMEWORK_VERSION: &str = "phase-11-execution-adapter-framework-v1";
+pub const EXECUTION_ADAPTER_FRAMEWORK_VERSION: &str = "phase-61-execution-adapter-framework-v2";
 
 /// State-store subsystem name for execution-adapter checkpoints.
 pub const EXECUTION_ADAPTER_STATE_SUBSYSTEM: &str = "execution-adapter";
@@ -37,6 +37,12 @@ pub struct ExecutionAdapterConfig {
     pub model_paper_fills: bool,
     /// Whether adapter submission is enabled. Phase 11 requires this to remain false.
     pub adapter_submission_enabled: bool,
+    /// Whether any future external submission path must have a kill switch.
+    pub require_kill_switch_for_submission: bool,
+    /// Whether any future external submission path must prove audit/state preflight.
+    pub require_audit_state_preflight_for_submission: bool,
+    /// Whether any future external submission path must require idempotency protection.
+    pub require_idempotency_for_submission: bool,
 }
 
 impl Default for ExecutionAdapterConfig {
@@ -46,6 +52,9 @@ impl Default for ExecutionAdapterConfig {
             max_plan_intents: 4,
             model_paper_fills: true,
             adapter_submission_enabled: false,
+            require_kill_switch_for_submission: true,
+            require_audit_state_preflight_for_submission: true,
+            require_idempotency_for_submission: true,
         }
     }
 }
@@ -67,6 +76,27 @@ impl ExecutionAdapterConfig {
             violations.push(ExecutionAdapterViolation::new(
                 "ADAPTER_SUBMISSION_DENIED_IN_PHASE_11",
                 "Phase 11 adapter framework must not enable external adapter submission",
+            ));
+        }
+
+        if !self.require_kill_switch_for_submission {
+            violations.push(ExecutionAdapterViolation::new(
+                "ADAPTER_SUBMISSION_KILL_SWITCH_REQUIRED",
+                "future adapter submission requires an enabled kill-switch precondition",
+            ));
+        }
+
+        if !self.require_audit_state_preflight_for_submission {
+            violations.push(ExecutionAdapterViolation::new(
+                "ADAPTER_SUBMISSION_AUDIT_STATE_PREFLIGHT_REQUIRED",
+                "future adapter submission requires durable audit/state preflight",
+            ));
+        }
+
+        if !self.require_idempotency_for_submission {
+            violations.push(ExecutionAdapterViolation::new(
+                "ADAPTER_SUBMISSION_IDEMPOTENCY_REQUIRED",
+                "future adapter submission requires idempotency protection",
             ));
         }
 
@@ -299,6 +329,12 @@ pub struct ExecutionAdapterRunRecord {
     pub reconciliations: Vec<ExecutionReconciliationRecord>,
     /// Always false in Phase 11.
     pub external_submission_enabled: bool,
+    /// Whether future submission paths are required to have a kill switch.
+    pub submission_kill_switch_required: bool,
+    /// Whether future submission paths are required to prove audit/state preflight.
+    pub submission_audit_state_preflight_required: bool,
+    /// Whether future submission paths are required to use idempotency protection.
+    pub submission_idempotency_required: bool,
     /// Non-secret warnings.
     pub warnings: Vec<String>,
 }
@@ -408,6 +444,27 @@ impl ExecutionAdapterRunRecord {
             violations.push(ExecutionAdapterViolation::new(
                 "ADAPTER_EXTERNAL_SUBMISSION_ENABLED",
                 "Phase 11 run records must never enable external submission",
+            ));
+        }
+
+        if !self.submission_kill_switch_required {
+            violations.push(ExecutionAdapterViolation::new(
+                "ADAPTER_RUN_SUBMISSION_KILL_SWITCH_NOT_REQUIRED",
+                "adapter run must preserve future submission kill-switch requirement",
+            ));
+        }
+
+        if !self.submission_audit_state_preflight_required {
+            violations.push(ExecutionAdapterViolation::new(
+                "ADAPTER_RUN_SUBMISSION_AUDIT_STATE_PREFLIGHT_NOT_REQUIRED",
+                "adapter run must preserve future submission audit/state preflight requirement",
+            ));
+        }
+
+        if !self.submission_idempotency_required {
+            violations.push(ExecutionAdapterViolation::new(
+                "ADAPTER_RUN_SUBMISSION_IDEMPOTENCY_NOT_REQUIRED",
+                "adapter run must preserve future submission idempotency requirement",
             ));
         }
 
@@ -860,6 +917,18 @@ pub fn append_execution_adapter_run_audit(
             AuditValue::Bool(run.external_submission_enabled),
         )
         .with_metadata(
+            "submission_kill_switch_required",
+            AuditValue::Bool(run.submission_kill_switch_required),
+        )
+        .with_metadata(
+            "submission_audit_state_preflight_required",
+            AuditValue::Bool(run.submission_audit_state_preflight_required),
+        )
+        .with_metadata(
+            "submission_idempotency_required",
+            AuditValue::Bool(run.submission_idempotency_required),
+        )
+        .with_metadata(
             "created_at_unix_ms",
             AuditValue::Unsigned(run.created_at_unix_ms),
         ),
@@ -1032,6 +1101,11 @@ impl ExecutionAdapter for DeterministicExecutionAdapterBoundary {
             fills,
             reconciliations,
             external_submission_enabled: false,
+            submission_kill_switch_required: request.config.require_kill_switch_for_submission,
+            submission_audit_state_preflight_required: request
+                .config
+                .require_audit_state_preflight_for_submission,
+            submission_idempotency_required: request.config.require_idempotency_for_submission,
             warnings,
         };
         run.validate()?;
@@ -1510,6 +1584,28 @@ redact_secrets = true
     }
 
     #[test]
+    fn adapter_config_requires_future_submission_preconditions() {
+        let config = ExecutionAdapterConfig {
+            require_kill_switch_for_submission: false,
+            require_audit_state_preflight_for_submission: false,
+            require_idempotency_for_submission: false,
+            ..ExecutionAdapterConfig::default()
+        };
+
+        let error = config
+            .validate()
+            .expect_err("future submission preconditions must be required");
+        let codes = error
+            .violations()
+            .iter()
+            .map(|violation| violation.code())
+            .collect::<Vec<_>>();
+        assert!(codes.contains(&"ADAPTER_SUBMISSION_KILL_SWITCH_REQUIRED"));
+        assert!(codes.contains(&"ADAPTER_SUBMISSION_AUDIT_STATE_PREFLIGHT_REQUIRED"));
+        assert!(codes.contains(&"ADAPTER_SUBMISSION_IDEMPOTENCY_REQUIRED"));
+    }
+
+    #[test]
     fn adapter_models_paper_plan_without_external_submission() {
         let policy = policy();
         let plan = planner_plan(&policy);
@@ -1535,6 +1631,9 @@ redact_secrets = true
             .attempts
             .iter()
             .all(|attempt| !attempt.submitted_to_external_adapter));
+        assert!(run.submission_kill_switch_required);
+        assert!(run.submission_audit_state_preflight_required);
+        assert!(run.submission_idempotency_required);
         assert!(run
             .fills
             .iter()

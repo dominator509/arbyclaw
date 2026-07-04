@@ -193,6 +193,9 @@ def command_specs(workspace_root: pathlib.Path) -> list[dict[str, Any]]:
             ),
             "true_fields": (
                 "adapter-policy-revalidated",
+                "adapter-submission-kill-switch-required",
+                "adapter-submission-audit-state-preflight-required",
+                "adapter-submission-idempotency-required",
                 "audit-append-failure-failed-closed",
                 "recovery-audit-append-failure-failed-closed",
                 "state-failure-failed-closed",
