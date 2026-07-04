@@ -558,6 +558,47 @@ def production_runtime_preflight_report(parsed: dict[str, str]) -> dict[str, Any
     }
 
 
+def runtime_load_profile_review_report(parsed: dict[str, str]) -> dict[str, Any]:
+    return {
+        "status": parsed.get("runtime-load-profile-review"),
+        "latency_budget_met": parsed.get("runtime-load-profile-latency-budget-met"),
+        "resource_budget_met": parsed.get("runtime-load-profile-resource-budget-met"),
+        "replay_recovery_evidence_validated": parsed.get(
+            "runtime-load-profile-replay-recovery-evidence-validated"
+        ),
+        "remaining_external_evidence_count": parsed.get(
+            "runtime-load-profile-remaining-external-evidence-count"
+        ),
+    }
+
+
+def validate_runtime_load_profile_review(report: dict[str, Any]) -> None:
+    load_profile = report.get("runtime_load_profile_review")
+    if not isinstance(load_profile, dict):
+        raise RuntimeError("runtime load profile review missing")
+    expected = {
+        "status": "ReadyForLocalReview",
+        "latency_budget_met": "true",
+        "resource_budget_met": "true",
+        "replay_recovery_evidence_validated": "true",
+    }
+    for key, value in expected.items():
+        if load_profile.get(key) != value:
+            raise RuntimeError(
+                f"runtime load profile review expected {key}={value}"
+            )
+    try:
+        remaining = int(load_profile.get("remaining_external_evidence_count", "0"))
+    except ValueError as exc:
+        raise RuntimeError(
+            "runtime load profile remaining external evidence count is not an integer"
+        ) from exc
+    if remaining <= 0:
+        raise RuntimeError(
+            "runtime load profile review must preserve external evidence blockers"
+        )
+
+
 def run_retention_preflight(
     active_path: pathlib.Path | None,
     archive_dir: pathlib.Path | None,
@@ -1111,7 +1152,7 @@ def run_runtime_smoke(
         "opportunity_trace_recovered_summaries"
     ]
 
-    return {
+    report = {
         "command_kind": "agent-bin" if agent_bin is not None else "cargo-run",
         "returncode": completed.returncode,
         "workspace": relative_or_absolute(smoke_workspace),
@@ -1150,6 +1191,7 @@ def run_runtime_smoke(
         "service_manager_action_performed": parsed.get("service-manager-action-performed"),
         "external_submission_performed": parsed.get("external-submission-performed"),
         "live_execution_performed": parsed.get("live-execution-performed"),
+        "runtime_load_profile_review": runtime_load_profile_review_report(parsed),
         "production_runtime_preflight": production_runtime_preflight_report(parsed),
         "runtime_smoke_passed": completed.returncode == 0,
         "iterations": iterations,
@@ -1157,6 +1199,9 @@ def run_runtime_smoke(
         "runtime_smoke_iteration_reports": structured_iteration_reports,
         "runtime_smoke_iteration_reports_available": has_iterations,
     }
+    if completed.returncode == 0:
+        validate_runtime_load_profile_review(report)
+    return report
 
 
 def run_audit_retention_execution(
@@ -2424,6 +2469,28 @@ def print_text_report(report: dict[str, Any]) -> None:
             print(
                 "concurrent-lifecycle-live-execution-performed: "
                 f"{concurrent_lifecycle.get('live_execution_performed', '')}"
+            )
+        load_profile = smoke.get("runtime_load_profile_review", {})
+        if isinstance(load_profile, dict):
+            print(
+                "runtime-load-profile-review: "
+                f"{load_profile.get('status', '')}"
+            )
+            print(
+                "runtime-load-profile-latency-budget-met: "
+                f"{load_profile.get('latency_budget_met', '')}"
+            )
+            print(
+                "runtime-load-profile-resource-budget-met: "
+                f"{load_profile.get('resource_budget_met', '')}"
+            )
+            print(
+                "runtime-load-profile-replay-recovery-evidence-validated: "
+                f"{load_profile.get('replay_recovery_evidence_validated', '')}"
+            )
+            print(
+                "runtime-load-profile-remaining-external-evidence-count: "
+                f"{load_profile.get('remaining_external_evidence_count', '')}"
             )
         print(f"production-ready: {smoke['production_ready']}")
         print(f"service-manager-action-performed: {smoke['service_manager_action_performed']}")

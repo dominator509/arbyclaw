@@ -517,6 +517,30 @@ def validate_report(report: dict[str, Any]) -> list[str]:
         errors.append("runtime_smoke report missing or invalid")
         return errors
 
+    load_profile = runtime_smoke.get("runtime_load_profile_review")
+    if not isinstance(load_profile, dict):
+        errors.append("runtime_smoke.runtime_load_profile_review missing or invalid")
+        return errors
+
+    if load_profile.get("status") != "ReadyForLocalReview":
+        errors.append("runtime load profile review was not ReadyForLocalReview")
+    for key in (
+        "latency_budget_met",
+        "resource_budget_met",
+        "replay_recovery_evidence_validated",
+    ):
+        if load_profile.get(key) != "true":
+            errors.append(f"runtime load profile review {key} was not true")
+    try:
+        if int(load_profile.get("remaining_external_evidence_count", "0")) <= 0:
+            errors.append(
+                "runtime load profile remaining_external_evidence_count was not positive"
+            )
+    except ValueError:
+        errors.append(
+            "runtime load profile remaining_external_evidence_count was not an integer"
+        )
+
     production_preflight = runtime_smoke.get("production_runtime_preflight")
     if not isinstance(production_preflight, dict):
         errors.append("runtime_smoke.production_runtime_preflight missing or invalid")
@@ -661,6 +685,7 @@ def main() -> int:
         "production_readiness_claimed": False,
         "deployment_host_report_schema": nested_report["schema"],
         "runtime_smoke_production_preflight_enforced": True,
+        "runtime_load_profile_review_enforced": True,
         "transcript_component_names": [
             component["name"] for component in TRANSCRIPT_COMPONENTS
         ],
@@ -682,6 +707,7 @@ def main() -> int:
         print("live-execution-enabled: false")
         print("secrets-loaded: false")
         print("production-readiness-claimed: false")
+        print("runtime-load-profile-review-enforced: true")
     return 0
 
 
