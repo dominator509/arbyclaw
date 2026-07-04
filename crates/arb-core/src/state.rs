@@ -12,6 +12,9 @@ use std::{
 /// Version marker for SQLite WAL durability validation records.
 pub const SQLITE_WAL_DURABILITY_VERSION: &str = "phase20-sqlite-wal-durability-v1";
 
+/// Current SQLite WAL state schema version.
+pub const SQLITE_WAL_STATE_SCHEMA_VERSION: i64 = 1;
+
 /// State checkpoint persisted by future durable stores.
 ///
 /// This model intentionally stores only non-secret operational state. Secrets,
@@ -79,6 +82,8 @@ pub struct SqliteWalStateStore {
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct SqliteWalDurabilityReport {
+    /// SQLite state schema version observed by the validation pass.
+    pub schema_version: i64,
     /// SQLite journal mode observed by the validation pass.
     pub journal_mode: String,
     /// SQLite synchronous mode observed by the validation pass.
@@ -255,6 +260,7 @@ impl SqliteWalStateStore {
 
         self.integrity_check()?;
         self.wal_checkpoint_truncate()?;
+        let schema_version = self.schema_version()?;
 
         {
             let reopened = Self::open(&self.path)?;
@@ -279,6 +285,7 @@ impl SqliteWalStateStore {
         }
 
         Ok(SqliteWalDurabilityReport {
+            schema_version,
             journal_mode,
             synchronous_mode,
             integrity_check_passed: true,
@@ -290,6 +297,15 @@ impl SqliteWalStateStore {
             external_network_used: false,
             secret_material_recorded: false,
         })
+    }
+
+    /// Return the local SQLite state schema version.
+    pub fn schema_version(&self) -> Result<i64, StateStoreError> {
+        self.connection
+            .query_row("PRAGMA user_version", [], |row| row.get::<_, i64>(0))
+            .map_err(sqlite_backend_error(
+                "failed to read sqlite state schema version",
+            ))
     }
 
     fn initialize(&self) -> Result<(), StateStoreError> {
@@ -307,6 +323,20 @@ impl SqliteWalStateStore {
         self.connection
             .busy_timeout(std::time::Duration::from_secs(5))
             .map_err(sqlite_backend_error("failed to set sqlite busy timeout"))?;
+        self.migrate_schema()?;
+        Ok(())
+    }
+
+    fn migrate_schema(&self) -> Result<(), StateStoreError> {
+        let schema_version = self.schema_version()?;
+        if schema_version > SQLITE_WAL_STATE_SCHEMA_VERSION {
+            return Err(StateStoreError::BackendFailed {
+                reason: format!(
+                    "sqlite state schema version {schema_version} exceeds supported version {SQLITE_WAL_STATE_SCHEMA_VERSION}"
+                ),
+            });
+        }
+
         self.connection
             .execute_batch(
                 "CREATE TABLE IF NOT EXISTS state_checkpoints (
@@ -314,9 +344,12 @@ impl SqliteWalStateStore {
                     subsystem TEXT NOT NULL,
                     value TEXT NOT NULL,
                     updated_at_unix_ms INTEGER NOT NULL
-                );",
+                );
+                PRAGMA user_version = 1;",
             )
-            .map_err(sqlite_backend_error("failed to initialize state schema"))?;
+            .map_err(sqlite_backend_error(
+                "failed to migrate sqlite state schema",
+            ))?;
         Ok(())
     }
 }
@@ -510,7 +543,9 @@ fn filesystem_backend_error(
 mod tests {
     use super::{
         InMemoryStateStore, SqliteWalStateStore, StateCheckpoint, StateStore, StateStoreError,
+        SQLITE_WAL_STATE_SCHEMA_VERSION,
     };
+    use rusqlite::{params, Connection};
     use std::{
         fs,
         path::PathBuf,
@@ -565,6 +600,10 @@ mod tests {
         {
             let mut store = SqliteWalStateStore::open(&path).expect("sqlite store opens");
             assert_eq!(store.path(), path.as_path());
+            assert_eq!(
+                store.schema_version().expect("schema version reads"),
+                SQLITE_WAL_STATE_SCHEMA_VERSION
+            );
             store
                 .put_checkpoint(checkpoint.clone())
                 .expect("checkpoint persists");
@@ -639,6 +678,7 @@ mod tests {
             .validate_durability("state:durability-probe", &backup_path, 100)
             .expect("durability validation passes");
 
+        assert_eq!(report.schema_version, SQLITE_WAL_STATE_SCHEMA_VERSION);
         assert_eq!(report.journal_mode, "wal");
         assert_eq!(report.synchronous_mode, "FULL");
         assert!(report.integrity_check_passed);
@@ -660,6 +700,70 @@ mod tests {
         drop(store);
         cleanup_state_files(&path);
         cleanup_state_files(&backup_path);
+    }
+
+    #[test]
+    fn sqlite_wal_state_schema_migrates_legacy_v0_checkpoint_table() {
+        let path = unique_state_path("schema-migrate-v0");
+        {
+            let connection = Connection::open(&path).expect("legacy sqlite opens");
+            connection
+                .execute_batch(
+                    "CREATE TABLE state_checkpoints (
+                        key TEXT PRIMARY KEY NOT NULL,
+                        subsystem TEXT NOT NULL,
+                        value TEXT NOT NULL,
+                        updated_at_unix_ms INTEGER NOT NULL
+                    );",
+                )
+                .expect("legacy schema fixture writes");
+            connection
+                .execute(
+                    "INSERT INTO state_checkpoints (key, subsystem, value, updated_at_unix_ms)
+                     VALUES (?1, ?2, ?3, ?4)",
+                    params!["legacy:checkpoint", "state", "legacy-local-value", 7_i64],
+                )
+                .expect("legacy checkpoint fixture writes");
+        }
+
+        let store = SqliteWalStateStore::open(&path).expect("legacy sqlite migrates");
+        assert_eq!(
+            store.schema_version().expect("schema version reads"),
+            SQLITE_WAL_STATE_SCHEMA_VERSION
+        );
+        let checkpoint = store
+            .get_checkpoint("legacy:checkpoint")
+            .expect("legacy checkpoint reads")
+            .expect("legacy checkpoint remains");
+        assert_eq!(checkpoint.value, "legacy-local-value");
+        assert_eq!(checkpoint.updated_at_unix_ms, 7);
+
+        drop(store);
+        cleanup_state_files(&path);
+    }
+
+    #[test]
+    fn sqlite_wal_state_schema_rejects_future_versions() {
+        let path = unique_state_path("schema-future-version");
+        {
+            let connection = Connection::open(&path).expect("future sqlite opens");
+            connection
+                .pragma_update(None, "user_version", SQLITE_WAL_STATE_SCHEMA_VERSION + 1)
+                .expect("future schema version fixture writes");
+        }
+
+        let error = SqliteWalStateStore::open(&path)
+            .expect_err("future schema versions should fail closed");
+        match error {
+            StateStoreError::BackendFailed { reason } => {
+                assert!(reason.contains("exceeds supported version"));
+            }
+            other @ StateStoreError::ValidationFailed { .. } => {
+                panic!("unexpected error: {other:?}");
+            }
+        }
+
+        cleanup_state_files(&path);
     }
 
     #[test]

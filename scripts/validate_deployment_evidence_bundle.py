@@ -110,6 +110,18 @@ COMPONENT_COMMANDS = [
         False,
     ),
     (
+        "deployment-sqlite-schema-migration-transcript",
+        [
+            "cargo",
+            "run",
+            "-p",
+            "arb-agent",
+            "--",
+            "validate-deployment-sqlite-schema-migration-transcript",
+        ],
+        False,
+    ),
+    (
         "deployment-failure-capture-transcript",
         [
             "cargo",
@@ -225,6 +237,7 @@ def build_report() -> dict[str, Any]:
         "remaining_external_evidence": [
             "operator-controlled service lifecycle execution evidence",
             "deployment-host audit and SQLite recovery evidence",
+            "deployment-host SQLite schema migration execution evidence",
             "physical disk-full fail-closed evidence",
             "retention/rotation execution evidence",
             "executed rollback drill evidence",

@@ -90,7 +90,8 @@ use arb_core::{
     validate_dashboard_hosted_request, validate_dashboard_hosted_session,
     validate_deployment_audit_sqlite_transcript, validate_deployment_disk_full_transcript,
     validate_deployment_failure_capture_transcript, validate_deployment_permission_transcript,
-    validate_deployment_retention_transcript, validate_fee_schedule_verification,
+    validate_deployment_retention_transcript,
+    validate_deployment_sqlite_schema_migration_transcript, validate_fee_schedule_verification,
     validate_historical_market_data_persistence, validate_incident_response_execution_transcript,
     validate_local_opportunity_quote_ingestion_load, validate_local_runtime_backup_restore,
     validate_local_runtime_restart_recovery,
@@ -177,8 +178,10 @@ use arb_core::{
     RuntimeDeploymentAuditSqliteTranscriptStatus, RuntimeDeploymentPermissionTranscript,
     RuntimeDeploymentPermissionTranscriptStatus, RuntimeDeploymentSmokeLoadIteration,
     RuntimeDeploymentSmokeLoadValidationReport, RuntimeDeploymentSmokeValidationRequest,
-    RuntimeFailureCaptureRequest, RuntimeFailureKind, RuntimeGracefulShutdownRequest,
-    RuntimeLifecycleStatus, RuntimePanicHookInstallationRequest, RuntimeRestartRecoveryDisposition,
+    RuntimeDeploymentSqliteSchemaMigrationTranscript,
+    RuntimeDeploymentSqliteSchemaMigrationTranscriptStatus, RuntimeFailureCaptureRequest,
+    RuntimeFailureKind, RuntimeGracefulShutdownRequest, RuntimeLifecycleStatus,
+    RuntimePanicHookInstallationRequest, RuntimeRestartRecoveryDisposition,
     RuntimeServiceManagerKind, RuntimeServiceManagerLifecycleEvent,
     RuntimeServiceManagerLifecycleEventKind, RuntimeServiceManagerLifecycleTranscript,
     RuntimeServiceManagerLifecycleTranscriptStatus, SecretBackupRestoreReviewReport,
@@ -250,7 +253,7 @@ use arb_core::{
     RUNTIME_RESTART_RECOVERY_VALIDATION_VERSION, SECRET_LAST_BACKUP_RESTORE_REVIEW_CHECKPOINT_KEY,
     SECRET_LAST_ROTATION_PLAN_CHECKPOINT_KEY, SIGNER_LAST_AUTHORIZATION_ENVELOPE_CHECKPOINT_KEY,
     SIGNER_LAST_REQUEST_CHECKPOINT_KEY, SIGNER_LAST_SECRET_SCOPE_REVIEW_CHECKPOINT_KEY,
-    SQLITE_WAL_DURABILITY_VERSION, TESTING_BACKTESTING_VERSION,
+    SQLITE_WAL_DURABILITY_VERSION, SQLITE_WAL_STATE_SCHEMA_VERSION, TESTING_BACKTESTING_VERSION,
     TESTING_LAST_FUZZ_CORPUS_REPLAY_REPORT_KEY, TESTING_LAST_PROPERTY_CHECK_REPORT_KEY,
     TESTING_LAST_VALIDATION_CORPUS_REPORT_KEY, TESTING_LAST_VALIDATION_RUN_CHECKPOINT_KEY,
 };
@@ -456,6 +459,7 @@ fn is_signer_web3_validation_command(command: &str) -> bool {
         command,
         "validate-signer-authorization-envelope"
             | "validate-deployment-audit-sqlite-transcript"
+            | "validate-deployment-sqlite-schema-migration-transcript"
             | "validate-deployment-disk-full-transcript"
             | "validate-deployment-failure-capture-transcript"
             | "validate-incident-response-execution-transcript"
@@ -568,6 +572,9 @@ fn run_signer_web3_validation_command(command: &str) -> Result<(), AgentCliError
         "validate-deployment-audit-sqlite-transcript" => {
             run_deployment_audit_sqlite_transcript_validation()
         }
+        "validate-deployment-sqlite-schema-migration-transcript" => {
+            run_deployment_sqlite_schema_migration_transcript_validation()
+        }
         "validate-deployment-disk-full-transcript" => {
             run_deployment_disk_full_transcript_validation()
         }
@@ -678,7 +685,7 @@ fn run_config_status(mut args: impl Iterator<Item = String>) -> Result<(), Agent
     );
     println!("policy: {} initialized", policy.trust_contract_version());
     println!("audit: append-only boundary available; {AUDIT_DURABILITY_VALIDATION_VERSION} validates local replay rejection, sync, concurrency, filesystem failure, simulated disk-full fail-closed probes, side-effect-free retention planning, and stale-lock restart recheck planning; runtime journal writing is not auto-started yet");
-    println!("state: trait boundary and local SQLite WAL checkpoints available; {SQLITE_WAL_DURABILITY_VERSION} validates local integrity, WAL checkpoint, reopen, backup/restore, and multi-handle durability; external production-host validation pending");
+    println!("state: trait boundary and local SQLite WAL checkpoints available; schema v{SQLITE_WAL_STATE_SCHEMA_VERSION} with {SQLITE_WAL_DURABILITY_VERSION} validates local schema migration, integrity, WAL checkpoint, reopen, backup/restore, and multi-handle durability; external production-host validation pending");
     println!(
         "market-data: normalized quote/order-book/fee boundaries available; live providers pending"
     );
@@ -863,6 +870,7 @@ fn print_usage() {
     println!("       arb-agent validate-audit-durability --workspace <fresh-dir>");
     println!("       arb-agent validate-audit-retention-execution --workspace <fresh-dir>");
     println!("       arb-agent validate-deployment-audit-sqlite-transcript");
+    println!("       arb-agent validate-deployment-sqlite-schema-migration-transcript");
     println!("       arb-agent validate-deployment-disk-full-transcript");
     println!("       arb-agent validate-deployment-failure-capture-transcript");
     println!("       arb-agent validate-incident-response-execution-transcript");
@@ -10601,6 +10609,17 @@ const fn deployment_audit_sqlite_status_label(
     }
 }
 
+const fn deployment_sqlite_schema_migration_status_label(
+    status: RuntimeDeploymentSqliteSchemaMigrationTranscriptStatus,
+) -> &'static str {
+    match status {
+        RuntimeDeploymentSqliteSchemaMigrationTranscriptStatus::ReadyForExternalReview => {
+            "ready-for-external-review"
+        }
+        RuntimeDeploymentSqliteSchemaMigrationTranscriptStatus::Blocked => "blocked",
+    }
+}
+
 const fn rollback_execution_status_label(
     status: RollbackExecutionTranscriptStatus,
 ) -> &'static str {
@@ -12618,6 +12637,86 @@ fn run_deployment_audit_sqlite_transcript_validation() -> Result<(), AgentCliErr
     Ok(())
 }
 
+fn run_deployment_sqlite_schema_migration_transcript_validation() -> Result<(), AgentCliError> {
+    let ready = validate_deployment_sqlite_schema_migration_transcript(
+        local_deployment_sqlite_schema_migration_transcript("ready", true),
+    )
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let blocked = validate_deployment_sqlite_schema_migration_transcript(
+        local_deployment_sqlite_schema_migration_transcript("blocked", false),
+    )
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+
+    if ready.status
+        != RuntimeDeploymentSqliteSchemaMigrationTranscriptStatus::ReadyForExternalReview
+        || blocked.status != RuntimeDeploymentSqliteSchemaMigrationTranscriptStatus::Blocked
+        || ready.production_ready
+        || blocked.production_ready
+        || ready.migration_executed_by_validator
+        || blocked.migration_executed_by_validator
+        || ready.service_manager_action_performed_by_validator
+        || blocked.service_manager_action_performed_by_validator
+        || ready.deployment_path_mutated_by_validator
+        || blocked.deployment_path_mutated_by_validator
+        || ready.secrets_loaded
+        || blocked.secrets_loaded
+        || ready.external_submission_performed
+        || blocked.external_submission_performed
+        || ready.live_execution_performed
+        || blocked.live_execution_performed
+        || blocked.blocker_codes.is_empty()
+    {
+        return Err(AgentCliError::Validation(
+            "deployment SQLite schema migration transcript validation failed".to_owned(),
+        ));
+    }
+
+    println!("deployment-sqlite-schema-migration-transcript: validation passed");
+    println!(
+        "ready-transcript-status: {}",
+        deployment_sqlite_schema_migration_status_label(ready.status)
+    );
+    println!(
+        "ready-deployment-host-evidence: {}",
+        ready.deployment_host_evidence
+    );
+    println!(
+        "ready-service-lifecycle-reference-present: {}",
+        ready.service_lifecycle_reference_present
+    );
+    println!(
+        "ready-schema-version-transition-validated: {}",
+        ready.schema_version_transition_validated
+            && ready.pre_migration_schema_version == 0
+            && ready.post_migration_schema_version == ready.expected_schema_version
+    );
+    println!(
+        "ready-sqlite-recovery-validated: {}",
+        ready.sqlite_integrity_check_passed && ready.sqlite_checkpoint_reopened
+    );
+    println!(
+        "ready-audit-replay-after-migration-validated: {}",
+        ready.audit_replay_after_migration_validated
+    );
+    println!(
+        "ready-rollback-reference-present: {}",
+        ready.rollback_reference_present
+    );
+    println!(
+        "blocked-transcript-status: {}",
+        deployment_sqlite_schema_migration_status_label(blocked.status)
+    );
+    println!("blocked-blocker-count: {}", blocked.blocker_codes.len());
+    println!("migration-executed-by-validator: false");
+    println!("service-manager-action-performed-by-validator: false");
+    println!("deployment-path-mutated-by-validator: false");
+    println!("secrets-loaded: false");
+    println!("external-submission-performed: false");
+    println!("live-execution-performed: false");
+    println!("production-ready: false");
+    Ok(())
+}
+
 fn run_rollback_execution_transcript_validation() -> Result<(), AgentCliError> {
     let ready =
         validate_rollback_execution_transcript(local_rollback_execution_transcript("ready", true))
@@ -12952,6 +13051,40 @@ fn local_deployment_audit_sqlite_transcript(
         live_execution_performed: false,
         production_ready_claimed: false,
         validated_at_unix_ms: 95_500,
+    }
+}
+
+fn local_deployment_sqlite_schema_migration_transcript(
+    suffix: &str,
+    complete: bool,
+) -> RuntimeDeploymentSqliteSchemaMigrationTranscript {
+    RuntimeDeploymentSqliteSchemaMigrationTranscript {
+        transcript_id: format!("local-deployment-sqlite-schema-migration-{suffix}"),
+        host_label: "deployment-host-a".to_owned(),
+        deployment_host_evidence: complete,
+        service_lifecycle_reference_present: complete,
+        pre_migration_schema_version: 0,
+        post_migration_schema_version: i64::from(complete),
+        expected_schema_version: 1,
+        pre_migration_backup_reference_present: complete,
+        migration_execution_reference_present: complete,
+        schema_version_transition_validated: complete,
+        sqlite_integrity_check_passed: complete,
+        sqlite_checkpoint_reopened: complete,
+        audit_replay_after_migration_validated: complete,
+        rollback_reference_present: complete,
+        runtime_quiesced_or_degraded: complete,
+        non_secret_reference_count: if complete { 9 } else { 1 },
+        operator_approved: complete,
+        reviewer_approved: complete,
+        migration_executed_by_validator: false,
+        service_manager_action_performed_by_validator: false,
+        deployment_path_mutated_by_validator: false,
+        secrets_loaded: false,
+        external_submission_performed: false,
+        live_execution_performed: false,
+        production_ready_claimed: false,
+        validated_at_unix_ms: 95_750,
     }
 }
 

@@ -167,6 +167,10 @@ pub const RUNTIME_DEPLOYMENT_PERMISSION_TRANSCRIPT_VERSION: &str =
 pub const RUNTIME_DEPLOYMENT_AUDIT_SQLITE_TRANSCRIPT_VERSION: &str =
     "phase57-deployment-audit-sqlite-transcript-local-v1";
 
+/// Stable local deployment-host SQLite schema migration transcript validation version.
+pub const RUNTIME_DEPLOYMENT_SQLITE_SCHEMA_MIGRATION_TRANSCRIPT_VERSION: &str =
+    "phase67-deployment-sqlite-schema-migration-transcript-local-v1";
+
 /// State checkpoint key for the last local graceful-shutdown record.
 pub const RUNTIME_GRACEFUL_SHUTDOWN_CHECKPOINT_KEY: &str = "runtime:last-graceful-shutdown";
 
@@ -1109,6 +1113,16 @@ pub enum RuntimeDeploymentAuditSqliteTranscriptStatus {
     Blocked,
 }
 
+/// Local validation status for sanitized deployment-host SQLite schema migration transcripts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum RuntimeDeploymentSqliteSchemaMigrationTranscriptStatus {
+    /// Transcript contains all required schema migration execution evidence references.
+    ReadyForExternalReview,
+    /// Transcript is missing schema migration evidence or contains unsafe flags.
+    Blocked,
+}
+
 /// Sanitized local deployment-host permission-denial validation request.
 ///
 /// This contains only reference presence and outcome flags. It must not embed
@@ -1317,6 +1331,132 @@ pub struct RuntimeDeploymentAuditSqliteTranscriptReport {
     pub status: RuntimeDeploymentAuditSqliteTranscriptStatus,
     /// Non-secret blocker codes.
     pub blocker_codes: Vec<String>,
+    /// Whether this validator performed service-manager actions. Always false.
+    pub service_manager_action_performed_by_validator: bool,
+    /// Whether this validator mutated deployment paths. Always false.
+    pub deployment_path_mutated_by_validator: bool,
+    /// Whether this validator loaded secrets. Always false.
+    pub secrets_loaded: bool,
+    /// Whether this validator submitted externally. Always false.
+    pub external_submission_performed: bool,
+    /// Whether live execution was performed. Always false.
+    pub live_execution_performed: bool,
+    /// Whether this report approves production readiness. Always false.
+    pub production_ready: bool,
+    /// Transcript validation timestamp in Unix milliseconds.
+    pub validated_at_unix_ms: u64,
+}
+
+/// Sanitized deployment-host SQLite schema migration validation request.
+///
+/// This contains only reference presence and outcome flags. It must not embed
+/// host paths, SQL dumps, migration output, database contents, logs, checkpoint
+/// values, secrets, or evidence artifact contents.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RuntimeDeploymentSqliteSchemaMigrationTranscript {
+    /// Stable transcript id.
+    pub transcript_id: String,
+    /// Non-secret deployment-host or runner label.
+    pub host_label: String,
+    /// Whether evidence came from a physical/deployment-like host.
+    pub deployment_host_evidence: bool,
+    /// Whether service lifecycle context evidence is present.
+    pub service_lifecycle_reference_present: bool,
+    /// SQLite schema version before migration.
+    pub pre_migration_schema_version: i64,
+    /// SQLite schema version after migration.
+    pub post_migration_schema_version: i64,
+    /// Expected schema version for the target binary.
+    pub expected_schema_version: i64,
+    /// Whether a pre-migration backup evidence reference is present.
+    pub pre_migration_backup_reference_present: bool,
+    /// Whether migration execution evidence is present.
+    pub migration_execution_reference_present: bool,
+    /// Whether schema version transition evidence is present and matched.
+    pub schema_version_transition_validated: bool,
+    /// Whether SQLite integrity check evidence is present after migration.
+    pub sqlite_integrity_check_passed: bool,
+    /// Whether checkpoint reopen evidence is present after migration.
+    pub sqlite_checkpoint_reopened: bool,
+    /// Whether audit replay evidence is present after migration.
+    pub audit_replay_after_migration_validated: bool,
+    /// Whether rollback plan/reference is present.
+    pub rollback_reference_present: bool,
+    /// Whether runtime remained quiesced or degraded during migration.
+    pub runtime_quiesced_or_degraded: bool,
+    /// Count of non-secret evidence references.
+    pub non_secret_reference_count: u64,
+    /// Whether operator approval/reference is present.
+    pub operator_approved: bool,
+    /// Whether reviewer approval/reference is present.
+    pub reviewer_approved: bool,
+    /// Whether this validator executed the migration. Must be false.
+    pub migration_executed_by_validator: bool,
+    /// Whether this validator performed service-manager actions. Must be false.
+    pub service_manager_action_performed_by_validator: bool,
+    /// Whether this validator mutated deployment paths. Must be false.
+    pub deployment_path_mutated_by_validator: bool,
+    /// Whether this validator loaded secrets. Must be false.
+    pub secrets_loaded: bool,
+    /// Whether this validator submitted externally. Must be false.
+    pub external_submission_performed: bool,
+    /// Whether live execution was performed. Must be false.
+    pub live_execution_performed: bool,
+    /// Whether this transcript attempts to claim production readiness. Must be false.
+    pub production_ready_claimed: bool,
+    /// Transcript validation timestamp in Unix milliseconds.
+    pub validated_at_unix_ms: u64,
+}
+
+/// Non-secret local validation report for deployment-host SQLite schema migration evidence.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RuntimeDeploymentSqliteSchemaMigrationTranscriptReport {
+    /// Deployment SQLite schema migration transcript validation version.
+    pub validation_version: String,
+    /// Stable transcript id.
+    pub transcript_id: String,
+    /// Non-secret deployment-host or runner label.
+    pub host_label: String,
+    /// Whether deployment-like host evidence is present.
+    pub deployment_host_evidence: bool,
+    /// Whether service lifecycle context evidence is present.
+    pub service_lifecycle_reference_present: bool,
+    /// SQLite schema version before migration.
+    pub pre_migration_schema_version: i64,
+    /// SQLite schema version after migration.
+    pub post_migration_schema_version: i64,
+    /// Expected schema version for the target binary.
+    pub expected_schema_version: i64,
+    /// Whether a pre-migration backup evidence reference is present.
+    pub pre_migration_backup_reference_present: bool,
+    /// Whether migration execution evidence is present.
+    pub migration_execution_reference_present: bool,
+    /// Whether schema version transition evidence is present and matched.
+    pub schema_version_transition_validated: bool,
+    /// Whether SQLite integrity check evidence is present after migration.
+    pub sqlite_integrity_check_passed: bool,
+    /// Whether checkpoint reopen evidence is present after migration.
+    pub sqlite_checkpoint_reopened: bool,
+    /// Whether audit replay evidence is present after migration.
+    pub audit_replay_after_migration_validated: bool,
+    /// Whether rollback plan/reference is present.
+    pub rollback_reference_present: bool,
+    /// Whether runtime quiesce/degrade evidence is present.
+    pub runtime_quiesced_or_degraded: bool,
+    /// Count of non-secret evidence references.
+    pub non_secret_reference_count: u64,
+    /// Whether operator approval/reference is present.
+    pub operator_approved: bool,
+    /// Whether reviewer approval/reference is present.
+    pub reviewer_approved: bool,
+    /// Validation status.
+    pub status: RuntimeDeploymentSqliteSchemaMigrationTranscriptStatus,
+    /// Non-secret blocker codes.
+    pub blocker_codes: Vec<String>,
+    /// Whether this validator executed the migration. Always false.
+    pub migration_executed_by_validator: bool,
     /// Whether this validator performed service-manager actions. Always false.
     pub service_manager_action_performed_by_validator: bool,
     /// Whether this validator mutated deployment paths. Always false.
@@ -2637,6 +2777,103 @@ impl RuntimeDeploymentAuditSqliteTranscriptReport {
     }
 }
 
+impl RuntimeDeploymentSqliteSchemaMigrationTranscript {
+    /// Validate sanitized deployment SQLite schema migration transcript input.
+    pub fn validate(&self) -> Result<(), RuntimeLifecycleError> {
+        if self.transcript_id.trim().is_empty() {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "deployment sqlite schema migration transcript id is required".to_owned(),
+            });
+        }
+        if self.host_label.trim().is_empty() {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "deployment sqlite schema migration host label is required".to_owned(),
+            });
+        }
+        if self.validated_at_unix_ms == 0 {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "deployment sqlite schema migration transcript timestamp must be non-zero"
+                    .to_owned(),
+            });
+        }
+        if self.pre_migration_schema_version < 0
+            || self.post_migration_schema_version < 0
+            || self.expected_schema_version <= 0
+        {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "deployment sqlite schema migration versions must be non-negative with positive expected version".to_owned(),
+            });
+        }
+        if self.migration_executed_by_validator
+            || self.service_manager_action_performed_by_validator
+            || self.deployment_path_mutated_by_validator
+            || self.secrets_loaded
+            || self.external_submission_performed
+            || self.live_execution_performed
+        {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "deployment sqlite schema migration transcript validator must not execute migration, perform service actions, mutate deployment paths, load secrets, submit externally, or perform live execution".to_owned(),
+            });
+        }
+        if self.production_ready_claimed {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "deployment sqlite schema migration transcript must not claim production readiness".to_owned(),
+            });
+        }
+        Ok(())
+    }
+}
+
+impl RuntimeDeploymentSqliteSchemaMigrationTranscriptReport {
+    /// Validate deployment SQLite schema migration transcript report invariants.
+    pub fn validate(&self) -> Result<(), RuntimeLifecycleError> {
+        if self.validation_version != RUNTIME_DEPLOYMENT_SQLITE_SCHEMA_MIGRATION_TRANSCRIPT_VERSION
+        {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: format!(
+                    "validation_version must be {RUNTIME_DEPLOYMENT_SQLITE_SCHEMA_MIGRATION_TRANSCRIPT_VERSION}"
+                ),
+            });
+        }
+        if self.transcript_id.trim().is_empty() || self.host_label.trim().is_empty() {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "deployment sqlite schema migration report requires id and host label"
+                    .to_owned(),
+            });
+        }
+        if self.migration_executed_by_validator
+            || self.service_manager_action_performed_by_validator
+            || self.deployment_path_mutated_by_validator
+            || self.secrets_loaded
+            || self.external_submission_performed
+            || self.live_execution_performed
+            || self.production_ready
+        {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "deployment sqlite schema migration report must not contain validator side effects or production readiness".to_owned(),
+            });
+        }
+        if self.status
+            == RuntimeDeploymentSqliteSchemaMigrationTranscriptStatus::ReadyForExternalReview
+            && !self.blocker_codes.is_empty()
+        {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "ready deployment sqlite schema migration report must not contain blockers"
+                    .to_owned(),
+            });
+        }
+        if self.status == RuntimeDeploymentSqliteSchemaMigrationTranscriptStatus::Blocked
+            && self.blocker_codes.is_empty()
+        {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "blocked deployment sqlite schema migration report requires blocker codes"
+                    .to_owned(),
+            });
+        }
+        Ok(())
+    }
+}
+
 impl RuntimeBackupRestoreValidationReport {
     /// Validate local backup/restore report invariants.
     pub fn validate(&self) -> Result<(), RuntimeLifecycleError> {
@@ -3680,6 +3917,58 @@ pub fn validate_deployment_audit_sqlite_transcript(
     Ok(report)
 }
 
+/// Validate sanitized deployment-host SQLite schema migration evidence metadata.
+///
+/// This consumes operator-supplied reference metadata only. It does not execute
+/// migrations, inspect deployment paths, mutate deployment paths, call service
+/// managers, load secrets, submit adapters, perform live execution, or claim
+/// production readiness.
+pub fn validate_deployment_sqlite_schema_migration_transcript(
+    transcript: RuntimeDeploymentSqliteSchemaMigrationTranscript,
+) -> Result<RuntimeDeploymentSqliteSchemaMigrationTranscriptReport, RuntimeLifecycleError> {
+    transcript.validate()?;
+    let blocker_codes = deployment_sqlite_schema_migration_blockers(&transcript);
+    let status = if blocker_codes.is_empty() {
+        RuntimeDeploymentSqliteSchemaMigrationTranscriptStatus::ReadyForExternalReview
+    } else {
+        RuntimeDeploymentSqliteSchemaMigrationTranscriptStatus::Blocked
+    };
+    let report = RuntimeDeploymentSqliteSchemaMigrationTranscriptReport {
+        validation_version: RUNTIME_DEPLOYMENT_SQLITE_SCHEMA_MIGRATION_TRANSCRIPT_VERSION
+            .to_owned(),
+        transcript_id: transcript.transcript_id,
+        host_label: transcript.host_label,
+        deployment_host_evidence: transcript.deployment_host_evidence,
+        service_lifecycle_reference_present: transcript.service_lifecycle_reference_present,
+        pre_migration_schema_version: transcript.pre_migration_schema_version,
+        post_migration_schema_version: transcript.post_migration_schema_version,
+        expected_schema_version: transcript.expected_schema_version,
+        pre_migration_backup_reference_present: transcript.pre_migration_backup_reference_present,
+        migration_execution_reference_present: transcript.migration_execution_reference_present,
+        schema_version_transition_validated: transcript.schema_version_transition_validated,
+        sqlite_integrity_check_passed: transcript.sqlite_integrity_check_passed,
+        sqlite_checkpoint_reopened: transcript.sqlite_checkpoint_reopened,
+        audit_replay_after_migration_validated: transcript.audit_replay_after_migration_validated,
+        rollback_reference_present: transcript.rollback_reference_present,
+        runtime_quiesced_or_degraded: transcript.runtime_quiesced_or_degraded,
+        non_secret_reference_count: transcript.non_secret_reference_count,
+        operator_approved: transcript.operator_approved,
+        reviewer_approved: transcript.reviewer_approved,
+        status,
+        blocker_codes,
+        migration_executed_by_validator: false,
+        service_manager_action_performed_by_validator: false,
+        deployment_path_mutated_by_validator: false,
+        secrets_loaded: false,
+        external_submission_performed: false,
+        live_execution_performed: false,
+        production_ready: false,
+        validated_at_unix_ms: transcript.validated_at_unix_ms,
+    };
+    report.validate()?;
+    Ok(report)
+}
+
 fn recover_runtime_smoke_checkpoints(
     state_path: &Path,
 ) -> Result<RuntimeSmokeRecoveredCheckpoints, RuntimeLifecycleError> {
@@ -4473,6 +4762,58 @@ fn deployment_audit_sqlite_blockers(
         blockers.push("missing-recovery-runbook-reference".to_owned());
     }
     if transcript.non_secret_reference_count < 7 {
+        blockers.push("insufficient-non-secret-references".to_owned());
+    }
+    if !transcript.operator_approved {
+        blockers.push("missing-operator-approval".to_owned());
+    }
+    if !transcript.reviewer_approved {
+        blockers.push("missing-reviewer-approval".to_owned());
+    }
+    blockers
+}
+
+fn deployment_sqlite_schema_migration_blockers(
+    transcript: &RuntimeDeploymentSqliteSchemaMigrationTranscript,
+) -> Vec<String> {
+    let mut blockers = Vec::new();
+    if !transcript.deployment_host_evidence {
+        blockers.push("missing-deployment-host-evidence".to_owned());
+    }
+    if !transcript.service_lifecycle_reference_present {
+        blockers.push("missing-service-lifecycle-reference".to_owned());
+    }
+    if !transcript.pre_migration_backup_reference_present {
+        blockers.push("missing-pre-migration-backup-reference".to_owned());
+    }
+    if !transcript.migration_execution_reference_present {
+        blockers.push("missing-migration-execution-reference".to_owned());
+    }
+    if !transcript.schema_version_transition_validated {
+        blockers.push("missing-schema-version-transition-evidence".to_owned());
+    }
+    if transcript.post_migration_schema_version != transcript.expected_schema_version {
+        blockers.push("schema-version-mismatch".to_owned());
+    }
+    if transcript.pre_migration_schema_version > transcript.post_migration_schema_version {
+        blockers.push("schema-version-regressed".to_owned());
+    }
+    if !transcript.sqlite_integrity_check_passed {
+        blockers.push("missing-sqlite-integrity-check-evidence".to_owned());
+    }
+    if !transcript.sqlite_checkpoint_reopened {
+        blockers.push("missing-sqlite-checkpoint-reopen-evidence".to_owned());
+    }
+    if !transcript.audit_replay_after_migration_validated {
+        blockers.push("missing-audit-replay-after-migration-evidence".to_owned());
+    }
+    if !transcript.rollback_reference_present {
+        blockers.push("missing-rollback-reference".to_owned());
+    }
+    if !transcript.runtime_quiesced_or_degraded {
+        blockers.push("missing-runtime-quiesce-or-degrade-evidence".to_owned());
+    }
+    if transcript.non_secret_reference_count < 8 {
         blockers.push("insufficient-non-secret-references".to_owned());
     }
     if !transcript.operator_approved {
@@ -6313,13 +6654,14 @@ mod tests {
         RuntimeDeploymentPermissionTranscript, RuntimeDeploymentPermissionTranscriptStatus,
         RuntimeDeploymentSmokeLoadIteration, RuntimeDeploymentSmokeLoadValidationReport,
         RuntimeDeploymentSmokeValidationReport, RuntimeDeploymentSmokeValidationRequest,
-        RuntimeGracefulShutdownRequest, RuntimeLifecycleError, RuntimeLifecycleRequest,
-        RuntimeLifecycleStatus, RuntimeOpportunityTraceRecoverySummary,
-        RuntimeProductionPreflightRequest, RuntimeProductionPreflightStatus,
-        RuntimeRecoveredOpportunityTraceSummary, RuntimeRestartRecoveryDisposition,
-        RuntimeServiceManagerKind, RuntimeServiceManagerLifecycleEvent,
-        RuntimeServiceManagerLifecycleEventKind, RuntimeServiceManagerLifecycleTranscript,
-        RuntimeServiceManagerLifecycleTranscriptStatus,
+        RuntimeDeploymentSqliteSchemaMigrationTranscript,
+        RuntimeDeploymentSqliteSchemaMigrationTranscriptStatus, RuntimeGracefulShutdownRequest,
+        RuntimeLifecycleError, RuntimeLifecycleRequest, RuntimeLifecycleStatus,
+        RuntimeOpportunityTraceRecoverySummary, RuntimeProductionPreflightRequest,
+        RuntimeProductionPreflightStatus, RuntimeRecoveredOpportunityTraceSummary,
+        RuntimeRestartRecoveryDisposition, RuntimeServiceManagerKind,
+        RuntimeServiceManagerLifecycleEvent, RuntimeServiceManagerLifecycleEventKind,
+        RuntimeServiceManagerLifecycleTranscript, RuntimeServiceManagerLifecycleTranscriptStatus,
         EXECUTION_ADAPTER_LAST_RECOVERY_PLAN_CHECKPOINT_KEY,
         EXECUTION_ADAPTER_LAST_RUN_CHECKPOINT_KEY, EXECUTION_PLANNER_LAST_DRAFT_CHECKPOINT_KEY,
         RUNTIME_DEPLOYMENT_SMOKE_VALIDATION_VERSION, RUNTIME_GRACEFUL_SHUTDOWN_CHECKPOINT_KEY,
@@ -7693,6 +8035,80 @@ redact_secrets = true
     }
 
     #[test]
+    fn deployment_sqlite_schema_migration_transcript_validates_ready_evidence() {
+        let report = super::validate_deployment_sqlite_schema_migration_transcript(
+            deployment_sqlite_schema_migration_transcript(true),
+        )
+        .expect("complete deployment SQLite schema migration transcript should validate");
+
+        assert_eq!(
+            report.status,
+            RuntimeDeploymentSqliteSchemaMigrationTranscriptStatus::ReadyForExternalReview
+        );
+        assert_eq!(report.pre_migration_schema_version, 0);
+        assert_eq!(report.post_migration_schema_version, 1);
+        assert_eq!(report.expected_schema_version, 1);
+        assert!(report.deployment_host_evidence);
+        assert!(report.service_lifecycle_reference_present);
+        assert!(report.pre_migration_backup_reference_present);
+        assert!(report.migration_execution_reference_present);
+        assert!(report.schema_version_transition_validated);
+        assert!(report.sqlite_integrity_check_passed);
+        assert!(report.sqlite_checkpoint_reopened);
+        assert!(report.audit_replay_after_migration_validated);
+        assert!(report.rollback_reference_present);
+        assert!(report.runtime_quiesced_or_degraded);
+        assert!(report.blocker_codes.is_empty());
+        assert!(!report.migration_executed_by_validator);
+        assert!(!report.service_manager_action_performed_by_validator);
+        assert!(!report.deployment_path_mutated_by_validator);
+        assert!(!report.secrets_loaded);
+        assert!(!report.external_submission_performed);
+        assert!(!report.live_execution_performed);
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn deployment_sqlite_schema_migration_transcript_blocks_missing_evidence() {
+        let report = super::validate_deployment_sqlite_schema_migration_transcript(
+            deployment_sqlite_schema_migration_transcript(false),
+        )
+        .expect("incomplete deployment SQLite schema migration transcript should block");
+
+        assert_eq!(
+            report.status,
+            RuntimeDeploymentSqliteSchemaMigrationTranscriptStatus::Blocked
+        );
+        assert!(!report.deployment_host_evidence);
+        assert!(!report.migration_execution_reference_present);
+        assert!(!report.schema_version_transition_validated);
+        assert!(report
+            .blocker_codes
+            .iter()
+            .any(|code| code == "missing-migration-execution-reference"));
+        assert!(report
+            .blocker_codes
+            .iter()
+            .any(|code| code == "schema-version-mismatch"));
+        assert!(report
+            .blocker_codes
+            .iter()
+            .any(|code| code == "insufficient-non-secret-references"));
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn deployment_sqlite_schema_migration_transcript_rejects_validator_side_effects() {
+        let mut transcript = deployment_sqlite_schema_migration_transcript(true);
+        transcript.migration_executed_by_validator = true;
+
+        let error = super::validate_deployment_sqlite_schema_migration_transcript(transcript)
+            .expect_err("validator migration execution must fail closed");
+
+        assert!(error.to_string().contains("must not execute migration"));
+    }
+
+    #[test]
     fn runtime_backup_restore_handles_deployment_style_concurrent_load() {
         let audit_path = temp_audit_path("runtime-load-backup-restore");
         let state_path = temp_state_path("runtime-load-backup-restore");
@@ -8107,6 +8523,43 @@ redact_secrets = true
             live_execution_performed: false,
             production_ready_claimed: false,
             validated_at_unix_ms: 99_000,
+        }
+    }
+
+    fn deployment_sqlite_schema_migration_transcript(
+        complete: bool,
+    ) -> RuntimeDeploymentSqliteSchemaMigrationTranscript {
+        RuntimeDeploymentSqliteSchemaMigrationTranscript {
+            transcript_id: if complete {
+                "deployment-sqlite-schema-migration-ready".to_owned()
+            } else {
+                "deployment-sqlite-schema-migration-blocked".to_owned()
+            },
+            host_label: "deployment-host-a".to_owned(),
+            deployment_host_evidence: complete,
+            service_lifecycle_reference_present: complete,
+            pre_migration_schema_version: 0,
+            post_migration_schema_version: i64::from(complete),
+            expected_schema_version: 1,
+            pre_migration_backup_reference_present: complete,
+            migration_execution_reference_present: complete,
+            schema_version_transition_validated: complete,
+            sqlite_integrity_check_passed: complete,
+            sqlite_checkpoint_reopened: complete,
+            audit_replay_after_migration_validated: complete,
+            rollback_reference_present: complete,
+            runtime_quiesced_or_degraded: complete,
+            non_secret_reference_count: if complete { 9 } else { 1 },
+            operator_approved: complete,
+            reviewer_approved: complete,
+            migration_executed_by_validator: false,
+            service_manager_action_performed_by_validator: false,
+            deployment_path_mutated_by_validator: false,
+            secrets_loaded: false,
+            external_submission_performed: false,
+            live_execution_performed: false,
+            production_ready_claimed: false,
+            validated_at_unix_ms: 96_000,
         }
     }
 

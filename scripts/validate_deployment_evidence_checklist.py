@@ -27,6 +27,7 @@ BUNDLE_TIMEOUT_SECONDS = 360
 CATEGORIES: dict[str, str] = {
     "service-lifecycle": "operator-controlled service lifecycle execution evidence",
     "deployment-host-audit-sqlite": "deployment-host audit and SQLite recovery evidence",
+    "deployment-host-sqlite-schema-migration": "deployment-host SQLite schema migration execution evidence",
     "physical-disk-full": "physical deployment-host disk-full fail-closed evidence",
     "retention-rotation": "deployment-host retention/rotation execution evidence",
     "rollback-drill": "executed rollback drill evidence",

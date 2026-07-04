@@ -2286,6 +2286,7 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
         "remaining_external_evidence": [
             "operator-controlled service start/shutdown/restart evidence",
             "deployment-host audit and SQLite recovery evidence under service lifecycle",
+            "deployment-host SQLite schema migration execution evidence",
             "physical disk-full fail-closed evidence",
             "deployment-host retention/rotation execution evidence",
             "rollback drill evidence",
