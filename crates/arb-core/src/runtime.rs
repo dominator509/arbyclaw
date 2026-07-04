@@ -157,7 +157,7 @@ pub const RUNTIME_PRODUCTION_PREFLIGHT_VALIDATION_VERSION: &str =
 
 /// Stable local service-manager lifecycle transcript validation version.
 pub const RUNTIME_SERVICE_MANAGER_LIFECYCLE_TRANSCRIPT_VERSION: &str =
-    "phase50-service-manager-lifecycle-transcript-local-v1";
+    "phase59-service-manager-lifecycle-transcript-local-v2";
 
 /// Stable local deployment permission transcript validation version.
 pub const RUNTIME_DEPLOYMENT_PERMISSION_TRANSCRIPT_VERSION: &str =
@@ -993,6 +993,12 @@ pub struct RuntimeServiceManagerLifecycleTranscript {
     pub sqlite_recovery_reference_present: bool,
     /// Whether runtime smoke evidence reference is present.
     pub runtime_smoke_reference_present: bool,
+    /// Whether service-manager-controlled concurrent lifecycle evidence is present.
+    pub concurrent_lifecycle_reference_present: bool,
+    /// Number of concurrent lifecycle workers covered by the external reference.
+    pub concurrent_lifecycle_worker_count: u32,
+    /// Whether the referenced concurrent lifecycle run completed successfully.
+    pub concurrent_lifecycle_success: bool,
     /// Whether operator approval/reference is present.
     pub operator_approved: bool,
     /// Whether an operator lifecycle rehearsal reference is present.
@@ -1051,6 +1057,12 @@ pub struct RuntimeServiceManagerLifecycleTranscriptReport {
     pub audit_replay_reference_present: bool,
     /// Whether SQLite recovery evidence reference is present.
     pub sqlite_recovery_reference_present: bool,
+    /// Whether service-manager-controlled concurrent lifecycle evidence is present.
+    pub concurrent_lifecycle_reference_present: bool,
+    /// Number of concurrent lifecycle workers covered by the external reference.
+    pub concurrent_lifecycle_worker_count: u32,
+    /// Whether the referenced concurrent lifecycle run completed successfully.
+    pub concurrent_lifecycle_success: bool,
     /// Whether operator approval/reference is present.
     pub operator_approved: bool,
     /// Whether an operator lifecycle rehearsal reference is present.
@@ -2337,6 +2349,21 @@ impl RuntimeServiceManagerLifecycleTranscript {
                     .to_owned(),
             });
         }
+        if self.concurrent_lifecycle_reference_present
+            && self.concurrent_lifecycle_worker_count == 0
+        {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "service-manager lifecycle concurrent worker count must be non-zero when concurrent evidence is referenced".to_owned(),
+            });
+        }
+        if self.concurrent_lifecycle_success
+            && (!self.concurrent_lifecycle_reference_present
+                || self.concurrent_lifecycle_worker_count == 0)
+        {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "service-manager lifecycle concurrent success requires referenced concurrent evidence".to_owned(),
+            });
+        }
         for event in &self.events {
             event.validate()?;
         }
@@ -2389,6 +2416,13 @@ impl RuntimeServiceManagerLifecycleTranscriptReport {
         if self.event_count == 0 {
             return Err(RuntimeLifecycleError::ValidationFailed {
                 reason: "service-manager lifecycle transcript report requires events".to_owned(),
+            });
+        }
+        if self.concurrent_lifecycle_reference_present
+            && self.concurrent_lifecycle_worker_count == 0
+        {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "service-manager lifecycle transcript report concurrent worker count must be non-zero when evidence is referenced".to_owned(),
             });
         }
         if self.service_manager_action_performed_by_validator
@@ -3478,6 +3512,9 @@ pub fn validate_service_manager_lifecycle_transcript(
     let recovery_evidence_present = recovery_event_present
         && transcript.audit_replay_reference_present
         && transcript.sqlite_recovery_reference_present;
+    let concurrent_lifecycle_evidence_present = transcript.concurrent_lifecycle_reference_present
+        && transcript.concurrent_lifecycle_worker_count >= 2
+        && transcript.concurrent_lifecycle_success;
     let blocker_codes = service_manager_lifecycle_blockers(
         &transcript,
         ServiceManagerLifecycleEvidence {
@@ -3490,6 +3527,7 @@ pub fn validate_service_manager_lifecycle_transcript(
             operator_controlled_events,
             non_secret_references_present,
             successful_event_outcomes,
+            concurrent_lifecycle_evidence_present,
         },
     );
     let status = if blocker_codes.is_empty() {
@@ -3514,6 +3552,9 @@ pub fn validate_service_manager_lifecycle_transcript(
         successful_event_outcomes,
         audit_replay_reference_present: transcript.audit_replay_reference_present,
         sqlite_recovery_reference_present: transcript.sqlite_recovery_reference_present,
+        concurrent_lifecycle_reference_present: transcript.concurrent_lifecycle_reference_present,
+        concurrent_lifecycle_worker_count: transcript.concurrent_lifecycle_worker_count,
+        concurrent_lifecycle_success: transcript.concurrent_lifecycle_success,
         operator_approved: transcript.operator_approved,
         operator_lifecycle_rehearsal_reference_present: transcript
             .operator_lifecycle_rehearsal_reference_present,
@@ -4260,6 +4301,7 @@ struct ServiceManagerLifecycleEvidence {
     operator_controlled_events: bool,
     non_secret_references_present: bool,
     successful_event_outcomes: bool,
+    concurrent_lifecycle_evidence_present: bool,
 }
 
 impl RuntimeServiceManagerLifecycleTranscript {
@@ -4304,6 +4346,9 @@ fn service_manager_lifecycle_blockers(
     }
     if !evidence.successful_event_outcomes {
         blockers.push("failed-lifecycle-event".to_owned());
+    }
+    if !evidence.concurrent_lifecycle_evidence_present {
+        blockers.push("missing-concurrent-lifecycle-evidence".to_owned());
     }
     if !transcript.audit_replay_reference_present {
         blockers.push("missing-audit-replay-reference".to_owned());
@@ -7365,6 +7410,9 @@ redact_secrets = true
         assert!(report.successful_event_outcomes);
         assert!(report.audit_replay_reference_present);
         assert!(report.sqlite_recovery_reference_present);
+        assert!(report.concurrent_lifecycle_reference_present);
+        assert_eq!(report.concurrent_lifecycle_worker_count, 3);
+        assert!(report.concurrent_lifecycle_success);
         assert!(report.operator_approved);
         assert!(report.operator_lifecycle_rehearsal_reference_present);
         assert!(report.emergency_stop_review_reference_present);
@@ -7390,6 +7438,8 @@ redact_secrets = true
         );
         assert!(!report.restart_evidence_present);
         assert!(!report.recovery_evidence_present);
+        assert!(!report.concurrent_lifecycle_reference_present);
+        assert!(!report.concurrent_lifecycle_success);
         assert!(report
             .blocker_codes
             .iter()
@@ -7402,6 +7452,10 @@ redact_secrets = true
             .blocker_codes
             .iter()
             .any(|code| code == "missing-operator-approval"));
+        assert!(report
+            .blocker_codes
+            .iter()
+            .any(|code| code == "missing-concurrent-lifecycle-evidence"));
         assert!(!report.production_ready);
     }
 
@@ -7889,6 +7943,9 @@ redact_secrets = true
             audit_replay_reference_present: complete,
             sqlite_recovery_reference_present: complete,
             runtime_smoke_reference_present: complete,
+            concurrent_lifecycle_reference_present: complete,
+            concurrent_lifecycle_worker_count: if complete { 3 } else { 0 },
+            concurrent_lifecycle_success: complete,
             operator_approved: complete,
             operator_lifecycle_rehearsal_reference_present: complete,
             emergency_stop_review_reference_present: complete,

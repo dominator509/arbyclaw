@@ -12168,6 +12168,18 @@ fn run_service_manager_lifecycle_transcript_validation() -> Result<(), AgentCliE
         ready.recovery_evidence_present
     );
     println!(
+        "ready-concurrent-lifecycle-reference-present: {}",
+        ready.concurrent_lifecycle_reference_present
+    );
+    println!(
+        "ready-concurrent-lifecycle-worker-count: {}",
+        ready.concurrent_lifecycle_worker_count
+    );
+    println!(
+        "ready-concurrent-lifecycle-success: {}",
+        ready.concurrent_lifecycle_success
+    );
+    println!(
         "ready-operator-lifecycle-rehearsal-reference-present: {}",
         ready.operator_lifecycle_rehearsal_reference_present
     );
@@ -12958,6 +12970,9 @@ fn local_service_manager_lifecycle_transcript(
         audit_replay_reference_present: complete,
         sqlite_recovery_reference_present: complete,
         runtime_smoke_reference_present: complete,
+        concurrent_lifecycle_reference_present: complete,
+        concurrent_lifecycle_worker_count: if complete { 3 } else { 0 },
+        concurrent_lifecycle_success: complete,
         operator_approved: complete,
         operator_lifecycle_rehearsal_reference_present: complete,
         emergency_stop_review_reference_present: complete,
