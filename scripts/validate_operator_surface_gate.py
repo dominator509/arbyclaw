@@ -178,6 +178,16 @@ def validate_dashboard_cli(parsed: dict[str, str]) -> list[str]:
         "dashboard-hosted-request-preflight-ready",
         "dashboard-hosted-request-validation-ready",
         "dashboard-hosted-session-validation-ready",
+        "dashboard-hosted-runtime-readiness-review-ready",
+        "dashboard-hosted-runtime-security-review-ready",
+        "dashboard-hosted-runtime-preflight-ready",
+        "dashboard-hosted-runtime-session-ready",
+        "dashboard-hosted-runtime-accepted-request-validated",
+        "dashboard-hosted-runtime-unauthenticated-rejection-validated",
+        "dashboard-hosted-runtime-csrf-rejection-validated",
+        "dashboard-hosted-runtime-rate-limit-rejection-validated",
+        "dashboard-hosted-runtime-loopback-serving-validated",
+        "dashboard-hosted-runtime-secure-headers-validated",
         "local-dashboard-server-started",
         "network-request-served",
     ):
@@ -185,6 +195,7 @@ def validate_dashboard_cli(parsed: dict[str, str]) -> list[str]:
             errors.append(f"dashboard cli expected {key}=true")
     for key in (
         "public-network-exposed",
+        "persistent-dashboard-server-started",
         "live-controls-enabled",
         "external-submission-performed",
         "live-execution-performed",
@@ -201,6 +212,7 @@ def validate_dashboard_cli(parsed: dict[str, str]) -> list[str]:
         "dashboard-hosted-session-rejected-unauthenticated",
         "dashboard-hosted-session-rejected-csrf",
         "dashboard-hosted-session-rejected-rate-limited",
+        "dashboard-hosted-runtime-remaining-external-evidence-count",
     ):
         if (parse_positive_int(parsed.get(key)) or 0) <= 0:
             errors.append(f"dashboard cli expected positive {key}")
@@ -339,6 +351,7 @@ def validate_dashboard_wrapper(report: dict[str, Any]) -> list[str]:
         "audit_records_replayed",
         "checkpoints_recovered",
         "render_panel_count",
+        "hosted_runtime_remaining_external_evidence_count",
     ):
         if (parse_positive_int(nested.get(key)) or 0) <= 0:
             errors.append(f"dashboard wrapper expected positive {key}")
@@ -347,6 +360,16 @@ def validate_dashboard_wrapper(report: dict[str, Any]) -> list[str]:
         "hosted_security_ready",
         "hosted_request_preflight_ready",
         "hosted_request_validation_ready",
+        "hosted_runtime_readiness_review_ready",
+        "hosted_runtime_security_review_ready",
+        "hosted_runtime_preflight_ready",
+        "hosted_runtime_session_ready",
+        "hosted_runtime_accepted_request_validated",
+        "hosted_runtime_unauthenticated_rejection_validated",
+        "hosted_runtime_csrf_rejection_validated",
+        "hosted_runtime_rate_limit_rejection_validated",
+        "hosted_runtime_loopback_serving_validated",
+        "hosted_runtime_secure_headers_validated",
         "local_dashboard_server_started",
         "network_request_served",
     ):
@@ -354,6 +377,7 @@ def validate_dashboard_wrapper(report: dict[str, Any]) -> list[str]:
             errors.append(f"dashboard wrapper expected {key}=true")
     for key in (
         "live_controls_enabled",
+        "persistent_dashboard_server_started",
         "external_submission_performed",
         "live_execution_performed",
         "production_ready",

@@ -79,13 +79,14 @@ use arb_core::{
     plan_execution_adapter_recovery, plan_local_secret_rotation,
     preflight_dashboard_hosted_request, preflight_observability_endpoint,
     preflight_observability_metrics_scrape, record_observability_alert_route_dispatch,
-    render_observability_export_dry_run, review_dashboard_hosted_security,
-    review_local_secret_backup_restore, review_local_validation_coverage,
-    review_market_data_provider_latency, review_observability_operations,
-    review_platform_adapter_controls, review_platform_command_ingress,
-    review_remote_command_security, review_signer_runtime_isolation, review_signer_secret_scope,
-    run_local_fuzz_corpus_replay, run_local_graceful_shutdown_checkpoint,
-    run_local_runtime_lifecycle, run_local_validation_corpus, run_local_validation_property_checks,
+    render_observability_export_dry_run, review_dashboard_hosted_runtime_readiness,
+    review_dashboard_hosted_security, review_local_secret_backup_restore,
+    review_local_validation_coverage, review_market_data_provider_latency,
+    review_observability_operations, review_platform_adapter_controls,
+    review_platform_command_ingress, review_remote_command_security,
+    review_signer_runtime_isolation, review_signer_secret_scope, run_local_fuzz_corpus_replay,
+    run_local_graceful_shutdown_checkpoint, run_local_runtime_lifecycle,
+    run_local_validation_corpus, run_local_validation_property_checks,
     validate_audit_journal_durability, validate_cex_credential_scope_review,
     validate_cex_rate_limit, validate_channel_adapter, validate_channel_session,
     validate_dashboard_hosted_request, validate_dashboard_hosted_session,
@@ -122,6 +123,7 @@ use arb_core::{
     DashboardAccessContext, DashboardAccessSource, DashboardBoundaryConfig,
     DashboardHostedRequestMethod, DashboardHostedRequestPreflight,
     DashboardHostedRequestValidation, DashboardHostedRequestValidationStatus,
+    DashboardHostedRuntimeReadinessReviewRequest, DashboardHostedRuntimeReadinessReviewStatus,
     DashboardHostedSecurityPolicy, DashboardHostedSecurityReviewStatus,
     DashboardHostedSessionValidationStatus, DashboardPanel, DashboardPanelItem, DashboardPanelKind,
     DashboardRenderRequest, DashboardRenderer, DashboardSeverity, DashboardSnapshot,
@@ -14132,6 +14134,24 @@ fn run_dashboard_runtime_validation(
         now_unix_ms.saturating_add(11),
     )
     .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let runtime_readiness_review =
+        review_dashboard_hosted_runtime_readiness(DashboardHostedRuntimeReadinessReviewRequest {
+            review_id: "local-dashboard-runtime-readiness".to_owned(),
+            security_review: security_review.clone(),
+            request_preflight: request_preflight.clone(),
+            session_validation: session_validation.clone(),
+            remaining_external_evidence: vec![
+                "persistent daemon dashboard hosting validation".to_owned(),
+                "browser authentication/session validation".to_owned(),
+                "CSRF token and secure-header serving validation".to_owned(),
+                "external dashboard penetration testing".to_owned(),
+            ],
+            persistent_server_start_requested: false,
+            public_network_exposure_requested: false,
+            live_controls_requested: false,
+            production_ready_claimed: false,
+        })
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
 
     let audit_records = [
         render_audit.sequence,
@@ -14214,6 +14234,22 @@ fn run_dashboard_runtime_validation(
         || session_validation.public_network_exposed
         || session_validation.live_controls_enabled
         || session_validation.production_ready
+        || runtime_readiness_review.status
+            != DashboardHostedRuntimeReadinessReviewStatus::ReadyForLocalReview
+        || !runtime_readiness_review.security_review_ready
+        || !runtime_readiness_review.request_preflight_ready
+        || !runtime_readiness_review.session_validation_ready
+        || !runtime_readiness_review.accepted_request_validated
+        || !runtime_readiness_review.unauthenticated_rejection_validated
+        || !runtime_readiness_review.csrf_rejection_validated
+        || !runtime_readiness_review.rate_limit_rejection_validated
+        || !runtime_readiness_review.loopback_serving_validated
+        || !runtime_readiness_review.secure_headers_validated
+        || !runtime_readiness_review.remaining_external_evidence_recorded
+        || runtime_readiness_review.persistent_server_started
+        || runtime_readiness_review.public_network_exposed
+        || runtime_readiness_review.live_controls_enabled
+        || runtime_readiness_review.production_ready
     {
         return Err(AgentCliError::Validation(
             "dashboard runtime validation failed".to_owned(),
@@ -14282,6 +14318,51 @@ fn run_dashboard_runtime_validation(
         session_validation.status == DashboardHostedSessionValidationStatus::ReadyForLocalReview
     );
     println!(
+        "dashboard-hosted-runtime-readiness-review-ready: {}",
+        runtime_readiness_review.status
+            == DashboardHostedRuntimeReadinessReviewStatus::ReadyForLocalReview
+    );
+    println!(
+        "dashboard-hosted-runtime-security-review-ready: {}",
+        runtime_readiness_review.security_review_ready
+    );
+    println!(
+        "dashboard-hosted-runtime-preflight-ready: {}",
+        runtime_readiness_review.request_preflight_ready
+    );
+    println!(
+        "dashboard-hosted-runtime-session-ready: {}",
+        runtime_readiness_review.session_validation_ready
+    );
+    println!(
+        "dashboard-hosted-runtime-accepted-request-validated: {}",
+        runtime_readiness_review.accepted_request_validated
+    );
+    println!(
+        "dashboard-hosted-runtime-unauthenticated-rejection-validated: {}",
+        runtime_readiness_review.unauthenticated_rejection_validated
+    );
+    println!(
+        "dashboard-hosted-runtime-csrf-rejection-validated: {}",
+        runtime_readiness_review.csrf_rejection_validated
+    );
+    println!(
+        "dashboard-hosted-runtime-rate-limit-rejection-validated: {}",
+        runtime_readiness_review.rate_limit_rejection_validated
+    );
+    println!(
+        "dashboard-hosted-runtime-loopback-serving-validated: {}",
+        runtime_readiness_review.loopback_serving_validated
+    );
+    println!(
+        "dashboard-hosted-runtime-secure-headers-validated: {}",
+        runtime_readiness_review.secure_headers_validated
+    );
+    println!(
+        "dashboard-hosted-runtime-remaining-external-evidence-count: {}",
+        runtime_readiness_review.remaining_external_evidence_count
+    );
+    println!(
         "dashboard-hosted-session-requests: {}",
         session_validation.total_request_count
     );
@@ -14314,6 +14395,10 @@ fn run_dashboard_runtime_validation(
         request_validation.local_http_status_code
     );
     println!("public-network-exposed: false");
+    println!(
+        "persistent-dashboard-server-started: {}",
+        runtime_readiness_review.persistent_server_started
+    );
     println!("live-controls-enabled: false");
     println!("external-submission-performed: false");
     println!("live-execution-performed: false");

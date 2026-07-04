@@ -2009,7 +2009,43 @@ def run_dashboard_runtime(
         "hosted_request_validation_ready": parsed.get(
             "dashboard-hosted-request-validation-ready"
         ),
+        "hosted_runtime_readiness_review_ready": parsed.get(
+            "dashboard-hosted-runtime-readiness-review-ready"
+        ),
+        "hosted_runtime_security_review_ready": parsed.get(
+            "dashboard-hosted-runtime-security-review-ready"
+        ),
+        "hosted_runtime_preflight_ready": parsed.get(
+            "dashboard-hosted-runtime-preflight-ready"
+        ),
+        "hosted_runtime_session_ready": parsed.get(
+            "dashboard-hosted-runtime-session-ready"
+        ),
+        "hosted_runtime_accepted_request_validated": parsed.get(
+            "dashboard-hosted-runtime-accepted-request-validated"
+        ),
+        "hosted_runtime_unauthenticated_rejection_validated": parsed.get(
+            "dashboard-hosted-runtime-unauthenticated-rejection-validated"
+        ),
+        "hosted_runtime_csrf_rejection_validated": parsed.get(
+            "dashboard-hosted-runtime-csrf-rejection-validated"
+        ),
+        "hosted_runtime_rate_limit_rejection_validated": parsed.get(
+            "dashboard-hosted-runtime-rate-limit-rejection-validated"
+        ),
+        "hosted_runtime_loopback_serving_validated": parsed.get(
+            "dashboard-hosted-runtime-loopback-serving-validated"
+        ),
+        "hosted_runtime_secure_headers_validated": parsed.get(
+            "dashboard-hosted-runtime-secure-headers-validated"
+        ),
+        "hosted_runtime_remaining_external_evidence_count": parsed.get(
+            "dashboard-hosted-runtime-remaining-external-evidence-count"
+        ),
         "local_dashboard_server_started": parsed.get("local-dashboard-server-started"),
+        "persistent_dashboard_server_started": parsed.get(
+            "persistent-dashboard-server-started"
+        ),
         "network_request_served": parsed.get("network-request-served"),
         "local_http_status_code": parsed.get("local-http-status-code"),
         "public_network_exposed": parsed.get("public-network-exposed"),
@@ -3276,8 +3312,56 @@ def print_text_report(report: dict[str, Any]) -> None:
             f"{dashboard.get('hosted_request_validation_ready', '')}"
         )
         print(
+            "dashboard-hosted-runtime-readiness-review-ready: "
+            f"{dashboard.get('hosted_runtime_readiness_review_ready', '')}"
+        )
+        print(
+            "dashboard-hosted-runtime-security-review-ready: "
+            f"{dashboard.get('hosted_runtime_security_review_ready', '')}"
+        )
+        print(
+            "dashboard-hosted-runtime-preflight-ready: "
+            f"{dashboard.get('hosted_runtime_preflight_ready', '')}"
+        )
+        print(
+            "dashboard-hosted-runtime-session-ready: "
+            f"{dashboard.get('hosted_runtime_session_ready', '')}"
+        )
+        print(
+            "dashboard-hosted-runtime-accepted-request-validated: "
+            f"{dashboard.get('hosted_runtime_accepted_request_validated', '')}"
+        )
+        print(
+            "dashboard-hosted-runtime-unauthenticated-rejection-validated: "
+            f"{dashboard.get('hosted_runtime_unauthenticated_rejection_validated', '')}"
+        )
+        print(
+            "dashboard-hosted-runtime-csrf-rejection-validated: "
+            f"{dashboard.get('hosted_runtime_csrf_rejection_validated', '')}"
+        )
+        print(
+            "dashboard-hosted-runtime-rate-limit-rejection-validated: "
+            f"{dashboard.get('hosted_runtime_rate_limit_rejection_validated', '')}"
+        )
+        print(
+            "dashboard-hosted-runtime-loopback-serving-validated: "
+            f"{dashboard.get('hosted_runtime_loopback_serving_validated', '')}"
+        )
+        print(
+            "dashboard-hosted-runtime-secure-headers-validated: "
+            f"{dashboard.get('hosted_runtime_secure_headers_validated', '')}"
+        )
+        print(
+            "dashboard-hosted-runtime-remaining-external-evidence-count: "
+            f"{dashboard.get('hosted_runtime_remaining_external_evidence_count', '')}"
+        )
+        print(
             "local-dashboard-server-started: "
             f"{dashboard.get('local_dashboard_server_started', '')}"
+        )
+        print(
+            "persistent-dashboard-server-started: "
+            f"{dashboard.get('persistent_dashboard_server_started', '')}"
         )
         print(f"network-request-served: {dashboard.get('network_request_served', '')}")
         print(f"local-http-status-code: {dashboard.get('local_http_status_code', '')}")

@@ -43,6 +43,10 @@ pub const DASHBOARD_LAST_HOSTED_REQUEST_VALIDATION_CHECKPOINT_KEY: &str =
 pub const DASHBOARD_LAST_HOSTED_SESSION_VALIDATION_CHECKPOINT_KEY: &str =
     "dashboard:last-hosted-session-validation";
 
+/// Stable local hosted-dashboard runtime readiness review version.
+pub const DASHBOARD_HOSTED_RUNTIME_READINESS_REVIEW_VERSION: &str =
+    "local-hosted-dashboard-runtime-readiness-review-v1";
+
 /// Conservative dashboard boundary settings.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -555,6 +559,85 @@ pub struct DashboardHostedSessionValidationReport {
     pub production_ready: bool,
 }
 
+/// Local hosted-dashboard runtime readiness review request.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DashboardHostedRuntimeReadinessReviewRequest {
+    /// Stable non-secret review identifier.
+    pub review_id: String,
+    /// Future-hosting security control review.
+    pub security_review: DashboardHostedSecurityReviewReport,
+    /// Future hosted-request preflight report.
+    pub request_preflight: DashboardHostedRequestPreflightReport,
+    /// Local one-shot hosted-session validation report.
+    pub session_validation: DashboardHostedSessionValidationReport,
+    /// Remaining non-secret external/deployment evidence references.
+    pub remaining_external_evidence: Vec<String>,
+    /// Whether this review requested persistent server startup.
+    pub persistent_server_start_requested: bool,
+    /// Whether this review requested public network exposure.
+    pub public_network_exposure_requested: bool,
+    /// Whether this review requested live dashboard controls.
+    pub live_controls_requested: bool,
+    /// Whether this review claims production readiness.
+    pub production_ready_claimed: bool,
+}
+
+/// Local hosted-dashboard runtime readiness review status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+pub enum DashboardHostedRuntimeReadinessReviewStatus {
+    /// Existing local controls are coherent for local review only.
+    ReadyForLocalReview,
+    /// Local evidence is incomplete or unsafe side effects were requested.
+    Blocked,
+}
+
+/// Local hosted-dashboard runtime readiness review report.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DashboardHostedRuntimeReadinessReviewReport {
+    /// Stable review schema version.
+    pub review_version: String,
+    /// Stable non-secret review identifier.
+    pub review_id: String,
+    /// Review status.
+    pub status: DashboardHostedRuntimeReadinessReviewStatus,
+    /// Whether security controls are ready for local review.
+    pub security_review_ready: bool,
+    /// Whether hosted-request preflight is ready for local review.
+    pub request_preflight_ready: bool,
+    /// Whether local hosted-session validation is ready for local review.
+    pub session_validation_ready: bool,
+    /// Whether at least one accepted local request was validated.
+    pub accepted_request_validated: bool,
+    /// Whether rejected unauthenticated request accounting was validated.
+    pub unauthenticated_rejection_validated: bool,
+    /// Whether rejected CSRF request accounting was validated.
+    pub csrf_rejection_validated: bool,
+    /// Whether rejected rate-limit request accounting was validated.
+    pub rate_limit_rejection_validated: bool,
+    /// Whether local one-shot loopback serving was validated.
+    pub loopback_serving_validated: bool,
+    /// Whether secure-header checks were validated.
+    pub secure_headers_validated: bool,
+    /// Whether remaining external/deployment evidence is recorded.
+    pub remaining_external_evidence_recorded: bool,
+    /// Count of remaining external/deployment evidence references.
+    pub remaining_external_evidence_count: usize,
+    /// Count of local missing controls across component reports.
+    pub missing_control_count: u32,
+    /// Whether a persistent dashboard server was started.
+    pub persistent_server_started: bool,
+    /// Whether public network exposure occurred.
+    pub public_network_exposed: bool,
+    /// Whether live controls were enabled.
+    pub live_controls_enabled: bool,
+    /// Whether production readiness was claimed.
+    pub production_ready: bool,
+    /// Stable non-secret violation codes.
+    pub violation_codes: Vec<String>,
+}
+
 impl DashboardHostedRequestValidation {
     /// Validate local one-shot hosted dashboard request validation input.
     pub fn validate(&self) -> Result<(), DashboardError> {
@@ -744,6 +827,127 @@ impl DashboardHostedSessionValidationReport {
                         "DASHBOARD_HOSTED_SESSION_BLOCKED_MISMATCH",
                         "blocked hosted dashboard session validation must be missing at least one required control",
                     ));
+                }
+            }
+        }
+        finish_validation(violations)
+    }
+}
+
+impl DashboardHostedRuntimeReadinessReviewRequest {
+    /// Validate the local readiness review request before composing component evidence.
+    pub fn validate(&self) -> Result<(), DashboardError> {
+        let mut violations = Vec::new();
+        if self.review_id.trim().is_empty() {
+            violations.push(DashboardViolation::new(
+                "DASHBOARD_HOSTED_RUNTIME_REVIEW_ID_EMPTY",
+                "hosted dashboard runtime readiness review id must not be empty",
+            ));
+        }
+        self.security_review.validate()?;
+        self.request_preflight.validate()?;
+        self.session_validation.validate()?;
+        finish_validation(violations)
+    }
+}
+
+impl DashboardHostedRuntimeReadinessReviewReport {
+    /// Validate derived readiness review invariants.
+    pub fn validate(&self) -> Result<(), DashboardError> {
+        let mut violations = Vec::new();
+        if self.review_version != DASHBOARD_HOSTED_RUNTIME_READINESS_REVIEW_VERSION {
+            violations.push(DashboardViolation::new(
+                "DASHBOARD_HOSTED_RUNTIME_REVIEW_VERSION_MISMATCH",
+                "hosted dashboard runtime readiness review version mismatch",
+            ));
+        }
+        if self.review_id.trim().is_empty() {
+            violations.push(DashboardViolation::new(
+                "DASHBOARD_HOSTED_RUNTIME_REVIEW_REPORT_ID_EMPTY",
+                "hosted dashboard runtime readiness review report id must not be empty",
+            ));
+        }
+        if self.status == DashboardHostedRuntimeReadinessReviewStatus::ReadyForLocalReview {
+            for (missing, code, message) in [
+                (
+                    !self.security_review_ready,
+                    "DASHBOARD_HOSTED_RUNTIME_SECURITY_NOT_READY",
+                    "hosted dashboard security review is not ready",
+                ),
+                (
+                    !self.request_preflight_ready,
+                    "DASHBOARD_HOSTED_RUNTIME_PREFLIGHT_NOT_READY",
+                    "hosted dashboard request preflight is not ready",
+                ),
+                (
+                    !self.session_validation_ready,
+                    "DASHBOARD_HOSTED_RUNTIME_SESSION_NOT_READY",
+                    "hosted dashboard session validation is not ready",
+                ),
+                (
+                    !self.accepted_request_validated,
+                    "DASHBOARD_HOSTED_RUNTIME_ACCEPTED_REQUEST_MISSING",
+                    "hosted dashboard accepted request validation is missing",
+                ),
+                (
+                    !self.unauthenticated_rejection_validated,
+                    "DASHBOARD_HOSTED_RUNTIME_UNAUTH_REJECTION_MISSING",
+                    "hosted dashboard unauthenticated rejection validation is missing",
+                ),
+                (
+                    !self.csrf_rejection_validated,
+                    "DASHBOARD_HOSTED_RUNTIME_CSRF_REJECTION_MISSING",
+                    "hosted dashboard CSRF rejection validation is missing",
+                ),
+                (
+                    !self.rate_limit_rejection_validated,
+                    "DASHBOARD_HOSTED_RUNTIME_RATE_LIMIT_REJECTION_MISSING",
+                    "hosted dashboard rate-limit rejection validation is missing",
+                ),
+                (
+                    !self.loopback_serving_validated,
+                    "DASHBOARD_HOSTED_RUNTIME_LOOPBACK_SERVING_MISSING",
+                    "hosted dashboard loopback serving validation is missing",
+                ),
+                (
+                    !self.secure_headers_validated,
+                    "DASHBOARD_HOSTED_RUNTIME_SECURE_HEADERS_MISSING",
+                    "hosted dashboard secure-header validation is missing",
+                ),
+                (
+                    !self.remaining_external_evidence_recorded,
+                    "DASHBOARD_HOSTED_RUNTIME_REMAINING_EVIDENCE_MISSING",
+                    "remaining hosted dashboard deployment evidence must be recorded",
+                ),
+            ] {
+                if missing {
+                    violations.push(DashboardViolation::new(code, message));
+                }
+            }
+            for (unsafe_flag, code, message) in [
+                (
+                    self.persistent_server_started,
+                    "DASHBOARD_HOSTED_RUNTIME_PERSISTENT_SERVER_STARTED",
+                    "local hosted dashboard readiness review must not start a persistent server",
+                ),
+                (
+                    self.public_network_exposed,
+                    "DASHBOARD_HOSTED_RUNTIME_PUBLIC_NETWORK_EXPOSED",
+                    "local hosted dashboard readiness review must not expose public network bindings",
+                ),
+                (
+                    self.live_controls_enabled,
+                    "DASHBOARD_HOSTED_RUNTIME_LIVE_CONTROLS_ENABLED",
+                    "local hosted dashboard readiness review must not enable live controls",
+                ),
+                (
+                    self.production_ready,
+                    "DASHBOARD_HOSTED_RUNTIME_PRODUCTION_READY_CLAIMED",
+                    "local hosted dashboard readiness review must not claim production readiness",
+                ),
+            ] {
+                if unsafe_flag {
+                    violations.push(DashboardViolation::new(code, message));
                 }
             }
         }
@@ -1308,6 +1512,154 @@ pub fn validate_dashboard_hosted_session(
         public_network_exposed,
         live_controls_enabled,
         production_ready,
+    };
+    report.validate()?;
+    Ok(report)
+}
+
+/// Compose local hosted-dashboard runtime readiness evidence without starting a
+/// persistent server, exposing public bindings, enabling live controls, or
+/// claiming production readiness.
+pub fn review_dashboard_hosted_runtime_readiness(
+    request: DashboardHostedRuntimeReadinessReviewRequest,
+) -> Result<DashboardHostedRuntimeReadinessReviewReport, DashboardError> {
+    request.validate()?;
+
+    let security_review_ready =
+        request.security_review.status == DashboardHostedSecurityReviewStatus::ReadyForLocalReview;
+    let request_preflight_ready = request.request_preflight.status
+        == DashboardHostedRequestPreflightStatus::ReadyForLocalReview;
+    let session_validation_ready = request.session_validation.status
+        == DashboardHostedSessionValidationStatus::ReadyForLocalReview;
+    let accepted_request_validated = request.session_validation.accepted_request_count > 0;
+    let unauthenticated_rejection_validated =
+        request.session_validation.rejected_unauthenticated_count > 0;
+    let csrf_rejection_validated = request.session_validation.rejected_csrf_count > 0;
+    let rate_limit_rejection_validated = request.session_validation.rejected_rate_limited_count > 0;
+    let loopback_serving_validated = request.request_preflight.loopback_bind_validated
+        && request.session_validation.loopback_bind_validated
+        && request.session_validation.local_server_started
+        && request.session_validation.network_request_served;
+    let secure_headers_validated = request.request_preflight.secure_headers_validated
+        && request.session_validation.secure_headers_validated;
+    let remaining_external_evidence_count = request.remaining_external_evidence.len();
+    let remaining_external_evidence_recorded = remaining_external_evidence_count > 0;
+    let missing_control_count = request
+        .security_review
+        .missing_control_count
+        .saturating_add(request.request_preflight.missing_control_count)
+        .saturating_add(request.session_validation.missing_control_count);
+    let persistent_server_started = request.persistent_server_start_requested;
+    let public_network_exposed = request.public_network_exposure_requested
+        || request.security_review.public_network_exposed
+        || request.request_preflight.public_network_exposed
+        || request.session_validation.public_network_exposed;
+    let live_controls_enabled = request.live_controls_requested
+        || request.security_review.live_controls_enabled
+        || request.request_preflight.live_controls_enabled
+        || request.session_validation.live_controls_enabled;
+    let production_ready = request.production_ready_claimed
+        || request.security_review.production_ready
+        || request.request_preflight.production_ready
+        || request.session_validation.production_ready;
+
+    let mut violation_codes = Vec::new();
+    push_dashboard_code_if(
+        &mut violation_codes,
+        !security_review_ready,
+        "DASHBOARD_HOSTED_RUNTIME_SECURITY_NOT_READY",
+    );
+    push_dashboard_code_if(
+        &mut violation_codes,
+        !request_preflight_ready,
+        "DASHBOARD_HOSTED_RUNTIME_PREFLIGHT_NOT_READY",
+    );
+    push_dashboard_code_if(
+        &mut violation_codes,
+        !session_validation_ready,
+        "DASHBOARD_HOSTED_RUNTIME_SESSION_NOT_READY",
+    );
+    push_dashboard_code_if(
+        &mut violation_codes,
+        !accepted_request_validated,
+        "DASHBOARD_HOSTED_RUNTIME_ACCEPTED_REQUEST_MISSING",
+    );
+    push_dashboard_code_if(
+        &mut violation_codes,
+        !unauthenticated_rejection_validated,
+        "DASHBOARD_HOSTED_RUNTIME_UNAUTH_REJECTION_MISSING",
+    );
+    push_dashboard_code_if(
+        &mut violation_codes,
+        !csrf_rejection_validated,
+        "DASHBOARD_HOSTED_RUNTIME_CSRF_REJECTION_MISSING",
+    );
+    push_dashboard_code_if(
+        &mut violation_codes,
+        !rate_limit_rejection_validated,
+        "DASHBOARD_HOSTED_RUNTIME_RATE_LIMIT_REJECTION_MISSING",
+    );
+    push_dashboard_code_if(
+        &mut violation_codes,
+        !loopback_serving_validated,
+        "DASHBOARD_HOSTED_RUNTIME_LOOPBACK_SERVING_MISSING",
+    );
+    push_dashboard_code_if(
+        &mut violation_codes,
+        !secure_headers_validated,
+        "DASHBOARD_HOSTED_RUNTIME_SECURE_HEADERS_MISSING",
+    );
+    push_dashboard_code_if(
+        &mut violation_codes,
+        !remaining_external_evidence_recorded,
+        "DASHBOARD_HOSTED_RUNTIME_REMAINING_EVIDENCE_MISSING",
+    );
+    push_dashboard_code_if(
+        &mut violation_codes,
+        persistent_server_started,
+        "DASHBOARD_HOSTED_RUNTIME_PERSISTENT_SERVER_STARTED",
+    );
+    push_dashboard_code_if(
+        &mut violation_codes,
+        public_network_exposed,
+        "DASHBOARD_HOSTED_RUNTIME_PUBLIC_NETWORK_EXPOSED",
+    );
+    push_dashboard_code_if(
+        &mut violation_codes,
+        live_controls_enabled,
+        "DASHBOARD_HOSTED_RUNTIME_LIVE_CONTROLS_ENABLED",
+    );
+    push_dashboard_code_if(
+        &mut violation_codes,
+        production_ready,
+        "DASHBOARD_HOSTED_RUNTIME_PRODUCTION_READY_CLAIMED",
+    );
+
+    let report = DashboardHostedRuntimeReadinessReviewReport {
+        review_version: DASHBOARD_HOSTED_RUNTIME_READINESS_REVIEW_VERSION.to_owned(),
+        review_id: request.review_id,
+        status: if violation_codes.is_empty() {
+            DashboardHostedRuntimeReadinessReviewStatus::ReadyForLocalReview
+        } else {
+            DashboardHostedRuntimeReadinessReviewStatus::Blocked
+        },
+        security_review_ready,
+        request_preflight_ready,
+        session_validation_ready,
+        accepted_request_validated,
+        unauthenticated_rejection_validated,
+        csrf_rejection_validated,
+        rate_limit_rejection_validated,
+        loopback_serving_validated,
+        secure_headers_validated,
+        remaining_external_evidence_recorded,
+        remaining_external_evidence_count,
+        missing_control_count,
+        persistent_server_started,
+        public_network_exposed,
+        live_controls_enabled,
+        production_ready,
+        violation_codes,
     };
     report.validate()?;
     Ok(report)
@@ -2580,6 +2932,12 @@ fn finish_validation(violations: Vec<DashboardViolation>) -> Result<(), Dashboar
     }
 }
 
+fn push_dashboard_code_if(codes: &mut Vec<String>, condition: bool, code: &str) {
+    if condition {
+        codes.push(code.to_owned());
+    }
+}
+
 fn validate_id(kind: &'static str, id: &str, violations: &mut Vec<DashboardViolation>) {
     let trimmed = id.trim();
     if trimmed.is_empty() {
@@ -2720,18 +3078,19 @@ mod tests {
         persist_dashboard_hosted_security_review_checkpoint,
         persist_dashboard_hosted_session_validation_checkpoint,
         persist_dashboard_render_checkpoint, preflight_dashboard_hosted_request,
-        review_dashboard_hosted_security, sha256_hex, validate_dashboard_hosted_request,
-        validate_dashboard_hosted_session, DashboardAccessAuthorizationStatus,
-        DashboardAccessContext, DashboardAccessSource, DashboardBoundaryConfig, DashboardError,
-        DashboardHostedRequestMethod, DashboardHostedRequestPreflight,
-        DashboardHostedRequestPreflightStatus, DashboardHostedRequestValidation,
-        DashboardHostedRequestValidationReport, DashboardHostedRequestValidationStatus,
-        DashboardHostedSecurityPolicy, DashboardHostedSecurityReviewStatus,
-        DashboardHostedSessionValidationReport, DashboardHostedSessionValidationStatus,
-        DashboardPanel, DashboardPanelItem, DashboardPanelKind, DashboardRenderRecord,
-        DashboardRenderRequest, DashboardRenderer, DashboardServerBinding, DashboardSeverity,
-        DashboardSnapshot, DeterministicDashboardRenderer,
-        DASHBOARD_LAST_HOSTED_REQUEST_PREFLIGHT_CHECKPOINT_KEY,
+        review_dashboard_hosted_runtime_readiness, review_dashboard_hosted_security, sha256_hex,
+        validate_dashboard_hosted_request, validate_dashboard_hosted_session,
+        DashboardAccessAuthorizationStatus, DashboardAccessContext, DashboardAccessSource,
+        DashboardBoundaryConfig, DashboardError, DashboardHostedRequestMethod,
+        DashboardHostedRequestPreflight, DashboardHostedRequestPreflightStatus,
+        DashboardHostedRequestValidation, DashboardHostedRequestValidationReport,
+        DashboardHostedRequestValidationStatus, DashboardHostedRuntimeReadinessReviewRequest,
+        DashboardHostedRuntimeReadinessReviewStatus, DashboardHostedSecurityPolicy,
+        DashboardHostedSecurityReviewStatus, DashboardHostedSessionValidationReport,
+        DashboardHostedSessionValidationStatus, DashboardPanel, DashboardPanelItem,
+        DashboardPanelKind, DashboardRenderRecord, DashboardRenderRequest, DashboardRenderer,
+        DashboardServerBinding, DashboardSeverity, DashboardSnapshot,
+        DeterministicDashboardRenderer, DASHBOARD_LAST_HOSTED_REQUEST_PREFLIGHT_CHECKPOINT_KEY,
         DASHBOARD_LAST_HOSTED_REQUEST_VALIDATION_CHECKPOINT_KEY,
         DASHBOARD_LAST_HOSTED_SECURITY_REVIEW_CHECKPOINT_KEY,
         DASHBOARD_LAST_HOSTED_SESSION_VALIDATION_CHECKPOINT_KEY,
@@ -3639,6 +3998,221 @@ mod tests {
 
         let _ = fs::remove_file(audit_path);
         cleanup_state_files(&state_path);
+    }
+
+    #[test]
+    fn hosted_dashboard_runtime_readiness_review_accepts_local_evidence() {
+        let report = review_dashboard_hosted_runtime_readiness(hosted_runtime_readiness_request(
+            false, true,
+        ))
+        .expect("complete local hosted dashboard evidence should review");
+
+        assert_eq!(
+            report.status,
+            DashboardHostedRuntimeReadinessReviewStatus::ReadyForLocalReview
+        );
+        assert!(report.security_review_ready);
+        assert!(report.request_preflight_ready);
+        assert!(report.session_validation_ready);
+        assert!(report.accepted_request_validated);
+        assert!(report.unauthenticated_rejection_validated);
+        assert!(report.csrf_rejection_validated);
+        assert!(report.rate_limit_rejection_validated);
+        assert!(report.loopback_serving_validated);
+        assert!(report.secure_headers_validated);
+        assert!(report.remaining_external_evidence_recorded);
+        assert_eq!(report.remaining_external_evidence_count, 4);
+        assert!(!report.persistent_server_started);
+        assert!(!report.public_network_exposed);
+        assert!(!report.live_controls_enabled);
+        assert!(!report.production_ready);
+        assert!(report.violation_codes.is_empty());
+    }
+
+    #[test]
+    fn hosted_dashboard_runtime_readiness_review_blocks_missing_external_evidence() {
+        let report = review_dashboard_hosted_runtime_readiness(hosted_runtime_readiness_request(
+            false, false,
+        ))
+        .expect("missing external evidence should produce blocked review");
+
+        assert_eq!(
+            report.status,
+            DashboardHostedRuntimeReadinessReviewStatus::Blocked
+        );
+        assert!(!report.remaining_external_evidence_recorded);
+        assert!(report
+            .violation_codes
+            .iter()
+            .any(|code| { code == "DASHBOARD_HOSTED_RUNTIME_REMAINING_EVIDENCE_MISSING" }));
+        assert!(!report.public_network_exposed);
+        assert!(!report.live_controls_enabled);
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn hosted_dashboard_runtime_readiness_review_fails_closed_on_side_effect_claims() {
+        let report =
+            review_dashboard_hosted_runtime_readiness(hosted_runtime_readiness_request(true, true))
+                .expect("side-effect claims should produce blocked review");
+
+        assert_eq!(
+            report.status,
+            DashboardHostedRuntimeReadinessReviewStatus::Blocked
+        );
+        assert!(report.persistent_server_started);
+        assert!(report.public_network_exposed);
+        assert!(report.live_controls_enabled);
+        assert!(report.production_ready);
+        for expected in [
+            "DASHBOARD_HOSTED_RUNTIME_PERSISTENT_SERVER_STARTED",
+            "DASHBOARD_HOSTED_RUNTIME_PUBLIC_NETWORK_EXPOSED",
+            "DASHBOARD_HOSTED_RUNTIME_LIVE_CONTROLS_ENABLED",
+            "DASHBOARD_HOSTED_RUNTIME_PRODUCTION_READY_CLAIMED",
+        ] {
+            assert!(
+                report.violation_codes.iter().any(|code| code == expected),
+                "missing expected violation code {expected}"
+            );
+        }
+    }
+
+    fn hosted_runtime_readiness_request(
+        side_effect_claimed: bool,
+        include_remaining_external_evidence: bool,
+    ) -> DashboardHostedRuntimeReadinessReviewRequest {
+        let security_review = review_dashboard_hosted_security(&DashboardHostedSecurityPolicy {
+            review_id: "dashboard-hosted-runtime-security".to_owned(),
+            authentication_required: true,
+            authorization_required: true,
+            csrf_protection_required: true,
+            csrf_token_rotation_required: true,
+            secure_headers_required: true,
+            clickjacking_protection_required: true,
+            rate_limit_required: true,
+            max_requests_per_minute: 60,
+            loopback_only_required: true,
+            audit_state_preflight_required: true,
+            session_revocation_required: true,
+            operator_role_review_required: true,
+            read_only_controls_required: true,
+            public_exposure_requested: false,
+            server_start_requested: false,
+            live_controls_requested: false,
+        })
+        .expect("security review builds");
+        let request_preflight =
+            preflight_dashboard_hosted_request(&DashboardHostedRequestPreflight {
+                preflight_id: "dashboard-hosted-runtime-preflight".to_owned(),
+                bind_host: "127.0.0.1".to_owned(),
+                access_source: DashboardAccessSource::BrowserSession,
+                method: DashboardHostedRequestMethod::Post,
+                authenticated: true,
+                authorized: true,
+                csrf_token_present: true,
+                csrf_token_valid: true,
+                content_security_policy_present: true,
+                frame_protection_present: true,
+                content_type_options_present: true,
+                referrer_policy_present: true,
+                requests_in_current_window: 1,
+                max_requests_per_minute: 60,
+                public_exposure_requested: false,
+                server_start_requested: false,
+                live_controls_requested: false,
+            })
+            .expect("request preflight builds");
+        let render_record = render_record();
+        let accepted = hosted_request_report(
+            "dashboard-hosted-runtime-accepted",
+            render_record.clone(),
+            DashboardHostedRequestMethod::Get,
+            true,
+            true,
+            true,
+            1,
+        );
+        let unauthenticated = hosted_request_report(
+            "dashboard-hosted-runtime-unauthenticated",
+            render_record.clone(),
+            DashboardHostedRequestMethod::Get,
+            false,
+            false,
+            true,
+            1,
+        );
+        let csrf_rejected = hosted_request_report(
+            "dashboard-hosted-runtime-csrf",
+            render_record.clone(),
+            DashboardHostedRequestMethod::Post,
+            true,
+            true,
+            false,
+            1,
+        );
+        let rate_limited = hosted_request_report(
+            "dashboard-hosted-runtime-rate-limited",
+            render_record,
+            DashboardHostedRequestMethod::Get,
+            true,
+            true,
+            true,
+            61,
+        );
+        let session_validation = validate_dashboard_hosted_session(
+            "dashboard-hosted-runtime-session",
+            &[accepted, unauthenticated, csrf_rejected, rate_limited],
+        )
+        .expect("hosted session validation builds");
+        DashboardHostedRuntimeReadinessReviewRequest {
+            review_id: "dashboard-hosted-runtime-readiness".to_owned(),
+            security_review,
+            request_preflight,
+            session_validation,
+            remaining_external_evidence: if include_remaining_external_evidence {
+                vec![
+                    "persistent daemon hosting validation".to_owned(),
+                    "browser authentication/session validation".to_owned(),
+                    "CSRF and secure-header serving validation".to_owned(),
+                    "external dashboard penetration testing".to_owned(),
+                ]
+            } else {
+                Vec::new()
+            },
+            persistent_server_start_requested: side_effect_claimed,
+            public_network_exposure_requested: side_effect_claimed,
+            live_controls_requested: side_effect_claimed,
+            production_ready_claimed: side_effect_claimed,
+        }
+    }
+
+    fn hosted_request_report(
+        validation_id: &str,
+        render_record: DashboardRenderRecord,
+        method: DashboardHostedRequestMethod,
+        authenticated: bool,
+        authorized: bool,
+        csrf_token_valid: bool,
+        requests_in_current_window: u32,
+    ) -> DashboardHostedRequestValidationReport {
+        validate_dashboard_hosted_request(DashboardHostedRequestValidation {
+            validation_id: validation_id.to_owned(),
+            render_record,
+            bind_host: "127.0.0.1".to_owned(),
+            requested_port: 0,
+            method,
+            request_path: "/".to_owned(),
+            authenticated,
+            authorized,
+            csrf_token_present: method.is_state_changing(),
+            csrf_token_valid,
+            secure_headers_required: true,
+            requests_in_current_window,
+            max_requests_per_minute: 60,
+            public_exposure_requested: false,
+            live_controls_requested: false,
+        })
+        .expect("hosted dashboard request report builds")
     }
 
     fn temp_audit_path(label: &str) -> PathBuf {
