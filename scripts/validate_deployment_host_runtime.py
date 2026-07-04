@@ -2290,6 +2290,7 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
             "deployment-host retention/rotation execution evidence",
             "rollback drill evidence",
             "incident-response drill evidence",
+            "daemon failure-capture execution evidence",
         ],
     }
 

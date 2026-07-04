@@ -18,6 +18,9 @@ pub const PACKAGING_ROLLBACK_EXECUTION_TRANSCRIPT_VERSION: &str =
 /// Stable local incident-response execution transcript validation version.
 pub const PACKAGING_INCIDENT_RESPONSE_EXECUTION_TRANSCRIPT_VERSION: &str =
     "phase55-incident-response-execution-transcript-local-v1";
+/// Stable local deployment panic/failure-capture transcript validation version.
+pub const PACKAGING_DEPLOYMENT_FAILURE_CAPTURE_TRANSCRIPT_VERSION: &str =
+    "phase56-deployment-failure-capture-transcript-local-v1";
 
 /// State-store subsystem name for local packaging/deployment checkpoints.
 pub const PACKAGING_STATE_SUBSYSTEM: &str = "packaging";
@@ -718,6 +721,16 @@ pub enum IncidentResponseExecutionTranscriptStatus {
     Blocked,
 }
 
+/// Local validation status for sanitized deployment panic/failure-capture transcripts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum DeploymentFailureCaptureTranscriptStatus {
+    /// Transcript contains all required deployment failure-capture evidence references.
+    ReadyForExternalReview,
+    /// Transcript is missing deployment failure-capture evidence or contains unsafe flags.
+    Blocked,
+}
+
 /// Deterministic package/deployment record.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -982,6 +995,132 @@ pub struct IncidentResponseExecutionTranscriptReport {
     pub blocker_codes: Vec<String>,
     /// Whether this validator executed incident-response actions. Always false.
     pub incident_response_executed_by_validator: bool,
+    /// Whether this validator performed service-manager actions. Always false.
+    pub service_manager_action_performed_by_validator: bool,
+    /// Whether this validator mutated files. Always false.
+    pub files_mutated_by_validator: bool,
+    /// Whether this validator sent alerts or escalation messages. Always false.
+    pub alerts_sent_by_validator: bool,
+    /// Whether this validator performed external calls. Always false.
+    pub external_calls_performed: bool,
+    /// Whether this validator performed live execution. Always false.
+    pub live_execution_performed: bool,
+    /// Whether this report approves production readiness. Always false.
+    pub production_ready: bool,
+    /// Transcript validation timestamp in Unix milliseconds.
+    pub validated_at_unix_ms: u64,
+}
+
+/// Sanitized deployment-host panic/failure-capture evidence transcript.
+///
+/// This records only operator-supplied reference presence and outcome flags. It
+/// must not embed panic payloads, logs, host paths, artifact contents, command
+/// output, secrets, audit payloads, checkpoint values, or evidence artifacts.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DeploymentFailureCaptureTranscript {
+    /// Stable transcript id.
+    pub transcript_id: String,
+    /// Source deployment/run or incident package id.
+    pub plan_id: String,
+    /// Whether deployment host/run identity evidence reference is present.
+    pub deployment_host_reference_present: bool,
+    /// Whether daemon-wide panic-hook installation evidence reference is present.
+    pub daemon_panic_hook_reference_present: bool,
+    /// Whether daemon-wide tracing/logging subscriber evidence reference is present.
+    pub daemon_tracing_reference_present: bool,
+    /// Whether panic/failure injection scenario reference is present.
+    pub failure_scenario_reference_present: bool,
+    /// Whether failure capture artifact locator reference is present.
+    pub failure_capture_reference_present: bool,
+    /// Whether sanitized panic/failure payload review reference is present.
+    pub sanitized_payload_review_present: bool,
+    /// Whether runtime quiesce/degrade behavior evidence is present.
+    pub runtime_quiesce_or_degrade_validated: bool,
+    /// Whether post-failure runtime smoke evidence is present.
+    pub post_failure_runtime_smoke_passed: bool,
+    /// Whether audit replay after failure evidence is present.
+    pub audit_replay_after_failure_validated: bool,
+    /// Whether SQLite recovery after failure evidence is present.
+    pub sqlite_recovery_after_failure_validated: bool,
+    /// Whether alert/escalation reference is present without sending alerts here.
+    pub alert_route_reference_present: bool,
+    /// Whether operator approval/reference is present.
+    pub operator_approved: bool,
+    /// Whether reviewer approval/reference is present.
+    pub reviewer_approved: bool,
+    /// Count of non-secret evidence references.
+    pub non_secret_reference_count: u64,
+    /// Whether this validator installed panic hooks. Must be false.
+    pub panic_hook_installed_by_validator: bool,
+    /// Whether this validator installed tracing/logging subscribers. Must be false.
+    pub tracing_subscriber_installed_by_validator: bool,
+    /// Whether this validator injected panics/failures. Must be false.
+    pub failure_injected_by_validator: bool,
+    /// Whether this validator performed service-manager actions. Must be false.
+    pub service_manager_action_performed_by_validator: bool,
+    /// Whether this validator mutated files. Must be false.
+    pub files_mutated_by_validator: bool,
+    /// Whether this validator sent alerts or escalation messages. Must be false.
+    pub alerts_sent_by_validator: bool,
+    /// Whether this validator performed external calls. Must be false.
+    pub external_calls_performed: bool,
+    /// Whether this validator performed live execution. Must be false.
+    pub live_execution_performed: bool,
+    /// Whether this transcript attempts to claim production readiness. Must be false.
+    pub production_ready_claimed: bool,
+    /// Transcript validation timestamp in Unix milliseconds.
+    pub validated_at_unix_ms: u64,
+}
+
+/// Non-secret local validation report for deployment panic/failure-capture evidence.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DeploymentFailureCaptureTranscriptReport {
+    /// Deployment failure-capture transcript validation version.
+    pub validation_version: String,
+    /// Stable transcript id.
+    pub transcript_id: String,
+    /// Source deployment/run or incident package id.
+    pub plan_id: String,
+    /// Whether deployment host/run identity evidence reference is present.
+    pub deployment_host_reference_present: bool,
+    /// Whether daemon-wide panic-hook installation evidence reference is present.
+    pub daemon_panic_hook_reference_present: bool,
+    /// Whether daemon-wide tracing/logging subscriber evidence reference is present.
+    pub daemon_tracing_reference_present: bool,
+    /// Whether panic/failure injection scenario reference is present.
+    pub failure_scenario_reference_present: bool,
+    /// Whether failure capture artifact locator reference is present.
+    pub failure_capture_reference_present: bool,
+    /// Whether sanitized panic/failure payload review reference is present.
+    pub sanitized_payload_review_present: bool,
+    /// Whether runtime quiesce/degrade behavior evidence is present.
+    pub runtime_quiesce_or_degrade_validated: bool,
+    /// Whether post-failure runtime smoke evidence is present.
+    pub post_failure_runtime_smoke_passed: bool,
+    /// Whether audit replay after failure evidence is present.
+    pub audit_replay_after_failure_validated: bool,
+    /// Whether SQLite recovery after failure evidence is present.
+    pub sqlite_recovery_after_failure_validated: bool,
+    /// Whether alert/escalation reference is present without sending alerts here.
+    pub alert_route_reference_present: bool,
+    /// Whether operator approval/reference is present.
+    pub operator_approved: bool,
+    /// Whether reviewer approval/reference is present.
+    pub reviewer_approved: bool,
+    /// Count of non-secret evidence references.
+    pub non_secret_reference_count: u64,
+    /// Validation status.
+    pub status: DeploymentFailureCaptureTranscriptStatus,
+    /// Non-secret blocker codes.
+    pub blocker_codes: Vec<String>,
+    /// Whether this validator installed panic hooks. Always false.
+    pub panic_hook_installed_by_validator: bool,
+    /// Whether this validator installed tracing/logging subscribers. Always false.
+    pub tracing_subscriber_installed_by_validator: bool,
+    /// Whether this validator injected panics/failures. Always false.
+    pub failure_injected_by_validator: bool,
     /// Whether this validator performed service-manager actions. Always false.
     pub service_manager_action_performed_by_validator: bool,
     /// Whether this validator mutated files. Always false.
@@ -1395,6 +1534,113 @@ impl IncidentResponseExecutionTranscriptReport {
     }
 }
 
+impl DeploymentFailureCaptureTranscript {
+    /// Validate sanitized deployment panic/failure-capture transcript input.
+    pub fn validate(&self) -> Result<(), PackagingBoundaryError> {
+        let mut violations = Vec::new();
+        if self.transcript_id.trim().is_empty() {
+            violations.push(PackagingBoundaryViolation::new(
+                "PACKAGING_DEPLOYMENT_FAILURE_CAPTURE_TRANSCRIPT_ID_EMPTY",
+                "deployment failure-capture transcript id must be non-empty",
+            ));
+        }
+        if self.plan_id.trim().is_empty() {
+            violations.push(PackagingBoundaryViolation::new(
+                "PACKAGING_DEPLOYMENT_FAILURE_CAPTURE_PLAN_ID_EMPTY",
+                "deployment failure-capture transcript plan id must be non-empty",
+            ));
+        }
+        if contains_secret_like_text(&self.transcript_id)
+            || contains_secret_like_text(&self.plan_id)
+        {
+            violations.push(PackagingBoundaryViolation::new(
+                "PACKAGING_DEPLOYMENT_FAILURE_CAPTURE_SECRET_LIKE",
+                "deployment failure-capture transcript ids must not contain secret-like text",
+            ));
+        }
+        if self.validated_at_unix_ms == 0 {
+            violations.push(PackagingBoundaryViolation::new(
+                "PACKAGING_DEPLOYMENT_FAILURE_CAPTURE_TIMESTAMP_EMPTY",
+                "deployment failure-capture transcript timestamp must be non-zero",
+            ));
+        }
+        if self.panic_hook_installed_by_validator
+            || self.tracing_subscriber_installed_by_validator
+            || self.failure_injected_by_validator
+            || self.service_manager_action_performed_by_validator
+            || self.files_mutated_by_validator
+            || self.alerts_sent_by_validator
+            || self.external_calls_performed
+            || self.live_execution_performed
+        {
+            violations.push(PackagingBoundaryViolation::new(
+                "PACKAGING_DEPLOYMENT_FAILURE_CAPTURE_VALIDATOR_SIDE_EFFECT_DENIED",
+                "deployment failure-capture transcript validator must not install hooks, install tracing, inject failures, perform service actions, mutate files, send alerts, call externally, or perform live execution",
+            ));
+        }
+        if self.production_ready_claimed {
+            violations.push(PackagingBoundaryViolation::new(
+                "PACKAGING_DEPLOYMENT_FAILURE_CAPTURE_PRODUCTION_CLAIM_DENIED",
+                "deployment failure-capture transcript must not claim production readiness",
+            ));
+        }
+        finish_validation(violations)
+    }
+}
+
+impl DeploymentFailureCaptureTranscriptReport {
+    /// Validate deployment panic/failure-capture transcript report invariants.
+    pub fn validate(&self) -> Result<(), PackagingBoundaryError> {
+        let mut violations = Vec::new();
+        if self.validation_version != PACKAGING_DEPLOYMENT_FAILURE_CAPTURE_TRANSCRIPT_VERSION {
+            violations.push(PackagingBoundaryViolation::new(
+                "PACKAGING_DEPLOYMENT_FAILURE_CAPTURE_VERSION_MISMATCH",
+                format!(
+                    "validation_version must be {PACKAGING_DEPLOYMENT_FAILURE_CAPTURE_TRANSCRIPT_VERSION}"
+                ),
+            ));
+        }
+        if self.transcript_id.trim().is_empty() || self.plan_id.trim().is_empty() {
+            violations.push(PackagingBoundaryViolation::new(
+                "PACKAGING_DEPLOYMENT_FAILURE_CAPTURE_REPORT_ID_EMPTY",
+                "deployment failure-capture report requires transcript id and plan id",
+            ));
+        }
+        if self.panic_hook_installed_by_validator
+            || self.tracing_subscriber_installed_by_validator
+            || self.failure_injected_by_validator
+            || self.service_manager_action_performed_by_validator
+            || self.files_mutated_by_validator
+            || self.alerts_sent_by_validator
+            || self.external_calls_performed
+            || self.live_execution_performed
+            || self.production_ready
+        {
+            violations.push(PackagingBoundaryViolation::new(
+                "PACKAGING_DEPLOYMENT_FAILURE_CAPTURE_REPORT_SIDE_EFFECT_DENIED",
+                "deployment failure-capture report must not contain validator side effects or production readiness",
+            ));
+        }
+        if self.status == DeploymentFailureCaptureTranscriptStatus::ReadyForExternalReview
+            && !self.blocker_codes.is_empty()
+        {
+            violations.push(PackagingBoundaryViolation::new(
+                "PACKAGING_DEPLOYMENT_FAILURE_CAPTURE_READY_WITH_BLOCKERS",
+                "ready deployment failure-capture report must not contain blockers",
+            ));
+        }
+        if self.status == DeploymentFailureCaptureTranscriptStatus::Blocked
+            && self.blocker_codes.is_empty()
+        {
+            violations.push(PackagingBoundaryViolation::new(
+                "PACKAGING_DEPLOYMENT_FAILURE_CAPTURE_BLOCKED_WITHOUT_BLOCKERS",
+                "blocked deployment failure-capture report requires blocker codes",
+            ));
+        }
+        finish_validation(violations)
+    }
+}
+
 /// Validate local rollback metadata without executing rollback steps.
 #[must_use]
 pub fn validate_local_deployment_rollback_plan(
@@ -1485,6 +1731,57 @@ pub fn validate_incident_response_execution_transcript(
         status,
         blocker_codes,
         incident_response_executed_by_validator: false,
+        service_manager_action_performed_by_validator: false,
+        files_mutated_by_validator: false,
+        alerts_sent_by_validator: false,
+        external_calls_performed: false,
+        live_execution_performed: false,
+        production_ready: false,
+        validated_at_unix_ms: transcript.validated_at_unix_ms,
+    };
+    report.validate()?;
+    Ok(report)
+}
+
+/// Validate sanitized deployment panic/failure-capture evidence metadata.
+///
+/// This consumes operator-owned reference metadata only. It does not install
+/// panic hooks or tracing subscribers, inject failures, stop services, send
+/// alerts, mutate files, call external systems, perform live execution, or
+/// claim production readiness.
+pub fn validate_deployment_failure_capture_transcript(
+    transcript: DeploymentFailureCaptureTranscript,
+) -> Result<DeploymentFailureCaptureTranscriptReport, PackagingBoundaryError> {
+    transcript.validate()?;
+    let blocker_codes = deployment_failure_capture_blockers(&transcript);
+    let status = if blocker_codes.is_empty() {
+        DeploymentFailureCaptureTranscriptStatus::ReadyForExternalReview
+    } else {
+        DeploymentFailureCaptureTranscriptStatus::Blocked
+    };
+    let report = DeploymentFailureCaptureTranscriptReport {
+        validation_version: PACKAGING_DEPLOYMENT_FAILURE_CAPTURE_TRANSCRIPT_VERSION.to_owned(),
+        transcript_id: transcript.transcript_id,
+        plan_id: transcript.plan_id,
+        deployment_host_reference_present: transcript.deployment_host_reference_present,
+        daemon_panic_hook_reference_present: transcript.daemon_panic_hook_reference_present,
+        daemon_tracing_reference_present: transcript.daemon_tracing_reference_present,
+        failure_scenario_reference_present: transcript.failure_scenario_reference_present,
+        failure_capture_reference_present: transcript.failure_capture_reference_present,
+        sanitized_payload_review_present: transcript.sanitized_payload_review_present,
+        runtime_quiesce_or_degrade_validated: transcript.runtime_quiesce_or_degrade_validated,
+        post_failure_runtime_smoke_passed: transcript.post_failure_runtime_smoke_passed,
+        audit_replay_after_failure_validated: transcript.audit_replay_after_failure_validated,
+        sqlite_recovery_after_failure_validated: transcript.sqlite_recovery_after_failure_validated,
+        alert_route_reference_present: transcript.alert_route_reference_present,
+        operator_approved: transcript.operator_approved,
+        reviewer_approved: transcript.reviewer_approved,
+        non_secret_reference_count: transcript.non_secret_reference_count,
+        status,
+        blocker_codes,
+        panic_hook_installed_by_validator: false,
+        tracing_subscriber_installed_by_validator: false,
+        failure_injected_by_validator: false,
         service_manager_action_performed_by_validator: false,
         files_mutated_by_validator: false,
         alerts_sent_by_validator: false,
@@ -1911,13 +2208,64 @@ fn incident_response_execution_blockers(
     blockers
 }
 
+fn deployment_failure_capture_blockers(
+    transcript: &DeploymentFailureCaptureTranscript,
+) -> Vec<String> {
+    let mut blockers = Vec::new();
+    if !transcript.deployment_host_reference_present {
+        blockers.push("missing-deployment-host-reference".to_owned());
+    }
+    if !transcript.daemon_panic_hook_reference_present {
+        blockers.push("missing-daemon-panic-hook-reference".to_owned());
+    }
+    if !transcript.daemon_tracing_reference_present {
+        blockers.push("missing-daemon-tracing-reference".to_owned());
+    }
+    if !transcript.failure_scenario_reference_present {
+        blockers.push("missing-failure-scenario-reference".to_owned());
+    }
+    if !transcript.failure_capture_reference_present {
+        blockers.push("missing-failure-capture-reference".to_owned());
+    }
+    if !transcript.sanitized_payload_review_present {
+        blockers.push("missing-sanitized-payload-review".to_owned());
+    }
+    if !transcript.runtime_quiesce_or_degrade_validated {
+        blockers.push("missing-runtime-quiesce-or-degrade-evidence".to_owned());
+    }
+    if !transcript.post_failure_runtime_smoke_passed {
+        blockers.push("missing-post-failure-runtime-smoke-evidence".to_owned());
+    }
+    if !transcript.audit_replay_after_failure_validated {
+        blockers.push("missing-audit-replay-after-failure-evidence".to_owned());
+    }
+    if !transcript.sqlite_recovery_after_failure_validated {
+        blockers.push("missing-sqlite-recovery-after-failure-evidence".to_owned());
+    }
+    if !transcript.alert_route_reference_present {
+        blockers.push("missing-alert-route-reference".to_owned());
+    }
+    if transcript.non_secret_reference_count < 7 {
+        blockers.push("insufficient-non-secret-references".to_owned());
+    }
+    if !transcript.operator_approved {
+        blockers.push("missing-operator-approval".to_owned());
+    }
+    if !transcript.reviewer_approved {
+        blockers.push("missing-reviewer-approval".to_owned());
+    }
+    blockers
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
         append_deployment_package_record_audit, append_rollback_validation_audit,
         persist_deployment_package_record_checkpoint, persist_rollback_validation_checkpoint,
+        validate_deployment_failure_capture_transcript,
         validate_incident_response_execution_transcript, validate_local_deployment_rollback_plan,
-        validate_rollback_execution_transcript, DeploymentNetworkExposure, DeploymentPackagePlan,
+        validate_rollback_execution_transcript, DeploymentFailureCaptureTranscript,
+        DeploymentFailureCaptureTranscriptStatus, DeploymentNetworkExposure, DeploymentPackagePlan,
         DeploymentPackageRequest, DeploymentPackageStatus, DeterministicPackagingDeploymentPlanner,
         IncidentResponseExecutionTranscript, IncidentResponseExecutionTranscriptStatus,
         PackageTargetPlan, PackagingBoundaryConfig, PackagingBoundaryError,
@@ -2295,6 +2643,82 @@ mod tests {
             .contains("must not execute incident actions"));
     }
 
+    #[test]
+    fn deployment_failure_capture_transcript_validates_operator_evidence_shape() {
+        let report = validate_deployment_failure_capture_transcript(
+            deployment_failure_capture_transcript(true),
+        )
+        .expect("complete deployment failure-capture transcript should validate");
+
+        assert_eq!(
+            report.status,
+            DeploymentFailureCaptureTranscriptStatus::ReadyForExternalReview
+        );
+        assert!(report.deployment_host_reference_present);
+        assert!(report.daemon_panic_hook_reference_present);
+        assert!(report.daemon_tracing_reference_present);
+        assert!(report.failure_scenario_reference_present);
+        assert!(report.failure_capture_reference_present);
+        assert!(report.sanitized_payload_review_present);
+        assert!(report.runtime_quiesce_or_degrade_validated);
+        assert!(report.post_failure_runtime_smoke_passed);
+        assert!(report.audit_replay_after_failure_validated);
+        assert!(report.sqlite_recovery_after_failure_validated);
+        assert!(report.alert_route_reference_present);
+        assert!(report.operator_approved);
+        assert!(report.reviewer_approved);
+        assert_eq!(report.non_secret_reference_count, 9);
+        assert!(report.blocker_codes.is_empty());
+        assert!(!report.panic_hook_installed_by_validator);
+        assert!(!report.tracing_subscriber_installed_by_validator);
+        assert!(!report.failure_injected_by_validator);
+        assert!(!report.service_manager_action_performed_by_validator);
+        assert!(!report.files_mutated_by_validator);
+        assert!(!report.alerts_sent_by_validator);
+        assert!(!report.external_calls_performed);
+        assert!(!report.live_execution_performed);
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn deployment_failure_capture_transcript_blocks_missing_execution_evidence() {
+        let report = validate_deployment_failure_capture_transcript(
+            deployment_failure_capture_transcript(false),
+        )
+        .expect("incomplete deployment failure-capture transcript should produce blocked report");
+
+        assert_eq!(
+            report.status,
+            DeploymentFailureCaptureTranscriptStatus::Blocked
+        );
+        assert!(!report.deployment_host_reference_present);
+        assert!(!report.failure_capture_reference_present);
+        assert!(report
+            .blocker_codes
+            .iter()
+            .any(|code| code == "missing-deployment-host-reference"));
+        assert!(report
+            .blocker_codes
+            .iter()
+            .any(|code| code == "missing-failure-capture-reference"));
+        assert!(report
+            .blocker_codes
+            .iter()
+            .any(|code| code == "insufficient-non-secret-references"));
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn deployment_failure_capture_transcript_rejects_validator_side_effects() {
+        let mut transcript = deployment_failure_capture_transcript(true);
+        transcript.failure_injected_by_validator = true;
+
+        let error = validate_deployment_failure_capture_transcript(transcript)
+            .expect_err("validator failure injection must fail closed");
+
+        assert!(error.to_string().contains("must not install hooks"));
+    }
+
     fn temp_audit_path(label: &str) -> PathBuf {
         let mut path = env::temp_dir();
         let nanos = std::time::SystemTime::now()
@@ -2386,6 +2810,41 @@ mod tests {
             live_execution_performed: false,
             production_ready_claimed: false,
             validated_at_unix_ms: 97_000,
+        }
+    }
+
+    fn deployment_failure_capture_transcript(complete: bool) -> DeploymentFailureCaptureTranscript {
+        DeploymentFailureCaptureTranscript {
+            transcript_id: if complete {
+                "deployment-failure-capture-ready".to_owned()
+            } else {
+                "deployment-failure-capture-blocked".to_owned()
+            },
+            plan_id: "phase-56-deployment-failure-capture".to_owned(),
+            deployment_host_reference_present: complete,
+            daemon_panic_hook_reference_present: complete,
+            daemon_tracing_reference_present: complete,
+            failure_scenario_reference_present: complete,
+            failure_capture_reference_present: complete,
+            sanitized_payload_review_present: complete,
+            runtime_quiesce_or_degrade_validated: complete,
+            post_failure_runtime_smoke_passed: complete,
+            audit_replay_after_failure_validated: complete,
+            sqlite_recovery_after_failure_validated: complete,
+            alert_route_reference_present: complete,
+            operator_approved: complete,
+            reviewer_approved: complete,
+            non_secret_reference_count: if complete { 9 } else { 1 },
+            panic_hook_installed_by_validator: false,
+            tracing_subscriber_installed_by_validator: false,
+            failure_injected_by_validator: false,
+            service_manager_action_performed_by_validator: false,
+            files_mutated_by_validator: false,
+            alerts_sent_by_validator: false,
+            external_calls_performed: false,
+            live_execution_performed: false,
+            production_ready_claimed: false,
+            validated_at_unix_ms: 98_000,
         }
     }
 }

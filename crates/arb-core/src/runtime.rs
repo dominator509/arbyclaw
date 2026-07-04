@@ -163,6 +163,10 @@ pub const RUNTIME_SERVICE_MANAGER_LIFECYCLE_TRANSCRIPT_VERSION: &str =
 pub const RUNTIME_DEPLOYMENT_PERMISSION_TRANSCRIPT_VERSION: &str =
     "phase53-deployment-permission-transcript-local-v1";
 
+/// Stable local deployment-host audit/SQLite transcript validation version.
+pub const RUNTIME_DEPLOYMENT_AUDIT_SQLITE_TRANSCRIPT_VERSION: &str =
+    "phase57-deployment-audit-sqlite-transcript-local-v1";
+
 /// State checkpoint key for the last local graceful-shutdown record.
 pub const RUNTIME_GRACEFUL_SHUTDOWN_CHECKPOINT_KEY: &str = "runtime:last-graceful-shutdown";
 
@@ -1083,6 +1087,16 @@ pub enum RuntimeDeploymentPermissionTranscriptStatus {
     Blocked,
 }
 
+/// Local validation status for sanitized deployment-host audit/SQLite transcripts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum RuntimeDeploymentAuditSqliteTranscriptStatus {
+    /// Transcript contains all required deployment-host audit and SQLite recovery evidence references.
+    ReadyForExternalReview,
+    /// Transcript is missing deployment-host audit/SQLite evidence or contains unsafe flags.
+    Blocked,
+}
+
 /// Sanitized local deployment-host permission-denial validation request.
 ///
 /// This contains only reference presence and outcome flags. It must not embed
@@ -1171,6 +1185,120 @@ pub struct RuntimeDeploymentPermissionTranscriptReport {
     pub production_path_mutated_by_validator: bool,
     /// Whether this validator performed a service-manager action. Always false.
     pub service_manager_action_performed_by_validator: bool,
+    /// Whether this validator submitted externally. Always false.
+    pub external_submission_performed: bool,
+    /// Whether live execution was performed. Always false.
+    pub live_execution_performed: bool,
+    /// Whether this report approves production readiness. Always false.
+    pub production_ready: bool,
+    /// Transcript validation timestamp in Unix milliseconds.
+    pub validated_at_unix_ms: u64,
+}
+
+/// Sanitized deployment-host audit and SQLite recovery validation request.
+///
+/// This contains only reference presence and outcome flags. It must not embed
+/// host paths, audit payloads, checkpoint values, logs, command output, secrets,
+/// or evidence artifact contents.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RuntimeDeploymentAuditSqliteTranscript {
+    /// Stable transcript id.
+    pub transcript_id: String,
+    /// Non-secret deployment-host or runner label.
+    pub host_label: String,
+    /// Whether evidence came from a physical/deployment-like host.
+    pub deployment_host_evidence: bool,
+    /// Whether service lifecycle context evidence is present.
+    pub service_lifecycle_reference_present: bool,
+    /// Whether audit journal append evidence is present.
+    pub audit_append_reference_present: bool,
+    /// Whether audit replay evidence is present.
+    pub audit_replay_validated: bool,
+    /// Whether audit hash-chain continuity evidence is present.
+    pub audit_hash_chain_validated: bool,
+    /// Whether SQLite WAL mode evidence is present.
+    pub sqlite_wal_mode_validated: bool,
+    /// Whether SQLite integrity check evidence is present.
+    pub sqlite_integrity_check_passed: bool,
+    /// Whether SQLite checkpoint recovery evidence is present.
+    pub sqlite_checkpoint_recovered: bool,
+    /// Whether backup/restore evidence is present.
+    pub backup_restore_validated: bool,
+    /// Whether concurrent runtime access evidence is present.
+    pub concurrent_access_validated: bool,
+    /// Whether recovery/runbook reference is present.
+    pub recovery_runbook_reference_present: bool,
+    /// Count of non-secret evidence references.
+    pub non_secret_reference_count: u64,
+    /// Whether operator approval/reference is present.
+    pub operator_approved: bool,
+    /// Whether reviewer approval/reference is present.
+    pub reviewer_approved: bool,
+    /// Whether this validator performed service-manager actions. Must be false.
+    pub service_manager_action_performed_by_validator: bool,
+    /// Whether this validator mutated deployment paths. Must be false.
+    pub deployment_path_mutated_by_validator: bool,
+    /// Whether this validator loaded secrets. Must be false.
+    pub secrets_loaded: bool,
+    /// Whether this validator submitted externally. Must be false.
+    pub external_submission_performed: bool,
+    /// Whether live execution was performed. Must be false.
+    pub live_execution_performed: bool,
+    /// Whether this transcript attempts to claim production readiness. Must be false.
+    pub production_ready_claimed: bool,
+    /// Transcript validation timestamp in Unix milliseconds.
+    pub validated_at_unix_ms: u64,
+}
+
+/// Non-secret local validation report for deployment-host audit and SQLite evidence.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RuntimeDeploymentAuditSqliteTranscriptReport {
+    /// Deployment audit/SQLite transcript validation version.
+    pub validation_version: String,
+    /// Stable transcript id.
+    pub transcript_id: String,
+    /// Non-secret deployment-host or runner label.
+    pub host_label: String,
+    /// Whether deployment-like host evidence is present.
+    pub deployment_host_evidence: bool,
+    /// Whether service lifecycle context evidence is present.
+    pub service_lifecycle_reference_present: bool,
+    /// Whether audit journal append evidence is present.
+    pub audit_append_reference_present: bool,
+    /// Whether audit replay evidence is present.
+    pub audit_replay_validated: bool,
+    /// Whether audit hash-chain continuity evidence is present.
+    pub audit_hash_chain_validated: bool,
+    /// Whether SQLite WAL mode evidence is present.
+    pub sqlite_wal_mode_validated: bool,
+    /// Whether SQLite integrity check evidence is present.
+    pub sqlite_integrity_check_passed: bool,
+    /// Whether SQLite checkpoint recovery evidence is present.
+    pub sqlite_checkpoint_recovered: bool,
+    /// Whether backup/restore evidence is present.
+    pub backup_restore_validated: bool,
+    /// Whether concurrent runtime access evidence is present.
+    pub concurrent_access_validated: bool,
+    /// Whether recovery/runbook reference is present.
+    pub recovery_runbook_reference_present: bool,
+    /// Count of non-secret evidence references.
+    pub non_secret_reference_count: u64,
+    /// Whether operator approval/reference is present.
+    pub operator_approved: bool,
+    /// Whether reviewer approval/reference is present.
+    pub reviewer_approved: bool,
+    /// Validation status.
+    pub status: RuntimeDeploymentAuditSqliteTranscriptStatus,
+    /// Non-secret blocker codes.
+    pub blocker_codes: Vec<String>,
+    /// Whether this validator performed service-manager actions. Always false.
+    pub service_manager_action_performed_by_validator: bool,
+    /// Whether this validator mutated deployment paths. Always false.
+    pub deployment_path_mutated_by_validator: bool,
+    /// Whether this validator loaded secrets. Always false.
+    pub secrets_loaded: bool,
     /// Whether this validator submitted externally. Always false.
     pub external_submission_performed: bool,
     /// Whether live execution was performed. Always false.
@@ -2381,6 +2509,88 @@ impl RuntimeDeploymentPermissionTranscriptReport {
     }
 }
 
+impl RuntimeDeploymentAuditSqliteTranscript {
+    /// Validate sanitized deployment audit/SQLite transcript input.
+    pub fn validate(&self) -> Result<(), RuntimeLifecycleError> {
+        if self.transcript_id.trim().is_empty() {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "deployment audit/sqlite transcript id is required".to_owned(),
+            });
+        }
+        if self.host_label.trim().is_empty() {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "deployment audit/sqlite host label is required".to_owned(),
+            });
+        }
+        if self.validated_at_unix_ms == 0 {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "deployment audit/sqlite transcript timestamp must be non-zero".to_owned(),
+            });
+        }
+        if self.service_manager_action_performed_by_validator
+            || self.deployment_path_mutated_by_validator
+            || self.secrets_loaded
+            || self.external_submission_performed
+            || self.live_execution_performed
+        {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "deployment audit/sqlite transcript validator must not perform service actions, mutate deployment paths, load secrets, submit externally, or perform live execution".to_owned(),
+            });
+        }
+        if self.production_ready_claimed {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "deployment audit/sqlite transcript must not claim production readiness"
+                    .to_owned(),
+            });
+        }
+        Ok(())
+    }
+}
+
+impl RuntimeDeploymentAuditSqliteTranscriptReport {
+    /// Validate deployment audit/SQLite transcript report invariants.
+    pub fn validate(&self) -> Result<(), RuntimeLifecycleError> {
+        if self.validation_version != RUNTIME_DEPLOYMENT_AUDIT_SQLITE_TRANSCRIPT_VERSION {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: format!(
+                    "validation_version must be {RUNTIME_DEPLOYMENT_AUDIT_SQLITE_TRANSCRIPT_VERSION}"
+                ),
+            });
+        }
+        if self.transcript_id.trim().is_empty() || self.host_label.trim().is_empty() {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "deployment audit/sqlite report requires id and host label".to_owned(),
+            });
+        }
+        if self.service_manager_action_performed_by_validator
+            || self.deployment_path_mutated_by_validator
+            || self.secrets_loaded
+            || self.external_submission_performed
+            || self.live_execution_performed
+            || self.production_ready
+        {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "deployment audit/sqlite report must not contain validator side effects or production readiness".to_owned(),
+            });
+        }
+        if self.status == RuntimeDeploymentAuditSqliteTranscriptStatus::ReadyForExternalReview
+            && !self.blocker_codes.is_empty()
+        {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "ready deployment audit/sqlite report must not contain blockers".to_owned(),
+            });
+        }
+        if self.status == RuntimeDeploymentAuditSqliteTranscriptStatus::Blocked
+            && self.blocker_codes.is_empty()
+        {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "blocked deployment audit/sqlite report requires blocker codes".to_owned(),
+            });
+        }
+        Ok(())
+    }
+}
+
 impl RuntimeBackupRestoreValidationReport {
     /// Validate local backup/restore report invariants.
     pub fn validate(&self) -> Result<(), RuntimeLifecycleError> {
@@ -3366,6 +3576,54 @@ pub fn validate_deployment_permission_transcript(
     Ok(report)
 }
 
+/// Validate sanitized deployment-host audit and SQLite recovery evidence metadata.
+///
+/// This consumes operator-supplied reference metadata only. It does not inspect
+/// deployment paths, mutate deployment paths, call service managers, load
+/// secrets, submit adapters, perform live execution, or claim production
+/// readiness.
+pub fn validate_deployment_audit_sqlite_transcript(
+    transcript: RuntimeDeploymentAuditSqliteTranscript,
+) -> Result<RuntimeDeploymentAuditSqliteTranscriptReport, RuntimeLifecycleError> {
+    transcript.validate()?;
+    let blocker_codes = deployment_audit_sqlite_blockers(&transcript);
+    let status = if blocker_codes.is_empty() {
+        RuntimeDeploymentAuditSqliteTranscriptStatus::ReadyForExternalReview
+    } else {
+        RuntimeDeploymentAuditSqliteTranscriptStatus::Blocked
+    };
+    let report = RuntimeDeploymentAuditSqliteTranscriptReport {
+        validation_version: RUNTIME_DEPLOYMENT_AUDIT_SQLITE_TRANSCRIPT_VERSION.to_owned(),
+        transcript_id: transcript.transcript_id,
+        host_label: transcript.host_label,
+        deployment_host_evidence: transcript.deployment_host_evidence,
+        service_lifecycle_reference_present: transcript.service_lifecycle_reference_present,
+        audit_append_reference_present: transcript.audit_append_reference_present,
+        audit_replay_validated: transcript.audit_replay_validated,
+        audit_hash_chain_validated: transcript.audit_hash_chain_validated,
+        sqlite_wal_mode_validated: transcript.sqlite_wal_mode_validated,
+        sqlite_integrity_check_passed: transcript.sqlite_integrity_check_passed,
+        sqlite_checkpoint_recovered: transcript.sqlite_checkpoint_recovered,
+        backup_restore_validated: transcript.backup_restore_validated,
+        concurrent_access_validated: transcript.concurrent_access_validated,
+        recovery_runbook_reference_present: transcript.recovery_runbook_reference_present,
+        non_secret_reference_count: transcript.non_secret_reference_count,
+        operator_approved: transcript.operator_approved,
+        reviewer_approved: transcript.reviewer_approved,
+        status,
+        blocker_codes,
+        service_manager_action_performed_by_validator: false,
+        deployment_path_mutated_by_validator: false,
+        secrets_loaded: false,
+        external_submission_performed: false,
+        live_execution_performed: false,
+        production_ready: false,
+        validated_at_unix_ms: transcript.validated_at_unix_ms,
+    };
+    report.validate()?;
+    Ok(report)
+}
+
 fn recover_runtime_smoke_checkpoints(
     state_path: &Path,
 ) -> Result<RuntimeSmokeRecoveredCheckpoints, RuntimeLifecycleError> {
@@ -4104,6 +4362,55 @@ fn deployment_permission_blockers(
     }
     if !transcript.operator_approved {
         blockers.push("missing-operator-approval".to_owned());
+    }
+    blockers
+}
+
+fn deployment_audit_sqlite_blockers(
+    transcript: &RuntimeDeploymentAuditSqliteTranscript,
+) -> Vec<String> {
+    let mut blockers = Vec::new();
+    if !transcript.deployment_host_evidence {
+        blockers.push("missing-deployment-host-evidence".to_owned());
+    }
+    if !transcript.service_lifecycle_reference_present {
+        blockers.push("missing-service-lifecycle-reference".to_owned());
+    }
+    if !transcript.audit_append_reference_present {
+        blockers.push("missing-audit-append-reference".to_owned());
+    }
+    if !transcript.audit_replay_validated {
+        blockers.push("missing-audit-replay-evidence".to_owned());
+    }
+    if !transcript.audit_hash_chain_validated {
+        blockers.push("missing-audit-hash-chain-evidence".to_owned());
+    }
+    if !transcript.sqlite_wal_mode_validated {
+        blockers.push("missing-sqlite-wal-mode-evidence".to_owned());
+    }
+    if !transcript.sqlite_integrity_check_passed {
+        blockers.push("missing-sqlite-integrity-check-evidence".to_owned());
+    }
+    if !transcript.sqlite_checkpoint_recovered {
+        blockers.push("missing-sqlite-checkpoint-recovery-evidence".to_owned());
+    }
+    if !transcript.backup_restore_validated {
+        blockers.push("missing-backup-restore-evidence".to_owned());
+    }
+    if !transcript.concurrent_access_validated {
+        blockers.push("missing-concurrent-access-evidence".to_owned());
+    }
+    if !transcript.recovery_runbook_reference_present {
+        blockers.push("missing-recovery-runbook-reference".to_owned());
+    }
+    if transcript.non_secret_reference_count < 7 {
+        blockers.push("insufficient-non-secret-references".to_owned());
+    }
+    if !transcript.operator_approved {
+        blockers.push("missing-operator-approval".to_owned());
+    }
+    if !transcript.reviewer_approved {
+        blockers.push("missing-reviewer-approval".to_owned());
     }
     blockers
 }
@@ -5905,6 +6212,7 @@ mod tests {
         validate_local_runtime_backup_restore, validate_local_runtime_deployment_smoke,
         validate_local_runtime_restart_recovery,
         validate_local_runtime_restart_recovery_with_trace_recovery,
+        RuntimeDeploymentAuditSqliteTranscript, RuntimeDeploymentAuditSqliteTranscriptStatus,
         RuntimeDeploymentPermissionTranscript, RuntimeDeploymentPermissionTranscriptStatus,
         RuntimeDeploymentSmokeLoadIteration, RuntimeDeploymentSmokeLoadValidationReport,
         RuntimeDeploymentSmokeValidationReport, RuntimeDeploymentSmokeValidationRequest,
@@ -7181,6 +7489,86 @@ redact_secrets = true
     }
 
     #[test]
+    fn deployment_audit_sqlite_transcript_validates_recovery_evidence_shape() {
+        let report = super::validate_deployment_audit_sqlite_transcript(
+            deployment_audit_sqlite_transcript(true),
+        )
+        .expect("complete deployment audit/sqlite transcript should validate");
+
+        assert_eq!(
+            report.status,
+            RuntimeDeploymentAuditSqliteTranscriptStatus::ReadyForExternalReview
+        );
+        assert!(report.deployment_host_evidence);
+        assert!(report.service_lifecycle_reference_present);
+        assert!(report.audit_append_reference_present);
+        assert!(report.audit_replay_validated);
+        assert!(report.audit_hash_chain_validated);
+        assert!(report.sqlite_wal_mode_validated);
+        assert!(report.sqlite_integrity_check_passed);
+        assert!(report.sqlite_checkpoint_recovered);
+        assert!(report.backup_restore_validated);
+        assert!(report.concurrent_access_validated);
+        assert!(report.recovery_runbook_reference_present);
+        assert_eq!(report.non_secret_reference_count, 9);
+        assert!(report.operator_approved);
+        assert!(report.reviewer_approved);
+        assert!(report.blocker_codes.is_empty());
+        assert!(!report.service_manager_action_performed_by_validator);
+        assert!(!report.deployment_path_mutated_by_validator);
+        assert!(!report.secrets_loaded);
+        assert!(!report.external_submission_performed);
+        assert!(!report.live_execution_performed);
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn deployment_audit_sqlite_transcript_blocks_missing_recovery_evidence() {
+        let report = super::validate_deployment_audit_sqlite_transcript(
+            deployment_audit_sqlite_transcript(false),
+        )
+        .expect("incomplete deployment audit/sqlite transcript should produce blocked report");
+
+        assert_eq!(
+            report.status,
+            RuntimeDeploymentAuditSqliteTranscriptStatus::Blocked
+        );
+        assert!(!report.deployment_host_evidence);
+        assert!(!report.audit_replay_validated);
+        assert!(!report.sqlite_checkpoint_recovered);
+        assert!(report
+            .blocker_codes
+            .iter()
+            .any(|code| code == "missing-deployment-host-evidence"));
+        assert!(report
+            .blocker_codes
+            .iter()
+            .any(|code| code == "missing-audit-replay-evidence"));
+        assert!(report
+            .blocker_codes
+            .iter()
+            .any(|code| code == "missing-sqlite-checkpoint-recovery-evidence"));
+        assert!(report
+            .blocker_codes
+            .iter()
+            .any(|code| code == "insufficient-non-secret-references"));
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn deployment_audit_sqlite_transcript_rejects_validator_side_effects() {
+        let mut transcript = deployment_audit_sqlite_transcript(true);
+        transcript.deployment_path_mutated_by_validator = true;
+
+        let error = super::validate_deployment_audit_sqlite_transcript(transcript)
+            .expect_err("validator deployment-path mutation must fail closed");
+
+        assert!(error
+            .to_string()
+            .contains("must not perform service actions"));
+    }
+
+    #[test]
     fn runtime_backup_restore_handles_deployment_style_concurrent_load() {
         let audit_path = temp_audit_path("runtime-load-backup-restore");
         let state_path = temp_state_path("runtime-load-backup-restore");
@@ -7555,6 +7943,40 @@ redact_secrets = true
             live_execution_performed: false,
             production_ready_claimed: false,
             validated_at_unix_ms: 95_000,
+        }
+    }
+
+    fn deployment_audit_sqlite_transcript(
+        complete: bool,
+    ) -> RuntimeDeploymentAuditSqliteTranscript {
+        RuntimeDeploymentAuditSqliteTranscript {
+            transcript_id: if complete {
+                "deployment-audit-sqlite-ready".to_owned()
+            } else {
+                "deployment-audit-sqlite-blocked".to_owned()
+            },
+            host_label: "deployment-host-a".to_owned(),
+            deployment_host_evidence: complete,
+            service_lifecycle_reference_present: complete,
+            audit_append_reference_present: complete,
+            audit_replay_validated: complete,
+            audit_hash_chain_validated: complete,
+            sqlite_wal_mode_validated: complete,
+            sqlite_integrity_check_passed: complete,
+            sqlite_checkpoint_recovered: complete,
+            backup_restore_validated: complete,
+            concurrent_access_validated: complete,
+            recovery_runbook_reference_present: complete,
+            non_secret_reference_count: if complete { 9 } else { 1 },
+            operator_approved: complete,
+            reviewer_approved: complete,
+            service_manager_action_performed_by_validator: false,
+            deployment_path_mutated_by_validator: false,
+            secrets_loaded: false,
+            external_submission_performed: false,
+            live_execution_performed: false,
+            production_ready_claimed: false,
+            validated_at_unix_ms: 99_000,
         }
     }
 

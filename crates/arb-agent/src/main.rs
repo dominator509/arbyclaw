@@ -88,7 +88,8 @@ use arb_core::{
     validate_audit_journal_durability, validate_cex_credential_scope_review,
     validate_cex_rate_limit, validate_channel_adapter, validate_channel_session,
     validate_dashboard_hosted_request, validate_dashboard_hosted_session,
-    validate_deployment_disk_full_transcript, validate_deployment_permission_transcript,
+    validate_deployment_audit_sqlite_transcript, validate_deployment_disk_full_transcript,
+    validate_deployment_failure_capture_transcript, validate_deployment_permission_transcript,
     validate_deployment_retention_transcript, validate_fee_schedule_verification,
     validate_historical_market_data_persistence, validate_incident_response_execution_transcript,
     validate_local_opportunity_quote_ingestion_load, validate_local_runtime_backup_restore,
@@ -121,7 +122,8 @@ use arb_core::{
     DashboardHostedRequestValidationStatus, DashboardHostedSecurityPolicy,
     DashboardHostedSecurityReviewStatus, DashboardHostedSessionValidationStatus, DashboardPanel,
     DashboardPanelItem, DashboardPanelKind, DashboardRenderRequest, DashboardRenderer,
-    DashboardSeverity, DashboardSnapshot, DestinationAllowlist, DestinationApprovalSource,
+    DashboardSeverity, DashboardSnapshot, DeploymentFailureCaptureTranscript,
+    DeploymentFailureCaptureTranscriptStatus, DestinationAllowlist, DestinationApprovalSource,
     DestinationOwnershipReviewReport, DestinationOwnershipReviewStatus, DestinationPolicy,
     DeterministicAgenticHandoffPackager, DeterministicDashboardRenderer,
     DeterministicExecutionAdapterBoundary, DeterministicExecutionPlanner,
@@ -171,7 +173,8 @@ use arb_core::{
     RemoteCommandEnvelopeValidationStatus, RemoteCommandSecurityReviewReport,
     RemoteCommandSecurityReviewRequest, RemoteCommandSecurityReviewStatus,
     RollbackExecutionTranscript, RollbackExecutionTranscriptStatus, RoutedOperatorCommand, Runbook,
-    RunbookStep, RuntimeDeploymentPermissionTranscript,
+    RunbookStep, RuntimeDeploymentAuditSqliteTranscript,
+    RuntimeDeploymentAuditSqliteTranscriptStatus, RuntimeDeploymentPermissionTranscript,
     RuntimeDeploymentPermissionTranscriptStatus, RuntimeDeploymentSmokeLoadIteration,
     RuntimeDeploymentSmokeLoadValidationReport, RuntimeDeploymentSmokeValidationRequest,
     RuntimeFailureCaptureRequest, RuntimeFailureKind, RuntimeGracefulShutdownRequest,
@@ -452,7 +455,9 @@ fn is_signer_web3_validation_command(command: &str) -> bool {
     matches!(
         command,
         "validate-signer-authorization-envelope"
+            | "validate-deployment-audit-sqlite-transcript"
             | "validate-deployment-disk-full-transcript"
+            | "validate-deployment-failure-capture-transcript"
             | "validate-incident-response-execution-transcript"
             | "validate-deployment-permission-transcript"
             | "validate-deployment-retention-transcript"
@@ -560,8 +565,14 @@ fn run_signer_web3_validation_command(command: &str) -> Result<(), AgentCliError
         "validate-web3-sandbox-live-discrepancy-calibration" => {
             run_web3_sandbox_live_discrepancy_calibration_validation()
         }
+        "validate-deployment-audit-sqlite-transcript" => {
+            run_deployment_audit_sqlite_transcript_validation()
+        }
         "validate-deployment-disk-full-transcript" => {
             run_deployment_disk_full_transcript_validation()
+        }
+        "validate-deployment-failure-capture-transcript" => {
+            run_deployment_failure_capture_transcript_validation()
         }
         "validate-incident-response-execution-transcript" => {
             run_incident_response_execution_transcript_validation()
@@ -851,7 +862,9 @@ fn print_usage() {
     println!("       arb-agent validate-connector-lifecycle-audit --workspace <fresh-dir>");
     println!("       arb-agent validate-audit-durability --workspace <fresh-dir>");
     println!("       arb-agent validate-audit-retention-execution --workspace <fresh-dir>");
+    println!("       arb-agent validate-deployment-audit-sqlite-transcript");
     println!("       arb-agent validate-deployment-disk-full-transcript");
+    println!("       arb-agent validate-deployment-failure-capture-transcript");
     println!("       arb-agent validate-incident-response-execution-transcript");
     println!("       arb-agent validate-deployment-permission-transcript");
     println!("       arb-agent validate-deployment-retention-transcript");
@@ -10528,6 +10541,17 @@ const fn deployment_permission_status_label(
     }
 }
 
+const fn deployment_audit_sqlite_status_label(
+    status: RuntimeDeploymentAuditSqliteTranscriptStatus,
+) -> &'static str {
+    match status {
+        RuntimeDeploymentAuditSqliteTranscriptStatus::ReadyForExternalReview => {
+            "ready-for-external-review"
+        }
+        RuntimeDeploymentAuditSqliteTranscriptStatus::Blocked => "blocked",
+    }
+}
+
 const fn rollback_execution_status_label(
     status: RollbackExecutionTranscriptStatus,
 ) -> &'static str {
@@ -10545,6 +10569,17 @@ const fn incident_response_execution_status_label(
             "ready-for-external-review"
         }
         IncidentResponseExecutionTranscriptStatus::Blocked => "blocked",
+    }
+}
+
+const fn deployment_failure_capture_status_label(
+    status: DeploymentFailureCaptureTranscriptStatus,
+) -> &'static str {
+    match status {
+        DeploymentFailureCaptureTranscriptStatus::ReadyForExternalReview => {
+            "ready-for-external-review"
+        }
+        DeploymentFailureCaptureTranscriptStatus::Blocked => "blocked",
     }
 }
 
@@ -12358,6 +12393,82 @@ fn run_deployment_permission_transcript_validation() -> Result<(), AgentCliError
     Ok(())
 }
 
+fn run_deployment_audit_sqlite_transcript_validation() -> Result<(), AgentCliError> {
+    let ready = validate_deployment_audit_sqlite_transcript(
+        local_deployment_audit_sqlite_transcript("ready", true),
+    )
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let blocked = validate_deployment_audit_sqlite_transcript(
+        local_deployment_audit_sqlite_transcript("blocked", false),
+    )
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+
+    if ready.status != RuntimeDeploymentAuditSqliteTranscriptStatus::ReadyForExternalReview
+        || blocked.status != RuntimeDeploymentAuditSqliteTranscriptStatus::Blocked
+        || ready.production_ready
+        || blocked.production_ready
+        || ready.service_manager_action_performed_by_validator
+        || blocked.service_manager_action_performed_by_validator
+        || ready.deployment_path_mutated_by_validator
+        || blocked.deployment_path_mutated_by_validator
+        || ready.secrets_loaded
+        || blocked.secrets_loaded
+        || ready.external_submission_performed
+        || blocked.external_submission_performed
+        || ready.live_execution_performed
+        || blocked.live_execution_performed
+        || blocked.blocker_codes.is_empty()
+    {
+        return Err(AgentCliError::Validation(
+            "deployment audit/SQLite transcript validation failed".to_owned(),
+        ));
+    }
+
+    println!("deployment-audit-sqlite-transcript: validation passed");
+    println!(
+        "ready-transcript-status: {}",
+        deployment_audit_sqlite_status_label(ready.status)
+    );
+    println!(
+        "ready-deployment-host-evidence: {}",
+        ready.deployment_host_evidence
+    );
+    println!(
+        "ready-service-lifecycle-reference-present: {}",
+        ready.service_lifecycle_reference_present
+    );
+    println!(
+        "ready-audit-replay-validated: {}",
+        ready.audit_replay_validated && ready.audit_hash_chain_validated
+    );
+    println!(
+        "ready-sqlite-recovery-validated: {}",
+        ready.sqlite_wal_mode_validated
+            && ready.sqlite_integrity_check_passed
+            && ready.sqlite_checkpoint_recovered
+    );
+    println!(
+        "ready-backup-restore-validated: {}",
+        ready.backup_restore_validated
+    );
+    println!(
+        "ready-concurrent-access-validated: {}",
+        ready.concurrent_access_validated
+    );
+    println!(
+        "blocked-transcript-status: {}",
+        deployment_audit_sqlite_status_label(blocked.status)
+    );
+    println!("blocked-blocker-count: {}", blocked.blocker_codes.len());
+    println!("service-manager-action-performed-by-validator: false");
+    println!("deployment-path-mutated-by-validator: false");
+    println!("secrets-loaded: false");
+    println!("external-submission-performed: false");
+    println!("live-execution-performed: false");
+    println!("production-ready: false");
+    Ok(())
+}
+
 fn run_rollback_execution_transcript_validation() -> Result<(), AgentCliError> {
     let ready =
         validate_rollback_execution_transcript(local_rollback_execution_transcript("ready", true))
@@ -12504,6 +12615,87 @@ fn run_incident_response_execution_transcript_validation() -> Result<(), AgentCl
     Ok(())
 }
 
+fn run_deployment_failure_capture_transcript_validation() -> Result<(), AgentCliError> {
+    let ready = validate_deployment_failure_capture_transcript(
+        local_deployment_failure_capture_transcript("ready", true),
+    )
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let blocked = validate_deployment_failure_capture_transcript(
+        local_deployment_failure_capture_transcript("blocked", false),
+    )
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+
+    if ready.status != DeploymentFailureCaptureTranscriptStatus::ReadyForExternalReview
+        || blocked.status != DeploymentFailureCaptureTranscriptStatus::Blocked
+        || ready.production_ready
+        || blocked.production_ready
+        || ready.panic_hook_installed_by_validator
+        || blocked.panic_hook_installed_by_validator
+        || ready.tracing_subscriber_installed_by_validator
+        || blocked.tracing_subscriber_installed_by_validator
+        || ready.failure_injected_by_validator
+        || blocked.failure_injected_by_validator
+        || ready.service_manager_action_performed_by_validator
+        || blocked.service_manager_action_performed_by_validator
+        || ready.files_mutated_by_validator
+        || blocked.files_mutated_by_validator
+        || ready.alerts_sent_by_validator
+        || blocked.alerts_sent_by_validator
+        || ready.external_calls_performed
+        || blocked.external_calls_performed
+        || ready.live_execution_performed
+        || blocked.live_execution_performed
+        || blocked.blocker_codes.is_empty()
+    {
+        return Err(AgentCliError::Validation(
+            "deployment failure-capture transcript validation failed".to_owned(),
+        ));
+    }
+
+    println!("deployment-failure-capture-transcript: validation passed");
+    println!(
+        "ready-transcript-status: {}",
+        deployment_failure_capture_status_label(ready.status)
+    );
+    println!(
+        "ready-deployment-host-reference-present: {}",
+        ready.deployment_host_reference_present
+    );
+    println!(
+        "ready-daemon-panic-hook-reference-present: {}",
+        ready.daemon_panic_hook_reference_present
+    );
+    println!(
+        "ready-daemon-tracing-reference-present: {}",
+        ready.daemon_tracing_reference_present
+    );
+    println!(
+        "ready-failure-capture-reference-present: {}",
+        ready.failure_capture_reference_present
+    );
+    println!(
+        "ready-post-failure-recovery-validated: {}",
+        ready.post_failure_runtime_smoke_passed
+            && ready.audit_replay_after_failure_validated
+            && ready.sqlite_recovery_after_failure_validated
+    );
+    println!(
+        "blocked-transcript-status: {}",
+        deployment_failure_capture_status_label(blocked.status)
+    );
+    println!("blocked-blocker-count: {}", blocked.blocker_codes.len());
+    println!("panic-hook-installed-by-validator: false");
+    println!("tracing-subscriber-installed-by-validator: false");
+    println!("failure-injected-by-validator: false");
+    println!("service-manager-action-performed-by-validator: false");
+    println!("files-mutated-by-validator: false");
+    println!("alerts-sent-by-validator: false");
+    println!("external-calls-performed: false");
+    println!("live-execution-performed: false");
+    println!("production-ready: false");
+    Ok(())
+}
+
 fn local_deployment_disk_full_transcript(
     suffix: &str,
     complete: bool,
@@ -12580,6 +12772,37 @@ fn local_deployment_permission_transcript(
     }
 }
 
+fn local_deployment_audit_sqlite_transcript(
+    suffix: &str,
+    complete: bool,
+) -> RuntimeDeploymentAuditSqliteTranscript {
+    RuntimeDeploymentAuditSqliteTranscript {
+        transcript_id: format!("local-deployment-audit-sqlite-{suffix}"),
+        host_label: "deployment-host-a".to_owned(),
+        deployment_host_evidence: complete,
+        service_lifecycle_reference_present: complete,
+        audit_append_reference_present: complete,
+        audit_replay_validated: complete,
+        audit_hash_chain_validated: complete,
+        sqlite_wal_mode_validated: complete,
+        sqlite_integrity_check_passed: complete,
+        sqlite_checkpoint_recovered: complete,
+        backup_restore_validated: complete,
+        concurrent_access_validated: complete,
+        recovery_runbook_reference_present: complete,
+        non_secret_reference_count: if complete { 9 } else { 1 },
+        operator_approved: complete,
+        reviewer_approved: complete,
+        service_manager_action_performed_by_validator: false,
+        deployment_path_mutated_by_validator: false,
+        secrets_loaded: false,
+        external_submission_performed: false,
+        live_execution_performed: false,
+        production_ready_claimed: false,
+        validated_at_unix_ms: 95_500,
+    }
+}
+
 fn local_rollback_execution_transcript(
     suffix: &str,
     complete: bool,
@@ -12636,6 +12859,40 @@ fn local_incident_response_execution_transcript(
         live_execution_performed: false,
         production_ready_claimed: false,
         validated_at_unix_ms: 97_000,
+    }
+}
+
+fn local_deployment_failure_capture_transcript(
+    suffix: &str,
+    complete: bool,
+) -> DeploymentFailureCaptureTranscript {
+    DeploymentFailureCaptureTranscript {
+        transcript_id: format!("local-deployment-failure-capture-{suffix}"),
+        plan_id: "phase-56-deployment-failure-capture".to_owned(),
+        deployment_host_reference_present: complete,
+        daemon_panic_hook_reference_present: complete,
+        daemon_tracing_reference_present: complete,
+        failure_scenario_reference_present: complete,
+        failure_capture_reference_present: complete,
+        sanitized_payload_review_present: complete,
+        runtime_quiesce_or_degrade_validated: complete,
+        post_failure_runtime_smoke_passed: complete,
+        audit_replay_after_failure_validated: complete,
+        sqlite_recovery_after_failure_validated: complete,
+        alert_route_reference_present: complete,
+        operator_approved: complete,
+        reviewer_approved: complete,
+        non_secret_reference_count: if complete { 9 } else { 1 },
+        panic_hook_installed_by_validator: false,
+        tracing_subscriber_installed_by_validator: false,
+        failure_injected_by_validator: false,
+        service_manager_action_performed_by_validator: false,
+        files_mutated_by_validator: false,
+        alerts_sent_by_validator: false,
+        external_calls_performed: false,
+        live_execution_performed: false,
+        production_ready_claimed: false,
+        validated_at_unix_ms: 98_000,
     }
 }
 

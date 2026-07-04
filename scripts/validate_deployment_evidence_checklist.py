@@ -31,6 +31,7 @@ CATEGORIES: dict[str, str] = {
     "retention-rotation": "deployment-host retention/rotation execution evidence",
     "rollback-drill": "executed rollback drill evidence",
     "incident-response-drill": "executed incident-response drill evidence",
+    "daemon-failure-capture": "daemon failure-capture execution evidence",
     "production-readiness-review": "human production-readiness review evidence",
 }
 

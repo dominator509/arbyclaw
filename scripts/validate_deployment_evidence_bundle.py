@@ -97,6 +97,30 @@ COMPONENT_COMMANDS = [
         ],
         False,
     ),
+    (
+        "deployment-audit-sqlite-transcript",
+        [
+            "cargo",
+            "run",
+            "-p",
+            "arb-agent",
+            "--",
+            "validate-deployment-audit-sqlite-transcript",
+        ],
+        False,
+    ),
+    (
+        "deployment-failure-capture-transcript",
+        [
+            "cargo",
+            "run",
+            "-p",
+            "arb-agent",
+            "--",
+            "validate-deployment-failure-capture-transcript",
+        ],
+        False,
+    ),
 ]
 
 BOOLEAN_SAFETY_FIELDS = (
@@ -205,6 +229,7 @@ def build_report() -> dict[str, Any]:
             "retention/rotation execution evidence",
             "executed rollback drill evidence",
             "executed incident-response drill evidence",
+            "daemon failure-capture execution evidence",
             "human production-readiness review",
         ],
     }

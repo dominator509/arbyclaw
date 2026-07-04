@@ -2820,7 +2820,9 @@ impl CexOrderLifecycleRecord {
                 };
                 fill_count += 1;
                 filled_quantity_base += response.fill_quantity_base_delta;
-                fill_notional_quote += response.fill_quantity_base_delta * fill_price_quote;
+                fill_notional_quote = response
+                    .fill_quantity_base_delta
+                    .mul_add(fill_price_quote, fill_notional_quote);
             }
             total_fee_quote += response.fee_quote_delta;
         }
