@@ -85,7 +85,7 @@ def run_component(name: str, command: list[str]) -> dict[str, Any]:
     output = f"{completed.stdout}\n{completed.stderr}".strip()
     json_report: dict[str, Any] | None = None
     parsed = parse_output(output)
-    if command[-1] == "--json" and completed.returncode == 0:
+    if "--json" in command and completed.returncode == 0:
         for index, line in enumerate(output.splitlines()):
             if line.lstrip().startswith("{"):
                 candidate = "\n".join(output.splitlines()[index:])
