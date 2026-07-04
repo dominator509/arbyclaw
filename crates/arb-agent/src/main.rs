@@ -9123,7 +9123,7 @@ fn local_signer_authorization_envelope_reports() -> Result<
         transaction_simulation_reference: String::new(),
         nonce_plan_reference: "secret=bad".to_owned(),
         pre_sign_audit_reference: String::new(),
-        pre_sign_state_checkpoint_key: "private_key=bad".to_owned(),
+        pre_sign_state_checkpoint_key: "invalid-sensitive-locator".to_owned(),
         signer_material_loaded: false,
         plaintext_decrypted: false,
         signing_performed: false,

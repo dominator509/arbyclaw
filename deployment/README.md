@@ -40,7 +40,7 @@ python3 scripts/validate_arm_cross_check.py --install-target
 
 This runs `cargo check --workspace --target aarch64-unknown-linux-gnu --locked`. With `--install-target`, it may install the Rust target before checking. Missing prerequisites or command timeouts fail the gate without running ARM binaries, inspecting devices, starting services, loading secrets, or approving ARM deployment readiness.
 
-`scripts/validate_production_container.py` builds `deployment/container/Containerfile.production`, runs Trivy HIGH/CRITICAL image scanning, enforces no fixable CRITICAL vulnerabilities, smoke-runs the inert `arb-agent --help` container path, and repeats that smoke under Docker `--read-only --network none --cap-drop ALL --security-opt no-new-privileges`. Docker probe, build, scan, and smoke commands use bounded timeouts and fail closed with explicit non-claims if Docker is unavailable or unresponsive; `--json` emits the same fail-closed result as structured evidence:
+`scripts/validate_production_container.py` builds `deployment/container/Containerfile.production`, runs Trivy HIGH/CRITICAL image scanning, enforces no fixable CRITICAL vulnerabilities, smoke-runs the inert `arb-agent --help` container path, and repeats that smoke under Docker `--read-only --network none --cap-drop ALL --security-opt no-new-privileges`. Docker probe, build, scan, and smoke commands use bounded timeouts, Dockerized Trivy runs with `--pull never` plus an in-container scan timeout, and timed-out named scan containers are force-removed before the script returns fail-closed with explicit non-claims if Docker is unavailable or unresponsive; `--json` emits the same fail-closed result as structured evidence:
 
 ```bash
 python3 scripts/validate_production_container.py
@@ -48,7 +48,7 @@ python3 scripts/validate_production_container.py
 
 Passing this script is production-intent container build/scan and hardened local container-smoke evidence only. Failing it proves no production-container evidence was collected for that run. It does not push an image, install or start a service, mount production state, open listeners, load secrets, validate service-manager lifecycle behavior, or claim production readiness.
 
-`scripts/validate_container_example.py --json` mirrors the example-container build/scan/smoke gate and also emits structured fail-closed JSON when Docker is unavailable or unresponsive.
+`scripts/validate_container_example.py --json` mirrors the example-container build/scan/smoke gate, including Dockerized Trivy no-pull/internal-timeout controls and timed-out scan-container cleanup, and also emits structured fail-closed JSON when Docker is unavailable or unresponsive.
 
 `scripts/validate_systemd_example.py` checks the committed example unit only. On Linux hosts with `systemd-analyze`, `python3 scripts/validate_systemd_example.py --systemd-analyze` also runs bounded syntax verification against a temporary fake root without installing, enabling, reloading, or starting a service. Passing it is not production service-manager validation.
 

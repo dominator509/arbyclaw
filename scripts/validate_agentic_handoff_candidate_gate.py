@@ -103,6 +103,7 @@ def run_component(name: str, command: list[str]) -> dict[str, Any]:
         "passed": completed.returncode == 0,
         "json_report": json_report,
         "parsed": parsed,
+        "output_tail": output.splitlines()[-20:],
     }
 
 
@@ -114,6 +115,7 @@ def validate_components(components: list[dict[str, Any]]) -> tuple[list[str], bo
     for component in components:
         if component["returncode"] != 0:
             errors.append(f"{component['name']} exited {component['returncode']}")
+            errors.extend(f"{component['name']} output: {line}" for line in component["output_tail"])
 
     if errors:
         return errors, bounded_toolchain_external_path_used

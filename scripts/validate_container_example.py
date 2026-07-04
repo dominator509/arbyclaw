@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 
 
@@ -23,8 +24,26 @@ TRIVY_TIMEOUT_SECONDS = 600
 SMOKE_TIMEOUT_SECONDS = 60
 
 
+def force_remove_container(name: str) -> None:
+    try:
+        subprocess.run(
+            ["docker", "rm", "-f", name],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=10,
+            check=False,
+        )
+    except (subprocess.SubprocessError, OSError):
+        pass
+
+
 def run(
-    command: list[str], *, capture: bool = False, timeout: int, verbose: bool = True
+    command: list[str],
+    *,
+    capture: bool = False,
+    timeout: int,
+    verbose: bool = True,
+    cleanup_container: str | None = None,
 ) -> subprocess.CompletedProcess[str]:
     if verbose:
         print(f"+ {' '.join(command)}", flush=True)
@@ -39,6 +58,8 @@ def run(
             timeout=timeout,
         )
     except subprocess.TimeoutExpired as error:
+        if cleanup_container is not None:
+            force_remove_container(cleanup_container)
         raise RuntimeError(
             f"command timed out after {timeout}s: {' '.join(command)}"
         ) from error
@@ -64,7 +85,14 @@ def non_claims() -> dict[str, bool]:
     }
 
 
-def build_report(json_mode: bool) -> dict[str, object]:
+def build_report(
+    json_mode: bool,
+    *,
+    docker_probe_timeout: int = DOCKER_PROBE_TIMEOUT_SECONDS,
+    docker_build_timeout: int = DOCKER_BUILD_TIMEOUT_SECONDS,
+    trivy_timeout: int = TRIVY_TIMEOUT_SECONDS,
+    smoke_timeout: int = SMOKE_TIMEOUT_SECONDS,
+) -> dict[str, object]:
     report: dict[str, object] = {
         "schema": "arbyclaw.example_container_validation.v1",
         "image": IMAGE_TAG,
@@ -72,18 +100,20 @@ def build_report(json_mode: bool) -> dict[str, object]:
         "docker_validation_completed": False,
         "failures": [],
         "bounded_timeouts": {
-            "docker_probe_seconds": DOCKER_PROBE_TIMEOUT_SECONDS,
-            "docker_build_seconds": DOCKER_BUILD_TIMEOUT_SECONDS,
-            "trivy_seconds": TRIVY_TIMEOUT_SECONDS,
-            "smoke_seconds": SMOKE_TIMEOUT_SECONDS,
+            "docker_probe_seconds": docker_probe_timeout,
+            "docker_build_seconds": docker_build_timeout,
+            "trivy_seconds": trivy_timeout,
+            "smoke_seconds": smoke_timeout,
         },
         **non_claims(),
     }
+    trivy_table_container = f"arbyclaw-example-trivy-table-{os.getpid()}"
+    trivy_gate_container = f"arbyclaw-example-trivy-gate-{os.getpid()}"
     try:
-        run(["docker", "version"], timeout=DOCKER_PROBE_TIMEOUT_SECONDS, verbose=not json_mode)
+        run(["docker", "version"], timeout=docker_probe_timeout, verbose=not json_mode)
         run(
             ["docker", "build", "-f", CONTAINERFILE, "-t", IMAGE_TAG, "."],
-            timeout=DOCKER_BUILD_TIMEOUT_SECONDS,
+            timeout=docker_build_timeout,
             verbose=not json_mode,
         )
         run(
@@ -91,31 +121,44 @@ def build_report(json_mode: bool) -> dict[str, object]:
                 "docker",
                 "run",
                 "--rm",
+                "--pull",
+                "never",
+                "--name",
+                trivy_table_container,
                 "-v",
                 "/var/run/docker.sock:/var/run/docker.sock",
                 TRIVY_IMAGE,
                 "image",
                 "--severity",
                 "HIGH,CRITICAL",
+                "--timeout",
+                f"{trivy_timeout}s",
                 "--ignore-unfixed",
                 "--format",
                 "table",
                 IMAGE_TAG,
             ],
-            timeout=TRIVY_TIMEOUT_SECONDS,
+            timeout=trivy_timeout,
             verbose=not json_mode,
+            cleanup_container=trivy_table_container,
         )
         run(
             [
                 "docker",
                 "run",
                 "--rm",
+                "--pull",
+                "never",
+                "--name",
+                trivy_gate_container,
                 "-v",
                 "/var/run/docker.sock:/var/run/docker.sock",
                 TRIVY_IMAGE,
                 "image",
                 "--severity",
                 "CRITICAL",
+                "--timeout",
+                f"{trivy_timeout}s",
                 "--ignore-unfixed",
                 "--exit-code",
                 "1",
@@ -123,13 +166,14 @@ def build_report(json_mode: bool) -> dict[str, object]:
                 "vuln",
                 IMAGE_TAG,
             ],
-            timeout=TRIVY_TIMEOUT_SECONDS,
+            timeout=trivy_timeout,
             verbose=not json_mode,
+            cleanup_container=trivy_gate_container,
         )
         smoke = run(
             ["docker", "run", "--rm", IMAGE_TAG],
             capture=True,
-            timeout=SMOKE_TIMEOUT_SECONDS,
+            timeout=smoke_timeout,
             verbose=not json_mode,
         )
         if not json_mode:
@@ -158,12 +202,42 @@ def print_text(report: dict[str, object]) -> None:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--json", action="store_true", help="emit JSON report")
+    parser.add_argument(
+        "--docker-probe-timeout-seconds",
+        type=int,
+        default=DOCKER_PROBE_TIMEOUT_SECONDS,
+        help="bounded timeout for Docker availability probing",
+    )
+    parser.add_argument(
+        "--docker-build-timeout-seconds",
+        type=int,
+        default=DOCKER_BUILD_TIMEOUT_SECONDS,
+        help="bounded timeout for the example image build",
+    )
+    parser.add_argument(
+        "--trivy-timeout-seconds",
+        type=int,
+        default=TRIVY_TIMEOUT_SECONDS,
+        help="bounded timeout for each Trivy scan container",
+    )
+    parser.add_argument(
+        "--smoke-timeout-seconds",
+        type=int,
+        default=SMOKE_TIMEOUT_SECONDS,
+        help="bounded timeout for the inert container help smoke",
+    )
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
-    report = build_report(args.json)
+    report = build_report(
+        args.json,
+        docker_probe_timeout=args.docker_probe_timeout_seconds,
+        docker_build_timeout=args.docker_build_timeout_seconds,
+        trivy_timeout=args.trivy_timeout_seconds,
+        smoke_timeout=args.smoke_timeout_seconds,
+    )
     if args.json:
         print(json.dumps(report, indent=2, sort_keys=True))
     else:

@@ -6,11 +6,11 @@ ArbyClaw
 
 ## Current Roadmap Position
 
-- Active phase: Phase 57 - Local Deployment Audit/SQLite Transcript Validation implemented for sanitized operator-owned deployment-host audit journal and SQLite WAL recovery evidence metadata only; next required work remains real external sandbox/live calibration, live exchange/RPC adapter implementation, custody-backed signer implementation, operator-controlled deployment-host/service-manager execution, real deployment-host permission execution, physical disk-full execution, deployment-host retention/rotation execution, actual rollback execution, actual incident-response execution, real daemon failure-capture execution, real deployment-host audit/SQLite recovery execution, and external evidence beyond current Rust/CI/local gates
-- Active sub-roadmap: `PHASE_57_SUBROADMAP.md`
+- Active phase: Phase 58 - Container Validator Fail-Closed Timeout Hardening implemented for local Dockerized image-scan helper robustness only; next required work remains real external sandbox/live calibration, live exchange/RPC adapter implementation, custody-backed signer implementation, operator-controlled deployment-host/service-manager execution, real deployment-host permission execution, physical disk-full execution, deployment-host retention/rotation execution, actual rollback execution, actual incident-response execution, real daemon failure-capture execution, real deployment-host audit/SQLite recovery execution, production image publishing, service deployment, and external evidence beyond current Rust/CI/local gates
+- Active sub-roadmap: `PHASE_58_SUBROADMAP.md`
 - Runtime-smoke composition update: local deployment-like runtime smoke now recovers observability operations review, export dry-run, alert-route dispatch, endpoint preflight, loopback bind, metrics scrape preflight, one-shot metrics endpoint validation, and scoped tracing capture alongside lifecycle, communications, dashboard, validation-runner, and paper-ledger recovery, without telemetry export, outbound alerts, public exposure, service-manager action, live execution, or production-readiness claims.
 - Current production readiness: 96%
-- Current implementation status: Minimal Rust workspace, typed config, reference-only secret boundary, mode-gate validation, deny-by-default policy engine, append-only audit journal primitives with local lock/sync append behavior, crash/concurrency/filesystem/simulated-disk-full validation probes, side-effect-free retention/rotation planning, and side-effect-free stale-lock restart recheck planning, state-store trait boundary with SQLite WAL-backed checkpoint store, local integrity/checkpoint/reopen/backup-restore/multi-handle durability validation, process-level crash/restart recovery tests, and local runtime state-permission fail-closed validation, normalized market-data models, fee models, freshness classification, provider trait boundaries, deterministic paper connectors with local paper-report checkpoint persistence, local paper balance ledgering, realistic local paper fill modeling, venue matching profiles, adverse-selection modeling, reference-only calibration records, paper ledger replay validation, local historical-fixture paper backtest corpus execution, and direct local audit journal records for paper intents/reports plus reserve/settlement ledger mutations, CEX connector framework types/traits with local Binance/Coinbase/Kraken-shaped fixture matching, mocked order-book transcript parsing validation, local Binance/Coinbase/Kraken market-data request-plan validation, local Binance/Coinbase/Kraken-shaped order lifecycle transcript parsing into lifecycle reconciliation, local Binance/Coinbase/Kraken-shaped balance snapshot transcript parsing, local rate-limit validation, local credential/API-scope review, and local governance review for fee/rate-limit/terms/jurisdiction/API-capability/incident metadata, DEX/Web3 connector framework types/traits with local router/RPC request plans, response transcript parsing, local EVM receipt/Solana signature-status transaction lifecycle transcript parsing with nonce/confirmation accounting, local protocol risk review for chain/pair scope allowlists, router/spender contract hygiene, gas/slippage caps, MEV controls, token metadata/contract/decimals, and terms/jurisdiction/incident review, local Web3 nonce reservation, local Web3 unsigned payload review, local Web3 pre-sign safety review for simulation/nonce/lifecycle coherence, and local Web3 broadcast-readiness review with broadcast permission denied, local Web3 unsigned transaction construction metadata with raw calldata and raw transaction serialization denied, local Web3 provider nonce reconciliation for caller-supplied provider nonce snapshot metadata, deterministic opportunity-engine types/traits with local replay/false-positive reports, a built-in local regression corpus, local historical fixture replay aggregation, local opportunity replay CLI validation commands, and the Phase 29 aggregate opportunity scenario gate that composes thirteen local opportunity/testing CLIs including strategy replay, strategy profitability tuning, local validation-run, local property-check, local fuzz-corpus replay, local validation-corpus, and local paper-backtest validation while failing on unsafe side-effect flags, draft-only execution-planner types/traits with local plan-draft audit/checkpoint persistence and per-intent policy-outcome audit records, execution-adapter boundary records/traits with local run and recovery-plan audit/checkpoint validation, local fail-closed runtime lifecycle wiring for audit/state/adapter sequencing, local concurrent runtime lifecycle access checks, local graceful-shutdown audit/state checkpointing, local runtime audit/SQLite backup-restore validation, local runtime restart recovery summaries with CLI-visible operator-review dispositions plus recovered local connector-lifecycle and opportunity-trace summary accounting, and incomplete-checkpoint fail-closed coverage, a typed non-mutating production-runtime preflight boundary over local smoke/load evidence, local deployment-like runtime smoke validation with concurrent lifecycle plus communications command/review/platform-ingress/envelope/channel-adapter/channel-session/platform-adapter/notification, dashboard render/hosted-security/hosted-request preflight/one-shot request, validation-run, property-check, and paper execution report/ledger checkpoint recovery for paper-scoped plans and CLI runner without service-manager actions, communications/CLI command, notification, and local authenticated channel-adapter boundaries, embedded-dashboard local render boundaries, observability/runbook local record boundaries with local alert-route dispatch through the deterministic communications notification boundary, deterministic testing/fuzzing/backtesting plan boundaries, deterministic packaging/deployment plan boundaries with repeatable local example-container validation plus a Phase 16 aggregate packaging/deployment gate over release-artifact, systemd example, static hardening, ARM profile, and ARM cross-target validation, static example systemd-unit validation, manual non-mutating systemd lifecycle plan/inspect evidence tooling, combined deployment-host runtime report tooling with non-mutating audit/state filesystem preflight and audit retention active/archive path preflight reporting, the Phase 28 aggregate deployment-runtime gate that composes 25 local runtime/deployment probes including seven sanitized runtime/deployment transcript validators and now enforces the embedded production-runtime preflight contract while failing on unsafe side-effect flags, sanitized service-manager lifecycle, deployment disk-full, deployment retention, deployment permission, rollback execution, incident-response execution, and deployment failure-capture transcript validators, non-mutating rollback-drill evidence tooling, non-mutating incident-response drill evidence tooling, non-mutating deployment evidence bundle indexing with rollback, incident-response, and deployment failure-capture transcript components, and non-mutating deployment evidence checklist validation, deterministic external-hardening evidence/checklist boundaries, and deterministic agentic handoff package boundaries exist; local and GitHub Actions evidence covers current structure, formatting, workspace compilation, tests, clippy, locked release build, aggregate packaging/deployment gate validation, dependency audit, dependency license policy validation, SBOM generation, local-SARIF SAST, example image scan, static example systemd-unit checks, secret-pattern scan, deployment evidence checklist artifact generation, and hardening evidence indexing. Live trading, production container/systemd/ARM deployment validation, real validation runner execution beyond Cargo tests, real fuzzing engines, broader external/deployment opportunity scenario-corpus execution, real external backtest corpus execution, real observability runtime, real dashboard hosting, outbound messaging integrations, external adapter submission, real exchange-specific live connectors, DEX RPC adapters, wallet signer, transaction broadcasts, custody backend, deployment-host durability validation, real deployment-host permission execution, physical disk-full and retention/rotation execution evidence, operator-controlled service-manager lifecycle execution evidence, actual rollback execution evidence, incident-response execution evidence, daemon failure-capture execution evidence, external sandbox/live calibration evidence, and production execution logic are not implemented.
+- Current implementation status: Minimal Rust workspace, typed config, reference-only secret boundary, mode-gate validation, deny-by-default policy engine, append-only audit journal primitives with local lock/sync append behavior, crash/concurrency/filesystem/simulated-disk-full validation probes, side-effect-free retention/rotation planning, and side-effect-free stale-lock restart recheck planning, state-store trait boundary with SQLite WAL-backed checkpoint store, local integrity/checkpoint/reopen/backup-restore/multi-handle durability validation, process-level crash/restart recovery tests, and local runtime state-permission fail-closed validation, normalized market-data models, fee models, freshness classification, provider trait boundaries, deterministic paper connectors with local paper-report checkpoint persistence, local paper balance ledgering, realistic local paper fill modeling, venue matching profiles, adverse-selection modeling, reference-only calibration records, paper ledger replay validation, local historical-fixture paper backtest corpus execution, and direct local audit journal records for paper intents/reports plus reserve/settlement ledger mutations, CEX connector framework types/traits with local Binance/Coinbase/Kraken-shaped fixture matching, mocked order-book transcript parsing validation, local Binance/Coinbase/Kraken market-data request-plan validation, local Binance/Coinbase/Kraken-shaped order lifecycle transcript parsing into lifecycle reconciliation, local Binance/Coinbase/Kraken-shaped balance snapshot transcript parsing, local rate-limit validation, local credential/API-scope review, and local governance review for fee/rate-limit/terms/jurisdiction/API-capability/incident metadata, DEX/Web3 connector framework types/traits with local router/RPC request plans, response transcript parsing, local EVM receipt/Solana signature-status transaction lifecycle transcript parsing with nonce/confirmation accounting, local protocol risk review for chain/pair scope allowlists, router/spender contract hygiene, gas/slippage caps, MEV controls, token metadata/contract/decimals, and terms/jurisdiction/incident review, local Web3 nonce reservation, local Web3 unsigned payload review, local Web3 pre-sign safety review for simulation/nonce/lifecycle coherence, and local Web3 broadcast-readiness review with broadcast permission denied, local Web3 unsigned transaction construction metadata with raw calldata and raw transaction serialization denied, local Web3 provider nonce reconciliation for caller-supplied provider nonce snapshot metadata, deterministic opportunity-engine types/traits with local replay/false-positive reports, a built-in local regression corpus, local historical fixture replay aggregation, local opportunity replay CLI validation commands, and the Phase 29 aggregate opportunity scenario gate that composes thirteen local opportunity/testing CLIs including strategy replay, strategy profitability tuning, local validation-run, local property-check, local fuzz-corpus replay, local validation-corpus, and local paper-backtest validation while failing on unsafe side-effect flags, draft-only execution-planner types/traits with local plan-draft audit/checkpoint persistence and per-intent policy-outcome audit records, execution-adapter boundary records/traits with local run and recovery-plan audit/checkpoint validation, local fail-closed runtime lifecycle wiring for audit/state/adapter sequencing, local concurrent runtime lifecycle access checks, local graceful-shutdown audit/state checkpointing, local runtime audit/SQLite backup-restore validation, local runtime restart recovery summaries with CLI-visible operator-review dispositions plus recovered local connector-lifecycle and opportunity-trace summary accounting, and incomplete-checkpoint fail-closed coverage, a typed non-mutating production-runtime preflight boundary over local smoke/load evidence, local deployment-like runtime smoke validation with concurrent lifecycle plus communications command/review/platform-ingress/envelope/channel-adapter/channel-session/platform-adapter/notification, dashboard render/hosted-security/hosted-request preflight/one-shot request, validation-run, property-check, and paper execution report/ledger checkpoint recovery for paper-scoped plans and CLI runner without service-manager actions, communications/CLI command, notification, and local authenticated channel-adapter boundaries, embedded-dashboard local render boundaries, observability/runbook local record boundaries with local alert-route dispatch through the deterministic communications notification boundary, deterministic testing/fuzzing/backtesting plan boundaries, deterministic packaging/deployment plan boundaries with repeatable local example-container validation, production-intent container validation with Dockerized Trivy no-pull/internal-timeout scan controls and timed-out scan-container cleanup, plus a Phase 16 aggregate packaging/deployment gate over release-artifact, systemd example, static hardening, ARM profile, and ARM cross-target validation, static example systemd-unit validation, manual non-mutating systemd lifecycle plan/inspect evidence tooling, combined deployment-host runtime report tooling with non-mutating audit/state filesystem preflight and audit retention active/archive path preflight reporting, the Phase 28 aggregate deployment-runtime gate that composes 26 local runtime/deployment probes including eight sanitized runtime/deployment transcript validators and now enforces the embedded production-runtime preflight contract while failing on unsafe side-effect flags, sanitized service-manager lifecycle, deployment disk-full, deployment retention, deployment permission, deployment audit/SQLite, rollback execution, incident-response execution, and deployment failure-capture transcript validators, non-mutating rollback-drill evidence tooling, non-mutating incident-response drill evidence tooling, non-mutating deployment evidence bundle indexing with rollback, incident-response, deployment failure-capture, and deployment audit/SQLite transcript components, and non-mutating deployment evidence checklist validation, deterministic external-hardening evidence/checklist boundaries, and deterministic agentic handoff package boundaries exist; local and GitHub Actions evidence covers current structure, formatting, workspace compilation, tests, clippy, locked release build, aggregate packaging/deployment gate validation, dependency audit, dependency license policy validation, SBOM generation, local-SARIF SAST, example image scan, static example systemd-unit checks, secret-pattern scan, deployment evidence checklist artifact generation, and hardening evidence indexing. Live trading, production container/systemd/ARM deployment validation, real validation runner execution beyond Cargo tests, real fuzzing engines, broader external/deployment opportunity scenario-corpus execution, real external backtest corpus execution, real observability runtime, real dashboard hosting, outbound messaging integrations, external adapter submission, real exchange-specific live connectors, DEX RPC adapters, wallet signer, transaction broadcasts, custody backend, deployment-host durability validation, real deployment-host permission execution, physical disk-full and retention/rotation execution evidence, operator-controlled service-manager lifecycle execution evidence, actual rollback execution evidence, incident-response execution evidence, daemon failure-capture execution evidence, external sandbox/live calibration evidence, and production execution logic are not implemented.
 - Current risk posture: High, because live-funds architecture is policy-, audit-, market-data-, paper-simulation-, paper-ledger-, paper-realism/replay/backtest/audit-, CEX-framework-, DEX/Web3-framework-, opportunity-engine-, planner-, adapter-, runtime-lifecycle-, communication-, dashboard-, observability-, and validation-boundary-gated but lacks custody isolation, exchange-specific live connectors, live DEX/RPC adapters, signer boundary, live adapter submission, real communications adapters, real dashboard hosting/authentication, real metrics/exporter/alert runtime, property/fuzz/backtest execution beyond current Cargo tests, real package/deployment validation, broad external hardening validation, future-agent execution validation, deployment-host database and audit validation, physical disk-full and retention/rotation evidence, external sandbox/live fill calibration evidence, and external validation.
 
 ## Roadmap Governance Rules
@@ -80,7 +80,7 @@ ArbyClaw
 
 Potential total inside ChatGPT Project Mode: approximately 75-96% of code/documentation readiness, but not full production readiness because live infrastructure, external exchange credentials, real deployment, penetration testing, deployment-host audit validation, external sandbox/live calibration evidence, deployment-host durability validation, and live trading verification are environment-limited.
 
-## Phase 0 — Governance Initialization
+## Phase 0 Ã¢â‚¬â€ Governance Initialization
 
 ### Status
 
@@ -111,7 +111,7 @@ Complete.
 
 Met for governance initialization only.
 
-## Phase 1 — Rust Workspace Scaffold
+## Phase 1 Ã¢â‚¬â€ Rust Workspace Scaffold
 
 ### Status
 
@@ -170,7 +170,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 Met for scaffold creation. Full Phase 1 build validation remains tracked as environment-limited work in `PRODUCTION_GAP_TRACKER.md`.
 
-## Phase 2 — Config, Secrets, and Mode Gates
+## Phase 2 Ã¢â‚¬â€ Config, Secrets, and Mode Gates
 
 ### Status
 
@@ -220,7 +220,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 Met for ChatGPT Project Mode scaffold/config implementation with current workspace Rust/CI validation evidence. Future changes still require rerunning validation before protected-branch or downstream reliance.
 
-## Phase 3 — Policy Engine and Trust Contract
+## Phase 3 Ã¢â‚¬â€ Policy Engine and Trust Contract
 
 ### Status
 
@@ -286,7 +286,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 Met for ChatGPT Project Mode policy implementation with current workspace Rust/CI validation evidence. Property tests, audit integration, and execution-adapter integration remain required.
 
-## Phase 4 — Audit Journal and State Store
+## Phase 4 Ã¢â‚¬â€ Audit Journal and State Store
 
 ### Status
 
@@ -376,7 +376,7 @@ Additional Phase 4 production validations deferred:
 
 Met for ChatGPT Project Mode audit/state boundary implementation with current workspace Rust/CI validation evidence and local Phase 26 audit durability probes. Deployment-host audit/state validation remains required before any live execution path may depend on audit persistence.
 
-## Phase 5 — Market Data Core
+## Phase 5 Ã¢â‚¬â€ Market Data Core
 
 ### Status
 
@@ -433,7 +433,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 Met for ChatGPT Project Mode market-data/fee-model boundary implementation with current workspace Rust/CI validation evidence. Live provider validation remains required before market data may be used for production decisions.
 
-## Phase 6 — Simulated/Paper Connectors
+## Phase 6 Ã¢â‚¬â€ Simulated/Paper Connectors
 
 ### Status
 
@@ -489,7 +489,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 Met for ChatGPT Project Mode deterministic paper connector boundary implementation with current workspace Rust/CI validation evidence. Local exchange matching profiles, adverse-selection modeling, calibration records, paper replay validation, and local backtest execution are implemented; external sandbox/live calibration evidence and production-host runtime validation remain required before Phase 6 can be treated as tested production-like runtime behavior.
 
-## Phase 7 — CEX Connector Framework
+## Phase 7 Ã¢â‚¬â€ CEX Connector Framework
 
 ### Status
 
@@ -542,7 +542,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 Met for ChatGPT Project Mode CEX framework boundary implementation with current workspace Rust/CI validation evidence. Exchange-specific adapter work, sandbox testing, external credential/account validation, provider-backed rate-limit validation, and external fee/terms/jurisdiction/API-capability/incident review remain required before any live CEX use.
 
-## Phase 8 — DEX/Web3 Connector Framework
+## Phase 8 Ã¢â‚¬â€ DEX/Web3 Connector Framework
 
 ### Status
 
@@ -596,7 +596,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 Met for ChatGPT Project Mode DEX/Web3 framework boundary implementation with current workspace Rust/CI validation evidence. RPC/simulation adapters, signer/custody work, transaction broadcast controls, protocol review, and live/on-chain validation remain required before any DEX/Web3 use with real funds.
 
-## Phase 9 — Opportunity Engine
+## Phase 9 Ã¢â‚¬â€ Opportunity Engine
 
 ### Status
 
@@ -663,7 +663,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 Met for ChatGPT Project Mode opportunity-engine model/ranking boundary implementation with current workspace Rust/CI validation evidence. Advanced route modeling, planner integration, execution-adapter integration, live connector validation, and production runtime validation remain required before any use with real funds.
 
-## Phase 10 — Execution Planner
+## Phase 10 Ã¢â‚¬â€ Execution Planner
 
 ### Status
 
@@ -731,7 +731,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 Met for ChatGPT Project Mode execution-planner model boundary implementation with current workspace Rust/CI validation evidence. Local runtime lifecycle wiring now journals plan drafts plus per-intent policy outcomes and checkpoints plans before deterministic adapter-boundary evaluation. Signer/custody integration, live connector validation, restart replay, and production runtime validation remain required before any use with real funds.
 
-## Phase 11 — Execution Adapters
+## Phase 11 Ã¢â‚¬â€ Execution Adapters
 
 ### Goal
 
@@ -806,7 +806,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 Met for ChatGPT Project Mode execution-adapter model/trait boundary implementation with current workspace Rust/CI validation evidence. Local runtime lifecycle wiring now persists adapter-run checkpoints after deterministic adapter-boundary evaluation. Exchange-specific live connectors, signer/custody integration, live submission controls, restart replay, and production runtime validation remain required before any use with real funds.
 
-## Phase 12 — Communications and CLI
+## Phase 12 Ã¢â‚¬â€ Communications and CLI
 
 ### Goal
 
@@ -885,7 +885,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 Met for ChatGPT Project Mode communications and CLI model/trait boundary implementation with local command-source authorization, local remote-command security review, local mocked platform command-ingress validation, local remote-command envelope validation with command-injection marker detection, local authenticated channel-adapter validation, local channel-session validation summaries, local platform-adapter control reviews, local notification rate-limit/outage gating, local audit/state checkpoint helpers, repeatable `validate-communications-runtime` CLI audit/SQLite reopen validation for route/review/platform-ingress/envelope/channel-adapter/channel-session/platform-adapter/notification records, local runtime-smoke review/platform-ingress/envelope/channel-adapter/channel-session/platform-adapter checkpoint recovery, deployment-host runtime report wrapper support, and current workspace Rust/CI validation evidence. Real messaging adapters, platform authentication, platform identity authorization, platform-token storage, provider-side rate-limit reconciliation, real outage detection, real delivery validation, and production runtime operator UX validation remain required before production use.
 
-## Phase 13 — Embedded Dashboard
+## Phase 13 Ã¢â‚¬â€ Embedded Dashboard
 
 ### Status
 
@@ -947,7 +947,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 Met for ChatGPT Project Mode embedded-dashboard model/trait boundary implementation with current workspace Rust/CI validation evidence. Real dashboard hosting, production authentication/session design, CSRF token serving, daemon secure-header serving, daemon rate limiting, UX validation, and penetration testing remain required before production dashboard use.
 
-## Phase 14 — Observability and Runbooks
+## Phase 14 Ã¢â‚¬â€ Observability and Runbooks
 
 ### Status
 
@@ -1013,7 +1013,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 Met for ChatGPT Project Mode observability and runbook model/trait boundary implementation with current workspace Rust/CI validation evidence, including scoped local tracing subscriber capture and sandbox-only observability log retention/rotation execution. Daemon-wide/deployment-host tracing/logging subscriber installation, Prometheus/OpenTelemetry exporters, authenticated metrics endpoint design, alert routing, deployment-host log retention/rotation validation, incident drills, and production runtime validation remain required before production observability use.
 
-## Phase 15 — Testing, Fuzzing, and Backtesting
+## Phase 15 Ã¢â‚¬â€ Testing, Fuzzing, and Backtesting
 
 ### Status
 
@@ -1075,7 +1075,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 Met for ChatGPT Project Mode testing, fuzzing, fixture, and backtesting boundary implementation with current workspace Rust/CI validation evidence. Phase 24 now executes local paper backtest corpora over caller-supplied fixtures, but property-test execution, fuzzing engine execution, broader fixture corpus expansion, CI-scale replay/backtest execution, load testing, penetration testing, and production runtime validation remain required before production claims.
 
-## Phase 16 — Packaging and Deployment
+## Phase 16 Ã¢â‚¬â€ Packaging and Deployment
 
 ### Status
 
@@ -1097,7 +1097,7 @@ Package for local, VPS, and ARM-capable environments without claiming builds, se
 - Ensured records preserve no-build, no-deployment, no-public-exposure, no-live-trading, no-secret-embedding, and no-production-claim flags.
 - Added example-only deployment docs for container, systemd, ARM, and deployment validation notes.
 - Added `scripts/validate_container_example.py` for repeatable local example image build, Trivy image scan, critical-vulnerability enforcement, and container CLI smoke checks.
-- Added `deployment/container/Containerfile.production` and `scripts/validate_production_container.py` for a production-intent local/CI container build, Trivy image scan, critical-vulnerability enforcement, bounded Docker command timeouts, fail-closed unavailable-Docker reporting, inert CLI help smoke path, and hardened read-only/no-network help smoke path without pushing images, installing services, loading secrets, or claiming readiness.
+- Added `deployment/container/Containerfile.production` and `scripts/validate_production_container.py` for a production-intent local/CI container build, Trivy image scan, critical-vulnerability enforcement, bounded Docker command timeouts, Dockerized Trivy no-pull/internal-timeout controls with timed-out scan-container cleanup, fail-closed unavailable-Docker reporting, inert CLI help smoke path, and hardened read-only/no-network help smoke path without pushing images, installing services, loading secrets, or claiming readiness.
 - Added bounded timeout behavior to `scripts/validate_arm_cross_check.py` and optional `systemd-analyze verify` execution so missing or stalled deployment prerequisites fail closed instead of hanging validation.
 - Added `scripts/validate_arm_cross_check.py` plus CI cross-compiler setup for `cargo check --workspace --target aarch64-unknown-linux-gnu --locked`, with bounded Docker fallback when the host cross compiler is unavailable, without running ARM binaries, inspecting devices, installing services, or claiming ARM deployment readiness.
 - Added `scripts/validate_release_artifact.py` plus CI upload of `arbyclaw-release-artifact` for an unsigned locked release binary, SHA-256 manifest, unsigned provenance record, and local bundle-integrity verification without signing, attestation upload, publishing, deployment, or production-readiness claims.
@@ -1157,7 +1157,7 @@ rollback drill validation
 
 Met for ChatGPT Project Mode packaging and deployment boundary implementation only. Current Rust/CI/release-build/example-image/static-example-systemd evidence does not prove production deployment readiness; production container, deployment-host systemd, ARM, runtime, rollback, load, penetration, and production deployment validation remain required before production claims.
 
-## Phase 17 — External Production Hardening
+## Phase 17 Ã¢â‚¬â€ External Production Hardening
 
 ### Status
 
@@ -1213,7 +1213,7 @@ production readiness review
 
 Met for ChatGPT Project Mode evidence-boundary implementation only. No production readiness, live-funds readiness, public exposure readiness, cloud deployment, penetration test, load test, live exchange validation, or release validation is claimed.
 
-## Phase 18 — Agentic Handoff Package
+## Phase 18 Ã¢â‚¬â€ Agentic Handoff Package
 
 ### Status
 
@@ -1253,7 +1253,7 @@ Met for deterministic handoff package records and documentation only. This phase
 
 Keep Rust/CI validation current and continue production-hardening evidence review plus external validation closure before any production, live-funds, public-service, or production-readiness claim.
 
-## Phase 19 — Runtime Lifecycle Wiring
+## Phase 19 Ã¢â‚¬â€ Runtime Lifecycle Wiring
 
 ### Status
 
@@ -1321,7 +1321,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 Met for local deterministic runtime lifecycle wiring, local graceful-shutdown audit/state checkpointing, local audit/SQLite backup-restore copy validation, local restart recovery summaries with operator-review dispositions, and incomplete-recovery fail-closed checks only. No production readiness, live-funds readiness, external adapter submission, public exposure readiness, deployment readiness, deployment-load backup/restore approval, service-manager shutdown/restart execution, or live exchange/RPC validation is claimed.
 
-## Phase 20 — SQLite WAL Durability Validation
+## Phase 20 Ã¢â‚¬â€ SQLite WAL Durability Validation
 
 ### Status
 
@@ -1384,7 +1384,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 Met for local deterministic SQLite WAL durability validation only. External production-host durability validation, deployment readiness, live-funds readiness, public exposure readiness, and live exchange/RPC validation are not claimed.
 
-## Phase 21 — Paper Balance Ledgering
+## Phase 21 Ã¢â‚¬â€ Paper Balance Ledgering
 
 ### Status
 
@@ -1444,7 +1444,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 Met for local deterministic paper balance ledgering only. Real balances, live trading, production deployment, public exposure readiness, and live exchange/RPC validation are not claimed.
 
-## Phase 22 — Crash/Restart Durability Validation
+## Phase 22 Ã¢â‚¬â€ Crash/Restart Durability Validation
 
 ### Status
 
