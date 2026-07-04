@@ -80,11 +80,12 @@ use arb_core::{
     preflight_dashboard_hosted_request, preflight_observability_endpoint,
     preflight_observability_metrics_scrape, record_observability_alert_route_dispatch,
     render_observability_export_dry_run, review_dashboard_hosted_security,
-    review_local_secret_backup_restore, review_observability_operations,
-    review_platform_adapter_controls, review_platform_command_ingress,
-    review_remote_command_security, review_signer_runtime_isolation, review_signer_secret_scope,
-    run_local_fuzz_corpus_replay, run_local_graceful_shutdown_checkpoint,
-    run_local_runtime_lifecycle, run_local_validation_corpus, run_local_validation_property_checks,
+    review_local_secret_backup_restore, review_market_data_provider_latency,
+    review_observability_operations, review_platform_adapter_controls,
+    review_platform_command_ingress, review_remote_command_security,
+    review_signer_runtime_isolation, review_signer_secret_scope, run_local_fuzz_corpus_replay,
+    run_local_graceful_shutdown_checkpoint, run_local_runtime_lifecycle,
+    run_local_validation_corpus, run_local_validation_property_checks,
     validate_audit_journal_durability, validate_cex_credential_scope_review,
     validate_cex_rate_limit, validate_channel_adapter, validate_channel_session,
     validate_dashboard_hosted_request, validate_dashboard_hosted_session,
@@ -147,13 +148,15 @@ use arb_core::{
     LocalTracingSubscriberValidationRequest, LocalTracingSubscriberValidationStatus,
     LocalValidationCorpusRequest, LocalValidationCorpusStatus, MarketDataCapabilities,
     MarketDataError, MarketDataProvider, MarketDataProviderHealthObservation,
-    MarketDataProviderPreflightReport, MarketDataProviderPreflightStatus,
-    MarketDataQualityAssessmentInput, MarketDataQualityAssessmentReport,
-    MarketDataQualityAssessmentStatus, MarketDataReconnectPlanInput, MarketDataReconnectPlanReport,
-    MarketDataReconnectPlanStatus, MarketDataRequest, MarketPair, MetricKind, MetricLabel,
-    MetricSample, NormalizedQuote, NotificationChannelProfile, NotificationChannelSafetyState,
-    NotificationDispatchRecord, NotificationDispatchStatus, NotificationPublisher,
-    NotificationSeverity, ObservabilityAccessContext, ObservabilityAlertRouteDispatchRequest,
+    MarketDataProviderLatencyReviewReport, MarketDataProviderLatencyReviewRequest,
+    MarketDataProviderLatencyReviewStatus, MarketDataProviderPreflightReport,
+    MarketDataProviderPreflightStatus, MarketDataQualityAssessmentInput,
+    MarketDataQualityAssessmentReport, MarketDataQualityAssessmentStatus,
+    MarketDataReconnectPlanInput, MarketDataReconnectPlanReport, MarketDataReconnectPlanStatus,
+    MarketDataRequest, MarketPair, MetricKind, MetricLabel, MetricSample, NormalizedQuote,
+    NotificationChannelProfile, NotificationChannelSafetyState, NotificationDispatchRecord,
+    NotificationDispatchStatus, NotificationPublisher, NotificationSeverity,
+    ObservabilityAccessContext, ObservabilityAlertRouteDispatchRequest,
     ObservabilityAlertRouteDispatchStatus, ObservabilityBoundaryConfig,
     ObservabilityCollectionRequest, ObservabilityCollector, ObservabilityEndpointPreflight,
     ObservabilityLogRetentionExecutionRequest, ObservabilityLoopbackBindValidationRequest,
@@ -1247,6 +1250,7 @@ fn run_market_data_provider_preflight_validation() -> Result<(), AgentCliError> 
         credential_loaded: false,
     })
     .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let latency_review = build_market_data_provider_latency_review(&clean, &degraded)?;
 
     println!("market-data-provider-preflight: validation passed");
     println!("clean-provider: {}", clean.provider_name);
@@ -1271,6 +1275,7 @@ fn run_market_data_provider_preflight_validation() -> Result<(), AgentCliError> 
     println!("live-network-used: false");
     println!("credential-loaded: false");
     println!("production-ready: false");
+    print_market_data_provider_latency_review(&latency_review);
 
     if clean.status != MarketDataProviderPreflightStatus::Usable
         || degraded.status != MarketDataProviderPreflightStatus::Blocked
@@ -1280,6 +1285,17 @@ fn run_market_data_provider_preflight_validation() -> Result<(), AgentCliError> 
         || degraded.credential_loaded
         || clean.production_ready
         || degraded.production_ready
+        || latency_review.status != MarketDataProviderLatencyReviewStatus::ReadyForLocalReview
+        || !latency_review.provider_latency_budget_met
+        || !latency_review.capture_latency_budget_met
+        || !latency_review.reconnect_delay_budget_met
+        || !latency_review.quality_review_ready
+        || !latency_review.paid_provider_review_ready
+        || latency_review.remaining_external_evidence_count == 0
+        || latency_review.live_network_used
+        || latency_review.websocket_connection_opened
+        || latency_review.credential_loaded
+        || latency_review.production_ready
     {
         return Err(AgentCliError::Validation(
             "market-data provider preflight validation failed".to_owned(),
@@ -1287,6 +1303,90 @@ fn run_market_data_provider_preflight_validation() -> Result<(), AgentCliError> 
     }
 
     Ok(())
+}
+
+fn print_market_data_provider_latency_review(report: &MarketDataProviderLatencyReviewReport) {
+    println!(
+        "market-data-provider-latency-review: {}",
+        market_data_provider_latency_review_status_label(report.status)
+    );
+    println!(
+        "market-data-provider-latency-budget-met: {}",
+        report.provider_latency_budget_met
+    );
+    println!(
+        "market-data-provider-capture-latency-budget-met: {}",
+        report.capture_latency_budget_met
+    );
+    println!(
+        "market-data-provider-reconnect-delay-budget-met: {}",
+        report.reconnect_delay_budget_met
+    );
+    println!(
+        "market-data-provider-quality-review-ready: {}",
+        report.quality_review_ready
+    );
+    println!(
+        "market-data-provider-paid-review-ready: {}",
+        report.paid_provider_review_ready
+    );
+    println!(
+        "market-data-provider-latency-review-remaining-external-evidence-count: {}",
+        report.remaining_external_evidence_count
+    );
+}
+
+fn build_market_data_provider_latency_review(
+    clean: &MarketDataProviderPreflightReport,
+    degraded: &MarketDataProviderPreflightReport,
+) -> Result<MarketDataProviderLatencyReviewReport, AgentCliError> {
+    let ready_reconnect = validate_market_data_reconnect_plan(MarketDataReconnectPlanInput {
+        plan_id: "cli-market-data-provider-latency-review-reconnect".to_owned(),
+        provider_name: "local-market-data-clean".to_owned(),
+        venue: local_provider_venue("paper-provider-latency-review"),
+        disconnected_at_unix_ms: 10_000,
+        planned_at_unix_ms: 10_050,
+        attempt_number: 3,
+        max_attempts: 5,
+        base_backoff_ms: 100,
+        max_backoff_ms: 1_000,
+        planned_delay_ms: 500,
+        provider_retry_after_ms: Some(450),
+        rate_limited: true,
+        outage_observed: false,
+        live_network_used: false,
+        websocket_connection_opened: false,
+        credential_loaded: false,
+    })
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let acceptable_quality = build_acceptable_market_data_quality_assessment()?;
+    let paid_provider = build_paid_market_data_provider_evaluation_case()?.ready;
+
+    review_market_data_provider_latency(MarketDataProviderLatencyReviewRequest {
+        review_id: "cli-market-data-provider-latency-review".to_owned(),
+        clean_preflight: clean.clone(),
+        degraded_preflight: degraded.clone(),
+        ready_reconnect,
+        acceptable_quality,
+        paid_provider_evaluation: paid_provider,
+        max_provider_latency_ms: 50,
+        max_capture_latency_ms: 25,
+        max_reconnect_delay_ms: 500,
+        min_quality_score: 100,
+        min_samples_checked: 4,
+        remaining_external_evidence: vec![
+            "live REST/WebSocket exchange adapters".to_owned(),
+            "provider-backed latency and throughput measurement".to_owned(),
+            "provider-side rate-limit and outage reconciliation".to_owned(),
+            "deployment-host market-data resource profiling".to_owned(),
+            "external sandbox/live calibration".to_owned(),
+        ],
+        live_network_used: false,
+        websocket_connection_opened: false,
+        credential_loaded: false,
+        production_ready_claimed: false,
+    })
+    .map_err(|error| AgentCliError::Validation(error.to_string()))
 }
 
 fn run_market_data_reconnect_plan_validation() -> Result<(), AgentCliError> {
@@ -15310,6 +15410,15 @@ const fn paid_market_data_provider_evaluation_status_label(
     match status {
         PaidMarketDataProviderEvaluationStatus::ReadyForLocalReview => "ready-for-local-review",
         PaidMarketDataProviderEvaluationStatus::Blocked => "blocked",
+    }
+}
+
+const fn market_data_provider_latency_review_status_label(
+    status: MarketDataProviderLatencyReviewStatus,
+) -> &'static str {
+    match status {
+        MarketDataProviderLatencyReviewStatus::ReadyForLocalReview => "ready-for-local-review",
+        MarketDataProviderLatencyReviewStatus::Blocked => "blocked",
     }
 }
 

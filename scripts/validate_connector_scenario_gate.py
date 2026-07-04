@@ -270,6 +270,28 @@ def validate_components(components: list[dict[str, Any]]) -> list[str]:
     require(preflight, "degraded-provider-status", "blocked", errors, "market_data_provider_preflight")
     for key in ("rate-limit-blocked", "outage-blocked", "stale-data-blocked", "latency-blocked"):
         require(preflight, key, "true", errors, "market_data_provider_preflight")
+    require(
+        preflight,
+        "market-data-provider-latency-review",
+        "ready-for-local-review",
+        errors,
+        "market_data_provider_preflight",
+    )
+    for key in (
+        "market-data-provider-latency-budget-met",
+        "market-data-provider-capture-latency-budget-met",
+        "market-data-provider-reconnect-delay-budget-met",
+        "market-data-provider-quality-review-ready",
+        "market-data-provider-paid-review-ready",
+    ):
+        require(preflight, key, "true", errors, "market_data_provider_preflight")
+    require(
+        preflight,
+        "market-data-provider-latency-review-remaining-external-evidence-count",
+        "5",
+        errors,
+        "market_data_provider_preflight",
+    )
 
     reconnect = by_name["market_data_reconnect_plan"]["parsed"]
     require(reconnect, "ready-plan-status", "ready-for-local-review", errors, "market_data_reconnect_plan")
@@ -513,6 +535,7 @@ def main() -> int:
         "live_execution_performed": False,
         "production_ready": False,
         "audit_records_replayed": audit_records,
+        "market_data_provider_latency_review_enforced": True,
         "components": [
             {
                 "name": component["name"],

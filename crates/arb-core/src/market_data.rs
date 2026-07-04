@@ -38,6 +38,10 @@ pub const MARKET_DATA_LAST_QUALITY_ASSESSMENT_CHECKPOINT_KEY: &str =
 pub const MARKET_DATA_LAST_HISTORICAL_PERSISTENCE_CHECKPOINT_KEY: &str =
     "market_data.last_historical_persistence";
 
+/// Stable version for local market-data provider latency/backpressure review records.
+pub const MARKET_DATA_PROVIDER_LATENCY_REVIEW_VERSION: &str =
+    "market-data-provider-latency-review-v1";
+
 /// A normalized base/quote market pair.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -720,6 +724,104 @@ pub struct MarketDataQualityAssessmentReport {
     pub violation_codes: Vec<String>,
 }
 
+/// Caller-supplied local market-data provider latency/backpressure review input.
+///
+/// This composes existing local provider preflight, reconnect, quality, and
+/// paid-provider dossier evidence. It does not open provider sessions, download
+/// market data, inspect host resources, load credentials, or approve production.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MarketDataProviderLatencyReviewRequest {
+    /// Stable local review id.
+    pub review_id: String,
+    /// Clean local provider preflight report.
+    pub clean_preflight: MarketDataProviderPreflightReport,
+    /// Degraded local provider preflight report proving fail-closed behavior.
+    pub degraded_preflight: MarketDataProviderPreflightReport,
+    /// Ready local reconnect/backoff report.
+    pub ready_reconnect: MarketDataReconnectPlanReport,
+    /// Acceptable local market-data quality report.
+    pub acceptable_quality: MarketDataQualityAssessmentReport,
+    /// Ready local paid-provider evaluation dossier.
+    pub paid_provider_evaluation: PaidMarketDataProviderEvaluationReport,
+    /// Local provider receive latency budget in milliseconds.
+    pub max_provider_latency_ms: u64,
+    /// Local capture-to-receive latency budget in milliseconds.
+    pub max_capture_latency_ms: u64,
+    /// Local reconnect delay budget in milliseconds.
+    pub max_reconnect_delay_ms: u64,
+    /// Minimum acceptable local quality score.
+    pub min_quality_score: u8,
+    /// Minimum local samples required in the clean preflight.
+    pub min_samples_checked: u64,
+    /// Remaining external evidence that this local review cannot satisfy.
+    pub remaining_external_evidence: Vec<String>,
+    /// Whether a live network was used. Must remain false here.
+    pub live_network_used: bool,
+    /// Whether a WebSocket connection was opened. Must remain false here.
+    pub websocket_connection_opened: bool,
+    /// Whether provider credentials were loaded. Must remain false here.
+    pub credential_loaded: bool,
+    /// Whether the caller tried to claim production readiness. Must remain false here.
+    pub production_ready_claimed: bool,
+}
+
+/// Local market-data provider latency/backpressure review status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum MarketDataProviderLatencyReviewStatus {
+    /// Existing local evidence is coherent enough for local review only.
+    ReadyForLocalReview,
+    /// Evidence is incomplete or unsafe and must fail closed.
+    Blocked,
+}
+
+/// Non-secret local market-data provider latency/backpressure review report.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MarketDataProviderLatencyReviewReport {
+    /// Stable review schema version.
+    pub version: String,
+    /// Stable local review id.
+    pub review_id: String,
+    /// Overall local review status.
+    pub status: MarketDataProviderLatencyReviewStatus,
+    /// Provider represented by the clean preflight.
+    pub provider_name: String,
+    /// Whether clean preflight was usable and read-only.
+    pub clean_preflight_ready: bool,
+    /// Whether degraded preflight demonstrated fail-closed behavior.
+    pub degraded_preflight_failed_closed: bool,
+    /// Whether reconnect/backoff evidence is ready and within budget.
+    pub reconnect_review_ready: bool,
+    /// Whether quality evidence is acceptable and within budget.
+    pub quality_review_ready: bool,
+    /// Whether the paid-provider dossier is ready for local review.
+    pub paid_provider_review_ready: bool,
+    /// Whether provider receive latency stayed within the local budget.
+    pub provider_latency_budget_met: bool,
+    /// Whether capture-to-receive latency stayed within the local budget.
+    pub capture_latency_budget_met: bool,
+    /// Whether reconnect delay stayed within the local budget.
+    pub reconnect_delay_budget_met: bool,
+    /// Whether local sample count met the review floor.
+    pub sample_floor_met: bool,
+    /// Whether remaining external evidence is still explicitly recorded.
+    pub remaining_external_evidence_recorded: bool,
+    /// Count of remaining external evidence items.
+    pub remaining_external_evidence_count: usize,
+    /// Whether a live network was used. Always false for a ready report.
+    pub live_network_used: bool,
+    /// Whether a WebSocket connection was opened. Always false for a ready report.
+    pub websocket_connection_opened: bool,
+    /// Whether provider credentials were loaded. Always false for a ready report.
+    pub credential_loaded: bool,
+    /// Whether this report approves production readiness. Always false here.
+    pub production_ready: bool,
+    /// Sanitized local violation codes.
+    pub violation_codes: Vec<String>,
+}
+
 /// Caller-supplied local historical market-data persistence input.
 ///
 /// This boundary persists already-normalized quotes and order books for later
@@ -1280,6 +1382,153 @@ impl MarketDataQualityAssessmentReport {
             violations.push(MarketDataViolation::new(
                 "MARKET_DATA_QUALITY_PRODUCTION_READY_FORBIDDEN",
                 "quality assessment must not approve production readiness",
+            ));
+        }
+
+        if violations.is_empty() {
+            Ok(())
+        } else {
+            Err(MarketDataError::ValidationFailed { violations })
+        }
+    }
+}
+
+impl MarketDataProviderLatencyReviewRequest {
+    /// Validate local provider latency/backpressure review input shape.
+    pub fn validate(&self) -> Result<(), MarketDataError> {
+        let mut violations = Vec::new();
+        validate_id(
+            "market-data provider latency review",
+            &self.review_id,
+            &mut violations,
+        );
+        if let Err(MarketDataError::ValidationFailed {
+            violations: report_violations,
+        }) = self.clean_preflight.validate()
+        {
+            violations.extend(report_violations);
+        }
+        if let Err(MarketDataError::ValidationFailed {
+            violations: report_violations,
+        }) = self.degraded_preflight.validate()
+        {
+            violations.extend(report_violations);
+        }
+        if let Err(MarketDataError::ValidationFailed {
+            violations: report_violations,
+        }) = self.ready_reconnect.validate()
+        {
+            violations.extend(report_violations);
+        }
+        if let Err(MarketDataError::ValidationFailed {
+            violations: report_violations,
+        }) = self.acceptable_quality.validate()
+        {
+            violations.extend(report_violations);
+        }
+        if let Err(MarketDataError::ValidationFailed {
+            violations: report_violations,
+        }) = self.paid_provider_evaluation.validate()
+        {
+            violations.extend(report_violations);
+        }
+        if self.max_provider_latency_ms == 0
+            || self.max_capture_latency_ms == 0
+            || self.max_reconnect_delay_ms == 0
+        {
+            violations.push(MarketDataViolation::new(
+                "MARKET_DATA_PROVIDER_LATENCY_REVIEW_BUDGET_ZERO",
+                "market-data provider latency review budgets must be positive",
+            ));
+        }
+        if self.min_samples_checked == 0 {
+            violations.push(MarketDataViolation::new(
+                "MARKET_DATA_PROVIDER_LATENCY_REVIEW_SAMPLE_FLOOR_ZERO",
+                "market-data provider latency review requires a positive sample floor",
+            ));
+        }
+        if self.min_quality_score > 100 {
+            violations.push(MarketDataViolation::new(
+                "MARKET_DATA_PROVIDER_LATENCY_REVIEW_SCORE_INVALID",
+                "market-data provider latency review quality floor must be within 0..=100",
+            ));
+        }
+        if self.remaining_external_evidence.is_empty()
+            || self
+                .remaining_external_evidence
+                .iter()
+                .any(|item| item.trim().is_empty())
+        {
+            violations.push(MarketDataViolation::new(
+                "MARKET_DATA_PROVIDER_LATENCY_REVIEW_EXTERNAL_EVIDENCE_MISSING",
+                "market-data provider latency review must keep unresolved external evidence explicit",
+            ));
+        }
+
+        if violations.is_empty() {
+            Ok(())
+        } else {
+            Err(MarketDataError::ValidationFailed { violations })
+        }
+    }
+}
+
+impl MarketDataProviderLatencyReviewReport {
+    /// Validate local provider latency/backpressure review report invariants.
+    pub fn validate(&self) -> Result<(), MarketDataError> {
+        let mut violations = Vec::new();
+        validate_id(
+            "market-data provider latency review",
+            &self.review_id,
+            &mut violations,
+        );
+        validate_id("market-data provider", &self.provider_name, &mut violations);
+        if self.version != MARKET_DATA_PROVIDER_LATENCY_REVIEW_VERSION {
+            violations.push(MarketDataViolation::new(
+                "MARKET_DATA_PROVIDER_LATENCY_REVIEW_VERSION_MISMATCH",
+                "market-data provider latency review version is not recognized",
+            ));
+        }
+        let side_effected =
+            self.live_network_used || self.websocket_connection_opened || self.credential_loaded;
+        let should_block = !self.clean_preflight_ready
+            || !self.degraded_preflight_failed_closed
+            || !self.reconnect_review_ready
+            || !self.quality_review_ready
+            || !self.paid_provider_review_ready
+            || !self.provider_latency_budget_met
+            || !self.capture_latency_budget_met
+            || !self.reconnect_delay_budget_met
+            || !self.sample_floor_met
+            || !self.remaining_external_evidence_recorded
+            || side_effected
+            || self.production_ready;
+        if should_block && self.status != MarketDataProviderLatencyReviewStatus::Blocked {
+            violations.push(MarketDataViolation::new(
+                "MARKET_DATA_PROVIDER_LATENCY_REVIEW_STATUS_SHOULD_BLOCK",
+                "incomplete or unsafe market-data provider latency review evidence must block",
+            ));
+        }
+        if !should_block
+            && self.status != MarketDataProviderLatencyReviewStatus::ReadyForLocalReview
+        {
+            violations.push(MarketDataViolation::new(
+                "MARKET_DATA_PROVIDER_LATENCY_REVIEW_STATUS_SHOULD_BE_READY",
+                "coherent local market-data provider latency evidence must be ready for local review",
+            ));
+        }
+        if side_effected
+            && self.status == MarketDataProviderLatencyReviewStatus::ReadyForLocalReview
+        {
+            violations.push(MarketDataViolation::new(
+                "MARKET_DATA_PROVIDER_LATENCY_REVIEW_SIDE_EFFECT_FORBIDDEN",
+                "market-data provider latency review must not use live network, WebSocket, or credentials",
+            ));
+        }
+        if self.production_ready {
+            violations.push(MarketDataViolation::new(
+                "MARKET_DATA_PROVIDER_LATENCY_REVIEW_PRODUCTION_READY_FORBIDDEN",
+                "market-data provider latency review must not approve production readiness",
             ));
         }
 
@@ -2028,6 +2277,189 @@ pub fn assess_market_data_quality(
         quality_score,
         live_network_used: input.live_network_used,
         credential_loaded: input.credential_loaded,
+        production_ready: false,
+        violation_codes,
+    };
+    report.validate()?;
+    Ok(report)
+}
+
+/// Review local market-data provider latency/backpressure evidence without side effects.
+pub fn review_market_data_provider_latency(
+    request: MarketDataProviderLatencyReviewRequest,
+) -> Result<MarketDataProviderLatencyReviewReport, MarketDataError> {
+    request.validate()?;
+
+    let clean_preflight_ready = request.clean_preflight.status
+        == MarketDataProviderPreflightStatus::Usable
+        && request.clean_preflight.read_only_confirmed
+        && !request.clean_preflight.rate_limit_blocked
+        && !request.clean_preflight.outage_blocked
+        && !request.clean_preflight.stale_data_blocked
+        && !request.clean_preflight.latency_blocked
+        && !request.clean_preflight.live_network_used
+        && !request.clean_preflight.credential_loaded
+        && !request.clean_preflight.production_ready;
+    let degraded_preflight_failed_closed = request.degraded_preflight.status
+        == MarketDataProviderPreflightStatus::Blocked
+        && !request.degraded_preflight.violation_codes.is_empty()
+        && !request.degraded_preflight.production_ready;
+    let provider_latency_budget_met = request.clean_preflight.max_observed_latency_ms
+        <= request.max_provider_latency_ms
+        && request.paid_provider_evaluation.documented_latency_ms
+            <= request.max_provider_latency_ms;
+    let sample_floor_met = request.clean_preflight.samples_checked >= request.min_samples_checked;
+    let reconnect_delay_budget_met = request.ready_reconnect.planned_delay_ms
+        <= request.max_reconnect_delay_ms
+        && request.ready_reconnect.effective_min_delay_ms <= request.max_reconnect_delay_ms;
+    let reconnect_review_ready = request.ready_reconnect.status
+        == MarketDataReconnectPlanStatus::ReadyForLocalReview
+        && reconnect_delay_budget_met
+        && !request.ready_reconnect.live_network_used
+        && !request.ready_reconnect.websocket_connection_opened
+        && !request.ready_reconnect.credential_loaded
+        && !request.ready_reconnect.production_ready;
+    let capture_latency_budget_met =
+        request.acceptable_quality.capture_latency_ms <= request.max_capture_latency_ms;
+    let quality_review_ready = request.acceptable_quality.status
+        == MarketDataQualityAssessmentStatus::Acceptable
+        && request.acceptable_quality.quality_score >= request.min_quality_score
+        && request.acceptable_quality.capture_latency_within_limit
+        && capture_latency_budget_met
+        && !request.acceptable_quality.live_network_used
+        && !request.acceptable_quality.credential_loaded
+        && !request.acceptable_quality.production_ready;
+    let paid_provider_review_ready = request.paid_provider_evaluation.status
+        == PaidMarketDataProviderEvaluationStatus::ReadyForLocalReview
+        && request.paid_provider_evaluation.latency_within_budget
+        && request.paid_provider_evaluation.rate_limit_review_passed
+        && request
+            .paid_provider_evaluation
+            .failure_behavior_review_passed
+        && request.paid_provider_evaluation.governance_review_passed
+        && !request.paid_provider_evaluation.live_network_used
+        && !request.paid_provider_evaluation.credential_loaded
+        && !request.paid_provider_evaluation.production_ready;
+    let remaining_external_evidence_recorded = !request.remaining_external_evidence.is_empty();
+    let live_network_used = request.live_network_used
+        || request.clean_preflight.live_network_used
+        || request.degraded_preflight.live_network_used
+        || request.ready_reconnect.live_network_used
+        || request.acceptable_quality.live_network_used
+        || request.paid_provider_evaluation.live_network_used;
+    let websocket_connection_opened =
+        request.websocket_connection_opened || request.ready_reconnect.websocket_connection_opened;
+    let credential_loaded = request.credential_loaded
+        || request.clean_preflight.credential_loaded
+        || request.degraded_preflight.credential_loaded
+        || request.ready_reconnect.credential_loaded
+        || request.acceptable_quality.credential_loaded
+        || request.paid_provider_evaluation.credential_loaded;
+    let blocked = !clean_preflight_ready
+        || !degraded_preflight_failed_closed
+        || !reconnect_review_ready
+        || !quality_review_ready
+        || !paid_provider_review_ready
+        || !provider_latency_budget_met
+        || !capture_latency_budget_met
+        || !reconnect_delay_budget_met
+        || !sample_floor_met
+        || !remaining_external_evidence_recorded
+        || live_network_used
+        || websocket_connection_opened
+        || credential_loaded
+        || request.production_ready_claimed;
+
+    let mut violation_codes = Vec::new();
+    push_if(
+        &mut violation_codes,
+        !clean_preflight_ready,
+        "MARKET_DATA_PROVIDER_LATENCY_REVIEW_PREFLIGHT_NOT_READY",
+    );
+    push_if(
+        &mut violation_codes,
+        !degraded_preflight_failed_closed,
+        "MARKET_DATA_PROVIDER_LATENCY_REVIEW_DEGRADED_NOT_FAIL_CLOSED",
+    );
+    push_if(
+        &mut violation_codes,
+        !reconnect_review_ready,
+        "MARKET_DATA_PROVIDER_LATENCY_REVIEW_RECONNECT_NOT_READY",
+    );
+    push_if(
+        &mut violation_codes,
+        !quality_review_ready,
+        "MARKET_DATA_PROVIDER_LATENCY_REVIEW_QUALITY_NOT_READY",
+    );
+    push_if(
+        &mut violation_codes,
+        !paid_provider_review_ready,
+        "MARKET_DATA_PROVIDER_LATENCY_REVIEW_PAID_PROVIDER_NOT_READY",
+    );
+    push_if(
+        &mut violation_codes,
+        !provider_latency_budget_met,
+        "MARKET_DATA_PROVIDER_LATENCY_REVIEW_PROVIDER_LATENCY_EXCEEDED",
+    );
+    push_if(
+        &mut violation_codes,
+        !capture_latency_budget_met,
+        "MARKET_DATA_PROVIDER_LATENCY_REVIEW_CAPTURE_LATENCY_EXCEEDED",
+    );
+    push_if(
+        &mut violation_codes,
+        !reconnect_delay_budget_met,
+        "MARKET_DATA_PROVIDER_LATENCY_REVIEW_RECONNECT_DELAY_EXCEEDED",
+    );
+    push_if(
+        &mut violation_codes,
+        !sample_floor_met,
+        "MARKET_DATA_PROVIDER_LATENCY_REVIEW_SAMPLE_FLOOR_MISSING",
+    );
+    push_if(
+        &mut violation_codes,
+        live_network_used,
+        "MARKET_DATA_PROVIDER_LATENCY_REVIEW_LIVE_NETWORK_USED",
+    );
+    push_if(
+        &mut violation_codes,
+        websocket_connection_opened,
+        "MARKET_DATA_PROVIDER_LATENCY_REVIEW_WEBSOCKET_OPENED",
+    );
+    push_if(
+        &mut violation_codes,
+        credential_loaded,
+        "MARKET_DATA_PROVIDER_LATENCY_REVIEW_CREDENTIAL_LOADED",
+    );
+    push_if(
+        &mut violation_codes,
+        request.production_ready_claimed,
+        "MARKET_DATA_PROVIDER_LATENCY_REVIEW_PRODUCTION_READY_CLAIMED",
+    );
+
+    let report = MarketDataProviderLatencyReviewReport {
+        version: MARKET_DATA_PROVIDER_LATENCY_REVIEW_VERSION.to_owned(),
+        review_id: request.review_id,
+        status: if blocked {
+            MarketDataProviderLatencyReviewStatus::Blocked
+        } else {
+            MarketDataProviderLatencyReviewStatus::ReadyForLocalReview
+        },
+        provider_name: request.clean_preflight.provider_name,
+        clean_preflight_ready,
+        degraded_preflight_failed_closed,
+        reconnect_review_ready,
+        quality_review_ready,
+        paid_provider_review_ready,
+        provider_latency_budget_met,
+        capture_latency_budget_met,
+        reconnect_delay_budget_met,
+        sample_floor_met,
+        remaining_external_evidence_recorded,
+        remaining_external_evidence_count: request.remaining_external_evidence.len(),
+        live_network_used,
+        websocket_connection_opened,
+        credential_loaded,
         production_ready: false,
         violation_codes,
     };
@@ -2984,17 +3416,19 @@ mod tests {
         persist_market_data_quality_assessment_checkpoint,
         persist_market_data_reconnect_plan_checkpoint,
         persist_paid_market_data_provider_evaluation_checkpoint,
-        validate_historical_market_data_persistence, validate_market_data_provider_preflight,
-        validate_market_data_reconnect_plan, validate_paid_market_data_provider_evaluation,
-        FreshnessStatus, HistoricalMarketDataPersistenceInput,
-        HistoricalMarketDataPersistenceReport, HistoricalMarketDataPersistenceStatus,
-        MarketDataCapabilities, MarketDataProviderHealthObservation,
-        MarketDataProviderPreflightReport, MarketDataProviderPreflightStatus,
-        MarketDataQualityAssessmentInput, MarketDataQualityAssessmentReport,
-        MarketDataQualityAssessmentStatus, MarketDataReconnectPlanInput,
-        MarketDataReconnectPlanReport, MarketDataReconnectPlanStatus, MarketDataRequest,
-        MarketPair, NormalizedQuote, OrderBookSnapshot, PaidMarketDataProviderEvaluationInput,
-        PaidMarketDataProviderEvaluationReport, PaidMarketDataProviderEvaluationStatus, PriceLevel,
+        review_market_data_provider_latency, validate_historical_market_data_persistence,
+        validate_market_data_provider_preflight, validate_market_data_reconnect_plan,
+        validate_paid_market_data_provider_evaluation, FreshnessStatus,
+        HistoricalMarketDataPersistenceInput, HistoricalMarketDataPersistenceReport,
+        HistoricalMarketDataPersistenceStatus, MarketDataCapabilities,
+        MarketDataProviderHealthObservation, MarketDataProviderLatencyReviewRequest,
+        MarketDataProviderLatencyReviewStatus, MarketDataProviderPreflightReport,
+        MarketDataProviderPreflightStatus, MarketDataQualityAssessmentInput,
+        MarketDataQualityAssessmentReport, MarketDataQualityAssessmentStatus,
+        MarketDataReconnectPlanInput, MarketDataReconnectPlanReport, MarketDataReconnectPlanStatus,
+        MarketDataRequest, MarketPair, NormalizedQuote, OrderBookSnapshot,
+        PaidMarketDataProviderEvaluationInput, PaidMarketDataProviderEvaluationReport,
+        PaidMarketDataProviderEvaluationStatus, PriceLevel,
         MARKET_DATA_LAST_HISTORICAL_PERSISTENCE_CHECKPOINT_KEY,
         MARKET_DATA_LAST_PAID_PROVIDER_EVALUATION_CHECKPOINT_KEY,
         MARKET_DATA_LAST_PROVIDER_PREFLIGHT_CHECKPOINT_KEY,
@@ -3754,6 +4188,97 @@ mod tests {
     }
 
     #[test]
+    fn market_data_provider_latency_review_accepts_local_evidence_with_open_external_gaps() {
+        let report = review_market_data_provider_latency(
+            market_data_provider_latency_review_request(false, 50, 25, 500),
+        )
+        .expect("local provider latency review should validate");
+
+        assert_eq!(
+            report.status,
+            MarketDataProviderLatencyReviewStatus::ReadyForLocalReview
+        );
+        assert!(report.clean_preflight_ready);
+        assert!(report.degraded_preflight_failed_closed);
+        assert!(report.reconnect_review_ready);
+        assert!(report.quality_review_ready);
+        assert!(report.paid_provider_review_ready);
+        assert!(report.provider_latency_budget_met);
+        assert!(report.capture_latency_budget_met);
+        assert!(report.reconnect_delay_budget_met);
+        assert!(report.sample_floor_met);
+        assert!(report.remaining_external_evidence_recorded);
+        assert_eq!(report.remaining_external_evidence_count, 5);
+        assert!(report.violation_codes.is_empty());
+        assert!(!report.live_network_used);
+        assert!(!report.websocket_connection_opened);
+        assert!(!report.credential_loaded);
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn market_data_provider_latency_review_blocks_budget_misses() {
+        let report = review_market_data_provider_latency(
+            market_data_provider_latency_review_request(false, 10, 5, 100),
+        )
+        .expect("budget misses should still produce fail-closed report");
+
+        assert_eq!(
+            report.status,
+            MarketDataProviderLatencyReviewStatus::Blocked
+        );
+        assert!(!report.provider_latency_budget_met);
+        assert!(!report.capture_latency_budget_met);
+        assert!(!report.reconnect_delay_budget_met);
+        assert!(report
+            .violation_codes
+            .iter()
+            .any(|code| code == "MARKET_DATA_PROVIDER_LATENCY_REVIEW_PROVIDER_LATENCY_EXCEEDED"));
+        assert!(report
+            .violation_codes
+            .iter()
+            .any(|code| code == "MARKET_DATA_PROVIDER_LATENCY_REVIEW_CAPTURE_LATENCY_EXCEEDED"));
+        assert!(report
+            .violation_codes
+            .iter()
+            .any(|code| code == "MARKET_DATA_PROVIDER_LATENCY_REVIEW_RECONNECT_DELAY_EXCEEDED"));
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn market_data_provider_latency_review_fails_closed_on_side_effect_claims() {
+        let report = review_market_data_provider_latency(
+            market_data_provider_latency_review_request(true, 50, 25, 500),
+        )
+        .expect("side-effect flags should still produce fail-closed report");
+
+        assert_eq!(
+            report.status,
+            MarketDataProviderLatencyReviewStatus::Blocked
+        );
+        assert!(report.live_network_used);
+        assert!(report.websocket_connection_opened);
+        assert!(report.credential_loaded);
+        assert!(report
+            .violation_codes
+            .iter()
+            .any(|code| code == "MARKET_DATA_PROVIDER_LATENCY_REVIEW_LIVE_NETWORK_USED"));
+        assert!(report
+            .violation_codes
+            .iter()
+            .any(|code| code == "MARKET_DATA_PROVIDER_LATENCY_REVIEW_WEBSOCKET_OPENED"));
+        assert!(report
+            .violation_codes
+            .iter()
+            .any(|code| code == "MARKET_DATA_PROVIDER_LATENCY_REVIEW_CREDENTIAL_LOADED"));
+        assert!(report
+            .violation_codes
+            .iter()
+            .any(|code| code == "MARKET_DATA_PROVIDER_LATENCY_REVIEW_PRODUCTION_READY_CLAIMED"));
+        assert!(!report.production_ready);
+    }
+
+    #[test]
     fn paid_market_data_provider_evaluation_audit_and_state_reopen_locally() {
         let report =
             validate_paid_market_data_provider_evaluation(PaidMarketDataProviderEvaluationInput {
@@ -4096,6 +4621,173 @@ mod tests {
         VenueRef {
             kind: VenueKind::Cex,
             name: name.to_owned(),
+        }
+    }
+
+    fn market_data_provider_latency_review_request(
+        side_effect_claimed: bool,
+        max_provider_latency_ms: u64,
+        max_capture_latency_ms: u64,
+        max_reconnect_delay_ms: u64,
+    ) -> MarketDataProviderLatencyReviewRequest {
+        let clean_preflight =
+            validate_market_data_provider_preflight(MarketDataProviderHealthObservation {
+                provider_name: "local-review-clean".to_owned(),
+                read_only: true,
+                rate_limited: false,
+                outage_observed: false,
+                reconnect_required: true,
+                reconnect_backoff_planned: true,
+                samples_checked: 4,
+                fresh_samples: 4,
+                stale_samples: 0,
+                max_observed_latency_ms: 12,
+                max_allowed_latency_ms: 50,
+                live_network_used: false,
+                credential_loaded: false,
+            })
+            .expect("clean preflight should validate");
+        let degraded_preflight =
+            validate_market_data_provider_preflight(MarketDataProviderHealthObservation {
+                provider_name: "local-review-degraded".to_owned(),
+                read_only: true,
+                rate_limited: true,
+                outage_observed: true,
+                reconnect_required: true,
+                reconnect_backoff_planned: false,
+                samples_checked: 5,
+                fresh_samples: 3,
+                stale_samples: 2,
+                max_observed_latency_ms: 250,
+                max_allowed_latency_ms: 100,
+                live_network_used: false,
+                credential_loaded: false,
+            })
+            .expect("degraded preflight should validate");
+        let ready_reconnect = validate_market_data_reconnect_plan(MarketDataReconnectPlanInput {
+            plan_id: "local-review-reconnect".to_owned(),
+            provider_name: "local-review-clean".to_owned(),
+            venue: local_cex_venue("paper-review"),
+            disconnected_at_unix_ms: 10_000,
+            planned_at_unix_ms: 10_050,
+            attempt_number: 3,
+            max_attempts: 5,
+            base_backoff_ms: 100,
+            max_backoff_ms: 1_000,
+            planned_delay_ms: 500,
+            provider_retry_after_ms: Some(450),
+            rate_limited: true,
+            outage_observed: false,
+            live_network_used: false,
+            websocket_connection_opened: false,
+            credential_loaded: false,
+        })
+        .expect("reconnect plan should validate");
+        let pair = MarketPair::new("BTC", "USDC").expect("pair should validate");
+        let venue = local_cex_venue("paper-review-quality");
+        let acceptable_quality = assess_market_data_quality(MarketDataQualityAssessmentInput {
+            assessment_id: "local-review-quality".to_owned(),
+            provider_name: "local-review-clean".to_owned(),
+            request: MarketDataRequest {
+                venue: venue.clone(),
+                pair: pair.clone(),
+                max_age_ms: 250,
+            },
+            quote: NormalizedQuote {
+                id: "local-review-quality-quote".to_owned(),
+                venue: venue.clone(),
+                pair: pair.clone(),
+                bid: PriceLevel::new(100.0, 1.0).expect("bid should validate"),
+                ask: PriceLevel::new(100.1, 1.0).expect("ask should validate"),
+                captured_at_unix_ms: 1_000,
+                received_at_unix_ms: 1_015,
+            },
+            order_book: Some(OrderBookSnapshot {
+                id: "local-review-quality-book".to_owned(),
+                venue,
+                pair,
+                captured_at_unix_ms: 1_000,
+                received_at_unix_ms: 1_015,
+                bids: vec![
+                    PriceLevel::new(100.0, 1.0).expect("bid should validate"),
+                    PriceLevel::new(99.9, 1.0).expect("bid should validate"),
+                ],
+                asks: vec![
+                    PriceLevel::new(100.1, 1.0).expect("ask should validate"),
+                    PriceLevel::new(100.2, 1.0).expect("ask should validate"),
+                ],
+                source_sequence: Some("local-review-quality-seq".to_owned()),
+            }),
+            now_unix_ms: 1_120,
+            max_spread_bps: 20,
+            min_depth_levels: 2,
+            max_capture_latency_ms: 25,
+            live_network_used: false,
+            credential_loaded: false,
+            production_ready_claimed: false,
+        })
+        .expect("quality assessment should validate");
+        let paid_provider_evaluation =
+            validate_paid_market_data_provider_evaluation(PaidMarketDataProviderEvaluationInput {
+                evaluation_id: "local-review-paid-provider".to_owned(),
+                provider_name: "local-review-paid-provider".to_owned(),
+                covered_venues: vec![
+                    local_cex_venue("paper-binance"),
+                    local_cex_venue("paper-coinbase"),
+                ],
+                covered_pairs: vec![
+                    MarketPair::new("BTC", "USDC").expect("pair should validate"),
+                    MarketPair::new("ETH", "USDC").expect("pair should validate"),
+                ],
+                capabilities: MarketDataCapabilities {
+                    order_book: true,
+                    top_of_book: true,
+                    fees: false,
+                    websocket: true,
+                    rest: true,
+                },
+                documented_latency_ms: 35,
+                max_allowed_latency_ms: 50,
+                max_requests_per_minute: 1_200,
+                monthly_cost_usd: 499,
+                failure_modes_reviewed: vec![
+                    "provider-outage".to_owned(),
+                    "stale-book".to_owned(),
+                    "rate-limit-burst".to_owned(),
+                ],
+                rate_limit_documentation_reviewed: true,
+                pricing_documentation_reviewed: true,
+                terms_reviewed: true,
+                credential_scope_reviewed: true,
+                live_network_used: false,
+                credential_loaded: false,
+                production_ready_claimed: false,
+            })
+            .expect("paid-provider evaluation should validate");
+
+        MarketDataProviderLatencyReviewRequest {
+            review_id: "local-provider-latency-review".to_owned(),
+            clean_preflight,
+            degraded_preflight,
+            ready_reconnect,
+            acceptable_quality,
+            paid_provider_evaluation,
+            max_provider_latency_ms,
+            max_capture_latency_ms,
+            max_reconnect_delay_ms,
+            min_quality_score: 100,
+            min_samples_checked: 4,
+            remaining_external_evidence: vec![
+                "live REST/WebSocket exchange adapters".to_owned(),
+                "provider-backed latency and throughput measurement".to_owned(),
+                "provider-side rate-limit and outage reconciliation".to_owned(),
+                "deployment-host market-data resource profiling".to_owned(),
+                "external sandbox/live calibration".to_owned(),
+            ],
+            live_network_used: side_effect_claimed,
+            websocket_connection_opened: side_effect_claimed,
+            credential_loaded: side_effect_claimed,
+            production_ready_claimed: side_effect_claimed,
         }
     }
 
