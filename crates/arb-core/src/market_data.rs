@@ -46,6 +46,10 @@ pub const MARKET_DATA_PROVIDER_LATENCY_REVIEW_VERSION: &str =
 pub const MARKET_DATA_PROVIDER_RECONCILIATION_REVIEW_VERSION: &str =
     "market-data-provider-reconciliation-review-v1";
 
+/// Stable version for local market-data bad-data rejection review records.
+pub const MARKET_DATA_BAD_DATA_REJECTION_REVIEW_VERSION: &str =
+    "market-data-bad-data-rejection-review-v1";
+
 /// A normalized base/quote market pair.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -912,6 +916,86 @@ pub struct MarketDataProviderReconciliationReviewReport {
     pub violation_codes: Vec<String>,
 }
 
+/// Caller-supplied local bad-data rejection evidence.
+///
+/// This composes local quality assessments over already-normalized fixtures. It
+/// does not fetch provider data, open sockets, load credentials, or approve
+/// production readiness.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MarketDataBadDataRejectionReviewRequest {
+    /// Stable local review id.
+    pub review_id: String,
+    /// Acceptable baseline quality evidence.
+    pub acceptable_quality: MarketDataQualityAssessmentReport,
+    /// Degraded quality evidence proving spread/depth/latency rejection metadata.
+    pub degraded_quality: MarketDataQualityAssessmentReport,
+    /// Blocked quality evidence proving stale-data rejection.
+    pub blocked_quality: MarketDataQualityAssessmentReport,
+    /// Minimum sanitized bad-data fixture references represented by this review.
+    pub min_bad_data_fixture_references: u64,
+    /// Remaining external evidence that this local review cannot satisfy.
+    pub remaining_external_evidence: Vec<String>,
+    /// Whether a live network was used. Must remain false here.
+    pub live_network_used: bool,
+    /// Whether a WebSocket connection was opened. Must remain false here.
+    pub websocket_connection_opened: bool,
+    /// Whether provider credentials were loaded. Must remain false here.
+    pub credential_loaded: bool,
+    /// Whether the caller tried to claim production readiness. Must remain false here.
+    pub production_ready_claimed: bool,
+}
+
+/// Local bad-data rejection review status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum MarketDataBadDataRejectionReviewStatus {
+    /// Existing local evidence is coherent enough for local review only.
+    ReadyForLocalReview,
+    /// Evidence is incomplete or unsafe and must fail closed.
+    Blocked,
+}
+
+/// Non-secret local bad-data rejection review report.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MarketDataBadDataRejectionReviewReport {
+    /// Stable review schema version.
+    pub version: String,
+    /// Stable local review id.
+    pub review_id: String,
+    /// Overall local review status.
+    pub status: MarketDataBadDataRejectionReviewStatus,
+    /// Provider represented by the local evidence.
+    pub provider_name: String,
+    /// Whether acceptable baseline evidence is ready.
+    pub acceptable_quality_ready: bool,
+    /// Whether stale-data evidence blocks bad data.
+    pub stale_data_rejected: bool,
+    /// Whether excessive-spread evidence is rejected from acceptable status.
+    pub spread_rejected: bool,
+    /// Whether insufficient-depth evidence is rejected from acceptable status.
+    pub depth_rejected: bool,
+    /// Whether capture-latency evidence is rejected from acceptable status.
+    pub capture_latency_rejected: bool,
+    /// Whether sanitized bad-data fixture reference count met the review floor.
+    pub bad_data_fixture_floor_met: bool,
+    /// Whether remaining external evidence is still explicitly recorded.
+    pub remaining_external_evidence_recorded: bool,
+    /// Count of remaining external evidence items.
+    pub remaining_external_evidence_count: usize,
+    /// Whether a live network was used. Always false for a ready report.
+    pub live_network_used: bool,
+    /// Whether a WebSocket connection was opened. Always false for a ready report.
+    pub websocket_connection_opened: bool,
+    /// Whether provider credentials were loaded. Always false for a ready report.
+    pub credential_loaded: bool,
+    /// Whether this report approves production readiness. Always false here.
+    pub production_ready: bool,
+    /// Sanitized local violation codes.
+    pub violation_codes: Vec<String>,
+}
+
 /// Caller-supplied local historical market-data persistence input.
 ///
 /// This boundary persists already-normalized quotes and order books for later
@@ -1744,6 +1828,123 @@ impl MarketDataProviderReconciliationReviewReport {
             violations.push(MarketDataViolation::new(
                 "MARKET_DATA_PROVIDER_RECONCILIATION_PRODUCTION_READY_FORBIDDEN",
                 "market-data provider reconciliation review must not approve production readiness",
+            ));
+        }
+
+        if violations.is_empty() {
+            Ok(())
+        } else {
+            Err(MarketDataError::ValidationFailed { violations })
+        }
+    }
+}
+
+impl MarketDataBadDataRejectionReviewRequest {
+    /// Validate local bad-data rejection review input shape.
+    pub fn validate(&self) -> Result<(), MarketDataError> {
+        let mut violations = Vec::new();
+        validate_id(
+            "market-data bad-data rejection review",
+            &self.review_id,
+            &mut violations,
+        );
+        if let Err(MarketDataError::ValidationFailed {
+            violations: report_violations,
+        }) = self.acceptable_quality.validate()
+        {
+            violations.extend(report_violations);
+        }
+        if let Err(MarketDataError::ValidationFailed {
+            violations: report_violations,
+        }) = self.degraded_quality.validate()
+        {
+            violations.extend(report_violations);
+        }
+        if let Err(MarketDataError::ValidationFailed {
+            violations: report_violations,
+        }) = self.blocked_quality.validate()
+        {
+            violations.extend(report_violations);
+        }
+        if self.min_bad_data_fixture_references == 0 {
+            violations.push(MarketDataViolation::new(
+                "MARKET_DATA_BAD_DATA_REJECTION_FIXTURE_FLOOR_ZERO",
+                "market-data bad-data rejection review requires a positive fixture reference floor",
+            ));
+        }
+        if self.remaining_external_evidence.is_empty()
+            || self
+                .remaining_external_evidence
+                .iter()
+                .any(|item| item.trim().is_empty())
+        {
+            violations.push(MarketDataViolation::new(
+                "MARKET_DATA_BAD_DATA_REJECTION_EXTERNAL_EVIDENCE_MISSING",
+                "market-data bad-data rejection review must keep unresolved external evidence explicit",
+            ));
+        }
+
+        if violations.is_empty() {
+            Ok(())
+        } else {
+            Err(MarketDataError::ValidationFailed { violations })
+        }
+    }
+}
+
+impl MarketDataBadDataRejectionReviewReport {
+    /// Validate local bad-data rejection review report invariants.
+    pub fn validate(&self) -> Result<(), MarketDataError> {
+        let mut violations = Vec::new();
+        validate_id(
+            "market-data bad-data rejection review",
+            &self.review_id,
+            &mut violations,
+        );
+        validate_id("market-data provider", &self.provider_name, &mut violations);
+        if self.version != MARKET_DATA_BAD_DATA_REJECTION_REVIEW_VERSION {
+            violations.push(MarketDataViolation::new(
+                "MARKET_DATA_BAD_DATA_REJECTION_VERSION_MISMATCH",
+                "market-data bad-data rejection review version is not recognized",
+            ));
+        }
+        let side_effected =
+            self.live_network_used || self.websocket_connection_opened || self.credential_loaded;
+        let should_block = !self.acceptable_quality_ready
+            || !self.stale_data_rejected
+            || !self.spread_rejected
+            || !self.depth_rejected
+            || !self.capture_latency_rejected
+            || !self.bad_data_fixture_floor_met
+            || !self.remaining_external_evidence_recorded
+            || side_effected
+            || self.production_ready;
+        if should_block && self.status != MarketDataBadDataRejectionReviewStatus::Blocked {
+            violations.push(MarketDataViolation::new(
+                "MARKET_DATA_BAD_DATA_REJECTION_STATUS_SHOULD_BLOCK",
+                "incomplete or unsafe market-data bad-data rejection evidence must block",
+            ));
+        }
+        if !should_block
+            && self.status != MarketDataBadDataRejectionReviewStatus::ReadyForLocalReview
+        {
+            violations.push(MarketDataViolation::new(
+                "MARKET_DATA_BAD_DATA_REJECTION_STATUS_SHOULD_BE_READY",
+                "coherent local market-data bad-data rejection evidence must be ready for local review",
+            ));
+        }
+        if side_effected
+            && self.status == MarketDataBadDataRejectionReviewStatus::ReadyForLocalReview
+        {
+            violations.push(MarketDataViolation::new(
+                "MARKET_DATA_BAD_DATA_REJECTION_SIDE_EFFECT_FORBIDDEN",
+                "market-data bad-data rejection review must not use live network, WebSocket, or credentials",
+            ));
+        }
+        if self.production_ready {
+            violations.push(MarketDataViolation::new(
+                "MARKET_DATA_BAD_DATA_REJECTION_PRODUCTION_READY_FORBIDDEN",
+                "market-data bad-data rejection review must not approve production readiness",
             ));
         }
 
@@ -2864,6 +3065,159 @@ pub fn review_market_data_provider_reconciliation(
     Ok(report)
 }
 
+/// Review local market-data bad-data rejection evidence without side effects.
+pub fn review_market_data_bad_data_rejection(
+    request: MarketDataBadDataRejectionReviewRequest,
+) -> Result<MarketDataBadDataRejectionReviewReport, MarketDataError> {
+    request.validate()?;
+
+    let acceptable_quality_ready = request.acceptable_quality.status
+        == MarketDataQualityAssessmentStatus::Acceptable
+        && request.acceptable_quality.quality_score == 100
+        && request.acceptable_quality.spread_within_limit
+        && request.acceptable_quality.depth_levels_sufficient
+        && request.acceptable_quality.capture_latency_within_limit
+        && !request.acceptable_quality.live_network_used
+        && !request.acceptable_quality.credential_loaded
+        && !request.acceptable_quality.production_ready;
+    let stale_data_rejected = request.blocked_quality.status
+        == MarketDataQualityAssessmentStatus::Blocked
+        && request
+            .blocked_quality
+            .violation_codes
+            .iter()
+            .any(|code| code == "MARKET_DATA_QUALITY_NOT_FRESH");
+    let spread_rejected = request.degraded_quality.status
+        != MarketDataQualityAssessmentStatus::Acceptable
+        && !request.degraded_quality.spread_within_limit
+        && request
+            .degraded_quality
+            .violation_codes
+            .iter()
+            .any(|code| code == "MARKET_DATA_QUALITY_SPREAD_EXCEEDED");
+    let depth_rejected = request.degraded_quality.status
+        != MarketDataQualityAssessmentStatus::Acceptable
+        && !request.degraded_quality.depth_levels_sufficient
+        && request
+            .degraded_quality
+            .violation_codes
+            .iter()
+            .any(|code| code == "MARKET_DATA_QUALITY_DEPTH_INSUFFICIENT");
+    let capture_latency_rejected = request.degraded_quality.status
+        != MarketDataQualityAssessmentStatus::Acceptable
+        && !request.degraded_quality.capture_latency_within_limit
+        && request
+            .degraded_quality
+            .violation_codes
+            .iter()
+            .any(|code| code == "MARKET_DATA_QUALITY_CAPTURE_LATENCY_EXCEEDED");
+    let bad_data_fixture_floor_met = request.min_bad_data_fixture_references >= 3;
+    let remaining_external_evidence_recorded = !request.remaining_external_evidence.is_empty();
+    let live_network_used = request.live_network_used
+        || request.acceptable_quality.live_network_used
+        || request.degraded_quality.live_network_used
+        || request.blocked_quality.live_network_used;
+    let credential_loaded = request.credential_loaded
+        || request.acceptable_quality.credential_loaded
+        || request.degraded_quality.credential_loaded
+        || request.blocked_quality.credential_loaded;
+    let websocket_connection_opened = request.websocket_connection_opened;
+    let blocked = !acceptable_quality_ready
+        || !stale_data_rejected
+        || !spread_rejected
+        || !depth_rejected
+        || !capture_latency_rejected
+        || !bad_data_fixture_floor_met
+        || !remaining_external_evidence_recorded
+        || live_network_used
+        || websocket_connection_opened
+        || credential_loaded
+        || request.production_ready_claimed;
+
+    let mut violation_codes = Vec::new();
+    push_if(
+        &mut violation_codes,
+        !acceptable_quality_ready,
+        "MARKET_DATA_BAD_DATA_REJECTION_ACCEPTABLE_BASELINE_NOT_READY",
+    );
+    push_if(
+        &mut violation_codes,
+        !stale_data_rejected,
+        "MARKET_DATA_BAD_DATA_REJECTION_STALE_DATA_NOT_REJECTED",
+    );
+    push_if(
+        &mut violation_codes,
+        !spread_rejected,
+        "MARKET_DATA_BAD_DATA_REJECTION_SPREAD_NOT_REJECTED",
+    );
+    push_if(
+        &mut violation_codes,
+        !depth_rejected,
+        "MARKET_DATA_BAD_DATA_REJECTION_DEPTH_NOT_REJECTED",
+    );
+    push_if(
+        &mut violation_codes,
+        !capture_latency_rejected,
+        "MARKET_DATA_BAD_DATA_REJECTION_CAPTURE_LATENCY_NOT_REJECTED",
+    );
+    push_if(
+        &mut violation_codes,
+        !bad_data_fixture_floor_met,
+        "MARKET_DATA_BAD_DATA_REJECTION_FIXTURE_FLOOR_MISSING",
+    );
+    push_if(
+        &mut violation_codes,
+        !remaining_external_evidence_recorded,
+        "MARKET_DATA_BAD_DATA_REJECTION_EXTERNAL_EVIDENCE_MISSING",
+    );
+    push_if(
+        &mut violation_codes,
+        live_network_used,
+        "MARKET_DATA_BAD_DATA_REJECTION_LIVE_NETWORK_USED",
+    );
+    push_if(
+        &mut violation_codes,
+        websocket_connection_opened,
+        "MARKET_DATA_BAD_DATA_REJECTION_WEBSOCKET_OPENED",
+    );
+    push_if(
+        &mut violation_codes,
+        credential_loaded,
+        "MARKET_DATA_BAD_DATA_REJECTION_CREDENTIAL_LOADED",
+    );
+    push_if(
+        &mut violation_codes,
+        request.production_ready_claimed,
+        "MARKET_DATA_BAD_DATA_REJECTION_PRODUCTION_READY_CLAIMED",
+    );
+
+    let report = MarketDataBadDataRejectionReviewReport {
+        version: MARKET_DATA_BAD_DATA_REJECTION_REVIEW_VERSION.to_owned(),
+        review_id: request.review_id,
+        status: if blocked {
+            MarketDataBadDataRejectionReviewStatus::Blocked
+        } else {
+            MarketDataBadDataRejectionReviewStatus::ReadyForLocalReview
+        },
+        provider_name: request.acceptable_quality.provider_name,
+        acceptable_quality_ready,
+        stale_data_rejected,
+        spread_rejected,
+        depth_rejected,
+        capture_latency_rejected,
+        bad_data_fixture_floor_met,
+        remaining_external_evidence_recorded,
+        remaining_external_evidence_count: request.remaining_external_evidence.len(),
+        live_network_used,
+        websocket_connection_opened,
+        credential_loaded,
+        production_ready: false,
+        violation_codes,
+    };
+    report.validate()?;
+    Ok(report)
+}
+
 /// Validate and prepare a local historical market-data persistence batch.
 pub fn validate_historical_market_data_persistence(
     input: HistoricalMarketDataPersistenceInput,
@@ -3813,15 +4167,16 @@ mod tests {
         persist_market_data_quality_assessment_checkpoint,
         persist_market_data_reconnect_plan_checkpoint,
         persist_paid_market_data_provider_evaluation_checkpoint,
-        review_market_data_provider_latency, review_market_data_provider_reconciliation,
-        validate_historical_market_data_persistence, validate_market_data_provider_preflight,
-        validate_market_data_reconnect_plan, validate_paid_market_data_provider_evaluation,
-        FreshnessStatus, HistoricalMarketDataPersistenceInput,
-        HistoricalMarketDataPersistenceReport, HistoricalMarketDataPersistenceStatus,
-        MarketDataCapabilities, MarketDataProviderHealthObservation,
-        MarketDataProviderLatencyReviewRequest, MarketDataProviderLatencyReviewStatus,
-        MarketDataProviderPreflightReport, MarketDataProviderPreflightStatus,
-        MarketDataProviderReconciliationReviewRequest,
+        review_market_data_bad_data_rejection, review_market_data_provider_latency,
+        review_market_data_provider_reconciliation, validate_historical_market_data_persistence,
+        validate_market_data_provider_preflight, validate_market_data_reconnect_plan,
+        validate_paid_market_data_provider_evaluation, FreshnessStatus,
+        HistoricalMarketDataPersistenceInput, HistoricalMarketDataPersistenceReport,
+        HistoricalMarketDataPersistenceStatus, MarketDataBadDataRejectionReviewRequest,
+        MarketDataBadDataRejectionReviewStatus, MarketDataCapabilities,
+        MarketDataProviderHealthObservation, MarketDataProviderLatencyReviewRequest,
+        MarketDataProviderLatencyReviewStatus, MarketDataProviderPreflightReport,
+        MarketDataProviderPreflightStatus, MarketDataProviderReconciliationReviewRequest,
         MarketDataProviderReconciliationReviewStatus, MarketDataQualityAssessmentInput,
         MarketDataQualityAssessmentReport, MarketDataQualityAssessmentStatus,
         MarketDataReconnectPlanInput, MarketDataReconnectPlanReport, MarketDataReconnectPlanStatus,
@@ -4418,6 +4773,84 @@ mod tests {
             .violation_codes
             .iter()
             .any(|code| code == "MARKET_DATA_QUALITY_LIVE_NETWORK_USED"));
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn market_data_bad_data_rejection_review_accepts_local_rejection_evidence() {
+        let report = review_market_data_bad_data_rejection(market_data_bad_data_rejection_request(
+            false, 3, true,
+        ))
+        .expect("bad-data rejection review should validate");
+
+        assert_eq!(
+            report.status,
+            MarketDataBadDataRejectionReviewStatus::ReadyForLocalReview
+        );
+        assert!(report.acceptable_quality_ready);
+        assert!(report.stale_data_rejected);
+        assert!(report.spread_rejected);
+        assert!(report.depth_rejected);
+        assert!(report.capture_latency_rejected);
+        assert!(report.bad_data_fixture_floor_met);
+        assert!(report.remaining_external_evidence_recorded);
+        assert_eq!(report.remaining_external_evidence_count, 4);
+        assert!(report.violation_codes.is_empty());
+        assert!(!report.live_network_used);
+        assert!(!report.websocket_connection_opened);
+        assert!(!report.credential_loaded);
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn market_data_bad_data_rejection_review_blocks_missing_fixture_floor() {
+        let report = review_market_data_bad_data_rejection(market_data_bad_data_rejection_request(
+            false, 2, true,
+        ))
+        .expect("fixture-floor miss should still produce fail-closed report");
+
+        assert_eq!(
+            report.status,
+            MarketDataBadDataRejectionReviewStatus::Blocked
+        );
+        assert!(!report.bad_data_fixture_floor_met);
+        assert!(report
+            .violation_codes
+            .iter()
+            .any(|code| code == "MARKET_DATA_BAD_DATA_REJECTION_FIXTURE_FLOOR_MISSING"));
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn market_data_bad_data_rejection_review_fails_closed_on_side_effect_claims() {
+        let report = review_market_data_bad_data_rejection(market_data_bad_data_rejection_request(
+            true, 3, true,
+        ))
+        .expect("side-effect flags should still produce fail-closed report");
+
+        assert_eq!(
+            report.status,
+            MarketDataBadDataRejectionReviewStatus::Blocked
+        );
+        assert!(report.live_network_used);
+        assert!(report.websocket_connection_opened);
+        assert!(report.credential_loaded);
+        assert!(report
+            .violation_codes
+            .iter()
+            .any(|code| code == "MARKET_DATA_BAD_DATA_REJECTION_LIVE_NETWORK_USED"));
+        assert!(report
+            .violation_codes
+            .iter()
+            .any(|code| code == "MARKET_DATA_BAD_DATA_REJECTION_WEBSOCKET_OPENED"));
+        assert!(report
+            .violation_codes
+            .iter()
+            .any(|code| code == "MARKET_DATA_BAD_DATA_REJECTION_CREDENTIAL_LOADED"));
+        assert!(report
+            .violation_codes
+            .iter()
+            .any(|code| code == "MARKET_DATA_BAD_DATA_REJECTION_PRODUCTION_READY_CLAIMED"));
         assert!(!report.production_ready);
     }
 
@@ -5357,6 +5790,157 @@ mod tests {
             credential_loaded: side_effect_claimed,
             production_ready_claimed: side_effect_claimed,
         }
+    }
+
+    fn market_data_bad_data_rejection_request(
+        side_effect_claimed: bool,
+        min_bad_data_fixture_references: u64,
+        include_external_evidence: bool,
+    ) -> MarketDataBadDataRejectionReviewRequest {
+        let quality_case = market_data_quality_assessment_case_for_bad_data_review();
+        MarketDataBadDataRejectionReviewRequest {
+            review_id: "local-market-data-bad-data-rejection-review".to_owned(),
+            acceptable_quality: quality_case.0,
+            degraded_quality: quality_case.1,
+            blocked_quality: quality_case.2,
+            min_bad_data_fixture_references,
+            remaining_external_evidence: if include_external_evidence {
+                vec![
+                    "provider-backed bad-data rejection validation".to_owned(),
+                    "external latency/data-quality evidence".to_owned(),
+                    "real historical dataset validation".to_owned(),
+                    "sandbox/read-only provider validation".to_owned(),
+                ]
+            } else {
+                Vec::new()
+            },
+            live_network_used: side_effect_claimed,
+            websocket_connection_opened: side_effect_claimed,
+            credential_loaded: side_effect_claimed,
+            production_ready_claimed: side_effect_claimed,
+        }
+    }
+
+    fn market_data_quality_assessment_case_for_bad_data_review() -> (
+        MarketDataQualityAssessmentReport,
+        MarketDataQualityAssessmentReport,
+        MarketDataQualityAssessmentReport,
+    ) {
+        let acceptable_venue = local_cex_venue("paper-bad-data-acceptable");
+        let acceptable_pair = MarketPair::new("BTC", "USDC").expect("pair should validate");
+        let acceptable = assess_market_data_quality(MarketDataQualityAssessmentInput {
+            assessment_id: "bad-data-acceptable".to_owned(),
+            provider_name: "local-bad-data-provider".to_owned(),
+            request: MarketDataRequest {
+                venue: acceptable_venue.clone(),
+                pair: acceptable_pair.clone(),
+                max_age_ms: 250,
+            },
+            quote: NormalizedQuote {
+                id: "bad-data-acceptable-quote".to_owned(),
+                venue: acceptable_venue.clone(),
+                pair: acceptable_pair.clone(),
+                bid: PriceLevel::new(100.0, 1.0).expect("bid should validate"),
+                ask: PriceLevel::new(100.1, 1.0).expect("ask should validate"),
+                captured_at_unix_ms: 1_000,
+                received_at_unix_ms: 1_015,
+            },
+            order_book: Some(OrderBookSnapshot {
+                id: "bad-data-acceptable-book".to_owned(),
+                venue: acceptable_venue,
+                pair: acceptable_pair,
+                captured_at_unix_ms: 1_000,
+                received_at_unix_ms: 1_015,
+                bids: vec![
+                    PriceLevel::new(100.0, 1.0).expect("bid should validate"),
+                    PriceLevel::new(99.9, 1.0).expect("bid should validate"),
+                ],
+                asks: vec![
+                    PriceLevel::new(100.1, 1.0).expect("ask should validate"),
+                    PriceLevel::new(100.2, 1.0).expect("ask should validate"),
+                ],
+                source_sequence: Some("bad-data-acceptable-seq".to_owned()),
+            }),
+            now_unix_ms: 1_120,
+            max_spread_bps: 20,
+            min_depth_levels: 2,
+            max_capture_latency_ms: 25,
+            live_network_used: false,
+            credential_loaded: false,
+            production_ready_claimed: false,
+        })
+        .expect("acceptable quality assessment should validate");
+
+        let degraded_venue = local_cex_venue("paper-bad-data-degraded");
+        let degraded_pair = MarketPair::new("ETH", "USDC").expect("pair should validate");
+        let degraded = assess_market_data_quality(MarketDataQualityAssessmentInput {
+            assessment_id: "bad-data-degraded".to_owned(),
+            provider_name: "local-bad-data-provider".to_owned(),
+            request: MarketDataRequest {
+                venue: degraded_venue.clone(),
+                pair: degraded_pair.clone(),
+                max_age_ms: 500,
+            },
+            quote: NormalizedQuote {
+                id: "bad-data-degraded-quote".to_owned(),
+                venue: degraded_venue.clone(),
+                pair: degraded_pair.clone(),
+                bid: PriceLevel::new(200.0, 1.0).expect("bid should validate"),
+                ask: PriceLevel::new(201.0, 1.0).expect("ask should validate"),
+                captured_at_unix_ms: 10_000,
+                received_at_unix_ms: 10_060,
+            },
+            order_book: Some(OrderBookSnapshot {
+                id: "bad-data-degraded-book".to_owned(),
+                venue: degraded_venue,
+                pair: degraded_pair,
+                captured_at_unix_ms: 10_000,
+                received_at_unix_ms: 10_060,
+                bids: vec![PriceLevel::new(200.0, 1.0).expect("bid should validate")],
+                asks: vec![PriceLevel::new(201.0, 1.0).expect("ask should validate")],
+                source_sequence: Some("bad-data-degraded-seq".to_owned()),
+            }),
+            now_unix_ms: 10_200,
+            max_spread_bps: 20,
+            min_depth_levels: 2,
+            max_capture_latency_ms: 25,
+            live_network_used: false,
+            credential_loaded: false,
+            production_ready_claimed: false,
+        })
+        .expect("degraded quality assessment should validate");
+
+        let blocked_venue = local_cex_venue("paper-bad-data-blocked");
+        let blocked_pair = MarketPair::new("SOL", "USDC").expect("pair should validate");
+        let blocked = assess_market_data_quality(MarketDataQualityAssessmentInput {
+            assessment_id: "bad-data-blocked".to_owned(),
+            provider_name: "local-bad-data-provider".to_owned(),
+            request: MarketDataRequest {
+                venue: blocked_venue.clone(),
+                pair: blocked_pair.clone(),
+                max_age_ms: 100,
+            },
+            quote: NormalizedQuote {
+                id: "bad-data-blocked-quote".to_owned(),
+                venue: blocked_venue,
+                pair: blocked_pair,
+                bid: PriceLevel::new(50.0, 1.0).expect("bid should validate"),
+                ask: PriceLevel::new(50.2, 1.0).expect("ask should validate"),
+                captured_at_unix_ms: 20_000,
+                received_at_unix_ms: 20_010,
+            },
+            order_book: None,
+            now_unix_ms: 20_500,
+            max_spread_bps: 50,
+            min_depth_levels: 1,
+            max_capture_latency_ms: 30,
+            live_network_used: false,
+            credential_loaded: false,
+            production_ready_claimed: false,
+        })
+        .expect("blocked quality assessment should validate");
+
+        (acceptable, degraded, blocked)
     }
 
     fn unique_temp_path(label: &str, extension: &str) -> std::path::PathBuf {

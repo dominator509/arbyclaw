@@ -81,12 +81,13 @@ use arb_core::{
     preflight_observability_metrics_scrape, record_observability_alert_route_dispatch,
     render_observability_export_dry_run, review_dashboard_hosted_runtime_readiness,
     review_dashboard_hosted_security, review_local_secret_backup_restore,
-    review_local_validation_coverage, review_market_data_provider_latency,
-    review_market_data_provider_reconciliation, review_observability_operations,
-    review_platform_adapter_controls, review_platform_command_ingress,
-    review_remote_command_security, review_signer_runtime_isolation, review_signer_secret_scope,
-    run_local_fuzz_corpus_replay, run_local_graceful_shutdown_checkpoint,
-    run_local_runtime_lifecycle, run_local_validation_corpus, run_local_validation_property_checks,
+    review_local_validation_coverage, review_market_data_bad_data_rejection,
+    review_market_data_provider_latency, review_market_data_provider_reconciliation,
+    review_observability_operations, review_platform_adapter_controls,
+    review_platform_command_ingress, review_remote_command_security,
+    review_signer_runtime_isolation, review_signer_secret_scope, run_local_fuzz_corpus_replay,
+    run_local_graceful_shutdown_checkpoint, run_local_runtime_lifecycle,
+    run_local_validation_corpus, run_local_validation_property_checks,
     validate_audit_journal_durability, validate_cex_credential_scope_review,
     validate_cex_rate_limit, validate_channel_adapter, validate_channel_session,
     validate_dashboard_hosted_request, validate_dashboard_hosted_session,
@@ -151,6 +152,7 @@ use arb_core::{
     LocalTracingSubscriberValidationRequest, LocalTracingSubscriberValidationStatus,
     LocalValidationCorpusRequest, LocalValidationCorpusStatus, LocalValidationCoverageReviewReport,
     LocalValidationCoverageReviewRequest, LocalValidationCoverageReviewStatus,
+    MarketDataBadDataRejectionReviewRequest, MarketDataBadDataRejectionReviewStatus,
     MarketDataCapabilities, MarketDataError, MarketDataProvider,
     MarketDataProviderHealthObservation, MarketDataProviderLatencyReviewReport,
     MarketDataProviderLatencyReviewRequest, MarketDataProviderLatencyReviewStatus,
@@ -442,6 +444,9 @@ fn run_with_args(args: impl IntoIterator<Item = String>) -> Result<(), AgentCliE
         Some("validate-market-data-reconnect-plan") => run_market_data_reconnect_plan_validation(),
         Some("validate-market-data-quality-assessment") => {
             run_market_data_quality_assessment_validation()
+        }
+        Some("validate-market-data-bad-data-rejection") => {
+            run_market_data_bad_data_rejection_validation()
         }
         Some("validate-paid-market-data-provider-evaluation") => {
             run_paid_market_data_provider_evaluation_validation()
@@ -859,6 +864,7 @@ fn print_usage() {
     println!("       arb-agent validate-market-data-provider-reconciliation");
     println!("       arb-agent validate-market-data-reconnect-plan");
     println!("       arb-agent validate-market-data-quality-assessment");
+    println!("       arb-agent validate-market-data-bad-data-rejection");
     println!("       arb-agent validate-paid-market-data-provider-evaluation");
     println!("       arb-agent validate-fee-schedule-verification");
     println!("       arb-agent validate-cex-governance-review");
@@ -1891,6 +1897,121 @@ fn run_market_data_quality_assessment_validation() -> Result<(), AgentCliError> 
     }
 
     Ok(())
+}
+
+fn run_market_data_bad_data_rejection_validation() -> Result<(), AgentCliError> {
+    let acceptable_quality = build_acceptable_market_data_quality_assessment()?;
+    let degraded_quality = build_degraded_market_data_quality_assessment()?;
+    let blocked_quality = build_blocked_market_data_quality_assessment_without_side_effects()?;
+    let review = review_market_data_bad_data_rejection(MarketDataBadDataRejectionReviewRequest {
+        review_id: "cli-market-data-bad-data-rejection-review".to_owned(),
+        acceptable_quality,
+        degraded_quality,
+        blocked_quality,
+        min_bad_data_fixture_references: 3,
+        remaining_external_evidence: vec![
+            "provider-backed bad-data rejection validation".to_owned(),
+            "external latency/data-quality evidence".to_owned(),
+            "real historical dataset validation".to_owned(),
+            "sandbox/read-only provider validation".to_owned(),
+        ],
+        live_network_used: false,
+        websocket_connection_opened: false,
+        credential_loaded: false,
+        production_ready_claimed: false,
+    })
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+
+    println!("market-data-bad-data-rejection: validation passed");
+    println!(
+        "market-data-bad-data-rejection-review: {}",
+        market_data_bad_data_rejection_review_status_label(review.status)
+    );
+    println!(
+        "bad-data-acceptable-quality-ready: {}",
+        review.acceptable_quality_ready
+    );
+    println!(
+        "bad-data-stale-data-rejected: {}",
+        review.stale_data_rejected
+    );
+    println!("bad-data-spread-rejected: {}", review.spread_rejected);
+    println!("bad-data-depth-rejected: {}", review.depth_rejected);
+    println!(
+        "bad-data-capture-latency-rejected: {}",
+        review.capture_latency_rejected
+    );
+    println!(
+        "bad-data-fixture-floor-met: {}",
+        review.bad_data_fixture_floor_met
+    );
+    println!(
+        "bad-data-remaining-external-evidence-count: {}",
+        review.remaining_external_evidence_count
+    );
+    println!("live-network-used: {}", review.live_network_used);
+    println!(
+        "websocket-connection-opened: {}",
+        review.websocket_connection_opened
+    );
+    println!("credential-loaded: {}", review.credential_loaded);
+    println!("production-ready: {}", review.production_ready);
+
+    if review.status != MarketDataBadDataRejectionReviewStatus::ReadyForLocalReview
+        || !review.acceptable_quality_ready
+        || !review.stale_data_rejected
+        || !review.spread_rejected
+        || !review.depth_rejected
+        || !review.capture_latency_rejected
+        || !review.bad_data_fixture_floor_met
+        || review.remaining_external_evidence_count == 0
+        || review.live_network_used
+        || review.websocket_connection_opened
+        || review.credential_loaded
+        || review.production_ready
+    {
+        return Err(AgentCliError::Validation(
+            "market-data bad-data rejection validation failed".to_owned(),
+        ));
+    }
+
+    Ok(())
+}
+
+fn build_blocked_market_data_quality_assessment_without_side_effects(
+) -> Result<MarketDataQualityAssessmentReport, AgentCliError> {
+    let pair = MarketPair::new("SOL", "USDC")
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let venue = local_provider_venue("paper-quality-blocked-stale-only");
+    assess_market_data_quality(MarketDataQualityAssessmentInput {
+        assessment_id: "cli-market-data-quality-blocked-stale-only".to_owned(),
+        provider_name: "local-market-data-quality-blocked-stale-only".to_owned(),
+        request: MarketDataRequest {
+            venue: venue.clone(),
+            pair: pair.clone(),
+            max_age_ms: 100,
+        },
+        quote: NormalizedQuote {
+            id: "cli-market-data-quality-blocked-stale-only-quote".to_owned(),
+            venue,
+            pair,
+            bid: PriceLevel::new(50.0, 1.0)
+                .map_err(|error| AgentCliError::Validation(error.to_string()))?,
+            ask: PriceLevel::new(50.2, 1.0)
+                .map_err(|error| AgentCliError::Validation(error.to_string()))?,
+            captured_at_unix_ms: 20_000,
+            received_at_unix_ms: 20_010,
+        },
+        order_book: None,
+        now_unix_ms: 20_500,
+        max_spread_bps: 50,
+        min_depth_levels: 1,
+        max_capture_latency_ms: 30,
+        live_network_used: false,
+        credential_loaded: false,
+        production_ready_claimed: false,
+    })
+    .map_err(|error| AgentCliError::Validation(error.to_string()))
 }
 
 struct PaidMarketDataProviderEvaluationCase {
@@ -16089,6 +16210,15 @@ const fn market_data_quality_assessment_status_label(
         MarketDataQualityAssessmentStatus::Acceptable => "acceptable",
         MarketDataQualityAssessmentStatus::Degraded => "degraded",
         MarketDataQualityAssessmentStatus::Blocked => "blocked",
+    }
+}
+
+const fn market_data_bad_data_rejection_review_status_label(
+    status: MarketDataBadDataRejectionReviewStatus,
+) -> &'static str {
+    match status {
+        MarketDataBadDataRejectionReviewStatus::ReadyForLocalReview => "ready-for-local-review",
+        MarketDataBadDataRejectionReviewStatus::Blocked => "blocked",
     }
 }
 

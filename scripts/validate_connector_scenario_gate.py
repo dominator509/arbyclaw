@@ -91,6 +91,17 @@ def command_set(workspace_root: pathlib.Path) -> list[tuple[str, list[str]]]:
             ["cargo", "run", "-p", "arb-agent", "--", "validate-market-data-quality-assessment"],
         ),
         (
+            "market_data_bad_data_rejection",
+            [
+                "cargo",
+                "run",
+                "-p",
+                "arb-agent",
+                "--",
+                "validate-market-data-bad-data-rejection",
+            ],
+        ),
+        (
             "paid_market_data_provider_evaluation",
             [
                 "cargo",
@@ -363,6 +374,31 @@ def validate_components(components: list[dict[str, Any]]) -> list[str]:
         "market_data_quality_assessment",
     )
 
+    bad_data = by_name["market_data_bad_data_rejection"]["parsed"]
+    require(
+        bad_data,
+        "market-data-bad-data-rejection-review",
+        "ready-for-local-review",
+        errors,
+        "market_data_bad_data_rejection",
+    )
+    for key in (
+        "bad-data-acceptable-quality-ready",
+        "bad-data-stale-data-rejected",
+        "bad-data-spread-rejected",
+        "bad-data-depth-rejected",
+        "bad-data-capture-latency-rejected",
+        "bad-data-fixture-floor-met",
+    ):
+        require(bad_data, key, "true", errors, "market_data_bad_data_rejection")
+    require(
+        bad_data,
+        "bad-data-remaining-external-evidence-count",
+        "4",
+        errors,
+        "market_data_bad_data_rejection",
+    )
+
     paid_provider = by_name["paid_market_data_provider_evaluation"]["parsed"]
     require(
         paid_provider,
@@ -573,6 +609,7 @@ def main() -> int:
         "live_execution_performed": False,
         "production_ready": False,
         "audit_records_replayed": audit_records,
+        "market_data_bad_data_rejection_review_enforced": True,
         "market_data_provider_latency_review_enforced": True,
         "market_data_provider_reconciliation_review_enforced": True,
         "components": [
