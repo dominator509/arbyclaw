@@ -151,6 +151,10 @@ pub const RUNTIME_RESTART_RECOVERY_VALIDATION_VERSION: &str =
 pub const RUNTIME_DEPLOYMENT_SMOKE_VALIDATION_VERSION: &str =
     "phase26-runtime-deployment-smoke-local-v1";
 
+/// Stable local runtime load profile review validation version.
+pub const RUNTIME_LOAD_PROFILE_REVIEW_VERSION: &str =
+    "phase70-runtime-load-profile-review-local-v1";
+
 /// Stable local production-runtime preflight validation version.
 pub const RUNTIME_PRODUCTION_PREFLIGHT_VALIDATION_VERSION: &str =
     "phase49-runtime-production-preflight-local-v1";
@@ -824,6 +828,111 @@ pub struct RuntimeDeploymentSmokeLoadValidationReport {
     pub production_ready: bool,
     /// Remaining blockers in non-secret wording.
     pub unresolved_blockers: Vec<String>,
+}
+
+/// Local runtime load profile review status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum RuntimeLoadProfileReviewStatus {
+    /// Local load evidence meets the supplied local review budgets.
+    ReadyForLocalReview,
+    /// Local load evidence is missing, unsafe, or exceeds the supplied local budgets.
+    Blocked,
+}
+
+/// Local runtime load profile review request.
+///
+/// This consumes sanitized local runtime-smoke load evidence and caller-supplied
+/// local budget/resource observations. It does not execute benchmarks, inspect
+/// host resources, start services, call providers, submit adapters, perform live
+/// execution, or claim production readiness.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RuntimeLoadProfileReviewRequest {
+    /// Stable review id.
+    pub review_id: String,
+    /// Sanitized local runtime smoke/load report.
+    pub load_report: RuntimeDeploymentSmokeLoadValidationReport,
+    /// Maximum allowed local average iteration duration.
+    pub max_average_elapsed_ms: u64,
+    /// Maximum allowed local single-iteration duration.
+    pub max_single_iteration_elapsed_ms: u64,
+    /// Maximum allowed local total duration.
+    pub max_total_elapsed_ms: u64,
+    /// Observed local peak memory estimate in MiB.
+    pub observed_peak_memory_mb: u64,
+    /// Maximum allowed local peak memory estimate in MiB.
+    pub max_peak_memory_mb: u64,
+    /// Observed local peak CPU estimate in percent.
+    pub observed_peak_cpu_percent: u64,
+    /// Maximum allowed local peak CPU estimate in percent.
+    pub max_peak_cpu_percent: u64,
+    /// Whether deployment-host load evidence is available.
+    pub deployment_host_load_evidence_available: bool,
+    /// Whether live/provider feed backpressure evidence is available.
+    pub live_feed_backpressure_evidence_available: bool,
+    /// Whether ARM or target-class runtime evidence is available.
+    pub target_runtime_evidence_available: bool,
+    /// Whether this review performed service-manager actions.
+    pub service_manager_action_performed: bool,
+    /// Whether this review performed external calls.
+    pub external_calls_performed: bool,
+    /// Whether this review performed live execution.
+    pub live_execution_performed: bool,
+    /// Whether this review claims production readiness.
+    pub production_ready_claimed: bool,
+    /// Validation timestamp in Unix milliseconds.
+    pub validated_at_unix_ms: u64,
+}
+
+/// Non-secret local runtime load profile review report.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RuntimeLoadProfileReviewReport {
+    /// Runtime load profile review version.
+    pub validation_version: String,
+    /// Stable review id.
+    pub review_id: String,
+    /// Validation status.
+    pub status: RuntimeLoadProfileReviewStatus,
+    /// Number of local smoke/load iterations reviewed.
+    pub iterations_reviewed: u64,
+    /// Whether local latency budgets were met.
+    pub latency_budget_met: bool,
+    /// Whether local resource budgets were met.
+    pub resource_budget_met: bool,
+    /// Whether local replay/recovery evidence is coherent.
+    pub replay_recovery_evidence_validated: bool,
+    /// Maximum observed local average iteration duration.
+    pub observed_average_elapsed_ms: u64,
+    /// Maximum observed local single iteration duration.
+    pub observed_max_elapsed_ms: u64,
+    /// Observed local total duration.
+    pub observed_total_elapsed_ms: u64,
+    /// Observed local peak memory estimate in MiB.
+    pub observed_peak_memory_mb: u64,
+    /// Observed local peak CPU estimate in percent.
+    pub observed_peak_cpu_percent: u64,
+    /// Whether deployment-host load evidence is available.
+    pub deployment_host_load_evidence_available: bool,
+    /// Whether live/provider feed backpressure evidence is available.
+    pub live_feed_backpressure_evidence_available: bool,
+    /// Whether ARM or target-class runtime evidence is available.
+    pub target_runtime_evidence_available: bool,
+    /// Local blocker codes.
+    pub blocker_codes: Vec<String>,
+    /// Remaining external evidence required before production performance claims.
+    pub remaining_external_evidence: Vec<String>,
+    /// Whether this review performed service-manager actions. Always false.
+    pub service_manager_action_performed: bool,
+    /// Whether this review performed external calls. Always false.
+    pub external_calls_performed: bool,
+    /// Whether this review performed live execution. Always false.
+    pub live_execution_performed: bool,
+    /// Whether this review approves production readiness. Always false.
+    pub production_ready: bool,
+    /// Validation timestamp in Unix milliseconds.
+    pub validated_at_unix_ms: u64,
 }
 
 /// Local production-runtime validation preflight status.
@@ -2539,6 +2648,151 @@ impl RuntimeDeploymentSmokeLoadValidationReport {
         }
         Ok(())
     }
+}
+
+impl RuntimeLoadProfileReviewRequest {
+    /// Validate local runtime load profile review input.
+    pub fn validate(&self) -> Result<(), RuntimeLifecycleError> {
+        if self.review_id.trim().is_empty() {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "runtime load profile review id is required".to_owned(),
+            });
+        }
+        if self.validated_at_unix_ms == 0 {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "runtime load profile review timestamp is required".to_owned(),
+            });
+        }
+        self.load_report.validate()?;
+        if self.max_average_elapsed_ms == 0
+            || self.max_single_iteration_elapsed_ms == 0
+            || self.max_total_elapsed_ms == 0
+            || self.max_peak_memory_mb == 0
+            || self.max_peak_cpu_percent == 0
+            || self.observed_peak_cpu_percent > 100
+            || self.max_peak_cpu_percent > 100
+        {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "runtime load profile review budgets must be non-zero and CPU percent must be <= 100".to_owned(),
+            });
+        }
+        if self.service_manager_action_performed
+            || self.external_calls_performed
+            || self.live_execution_performed
+        {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "runtime load profile review must remain local-only".to_owned(),
+            });
+        }
+        if self.production_ready_claimed {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "runtime load profile review must not claim production readiness"
+                    .to_owned(),
+            });
+        }
+        Ok(())
+    }
+}
+
+impl RuntimeLoadProfileReviewReport {
+    /// Validate local runtime load profile review report invariants.
+    pub fn validate(&self) -> Result<(), RuntimeLifecycleError> {
+        if self.validation_version != RUNTIME_LOAD_PROFILE_REVIEW_VERSION {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: format!("validation_version must be {RUNTIME_LOAD_PROFILE_REVIEW_VERSION}"),
+            });
+        }
+        if self.review_id.trim().is_empty() {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "runtime load profile review report id is required".to_owned(),
+            });
+        }
+        if self.iterations_reviewed == 0 {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "runtime load profile review requires at least one iteration".to_owned(),
+            });
+        }
+        if self.service_manager_action_performed
+            || self.external_calls_performed
+            || self.live_execution_performed
+            || self.production_ready
+        {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "runtime load profile review report must not contain side effects or production readiness".to_owned(),
+            });
+        }
+        if self.status == RuntimeLoadProfileReviewStatus::ReadyForLocalReview
+            && !self.blocker_codes.is_empty()
+        {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "ready runtime load profile review must not contain local blockers"
+                    .to_owned(),
+            });
+        }
+        if self.status == RuntimeLoadProfileReviewStatus::Blocked && self.blocker_codes.is_empty() {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "blocked runtime load profile review requires blocker codes".to_owned(),
+            });
+        }
+        Ok(())
+    }
+}
+
+/// Review local runtime smoke load/latency evidence against supplied local budgets.
+///
+/// This does not execute benchmarks, inspect host resources, call providers,
+/// start services, perform live execution, or claim production readiness.
+pub fn review_runtime_load_profile(
+    request: RuntimeLoadProfileReviewRequest,
+) -> Result<RuntimeLoadProfileReviewReport, RuntimeLifecycleError> {
+    request.validate()?;
+    let latency_budget_met = request.load_report.average_elapsed_ms
+        <= request.max_average_elapsed_ms
+        && request.load_report.max_elapsed_ms <= request.max_single_iteration_elapsed_ms
+        && request.load_report.total_elapsed_ms <= request.max_total_elapsed_ms;
+    let resource_budget_met = request.observed_peak_memory_mb <= request.max_peak_memory_mb
+        && request.observed_peak_cpu_percent <= request.max_peak_cpu_percent;
+    let replay_recovery_evidence_validated = request.load_report.restart_audit_records_replayed > 0
+        && request.load_report.backup_audit_records_replayed > 0
+        && request.load_report.opportunity_trace_recovered_checkpoints > 0
+        && request.load_report.opportunity_trace_missing_checkpoints == 0;
+    let blocker_codes = runtime_load_profile_blockers(
+        latency_budget_met,
+        resource_budget_met,
+        replay_recovery_evidence_validated,
+    );
+    let status = if blocker_codes.is_empty() {
+        RuntimeLoadProfileReviewStatus::ReadyForLocalReview
+    } else {
+        RuntimeLoadProfileReviewStatus::Blocked
+    };
+    let report = RuntimeLoadProfileReviewReport {
+        validation_version: RUNTIME_LOAD_PROFILE_REVIEW_VERSION.to_owned(),
+        review_id: request.review_id,
+        status,
+        iterations_reviewed: request.load_report.iterations_attempted,
+        latency_budget_met,
+        resource_budget_met,
+        replay_recovery_evidence_validated,
+        observed_average_elapsed_ms: request.load_report.average_elapsed_ms,
+        observed_max_elapsed_ms: request.load_report.max_elapsed_ms,
+        observed_total_elapsed_ms: request.load_report.total_elapsed_ms,
+        observed_peak_memory_mb: request.observed_peak_memory_mb,
+        observed_peak_cpu_percent: request.observed_peak_cpu_percent,
+        deployment_host_load_evidence_available: request.deployment_host_load_evidence_available,
+        live_feed_backpressure_evidence_available: request
+            .live_feed_backpressure_evidence_available,
+        target_runtime_evidence_available: request.target_runtime_evidence_available,
+        blocker_codes,
+        remaining_external_evidence: runtime_load_profile_remaining_external_evidence(),
+        service_manager_action_performed: false,
+        external_calls_performed: false,
+        live_execution_performed: false,
+        production_ready: false,
+        validated_at_unix_ms: request.validated_at_unix_ms,
+    };
+    report.validate()?;
+    Ok(report)
 }
 
 impl RuntimeProductionPreflightRequest {
@@ -4913,6 +5167,34 @@ fn runtime_deployment_smoke_load_unresolved_blockers() -> Vec<String> {
     ]
 }
 
+fn runtime_load_profile_blockers(
+    latency_budget_met: bool,
+    resource_budget_met: bool,
+    replay_recovery_evidence_validated: bool,
+) -> Vec<String> {
+    let mut blockers = Vec::new();
+    if !latency_budget_met {
+        blockers.push("local-latency-budget-exceeded".to_owned());
+    }
+    if !resource_budget_met {
+        blockers.push("local-resource-budget-exceeded".to_owned());
+    }
+    if !replay_recovery_evidence_validated {
+        blockers.push("local-replay-recovery-evidence-incomplete".to_owned());
+    }
+    blockers
+}
+
+fn runtime_load_profile_remaining_external_evidence() -> Vec<String> {
+    vec![
+        "deployment-host load and soak evidence is missing".to_owned(),
+        "live/provider feed backpressure evidence is missing".to_owned(),
+        "target-class or ARM runtime performance evidence is missing".to_owned(),
+        "dashboard and observability exporter latency evidence is missing".to_owned(),
+        "production resource profiler evidence is missing".to_owned(),
+    ]
+}
+
 fn runtime_production_preflight_unresolved_blockers(
     request: &RuntimeProductionPreflightRequest,
 ) -> Vec<String> {
@@ -7118,9 +7400,9 @@ fn copy_runtime_backup_file(
 #[cfg(test)]
 mod tests {
     use super::{
-        run_local_graceful_shutdown_checkpoint, run_local_runtime_lifecycle,
-        validate_local_runtime_backup_restore, validate_local_runtime_deployment_smoke,
-        validate_local_runtime_restart_recovery,
+        review_runtime_load_profile, run_local_graceful_shutdown_checkpoint,
+        run_local_runtime_lifecycle, validate_local_runtime_backup_restore,
+        validate_local_runtime_deployment_smoke, validate_local_runtime_restart_recovery,
         validate_local_runtime_restart_recovery_with_trace_recovery,
         RuntimeDeploymentAuditSqliteTranscript, RuntimeDeploymentAuditSqliteTranscriptStatus,
         RuntimeDeploymentPermissionTranscript, RuntimeDeploymentPermissionTranscriptStatus,
@@ -7129,6 +7411,7 @@ mod tests {
         RuntimeDeploymentSqliteSchemaMigrationTranscript,
         RuntimeDeploymentSqliteSchemaMigrationTranscriptStatus, RuntimeGracefulShutdownRequest,
         RuntimeLifecycleError, RuntimeLifecycleRequest, RuntimeLifecycleStatus,
+        RuntimeLoadProfileReviewRequest, RuntimeLoadProfileReviewStatus,
         RuntimeOpportunityTraceRecoverySummary, RuntimeProductionPreflightRequest,
         RuntimeProductionPreflightStatus, RuntimeRecoveredOpportunityTraceSummary,
         RuntimeRestartRecoveryDisposition, RuntimeServiceManagerKind,
@@ -8165,6 +8448,145 @@ redact_secrets = true
         .expect_err("side-effect report should be rejected before aggregation");
 
         assert!(error.to_string().contains("external submission"));
+    }
+
+    #[test]
+    fn runtime_load_profile_review_accepts_local_budgets_without_readiness() {
+        let load_report = RuntimeDeploymentSmokeLoadValidationReport::from_iterations(vec![
+            RuntimeDeploymentSmokeLoadIteration {
+                iteration_id: "run-1".to_owned(),
+                elapsed_ms: 40,
+                report: valid_runtime_smoke_report(7, 12),
+            },
+            RuntimeDeploymentSmokeLoadIteration {
+                iteration_id: "run-2".to_owned(),
+                elapsed_ms: 60,
+                report: valid_runtime_smoke_report(8, 12),
+            },
+        ])
+        .expect("valid local smoke iterations should aggregate");
+
+        let report = review_runtime_load_profile(RuntimeLoadProfileReviewRequest {
+            review_id: "local-runtime-load-profile".to_owned(),
+            load_report,
+            max_average_elapsed_ms: 60,
+            max_single_iteration_elapsed_ms: 100,
+            max_total_elapsed_ms: 120,
+            observed_peak_memory_mb: 128,
+            max_peak_memory_mb: 256,
+            observed_peak_cpu_percent: 25,
+            max_peak_cpu_percent: 80,
+            deployment_host_load_evidence_available: false,
+            live_feed_backpressure_evidence_available: false,
+            target_runtime_evidence_available: false,
+            service_manager_action_performed: false,
+            external_calls_performed: false,
+            live_execution_performed: false,
+            production_ready_claimed: false,
+            validated_at_unix_ms: 100_000,
+        })
+        .expect("local load profile should review successfully");
+
+        assert_eq!(
+            report.status,
+            RuntimeLoadProfileReviewStatus::ReadyForLocalReview
+        );
+        assert_eq!(report.iterations_reviewed, 2);
+        assert!(report.latency_budget_met);
+        assert!(report.resource_budget_met);
+        assert!(report.replay_recovery_evidence_validated);
+        assert!(report.blocker_codes.is_empty());
+        assert!(!report.remaining_external_evidence.is_empty());
+        assert!(!report.service_manager_action_performed);
+        assert!(!report.external_calls_performed);
+        assert!(!report.live_execution_performed);
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn runtime_load_profile_review_blocks_budget_overruns() {
+        let load_report = RuntimeDeploymentSmokeLoadValidationReport::from_iterations(vec![
+            RuntimeDeploymentSmokeLoadIteration {
+                iteration_id: "run-1".to_owned(),
+                elapsed_ms: 40,
+                report: valid_runtime_smoke_report(7, 12),
+            },
+            RuntimeDeploymentSmokeLoadIteration {
+                iteration_id: "run-2".to_owned(),
+                elapsed_ms: 60,
+                report: valid_runtime_smoke_report(8, 12),
+            },
+        ])
+        .expect("valid local smoke iterations should aggregate");
+
+        let report = review_runtime_load_profile(RuntimeLoadProfileReviewRequest {
+            review_id: "local-runtime-load-profile-blocked".to_owned(),
+            load_report,
+            max_average_elapsed_ms: 10,
+            max_single_iteration_elapsed_ms: 20,
+            max_total_elapsed_ms: 30,
+            observed_peak_memory_mb: 512,
+            max_peak_memory_mb: 256,
+            observed_peak_cpu_percent: 95,
+            max_peak_cpu_percent: 80,
+            deployment_host_load_evidence_available: false,
+            live_feed_backpressure_evidence_available: false,
+            target_runtime_evidence_available: false,
+            service_manager_action_performed: false,
+            external_calls_performed: false,
+            live_execution_performed: false,
+            production_ready_claimed: false,
+            validated_at_unix_ms: 100_001,
+        })
+        .expect("blocked local load profile should still return a report");
+
+        assert_eq!(report.status, RuntimeLoadProfileReviewStatus::Blocked);
+        assert!(!report.latency_budget_met);
+        assert!(!report.resource_budget_met);
+        assert!(report
+            .blocker_codes
+            .iter()
+            .any(|code| code == "local-latency-budget-exceeded"));
+        assert!(report
+            .blocker_codes
+            .iter()
+            .any(|code| code == "local-resource-budget-exceeded"));
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn runtime_load_profile_review_rejects_side_effect_claims() {
+        let load_report = RuntimeDeploymentSmokeLoadValidationReport::from_iterations(vec![
+            RuntimeDeploymentSmokeLoadIteration {
+                iteration_id: "run-1".to_owned(),
+                elapsed_ms: 40,
+                report: valid_runtime_smoke_report(7, 12),
+            },
+        ])
+        .expect("valid local smoke iterations should aggregate");
+
+        let error = review_runtime_load_profile(RuntimeLoadProfileReviewRequest {
+            review_id: "local-runtime-load-profile-unsafe".to_owned(),
+            load_report,
+            max_average_elapsed_ms: 100,
+            max_single_iteration_elapsed_ms: 100,
+            max_total_elapsed_ms: 100,
+            observed_peak_memory_mb: 128,
+            max_peak_memory_mb: 256,
+            observed_peak_cpu_percent: 25,
+            max_peak_cpu_percent: 80,
+            deployment_host_load_evidence_available: false,
+            live_feed_backpressure_evidence_available: false,
+            target_runtime_evidence_available: false,
+            service_manager_action_performed: false,
+            external_calls_performed: false,
+            live_execution_performed: true,
+            production_ready_claimed: true,
+            validated_at_unix_ms: 100_002,
+        })
+        .expect_err("side-effect/runtime readiness claims must be rejected");
+
+        assert!(error.to_string().contains("local-only"));
     }
 
     #[test]

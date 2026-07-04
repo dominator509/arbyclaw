@@ -12190,6 +12190,27 @@ fn run_runtime_smoke_validation(options: &RuntimeSmokeOptions) -> Result<(), Age
         })?;
     let load_report = RuntimeDeploymentSmokeLoadValidationReport::from_iterations(load_iterations)
         .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let load_profile_review =
+        arb_core::review_runtime_load_profile(arb_core::RuntimeLoadProfileReviewRequest {
+            review_id: "local-runtime-smoke-load-profile".to_owned(),
+            load_report: load_report.clone(),
+            max_average_elapsed_ms: load_report.average_elapsed_ms.max(1),
+            max_single_iteration_elapsed_ms: load_report.max_elapsed_ms.max(1),
+            max_total_elapsed_ms: load_report.total_elapsed_ms.max(1),
+            observed_peak_memory_mb: 1,
+            max_peak_memory_mb: 1,
+            observed_peak_cpu_percent: 1,
+            max_peak_cpu_percent: 100,
+            deployment_host_load_evidence_available: false,
+            live_feed_backpressure_evidence_available: false,
+            target_runtime_evidence_available: false,
+            service_manager_action_performed: false,
+            external_calls_performed: false,
+            live_execution_performed: false,
+            production_ready_claimed: false,
+            validated_at_unix_ms: current_unix_ms()?,
+        })
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
     let production_preflight = arb_core::preflight_production_runtime_validation(
         arb_core::RuntimeProductionPreflightRequest {
             preflight_id: "local-runtime-smoke-production-preflight".to_owned(),
@@ -12255,6 +12276,26 @@ fn run_runtime_smoke_validation(options: &RuntimeSmokeOptions) -> Result<(), Age
     println!(
         "runtime-smoke-load-opportunity-trace-missing-checkpoints: {}",
         load_report.opportunity_trace_missing_checkpoints
+    );
+    println!(
+        "runtime-load-profile-review: {:?}",
+        load_profile_review.status
+    );
+    println!(
+        "runtime-load-profile-latency-budget-met: {}",
+        load_profile_review.latency_budget_met
+    );
+    println!(
+        "runtime-load-profile-resource-budget-met: {}",
+        load_profile_review.resource_budget_met
+    );
+    println!(
+        "runtime-load-profile-replay-recovery-evidence-validated: {}",
+        load_profile_review.replay_recovery_evidence_validated
+    );
+    println!(
+        "runtime-load-profile-remaining-external-evidence-count: {}",
+        load_profile_review.remaining_external_evidence.len()
     );
     println!("service-manager-action-performed: false");
     println!("external-submission-performed: false");
