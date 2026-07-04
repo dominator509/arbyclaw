@@ -159,6 +159,10 @@ pub const RUNTIME_PRODUCTION_PREFLIGHT_VALIDATION_VERSION: &str =
 pub const RUNTIME_SERVICE_MANAGER_LIFECYCLE_TRANSCRIPT_VERSION: &str =
     "phase59-service-manager-lifecycle-transcript-local-v2";
 
+/// Stable local service-manager lifecycle rehearsal validation version.
+pub const RUNTIME_SERVICE_MANAGER_LIFECYCLE_REHEARSAL_VERSION: &str =
+    "phase68-service-manager-lifecycle-rehearsal-local-v1";
+
 /// Stable local deployment permission transcript validation version.
 pub const RUNTIME_DEPLOYMENT_PERMISSION_TRANSCRIPT_VERSION: &str =
     "phase60-deployment-permission-transcript-local-v2";
@@ -1090,6 +1094,141 @@ pub struct RuntimeServiceManagerLifecycleTranscriptReport {
     /// Whether this report approves production readiness. Always false.
     pub production_ready: bool,
     /// Transcript validation timestamp in Unix milliseconds.
+    pub validated_at_unix_ms: u64,
+}
+
+/// Local validation status for service-manager lifecycle rehearsals.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum RuntimeServiceManagerLifecycleRehearsalStatus {
+    /// The local rehearsal proves ordered lifecycle evidence without side effects.
+    Validated,
+    /// The local rehearsal is missing required lifecycle evidence or contains unsafe flags.
+    Blocked,
+}
+
+/// Local-only service-manager lifecycle rehearsal validation request.
+///
+/// This model proves ordered lifecycle evidence over sanitized event metadata.
+/// It must not run `systemctl`, start/stop/restart real services, mutate
+/// deployment paths, read service logs, load secrets, submit adapters, or claim
+/// production readiness.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RuntimeServiceManagerLifecycleRehearsalRequest {
+    /// Stable rehearsal id.
+    pub rehearsal_id: String,
+    /// Service manager family being modeled.
+    pub service_manager: RuntimeServiceManagerKind,
+    /// Unit or service name.
+    pub unit_name: String,
+    /// Sanitized ordered lifecycle events.
+    pub events: Vec<RuntimeServiceManagerLifecycleEvent>,
+    /// Whether audit replay evidence reference is present.
+    pub audit_replay_reference_present: bool,
+    /// Whether SQLite recovery evidence reference is present.
+    pub sqlite_recovery_reference_present: bool,
+    /// Whether runtime smoke evidence reference is present.
+    pub runtime_smoke_reference_present: bool,
+    /// Whether concurrent lifecycle evidence reference is present.
+    pub concurrent_lifecycle_reference_present: bool,
+    /// Number of concurrent lifecycle workers covered by the reference.
+    pub concurrent_lifecycle_worker_count: u32,
+    /// Whether the referenced concurrent lifecycle run completed successfully.
+    pub concurrent_lifecycle_success: bool,
+    /// Whether a graceful-shutdown checkpoint reference is present.
+    pub graceful_shutdown_checkpoint_reference_present: bool,
+    /// Whether restart recovery reference is present.
+    pub restart_recovery_reference_present: bool,
+    /// Whether operator approval/reference is present.
+    pub operator_approved: bool,
+    /// Whether reviewer approval/reference is present.
+    pub reviewer_approved: bool,
+    /// Whether this validator performed a service-manager action. Must be false.
+    pub service_manager_action_performed_by_validator: bool,
+    /// Whether this validator mutated deployment paths. Must be false.
+    pub deployment_path_mutated_by_validator: bool,
+    /// Whether this validator loaded secrets. Must be false.
+    pub secrets_loaded: bool,
+    /// Whether this validator submitted externally. Must be false.
+    pub external_submission_performed: bool,
+    /// Whether live execution was performed. Must be false.
+    pub live_execution_performed: bool,
+    /// Whether this request attempts to claim production readiness. Must be false.
+    pub production_ready_claimed: bool,
+    /// Rehearsal validation timestamp in Unix milliseconds.
+    pub validated_at_unix_ms: u64,
+}
+
+/// Non-secret local validation report for a service-manager lifecycle rehearsal.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RuntimeServiceManagerLifecycleRehearsalReport {
+    /// Service-manager lifecycle rehearsal validation version.
+    pub validation_version: String,
+    /// Stable rehearsal id.
+    pub rehearsal_id: String,
+    /// Service manager family being modeled.
+    pub service_manager: RuntimeServiceManagerKind,
+    /// Unit or service name.
+    pub unit_name: String,
+    /// Number of lifecycle events reviewed.
+    pub event_count: u64,
+    /// Whether events appear in the required local lifecycle order.
+    pub ordered_lifecycle_validated: bool,
+    /// Whether every lifecycle event is operator-controlled.
+    pub operator_controlled_events: bool,
+    /// Whether every lifecycle event has a non-secret reference.
+    pub non_secret_references_present: bool,
+    /// Whether all lifecycle event outcomes succeeded.
+    pub successful_event_outcomes: bool,
+    /// Whether start evidence was present.
+    pub start_evidence_present: bool,
+    /// Whether runtime smoke evidence was present.
+    pub runtime_smoke_evidence_present: bool,
+    /// Whether graceful-shutdown evidence was present.
+    pub graceful_shutdown_evidence_present: bool,
+    /// Whether stop evidence was present.
+    pub stop_evidence_present: bool,
+    /// Whether restart evidence was present.
+    pub restart_evidence_present: bool,
+    /// Whether recovery evidence was present.
+    pub recovery_evidence_present: bool,
+    /// Whether audit replay evidence reference is present.
+    pub audit_replay_reference_present: bool,
+    /// Whether SQLite recovery evidence reference is present.
+    pub sqlite_recovery_reference_present: bool,
+    /// Whether concurrent lifecycle evidence reference is present.
+    pub concurrent_lifecycle_reference_present: bool,
+    /// Number of concurrent lifecycle workers covered by the reference.
+    pub concurrent_lifecycle_worker_count: u32,
+    /// Whether the referenced concurrent lifecycle run completed successfully.
+    pub concurrent_lifecycle_success: bool,
+    /// Whether graceful-shutdown checkpoint reference is present.
+    pub graceful_shutdown_checkpoint_reference_present: bool,
+    /// Whether restart recovery reference is present.
+    pub restart_recovery_reference_present: bool,
+    /// Whether operator approval/reference is present.
+    pub operator_approved: bool,
+    /// Whether reviewer approval/reference is present.
+    pub reviewer_approved: bool,
+    /// Validation status.
+    pub status: RuntimeServiceManagerLifecycleRehearsalStatus,
+    /// Non-secret blocker codes.
+    pub blocker_codes: Vec<String>,
+    /// Whether this validator performed a service-manager action. Always false.
+    pub service_manager_action_performed_by_validator: bool,
+    /// Whether this validator mutated deployment paths. Always false.
+    pub deployment_path_mutated_by_validator: bool,
+    /// Whether this validator loaded secrets. Always false.
+    pub secrets_loaded: bool,
+    /// Whether this validator submitted externally. Always false.
+    pub external_submission_performed: bool,
+    /// Whether live execution was performed. Always false.
+    pub live_execution_performed: bool,
+    /// Whether this report approves production readiness. Always false.
+    pub production_ready: bool,
+    /// Rehearsal validation timestamp in Unix milliseconds.
     pub validated_at_unix_ms: u64,
 }
 
@@ -2613,6 +2752,118 @@ impl RuntimeServiceManagerLifecycleTranscriptReport {
     }
 }
 
+impl RuntimeServiceManagerLifecycleRehearsalRequest {
+    /// Validate local-only service-manager lifecycle rehearsal input.
+    pub fn validate(&self) -> Result<(), RuntimeLifecycleError> {
+        if self.rehearsal_id.trim().is_empty() {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "service-manager lifecycle rehearsal id is required".to_owned(),
+            });
+        }
+        validate_service_manager_unit_name(&self.unit_name)?;
+        if self.events.is_empty() {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "service-manager lifecycle rehearsal requires events".to_owned(),
+            });
+        }
+        if self.validated_at_unix_ms == 0 {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "service-manager lifecycle rehearsal timestamp must be non-zero".to_owned(),
+            });
+        }
+        if self.concurrent_lifecycle_reference_present
+            && self.concurrent_lifecycle_worker_count == 0
+        {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "service-manager lifecycle rehearsal concurrent worker count must be non-zero when concurrent evidence is referenced".to_owned(),
+            });
+        }
+        if self.concurrent_lifecycle_success
+            && (!self.concurrent_lifecycle_reference_present
+                || self.concurrent_lifecycle_worker_count == 0)
+        {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "service-manager lifecycle rehearsal concurrent success requires referenced concurrent evidence".to_owned(),
+            });
+        }
+        for event in &self.events {
+            event.validate()?;
+        }
+        if self.service_manager_action_performed_by_validator
+            || self.deployment_path_mutated_by_validator
+            || self.secrets_loaded
+            || self.external_submission_performed
+            || self.live_execution_performed
+        {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "service-manager lifecycle rehearsal must not perform service actions, mutate deployment paths, load secrets, submit externally, or perform live execution".to_owned(),
+            });
+        }
+        if self.production_ready_claimed {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "service-manager lifecycle rehearsal must not claim production readiness"
+                    .to_owned(),
+            });
+        }
+        Ok(())
+    }
+}
+
+impl RuntimeServiceManagerLifecycleRehearsalReport {
+    /// Validate local-only service-manager lifecycle rehearsal report invariants.
+    pub fn validate(&self) -> Result<(), RuntimeLifecycleError> {
+        if self.validation_version != RUNTIME_SERVICE_MANAGER_LIFECYCLE_REHEARSAL_VERSION {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: format!(
+                    "validation_version must be {RUNTIME_SERVICE_MANAGER_LIFECYCLE_REHEARSAL_VERSION}"
+                ),
+            });
+        }
+        validate_service_manager_unit_name(&self.unit_name)?;
+        if self.rehearsal_id.trim().is_empty() || self.event_count == 0 {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "service-manager lifecycle rehearsal report requires id and events"
+                    .to_owned(),
+            });
+        }
+        if self.concurrent_lifecycle_reference_present
+            && self.concurrent_lifecycle_worker_count == 0
+        {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "service-manager lifecycle rehearsal report concurrent worker count must be non-zero when evidence is referenced".to_owned(),
+            });
+        }
+        if self.service_manager_action_performed_by_validator
+            || self.deployment_path_mutated_by_validator
+            || self.secrets_loaded
+            || self.external_submission_performed
+            || self.live_execution_performed
+            || self.production_ready
+        {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "service-manager lifecycle rehearsal report must not contain side effects or production readiness".to_owned(),
+            });
+        }
+        if self.status == RuntimeServiceManagerLifecycleRehearsalStatus::Validated
+            && !self.blocker_codes.is_empty()
+        {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "validated service-manager lifecycle rehearsal must not contain blockers"
+                    .to_owned(),
+            });
+        }
+        if self.status == RuntimeServiceManagerLifecycleRehearsalStatus::Blocked
+            && self.blocker_codes.is_empty()
+        {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "blocked service-manager lifecycle rehearsal requires blocker codes"
+                    .to_owned(),
+            });
+        }
+        Ok(())
+    }
+}
+
 impl RuntimeDeploymentPermissionTranscript {
     /// Validate sanitized deployment permission transcript input.
     pub fn validate(&self) -> Result<(), RuntimeLifecycleError> {
@@ -3822,6 +4073,113 @@ pub fn validate_service_manager_lifecycle_transcript(
     Ok(report)
 }
 
+/// Validate a local-only service-manager lifecycle rehearsal.
+///
+/// This consumes sanitized event/reference metadata only. It does not call
+/// service managers, start/stop/restart services, mutate deployment paths,
+/// inspect logs, load secrets, submit adapters, perform live execution, or
+/// claim production readiness.
+pub fn validate_service_manager_lifecycle_rehearsal(
+    request: RuntimeServiceManagerLifecycleRehearsalRequest,
+) -> Result<RuntimeServiceManagerLifecycleRehearsalReport, RuntimeLifecycleError> {
+    request.validate()?;
+    let start_evidence_present = rehearsal_has_successful_reference(
+        &request,
+        RuntimeServiceManagerLifecycleEventKind::Started,
+    );
+    let runtime_smoke_event_present = rehearsal_has_successful_reference(
+        &request,
+        RuntimeServiceManagerLifecycleEventKind::RuntimeSmokePassed,
+    );
+    let graceful_shutdown_evidence_present = rehearsal_has_successful_reference(
+        &request,
+        RuntimeServiceManagerLifecycleEventKind::GracefulShutdownRequested,
+    );
+    let stop_evidence_present = rehearsal_has_successful_reference(
+        &request,
+        RuntimeServiceManagerLifecycleEventKind::Stopped,
+    );
+    let restart_evidence_present = rehearsal_has_successful_reference(
+        &request,
+        RuntimeServiceManagerLifecycleEventKind::Restarted,
+    );
+    let recovery_event_present = rehearsal_has_successful_reference(
+        &request,
+        RuntimeServiceManagerLifecycleEventKind::RecoveryValidated,
+    );
+    let ordered_lifecycle_validated = service_manager_lifecycle_order_validated(&request.events);
+    let operator_controlled_events = request.events.iter().all(|event| event.operator_controlled);
+    let non_secret_references_present = request
+        .events
+        .iter()
+        .all(|event| event.non_secret_reference_present);
+    let successful_event_outcomes = request.events.iter().all(|event| event.outcome_success);
+    let runtime_smoke_evidence_present =
+        runtime_smoke_event_present && request.runtime_smoke_reference_present;
+    let recovery_evidence_present = recovery_event_present
+        && request.audit_replay_reference_present
+        && request.sqlite_recovery_reference_present
+        && request.restart_recovery_reference_present;
+    let blocker_codes = service_manager_lifecycle_rehearsal_blockers(
+        &request,
+        ServiceManagerLifecycleRehearsalEvidence {
+            ordered_lifecycle_validated,
+            operator_controlled_events,
+            non_secret_references_present,
+            successful_event_outcomes,
+            start_evidence_present,
+            runtime_smoke_evidence_present,
+            graceful_shutdown_evidence_present,
+            stop_evidence_present,
+            restart_evidence_present,
+            recovery_evidence_present,
+        },
+    );
+    let status = if blocker_codes.is_empty() {
+        RuntimeServiceManagerLifecycleRehearsalStatus::Validated
+    } else {
+        RuntimeServiceManagerLifecycleRehearsalStatus::Blocked
+    };
+    let report = RuntimeServiceManagerLifecycleRehearsalReport {
+        validation_version: RUNTIME_SERVICE_MANAGER_LIFECYCLE_REHEARSAL_VERSION.to_owned(),
+        rehearsal_id: request.rehearsal_id,
+        service_manager: request.service_manager,
+        unit_name: request.unit_name,
+        event_count: request.events.len() as u64,
+        ordered_lifecycle_validated,
+        operator_controlled_events,
+        non_secret_references_present,
+        successful_event_outcomes,
+        start_evidence_present,
+        runtime_smoke_evidence_present,
+        graceful_shutdown_evidence_present,
+        stop_evidence_present,
+        restart_evidence_present,
+        recovery_evidence_present,
+        audit_replay_reference_present: request.audit_replay_reference_present,
+        sqlite_recovery_reference_present: request.sqlite_recovery_reference_present,
+        concurrent_lifecycle_reference_present: request.concurrent_lifecycle_reference_present,
+        concurrent_lifecycle_worker_count: request.concurrent_lifecycle_worker_count,
+        concurrent_lifecycle_success: request.concurrent_lifecycle_success,
+        graceful_shutdown_checkpoint_reference_present: request
+            .graceful_shutdown_checkpoint_reference_present,
+        restart_recovery_reference_present: request.restart_recovery_reference_present,
+        operator_approved: request.operator_approved,
+        reviewer_approved: request.reviewer_approved,
+        status,
+        blocker_codes,
+        service_manager_action_performed_by_validator: false,
+        deployment_path_mutated_by_validator: false,
+        secrets_loaded: false,
+        external_submission_performed: false,
+        live_execution_performed: false,
+        production_ready: false,
+        validated_at_unix_ms: request.validated_at_unix_ms,
+    };
+    report.validate()?;
+    Ok(report)
+}
+
 /// Validate sanitized deployment-host filesystem permission evidence metadata.
 ///
 /// This consumes operator-supplied reference metadata only. It does not change
@@ -4608,6 +4966,20 @@ struct ServiceManagerLifecycleEvidence {
     concurrent_lifecycle_evidence_present: bool,
 }
 
+#[derive(Debug, Clone, Copy)]
+struct ServiceManagerLifecycleRehearsalEvidence {
+    ordered_lifecycle_validated: bool,
+    operator_controlled_events: bool,
+    non_secret_references_present: bool,
+    successful_event_outcomes: bool,
+    start_evidence_present: bool,
+    runtime_smoke_evidence_present: bool,
+    graceful_shutdown_evidence_present: bool,
+    stop_evidence_present: bool,
+    restart_evidence_present: bool,
+    recovery_evidence_present: bool,
+}
+
 impl RuntimeServiceManagerLifecycleTranscript {
     fn has_successful_reference(&self, kind: RuntimeServiceManagerLifecycleEventKind) -> bool {
         self.events.iter().any(|event| {
@@ -4617,6 +4989,106 @@ impl RuntimeServiceManagerLifecycleTranscript {
                 && event.outcome_success
         })
     }
+}
+
+fn rehearsal_has_successful_reference(
+    request: &RuntimeServiceManagerLifecycleRehearsalRequest,
+    kind: RuntimeServiceManagerLifecycleEventKind,
+) -> bool {
+    request.events.iter().any(|event| {
+        event.kind == kind
+            && event.operator_controlled
+            && event.non_secret_reference_present
+            && event.outcome_success
+    })
+}
+
+fn service_manager_lifecycle_order_validated(
+    events: &[RuntimeServiceManagerLifecycleEvent],
+) -> bool {
+    let required_order = [
+        RuntimeServiceManagerLifecycleEventKind::UnitLoaded,
+        RuntimeServiceManagerLifecycleEventKind::Started,
+        RuntimeServiceManagerLifecycleEventKind::RuntimeSmokePassed,
+        RuntimeServiceManagerLifecycleEventKind::GracefulShutdownRequested,
+        RuntimeServiceManagerLifecycleEventKind::Stopped,
+        RuntimeServiceManagerLifecycleEventKind::Restarted,
+        RuntimeServiceManagerLifecycleEventKind::RecoveryValidated,
+    ];
+    let mut cursor = 0_usize;
+    let mut last_observed_at = 0_u64;
+    for event in events {
+        if event.observed_at_unix_ms < last_observed_at {
+            return false;
+        }
+        last_observed_at = event.observed_at_unix_ms;
+        if cursor < required_order.len() && event.kind == required_order[cursor] {
+            cursor = cursor.saturating_add(1);
+        }
+    }
+    cursor == required_order.len()
+}
+
+fn service_manager_lifecycle_rehearsal_blockers(
+    request: &RuntimeServiceManagerLifecycleRehearsalRequest,
+    evidence: ServiceManagerLifecycleRehearsalEvidence,
+) -> Vec<String> {
+    let mut blockers = Vec::new();
+    if !evidence.ordered_lifecycle_validated {
+        blockers.push("missing-ordered-lifecycle-evidence".to_owned());
+    }
+    if !evidence.operator_controlled_events {
+        blockers.push("non-operator-controlled-event".to_owned());
+    }
+    if !evidence.non_secret_references_present {
+        blockers.push("missing-non-secret-event-reference".to_owned());
+    }
+    if !evidence.successful_event_outcomes {
+        blockers.push("failed-lifecycle-event".to_owned());
+    }
+    if !evidence.start_evidence_present {
+        blockers.push("missing-start-evidence".to_owned());
+    }
+    if !evidence.runtime_smoke_evidence_present {
+        blockers.push("missing-runtime-smoke-evidence".to_owned());
+    }
+    if !evidence.graceful_shutdown_evidence_present {
+        blockers.push("missing-graceful-shutdown-evidence".to_owned());
+    }
+    if !evidence.stop_evidence_present {
+        blockers.push("missing-stop-evidence".to_owned());
+    }
+    if !evidence.restart_evidence_present {
+        blockers.push("missing-restart-evidence".to_owned());
+    }
+    if !evidence.recovery_evidence_present {
+        blockers.push("missing-recovery-evidence".to_owned());
+    }
+    if !request.audit_replay_reference_present {
+        blockers.push("missing-audit-replay-reference".to_owned());
+    }
+    if !request.sqlite_recovery_reference_present {
+        blockers.push("missing-sqlite-recovery-reference".to_owned());
+    }
+    if !request.concurrent_lifecycle_reference_present
+        || request.concurrent_lifecycle_worker_count < 2
+        || !request.concurrent_lifecycle_success
+    {
+        blockers.push("missing-concurrent-lifecycle-evidence".to_owned());
+    }
+    if !request.graceful_shutdown_checkpoint_reference_present {
+        blockers.push("missing-graceful-shutdown-checkpoint-reference".to_owned());
+    }
+    if !request.restart_recovery_reference_present {
+        blockers.push("missing-restart-recovery-reference".to_owned());
+    }
+    if !request.operator_approved {
+        blockers.push("missing-operator-approval".to_owned());
+    }
+    if !request.reviewer_approved {
+        blockers.push("missing-reviewer-approval".to_owned());
+    }
+    blockers
 }
 
 fn service_manager_lifecycle_blockers(
@@ -6661,7 +7133,9 @@ mod tests {
         RuntimeProductionPreflightStatus, RuntimeRecoveredOpportunityTraceSummary,
         RuntimeRestartRecoveryDisposition, RuntimeServiceManagerKind,
         RuntimeServiceManagerLifecycleEvent, RuntimeServiceManagerLifecycleEventKind,
-        RuntimeServiceManagerLifecycleTranscript, RuntimeServiceManagerLifecycleTranscriptStatus,
+        RuntimeServiceManagerLifecycleRehearsalRequest,
+        RuntimeServiceManagerLifecycleRehearsalStatus, RuntimeServiceManagerLifecycleTranscript,
+        RuntimeServiceManagerLifecycleTranscriptStatus,
         EXECUTION_ADAPTER_LAST_RECOVERY_PLAN_CHECKPOINT_KEY,
         EXECUTION_ADAPTER_LAST_RUN_CHECKPOINT_KEY, EXECUTION_PLANNER_LAST_DRAFT_CHECKPOINT_KEY,
         RUNTIME_DEPLOYMENT_SMOKE_VALIDATION_VERSION, RUNTIME_GRACEFUL_SHUTDOWN_CHECKPOINT_KEY,
@@ -7867,6 +8341,93 @@ redact_secrets = true
     }
 
     #[test]
+    fn service_manager_lifecycle_rehearsal_validates_ordered_local_evidence() {
+        let report = super::validate_service_manager_lifecycle_rehearsal(
+            service_manager_lifecycle_rehearsal(true),
+        )
+        .expect("complete service-manager lifecycle rehearsal should validate");
+
+        assert_eq!(
+            report.status,
+            RuntimeServiceManagerLifecycleRehearsalStatus::Validated
+        );
+        assert_eq!(report.event_count, 7);
+        assert!(report.ordered_lifecycle_validated);
+        assert!(report.operator_controlled_events);
+        assert!(report.non_secret_references_present);
+        assert!(report.successful_event_outcomes);
+        assert!(report.start_evidence_present);
+        assert!(report.runtime_smoke_evidence_present);
+        assert!(report.graceful_shutdown_evidence_present);
+        assert!(report.stop_evidence_present);
+        assert!(report.restart_evidence_present);
+        assert!(report.recovery_evidence_present);
+        assert!(report.audit_replay_reference_present);
+        assert!(report.sqlite_recovery_reference_present);
+        assert!(report.concurrent_lifecycle_reference_present);
+        assert_eq!(report.concurrent_lifecycle_worker_count, 3);
+        assert!(report.concurrent_lifecycle_success);
+        assert!(report.graceful_shutdown_checkpoint_reference_present);
+        assert!(report.restart_recovery_reference_present);
+        assert!(report.operator_approved);
+        assert!(report.reviewer_approved);
+        assert!(report.blocker_codes.is_empty());
+        assert!(!report.service_manager_action_performed_by_validator);
+        assert!(!report.deployment_path_mutated_by_validator);
+        assert!(!report.secrets_loaded);
+        assert!(!report.external_submission_performed);
+        assert!(!report.live_execution_performed);
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn service_manager_lifecycle_rehearsal_blocks_missing_ordered_recovery() {
+        let report = super::validate_service_manager_lifecycle_rehearsal(
+            service_manager_lifecycle_rehearsal(false),
+        )
+        .expect("incomplete service-manager lifecycle rehearsal should block");
+
+        assert_eq!(
+            report.status,
+            RuntimeServiceManagerLifecycleRehearsalStatus::Blocked
+        );
+        assert!(!report.ordered_lifecycle_validated);
+        assert!(!report.restart_evidence_present);
+        assert!(!report.recovery_evidence_present);
+        assert!(!report.concurrent_lifecycle_reference_present);
+        assert!(report
+            .blocker_codes
+            .iter()
+            .any(|code| code == "missing-ordered-lifecycle-evidence"));
+        assert!(report
+            .blocker_codes
+            .iter()
+            .any(|code| code == "missing-restart-evidence"));
+        assert!(report
+            .blocker_codes
+            .iter()
+            .any(|code| code == "missing-restart-recovery-reference"));
+        assert!(report
+            .blocker_codes
+            .iter()
+            .any(|code| code == "missing-reviewer-approval"));
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn service_manager_lifecycle_rehearsal_rejects_validator_side_effects() {
+        let mut request = service_manager_lifecycle_rehearsal(true);
+        request.service_manager_action_performed_by_validator = true;
+
+        let error = super::validate_service_manager_lifecycle_rehearsal(request)
+            .expect_err("validator service-manager actions must fail closed");
+
+        assert!(error
+            .to_string()
+            .contains("must not perform service actions"));
+    }
+
+    #[test]
     fn deployment_permission_transcript_validates_fail_closed_evidence_shape() {
         let report = super::validate_deployment_permission_transcript(
             deployment_permission_transcript(true),
@@ -8442,6 +9003,88 @@ redact_secrets = true
             live_execution_performed: false,
             production_ready_claimed: false,
             validated_at_unix_ms: 92_000,
+        }
+    }
+
+    fn service_manager_lifecycle_rehearsal(
+        complete: bool,
+    ) -> RuntimeServiceManagerLifecycleRehearsalRequest {
+        let mut events = vec![
+            service_manager_lifecycle_event(
+                "rehearsal-unit-loaded",
+                RuntimeServiceManagerLifecycleEventKind::UnitLoaded,
+                93_000,
+                true,
+            ),
+            service_manager_lifecycle_event(
+                "rehearsal-started",
+                RuntimeServiceManagerLifecycleEventKind::Started,
+                93_100,
+                true,
+            ),
+            service_manager_lifecycle_event(
+                "rehearsal-runtime-smoke",
+                RuntimeServiceManagerLifecycleEventKind::RuntimeSmokePassed,
+                93_200,
+                true,
+            ),
+            service_manager_lifecycle_event(
+                "rehearsal-shutdown",
+                RuntimeServiceManagerLifecycleEventKind::GracefulShutdownRequested,
+                93_300,
+                true,
+            ),
+            service_manager_lifecycle_event(
+                "rehearsal-stopped",
+                RuntimeServiceManagerLifecycleEventKind::Stopped,
+                93_400,
+                true,
+            ),
+            service_manager_lifecycle_event(
+                "rehearsal-restarted",
+                RuntimeServiceManagerLifecycleEventKind::Restarted,
+                93_500,
+                true,
+            ),
+            service_manager_lifecycle_event(
+                "rehearsal-recovery",
+                RuntimeServiceManagerLifecycleEventKind::RecoveryValidated,
+                93_600,
+                true,
+            ),
+        ];
+        if !complete {
+            events.retain(|event| {
+                event.kind != RuntimeServiceManagerLifecycleEventKind::Restarted
+                    && event.kind != RuntimeServiceManagerLifecycleEventKind::RecoveryValidated
+            });
+        }
+        RuntimeServiceManagerLifecycleRehearsalRequest {
+            rehearsal_id: if complete {
+                "service-manager-lifecycle-rehearsal-ready".to_owned()
+            } else {
+                "service-manager-lifecycle-rehearsal-blocked".to_owned()
+            },
+            service_manager: RuntimeServiceManagerKind::Systemd,
+            unit_name: "arb-agent.service".to_owned(),
+            events,
+            audit_replay_reference_present: complete,
+            sqlite_recovery_reference_present: complete,
+            runtime_smoke_reference_present: complete,
+            concurrent_lifecycle_reference_present: complete,
+            concurrent_lifecycle_worker_count: if complete { 3 } else { 0 },
+            concurrent_lifecycle_success: complete,
+            graceful_shutdown_checkpoint_reference_present: complete,
+            restart_recovery_reference_present: complete,
+            operator_approved: complete,
+            reviewer_approved: complete,
+            service_manager_action_performed_by_validator: false,
+            deployment_path_mutated_by_validator: false,
+            secrets_loaded: false,
+            external_submission_performed: false,
+            live_execution_performed: false,
+            production_ready_claimed: false,
+            validated_at_unix_ms: 94_000,
         }
     }
 

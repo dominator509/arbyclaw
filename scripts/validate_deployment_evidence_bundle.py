@@ -110,6 +110,18 @@ COMPONENT_COMMANDS = [
         False,
     ),
     (
+        "service-manager-lifecycle-rehearsal",
+        [
+            "cargo",
+            "run",
+            "-p",
+            "arb-agent",
+            "--",
+            "validate-service-manager-lifecycle-rehearsal",
+        ],
+        False,
+    ),
+    (
         "deployment-sqlite-schema-migration-transcript",
         [
             "cargo",

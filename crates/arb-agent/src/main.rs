@@ -101,43 +101,43 @@ use arb_core::{
     validate_opportunity_candidate_trace_restart_recovery,
     validate_opportunity_planner_handoff_with_trace, validate_paid_market_data_provider_evaluation,
     validate_remote_command_envelope, validate_rollback_execution_transcript,
-    validate_service_manager_lifecycle_transcript, validate_strategy_profile_replay_corpus,
-    validate_strategy_profitability_tuning, AgentConfig, AgenticHandoffPackager,
-    AgenticHandoffReviewRecord, AgenticHandoffReviewRequest, AgenticHandoffReviewStatus,
-    AppendOnlyAuditJournal, ApprovedDestinationEntry, AuditDeploymentDiskFullTranscript,
-    AuditDeploymentDiskFullTranscriptStatus, AuditDeploymentRetentionTranscript,
-    AuditDeploymentRetentionTranscriptStatus, AuditEvent, AuditEventKind, AuditJournalFileMetadata,
-    AuditRecord, AuditRetentionExecutionRequest, AuditRetentionPolicy, AuditValue,
-    BacktestDatasetDefinition, BacktestScenarioDefinition, BuildIdentity,
-    CexBalanceSnapshotTranscript, CexBalanceSnapshotTranscriptFormat, CexCredentialPermission,
-    CexCredentialScopeReviewInput, CexCredentialScopeReviewStatus, CexExchangeMarketDataFormat,
-    CexMarketDataRequestKind, CexMarketDataRequestPlan, CexMockMarketDataTranscript,
-    CexOrderLifecycleRecord, CexOrderLifecycleTranscript, CexOrderLifecycleTranscriptFormat,
-    CexOrderRequest, CexOrderSide, CexOrderType, CexOrderValidationRecord, CexRateLimitObservation,
-    CexRateLimitScope, CexRateLimitStatus, CexTimeInForce, ChannelAdapterValidationReport,
-    ChannelAdapterValidationRequest, ChannelAdapterValidationStatus,
-    ChannelSessionValidationReport, ChannelSessionValidationStatus, CommunicationBoundaryConfig,
-    ComponentHealthStatus, ConfigError, ConfigMigrationStatus, DashboardAccessContext,
-    DashboardAccessSource, DashboardBoundaryConfig, DashboardHostedRequestMethod,
-    DashboardHostedRequestPreflight, DashboardHostedRequestValidation,
-    DashboardHostedRequestValidationStatus, DashboardHostedSecurityPolicy,
-    DashboardHostedSecurityReviewStatus, DashboardHostedSessionValidationStatus, DashboardPanel,
-    DashboardPanelItem, DashboardPanelKind, DashboardRenderRequest, DashboardRenderer,
-    DashboardSeverity, DashboardSnapshot, DeploymentFailureCaptureTranscript,
-    DeploymentFailureCaptureTranscriptStatus, DestinationAllowlist, DestinationApprovalSource,
-    DestinationOwnershipReviewReport, DestinationOwnershipReviewStatus, DestinationPolicy,
-    DeterministicAgenticHandoffPackager, DeterministicDashboardRenderer,
-    DeterministicExecutionAdapterBoundary, DeterministicExecutionPlanner,
-    DeterministicNotificationBoundary, DeterministicObservabilityCollector,
-    DeterministicOperatorCommandRouter, DeterministicOpportunityEngine,
-    DeterministicValidationHarness, DexProtocolRiskReviewRequest, DexProtocolRiskReviewStatus,
-    DexRequestPlan, DexRequestPlanKind, DexResponseTranscript, DexRouteKind, DexSimulationStatus,
-    DexSwapLifecycleRecord, DexSwapMode, DexSwapQuoteRequest, DexSwapQuoteResponse,
-    DexSwapValidationRecord, ExecutionAdapter, ExecutionAdapterConfig, ExecutionAdapterRequest,
-    ExecutionAdapterRunStatus, ExecutionIntent, ExecutionIntentKind, ExecutionPlanStatus,
-    ExecutionPlanner, ExecutionPlannerConfig, ExecutionPlannerRequest, ExecutionScope,
-    ExpectedValidationOutcome, FeeAdjustedEdge, FeeEstimate, FeeModelError, FeeProvider,
-    FeeSchedule, FeeScheduleVerificationInput, FeeScheduleVerificationReport,
+    validate_service_manager_lifecycle_rehearsal, validate_service_manager_lifecycle_transcript,
+    validate_strategy_profile_replay_corpus, validate_strategy_profitability_tuning, AgentConfig,
+    AgenticHandoffPackager, AgenticHandoffReviewRecord, AgenticHandoffReviewRequest,
+    AgenticHandoffReviewStatus, AppendOnlyAuditJournal, ApprovedDestinationEntry,
+    AuditDeploymentDiskFullTranscript, AuditDeploymentDiskFullTranscriptStatus,
+    AuditDeploymentRetentionTranscript, AuditDeploymentRetentionTranscriptStatus, AuditEvent,
+    AuditEventKind, AuditJournalFileMetadata, AuditRecord, AuditRetentionExecutionRequest,
+    AuditRetentionPolicy, AuditValue, BacktestDatasetDefinition, BacktestScenarioDefinition,
+    BuildIdentity, CexBalanceSnapshotTranscript, CexBalanceSnapshotTranscriptFormat,
+    CexCredentialPermission, CexCredentialScopeReviewInput, CexCredentialScopeReviewStatus,
+    CexExchangeMarketDataFormat, CexMarketDataRequestKind, CexMarketDataRequestPlan,
+    CexMockMarketDataTranscript, CexOrderLifecycleRecord, CexOrderLifecycleTranscript,
+    CexOrderLifecycleTranscriptFormat, CexOrderRequest, CexOrderSide, CexOrderType,
+    CexOrderValidationRecord, CexRateLimitObservation, CexRateLimitScope, CexRateLimitStatus,
+    CexTimeInForce, ChannelAdapterValidationReport, ChannelAdapterValidationRequest,
+    ChannelAdapterValidationStatus, ChannelSessionValidationReport, ChannelSessionValidationStatus,
+    CommunicationBoundaryConfig, ComponentHealthStatus, ConfigError, ConfigMigrationStatus,
+    DashboardAccessContext, DashboardAccessSource, DashboardBoundaryConfig,
+    DashboardHostedRequestMethod, DashboardHostedRequestPreflight,
+    DashboardHostedRequestValidation, DashboardHostedRequestValidationStatus,
+    DashboardHostedSecurityPolicy, DashboardHostedSecurityReviewStatus,
+    DashboardHostedSessionValidationStatus, DashboardPanel, DashboardPanelItem, DashboardPanelKind,
+    DashboardRenderRequest, DashboardRenderer, DashboardSeverity, DashboardSnapshot,
+    DeploymentFailureCaptureTranscript, DeploymentFailureCaptureTranscriptStatus,
+    DestinationAllowlist, DestinationApprovalSource, DestinationOwnershipReviewReport,
+    DestinationOwnershipReviewStatus, DestinationPolicy, DeterministicAgenticHandoffPackager,
+    DeterministicDashboardRenderer, DeterministicExecutionAdapterBoundary,
+    DeterministicExecutionPlanner, DeterministicNotificationBoundary,
+    DeterministicObservabilityCollector, DeterministicOperatorCommandRouter,
+    DeterministicOpportunityEngine, DeterministicValidationHarness, DexProtocolRiskReviewRequest,
+    DexProtocolRiskReviewStatus, DexRequestPlan, DexRequestPlanKind, DexResponseTranscript,
+    DexRouteKind, DexSimulationStatus, DexSwapLifecycleRecord, DexSwapMode, DexSwapQuoteRequest,
+    DexSwapQuoteResponse, DexSwapValidationRecord, ExecutionAdapter, ExecutionAdapterConfig,
+    ExecutionAdapterRequest, ExecutionAdapterRunStatus, ExecutionIntent, ExecutionIntentKind,
+    ExecutionPlanStatus, ExecutionPlanner, ExecutionPlannerConfig, ExecutionPlannerRequest,
+    ExecutionScope, ExpectedValidationOutcome, FeeAdjustedEdge, FeeEstimate, FeeModelError,
+    FeeProvider, FeeSchedule, FeeScheduleVerificationInput, FeeScheduleVerificationReport,
     FeeScheduleVerificationStatus, FixtureKind, FuzzCorpusDefinition, FuzzSeedRecord,
     FuzzTargetKind, HealthStatus, HistoricalMarketDataPersistenceInput,
     HistoricalMarketDataPersistenceReport, HistoricalMarketDataPersistenceStatus,
@@ -183,7 +183,8 @@ use arb_core::{
     RuntimeFailureKind, RuntimeGracefulShutdownRequest, RuntimeLifecycleStatus,
     RuntimePanicHookInstallationRequest, RuntimeRestartRecoveryDisposition,
     RuntimeServiceManagerKind, RuntimeServiceManagerLifecycleEvent,
-    RuntimeServiceManagerLifecycleEventKind, RuntimeServiceManagerLifecycleTranscript,
+    RuntimeServiceManagerLifecycleEventKind, RuntimeServiceManagerLifecycleRehearsalRequest,
+    RuntimeServiceManagerLifecycleRehearsalStatus, RuntimeServiceManagerLifecycleTranscript,
     RuntimeServiceManagerLifecycleTranscriptStatus, SecretBackupRestoreReviewReport,
     SecretBackupRestoreReviewRequest, SecretBackupRestoreReviewStatus, SecretRef,
     SecretRotationPlanReport, SecretRotationPlanRequest, SecretRotationPlanStatus,
@@ -466,6 +467,7 @@ fn is_signer_web3_validation_command(command: &str) -> bool {
             | "validate-deployment-permission-transcript"
             | "validate-deployment-retention-transcript"
             | "validate-rollback-execution-transcript"
+            | "validate-service-manager-lifecycle-rehearsal"
             | "validate-service-manager-lifecycle-transcript"
             | "validate-web3-nonce-reservation"
             | "validate-web3-unsigned-payload-review"
@@ -593,6 +595,9 @@ fn run_signer_web3_validation_command(command: &str) -> Result<(), AgentCliError
         "validate-rollback-execution-transcript" => run_rollback_execution_transcript_validation(),
         "validate-service-manager-lifecycle-transcript" => {
             run_service_manager_lifecycle_transcript_validation()
+        }
+        "validate-service-manager-lifecycle-rehearsal" => {
+            run_service_manager_lifecycle_rehearsal_validation()
         }
         "validate-signer-runtime-isolation" => run_signer_runtime_isolation_validation(),
         _ => unreachable!("signer/Web3 validation command is matched by run_with_args"),
@@ -894,6 +899,7 @@ fn print_usage() {
         "       arb-agent validate-runtime-smoke --config <path> --workspace <fresh-dir> [--iterations <n>]"
     );
     println!("       arb-agent validate-service-manager-lifecycle-transcript");
+    println!("       arb-agent validate-service-manager-lifecycle-rehearsal");
     println!("default mode reports scaffold status without loading secrets or trading");
     println!("communication, dashboard, validation, packaging, hardening, and handoff commands are typed/local boundaries only; live execute, withdraw, bridge, sign, broadcast, external fuzzing, live network tests, public web exposure, service installation, external agent execution, external hardening execution, production claims, and production deployment remain unavailable");
 }
@@ -10565,6 +10571,15 @@ const fn service_manager_lifecycle_status_label(
     }
 }
 
+const fn service_manager_lifecycle_rehearsal_status_label(
+    status: RuntimeServiceManagerLifecycleRehearsalStatus,
+) -> &'static str {
+    match status {
+        RuntimeServiceManagerLifecycleRehearsalStatus::Validated => "validated",
+        RuntimeServiceManagerLifecycleRehearsalStatus::Blocked => "blocked",
+    }
+}
+
 const fn deployment_disk_full_status_label(
     status: AuditDeploymentDiskFullTranscriptStatus,
 ) -> &'static str {
@@ -12355,6 +12370,91 @@ fn run_service_manager_lifecycle_transcript_validation() -> Result<(), AgentCliE
     Ok(())
 }
 
+fn run_service_manager_lifecycle_rehearsal_validation() -> Result<(), AgentCliError> {
+    let ready = validate_service_manager_lifecycle_rehearsal(
+        local_service_manager_lifecycle_rehearsal("ready", true),
+    )
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let blocked = validate_service_manager_lifecycle_rehearsal(
+        local_service_manager_lifecycle_rehearsal("blocked", false),
+    )
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+
+    if ready.status != RuntimeServiceManagerLifecycleRehearsalStatus::Validated
+        || blocked.status != RuntimeServiceManagerLifecycleRehearsalStatus::Blocked
+        || ready.production_ready
+        || blocked.production_ready
+        || ready.service_manager_action_performed_by_validator
+        || blocked.service_manager_action_performed_by_validator
+        || ready.deployment_path_mutated_by_validator
+        || blocked.deployment_path_mutated_by_validator
+        || ready.secrets_loaded
+        || blocked.secrets_loaded
+        || ready.external_submission_performed
+        || blocked.external_submission_performed
+        || ready.live_execution_performed
+        || blocked.live_execution_performed
+        || blocked.blocker_codes.is_empty()
+    {
+        return Err(AgentCliError::Validation(
+            "service-manager lifecycle rehearsal validation failed".to_owned(),
+        ));
+    }
+
+    println!("service-manager-lifecycle-rehearsal: validation passed");
+    println!(
+        "ready-rehearsal-status: {}",
+        service_manager_lifecycle_rehearsal_status_label(ready.status)
+    );
+    println!("ready-rehearsal-events: {}", ready.event_count);
+    println!(
+        "ready-ordered-lifecycle-validated: {}",
+        ready.ordered_lifecycle_validated
+    );
+    println!(
+        "ready-operator-controlled-events: {}",
+        ready.operator_controlled_events
+    );
+    println!(
+        "ready-non-secret-references-present: {}",
+        ready.non_secret_references_present
+    );
+    println!(
+        "ready-graceful-shutdown-checkpoint-reference-present: {}",
+        ready.graceful_shutdown_checkpoint_reference_present
+    );
+    println!(
+        "ready-restart-recovery-reference-present: {}",
+        ready.restart_recovery_reference_present
+    );
+    println!(
+        "ready-concurrent-lifecycle-reference-present: {}",
+        ready.concurrent_lifecycle_reference_present
+    );
+    println!(
+        "ready-concurrent-lifecycle-worker-count: {}",
+        ready.concurrent_lifecycle_worker_count
+    );
+    println!(
+        "ready-concurrent-lifecycle-success: {}",
+        ready.concurrent_lifecycle_success
+    );
+    println!("ready-operator-approved: {}", ready.operator_approved);
+    println!("ready-reviewer-approved: {}", ready.reviewer_approved);
+    println!(
+        "blocked-rehearsal-status: {}",
+        service_manager_lifecycle_rehearsal_status_label(blocked.status)
+    );
+    println!("blocked-blocker-count: {}", blocked.blocker_codes.len());
+    println!("service-manager-action-performed-by-validator: false");
+    println!("deployment-path-mutated-by-validator: false");
+    println!("secrets-loaded: false");
+    println!("external-submission-performed: false");
+    println!("live-execution-performed: false");
+    println!("production-ready: false");
+    Ok(())
+}
+
 fn run_deployment_disk_full_transcript_validation() -> Result<(), AgentCliError> {
     let ready = validate_deployment_disk_full_transcript(local_deployment_disk_full_transcript(
         "ready", true,
@@ -13256,6 +13356,85 @@ fn local_service_manager_lifecycle_transcript(
         live_execution_performed: false,
         production_ready_claimed: false,
         validated_at_unix_ms: 92_000,
+    }
+}
+
+fn local_service_manager_lifecycle_rehearsal(
+    suffix: &str,
+    complete: bool,
+) -> RuntimeServiceManagerLifecycleRehearsalRequest {
+    let mut events = vec![
+        local_service_manager_lifecycle_event(
+            suffix,
+            RuntimeServiceManagerLifecycleEventKind::UnitLoaded,
+            93_000,
+            true,
+        ),
+        local_service_manager_lifecycle_event(
+            suffix,
+            RuntimeServiceManagerLifecycleEventKind::Started,
+            93_100,
+            true,
+        ),
+        local_service_manager_lifecycle_event(
+            suffix,
+            RuntimeServiceManagerLifecycleEventKind::RuntimeSmokePassed,
+            93_200,
+            true,
+        ),
+        local_service_manager_lifecycle_event(
+            suffix,
+            RuntimeServiceManagerLifecycleEventKind::GracefulShutdownRequested,
+            93_300,
+            true,
+        ),
+        local_service_manager_lifecycle_event(
+            suffix,
+            RuntimeServiceManagerLifecycleEventKind::Stopped,
+            93_400,
+            true,
+        ),
+        local_service_manager_lifecycle_event(
+            suffix,
+            RuntimeServiceManagerLifecycleEventKind::Restarted,
+            93_500,
+            true,
+        ),
+        local_service_manager_lifecycle_event(
+            suffix,
+            RuntimeServiceManagerLifecycleEventKind::RecoveryValidated,
+            93_600,
+            true,
+        ),
+    ];
+    if !complete {
+        events.retain(|event| {
+            event.kind != RuntimeServiceManagerLifecycleEventKind::Restarted
+                && event.kind != RuntimeServiceManagerLifecycleEventKind::RecoveryValidated
+        });
+    }
+    RuntimeServiceManagerLifecycleRehearsalRequest {
+        rehearsal_id: format!("local-service-manager-lifecycle-rehearsal-{suffix}"),
+        service_manager: RuntimeServiceManagerKind::Systemd,
+        unit_name: "arb-agent.service".to_owned(),
+        events,
+        audit_replay_reference_present: complete,
+        sqlite_recovery_reference_present: complete,
+        runtime_smoke_reference_present: complete,
+        concurrent_lifecycle_reference_present: complete,
+        concurrent_lifecycle_worker_count: if complete { 3 } else { 0 },
+        concurrent_lifecycle_success: complete,
+        graceful_shutdown_checkpoint_reference_present: complete,
+        restart_recovery_reference_present: complete,
+        operator_approved: complete,
+        reviewer_approved: complete,
+        service_manager_action_performed_by_validator: false,
+        deployment_path_mutated_by_validator: false,
+        secrets_loaded: false,
+        external_submission_performed: false,
+        live_execution_performed: false,
+        production_ready_claimed: false,
+        validated_at_unix_ms: 94_000,
     }
 }
 
