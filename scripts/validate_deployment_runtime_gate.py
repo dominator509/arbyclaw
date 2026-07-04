@@ -191,6 +191,38 @@ TRANSCRIPT_COMPONENTS = [
         },
     },
     {
+        "name": "deployment-backup-restore-transcript",
+        "command": [
+            "cargo",
+            "run",
+            "-p",
+            "arb-agent",
+            "--",
+            "validate-deployment-backup-restore-transcript",
+        ],
+        "expected": {
+            "deployment-backup-restore-transcript": "validation passed",
+            "ready-transcript-status": "ready-for-external-review",
+            "ready-deployment-host-evidence": "true",
+            "ready-service-lifecycle-reference-present": "true",
+            "ready-backup-artifact-reference-present": "true",
+            "ready-restore-execution-reference-present": "true",
+            "ready-deployment-load-reference-present": "true",
+            "ready-audit-restore-validated": "true",
+            "ready-sqlite-restore-validated": "true",
+            "ready-runtime-checkpoint-restore-validated": "true",
+            "ready-post-restore-runtime-smoke-passed": "true",
+            "blocked-transcript-status": "blocked",
+            "backup-restore-executed-by-validator": "false",
+            "service-manager-action-performed-by-validator": "false",
+            "deployment-path-mutated-by-validator": "false",
+            "secrets-loaded": "false",
+            "external-submission-performed": "false",
+            "live-execution-performed": "false",
+            "production-ready": "false",
+        },
+    },
+    {
         "name": "deployment-sqlite-schema-migration-transcript",
         "command": [
             "cargo",
@@ -325,6 +357,7 @@ TRANSCRIPT_COMPONENTS = [
 ]
 
 DANGEROUS_TRUE_KEYS = {
+    "backup_restore_executed_by_validator",
     "external_calls_performed",
     "external_execution_performed",
     "external_log_shipping_performed",

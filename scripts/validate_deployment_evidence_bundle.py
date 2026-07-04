@@ -110,6 +110,18 @@ COMPONENT_COMMANDS = [
         False,
     ),
     (
+        "deployment-backup-restore-transcript",
+        [
+            "cargo",
+            "run",
+            "-p",
+            "arb-agent",
+            "--",
+            "validate-deployment-backup-restore-transcript",
+        ],
+        False,
+    ),
+    (
         "service-manager-lifecycle-rehearsal",
         [
             "cargo",
@@ -260,6 +272,7 @@ def build_report() -> dict[str, Any]:
         "artifact_contents_embedded": False,
         "remaining_external_evidence": [
             "operator-controlled service lifecycle execution evidence",
+            "deployment-host backup/restore execution evidence",
             "deployment-host audit and SQLite recovery evidence",
             "deployment-host SQLite schema migration execution evidence",
             "physical disk-full fail-closed evidence",

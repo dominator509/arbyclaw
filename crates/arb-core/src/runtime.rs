@@ -143,6 +143,10 @@ pub const RUNTIME_GRACEFUL_SHUTDOWN_VERSION: &str = "phase26-runtime-graceful-sh
 pub const RUNTIME_BACKUP_RESTORE_VALIDATION_VERSION: &str =
     "phase26-runtime-backup-restore-local-v1";
 
+/// Stable local deployment-host backup/restore transcript validation version.
+pub const RUNTIME_DEPLOYMENT_BACKUP_RESTORE_TRANSCRIPT_VERSION: &str =
+    "phase75-deployment-backup-restore-transcript-local-v1";
+
 /// Stable local runtime restart recovery validation version.
 pub const RUNTIME_RESTART_RECOVERY_VALIDATION_VERSION: &str =
     "phase26-runtime-restart-recovery-local-v1";
@@ -1361,6 +1365,16 @@ pub enum RuntimeDeploymentAuditSqliteTranscriptStatus {
     Blocked,
 }
 
+/// Local validation status for sanitized deployment-host backup/restore transcripts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum RuntimeDeploymentBackupRestoreTranscriptStatus {
+    /// Transcript contains all required deployment-host backup/restore evidence references.
+    ReadyForExternalReview,
+    /// Transcript is missing backup/restore evidence or contains unsafe flags.
+    Blocked,
+}
+
 /// Local validation status for sanitized deployment-host SQLite schema migration transcripts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -1579,6 +1593,132 @@ pub struct RuntimeDeploymentAuditSqliteTranscriptReport {
     pub status: RuntimeDeploymentAuditSqliteTranscriptStatus,
     /// Non-secret blocker codes.
     pub blocker_codes: Vec<String>,
+    /// Whether this validator performed service-manager actions. Always false.
+    pub service_manager_action_performed_by_validator: bool,
+    /// Whether this validator mutated deployment paths. Always false.
+    pub deployment_path_mutated_by_validator: bool,
+    /// Whether this validator loaded secrets. Always false.
+    pub secrets_loaded: bool,
+    /// Whether this validator submitted externally. Always false.
+    pub external_submission_performed: bool,
+    /// Whether live execution was performed. Always false.
+    pub live_execution_performed: bool,
+    /// Whether this report approves production readiness. Always false.
+    pub production_ready: bool,
+    /// Transcript validation timestamp in Unix milliseconds.
+    pub validated_at_unix_ms: u64,
+}
+
+/// Sanitized deployment-host backup/restore validation request.
+///
+/// This contains only reference presence and outcome flags. It must not embed
+/// host paths, backup archives, audit payloads, SQLite contents, logs, command
+/// output, secrets, or evidence artifact contents.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RuntimeDeploymentBackupRestoreTranscript {
+    /// Stable transcript id.
+    pub transcript_id: String,
+    /// Non-secret deployment-host or runner label.
+    pub host_label: String,
+    /// Whether evidence came from a physical/deployment-like host.
+    pub deployment_host_evidence: bool,
+    /// Whether service lifecycle context evidence is present.
+    pub service_lifecycle_reference_present: bool,
+    /// Whether backup artifact locator/reference evidence is present.
+    pub backup_artifact_reference_present: bool,
+    /// Whether restore execution evidence is present.
+    pub restore_execution_reference_present: bool,
+    /// Whether backup/restore load evidence is present.
+    pub deployment_load_reference_present: bool,
+    /// Whether audit replay after restore was validated.
+    pub audit_replay_after_restore_validated: bool,
+    /// Whether audit hash-chain continuity after restore was validated.
+    pub audit_hash_chain_after_restore_validated: bool,
+    /// Whether SQLite integrity after restore was validated.
+    pub sqlite_integrity_after_restore_validated: bool,
+    /// Whether SQLite WAL/checkpoint recovery after restore was validated.
+    pub sqlite_checkpoint_after_restore_validated: bool,
+    /// Whether restored runtime checkpoints were validated.
+    pub runtime_checkpoint_restore_validated: bool,
+    /// Whether post-restore runtime smoke evidence is present.
+    pub post_restore_runtime_smoke_passed: bool,
+    /// Whether rollback/fallback reference is present.
+    pub rollback_reference_present: bool,
+    /// Whether recovery/runbook reference is present.
+    pub recovery_runbook_reference_present: bool,
+    /// Count of non-secret evidence references.
+    pub non_secret_reference_count: u64,
+    /// Whether operator approval/reference is present.
+    pub operator_approved: bool,
+    /// Whether reviewer approval/reference is present.
+    pub reviewer_approved: bool,
+    /// Whether this validator executed backup/restore actions. Must be false.
+    pub backup_restore_executed_by_validator: bool,
+    /// Whether this validator performed service-manager actions. Must be false.
+    pub service_manager_action_performed_by_validator: bool,
+    /// Whether this validator mutated deployment paths. Must be false.
+    pub deployment_path_mutated_by_validator: bool,
+    /// Whether this validator loaded secrets. Must be false.
+    pub secrets_loaded: bool,
+    /// Whether this validator submitted externally. Must be false.
+    pub external_submission_performed: bool,
+    /// Whether live execution was performed. Must be false.
+    pub live_execution_performed: bool,
+    /// Whether this transcript attempts to claim production readiness. Must be false.
+    pub production_ready_claimed: bool,
+    /// Transcript validation timestamp in Unix milliseconds.
+    pub validated_at_unix_ms: u64,
+}
+
+/// Non-secret local validation report for deployment-host backup/restore evidence.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RuntimeDeploymentBackupRestoreTranscriptReport {
+    /// Deployment backup/restore transcript validation version.
+    pub validation_version: String,
+    /// Stable transcript id.
+    pub transcript_id: String,
+    /// Non-secret deployment-host or runner label.
+    pub host_label: String,
+    /// Whether deployment-like host evidence is present.
+    pub deployment_host_evidence: bool,
+    /// Whether service lifecycle context evidence is present.
+    pub service_lifecycle_reference_present: bool,
+    /// Whether backup artifact locator/reference evidence is present.
+    pub backup_artifact_reference_present: bool,
+    /// Whether restore execution evidence is present.
+    pub restore_execution_reference_present: bool,
+    /// Whether backup/restore load evidence is present.
+    pub deployment_load_reference_present: bool,
+    /// Whether audit replay after restore was validated.
+    pub audit_replay_after_restore_validated: bool,
+    /// Whether audit hash-chain continuity after restore was validated.
+    pub audit_hash_chain_after_restore_validated: bool,
+    /// Whether SQLite integrity after restore was validated.
+    pub sqlite_integrity_after_restore_validated: bool,
+    /// Whether SQLite WAL/checkpoint recovery after restore was validated.
+    pub sqlite_checkpoint_after_restore_validated: bool,
+    /// Whether restored runtime checkpoints were validated.
+    pub runtime_checkpoint_restore_validated: bool,
+    /// Whether post-restore runtime smoke evidence is present.
+    pub post_restore_runtime_smoke_passed: bool,
+    /// Whether rollback/fallback reference is present.
+    pub rollback_reference_present: bool,
+    /// Whether recovery/runbook reference is present.
+    pub recovery_runbook_reference_present: bool,
+    /// Count of non-secret evidence references.
+    pub non_secret_reference_count: u64,
+    /// Whether operator approval/reference is present.
+    pub operator_approved: bool,
+    /// Whether reviewer approval/reference is present.
+    pub reviewer_approved: bool,
+    /// Validation status.
+    pub status: RuntimeDeploymentBackupRestoreTranscriptStatus,
+    /// Non-secret blocker codes.
+    pub blocker_codes: Vec<String>,
+    /// Whether this validator executed backup/restore actions. Always false.
+    pub backup_restore_executed_by_validator: bool,
     /// Whether this validator performed service-manager actions. Always false.
     pub service_manager_action_performed_by_validator: bool,
     /// Whether this validator mutated deployment paths. Always false.
@@ -3282,6 +3422,93 @@ impl RuntimeDeploymentAuditSqliteTranscriptReport {
     }
 }
 
+impl RuntimeDeploymentBackupRestoreTranscript {
+    /// Validate sanitized deployment backup/restore transcript input.
+    pub fn validate(&self) -> Result<(), RuntimeLifecycleError> {
+        if self.transcript_id.trim().is_empty() {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "deployment backup/restore transcript id is required".to_owned(),
+            });
+        }
+        if self.host_label.trim().is_empty() {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "deployment backup/restore host label is required".to_owned(),
+            });
+        }
+        if self.validated_at_unix_ms == 0 {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "deployment backup/restore transcript timestamp must be non-zero"
+                    .to_owned(),
+            });
+        }
+        if self.backup_restore_executed_by_validator
+            || self.service_manager_action_performed_by_validator
+            || self.deployment_path_mutated_by_validator
+            || self.secrets_loaded
+            || self.external_submission_performed
+            || self.live_execution_performed
+        {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "deployment backup/restore transcript validator must not execute backup/restore, perform service actions, mutate deployment paths, load secrets, submit externally, or perform live execution".to_owned(),
+            });
+        }
+        if self.production_ready_claimed {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "deployment backup/restore transcript must not claim production readiness"
+                    .to_owned(),
+            });
+        }
+        Ok(())
+    }
+}
+
+impl RuntimeDeploymentBackupRestoreTranscriptReport {
+    /// Validate deployment backup/restore transcript report invariants.
+    pub fn validate(&self) -> Result<(), RuntimeLifecycleError> {
+        if self.validation_version != RUNTIME_DEPLOYMENT_BACKUP_RESTORE_TRANSCRIPT_VERSION {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: format!(
+                    "validation_version must be {RUNTIME_DEPLOYMENT_BACKUP_RESTORE_TRANSCRIPT_VERSION}"
+                ),
+            });
+        }
+        if self.transcript_id.trim().is_empty() || self.host_label.trim().is_empty() {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "deployment backup/restore report requires id and host label".to_owned(),
+            });
+        }
+        if self.backup_restore_executed_by_validator
+            || self.service_manager_action_performed_by_validator
+            || self.deployment_path_mutated_by_validator
+            || self.secrets_loaded
+            || self.external_submission_performed
+            || self.live_execution_performed
+            || self.production_ready
+        {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "deployment backup/restore report must not contain validator side effects or production readiness".to_owned(),
+            });
+        }
+        if self.status == RuntimeDeploymentBackupRestoreTranscriptStatus::ReadyForExternalReview
+            && !self.blocker_codes.is_empty()
+        {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "ready deployment backup/restore report must not contain blockers"
+                    .to_owned(),
+            });
+        }
+        if self.status == RuntimeDeploymentBackupRestoreTranscriptStatus::Blocked
+            && self.blocker_codes.is_empty()
+        {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "blocked deployment backup/restore report requires blocker codes"
+                    .to_owned(),
+            });
+        }
+        Ok(())
+    }
+}
+
 impl RuntimeDeploymentSqliteSchemaMigrationTranscript {
     /// Validate sanitized deployment SQLite schema migration transcript input.
     pub fn validate(&self) -> Result<(), RuntimeLifecycleError> {
@@ -4529,6 +4756,60 @@ pub fn validate_deployment_audit_sqlite_transcript(
     Ok(report)
 }
 
+/// Validate sanitized deployment-host backup/restore evidence metadata.
+///
+/// This consumes operator-supplied reference metadata only. It does not execute
+/// backups or restores, inspect deployment paths, mutate deployment paths, call
+/// service managers, load secrets, submit adapters, perform live execution, or
+/// claim production readiness.
+pub fn validate_deployment_backup_restore_transcript(
+    transcript: RuntimeDeploymentBackupRestoreTranscript,
+) -> Result<RuntimeDeploymentBackupRestoreTranscriptReport, RuntimeLifecycleError> {
+    transcript.validate()?;
+    let blocker_codes = deployment_backup_restore_blockers(&transcript);
+    let status = if blocker_codes.is_empty() {
+        RuntimeDeploymentBackupRestoreTranscriptStatus::ReadyForExternalReview
+    } else {
+        RuntimeDeploymentBackupRestoreTranscriptStatus::Blocked
+    };
+    let report = RuntimeDeploymentBackupRestoreTranscriptReport {
+        validation_version: RUNTIME_DEPLOYMENT_BACKUP_RESTORE_TRANSCRIPT_VERSION.to_owned(),
+        transcript_id: transcript.transcript_id,
+        host_label: transcript.host_label,
+        deployment_host_evidence: transcript.deployment_host_evidence,
+        service_lifecycle_reference_present: transcript.service_lifecycle_reference_present,
+        backup_artifact_reference_present: transcript.backup_artifact_reference_present,
+        restore_execution_reference_present: transcript.restore_execution_reference_present,
+        deployment_load_reference_present: transcript.deployment_load_reference_present,
+        audit_replay_after_restore_validated: transcript.audit_replay_after_restore_validated,
+        audit_hash_chain_after_restore_validated: transcript
+            .audit_hash_chain_after_restore_validated,
+        sqlite_integrity_after_restore_validated: transcript
+            .sqlite_integrity_after_restore_validated,
+        sqlite_checkpoint_after_restore_validated: transcript
+            .sqlite_checkpoint_after_restore_validated,
+        runtime_checkpoint_restore_validated: transcript.runtime_checkpoint_restore_validated,
+        post_restore_runtime_smoke_passed: transcript.post_restore_runtime_smoke_passed,
+        rollback_reference_present: transcript.rollback_reference_present,
+        recovery_runbook_reference_present: transcript.recovery_runbook_reference_present,
+        non_secret_reference_count: transcript.non_secret_reference_count,
+        operator_approved: transcript.operator_approved,
+        reviewer_approved: transcript.reviewer_approved,
+        status,
+        blocker_codes,
+        backup_restore_executed_by_validator: false,
+        service_manager_action_performed_by_validator: false,
+        deployment_path_mutated_by_validator: false,
+        secrets_loaded: false,
+        external_submission_performed: false,
+        live_execution_performed: false,
+        production_ready: false,
+        validated_at_unix_ms: transcript.validated_at_unix_ms,
+    };
+    report.validate()?;
+    Ok(report)
+}
+
 /// Validate sanitized deployment-host SQLite schema migration evidence metadata.
 ///
 /// This consumes operator-supplied reference metadata only. It does not execute
@@ -5516,6 +5797,61 @@ fn deployment_audit_sqlite_blockers(
         blockers.push("missing-recovery-runbook-reference".to_owned());
     }
     if transcript.non_secret_reference_count < 7 {
+        blockers.push("insufficient-non-secret-references".to_owned());
+    }
+    if !transcript.operator_approved {
+        blockers.push("missing-operator-approval".to_owned());
+    }
+    if !transcript.reviewer_approved {
+        blockers.push("missing-reviewer-approval".to_owned());
+    }
+    blockers
+}
+
+fn deployment_backup_restore_blockers(
+    transcript: &RuntimeDeploymentBackupRestoreTranscript,
+) -> Vec<String> {
+    let mut blockers = Vec::new();
+    if !transcript.deployment_host_evidence {
+        blockers.push("missing-deployment-host-evidence".to_owned());
+    }
+    if !transcript.service_lifecycle_reference_present {
+        blockers.push("missing-service-lifecycle-reference".to_owned());
+    }
+    if !transcript.backup_artifact_reference_present {
+        blockers.push("missing-backup-artifact-reference".to_owned());
+    }
+    if !transcript.restore_execution_reference_present {
+        blockers.push("missing-restore-execution-reference".to_owned());
+    }
+    if !transcript.deployment_load_reference_present {
+        blockers.push("missing-deployment-load-reference".to_owned());
+    }
+    if !transcript.audit_replay_after_restore_validated {
+        blockers.push("missing-audit-replay-after-restore-evidence".to_owned());
+    }
+    if !transcript.audit_hash_chain_after_restore_validated {
+        blockers.push("missing-audit-hash-chain-after-restore-evidence".to_owned());
+    }
+    if !transcript.sqlite_integrity_after_restore_validated {
+        blockers.push("missing-sqlite-integrity-after-restore-evidence".to_owned());
+    }
+    if !transcript.sqlite_checkpoint_after_restore_validated {
+        blockers.push("missing-sqlite-checkpoint-after-restore-evidence".to_owned());
+    }
+    if !transcript.runtime_checkpoint_restore_validated {
+        blockers.push("missing-runtime-checkpoint-restore-evidence".to_owned());
+    }
+    if !transcript.post_restore_runtime_smoke_passed {
+        blockers.push("missing-post-restore-runtime-smoke-evidence".to_owned());
+    }
+    if !transcript.rollback_reference_present {
+        blockers.push("missing-rollback-reference".to_owned());
+    }
+    if !transcript.recovery_runbook_reference_present {
+        blockers.push("missing-recovery-runbook-reference".to_owned());
+    }
+    if transcript.non_secret_reference_count < 9 {
         blockers.push("insufficient-non-secret-references".to_owned());
     }
     if !transcript.operator_approved {
@@ -7405,6 +7741,7 @@ mod tests {
         validate_local_runtime_deployment_smoke, validate_local_runtime_restart_recovery,
         validate_local_runtime_restart_recovery_with_trace_recovery,
         RuntimeDeploymentAuditSqliteTranscript, RuntimeDeploymentAuditSqliteTranscriptStatus,
+        RuntimeDeploymentBackupRestoreTranscript, RuntimeDeploymentBackupRestoreTranscriptStatus,
         RuntimeDeploymentPermissionTranscript, RuntimeDeploymentPermissionTranscriptStatus,
         RuntimeDeploymentSmokeLoadIteration, RuntimeDeploymentSmokeLoadValidationReport,
         RuntimeDeploymentSmokeValidationReport, RuntimeDeploymentSmokeValidationRequest,
@@ -9018,6 +9355,90 @@ redact_secrets = true
     }
 
     #[test]
+    fn deployment_backup_restore_transcript_validates_service_load_restore_evidence() {
+        let report = super::validate_deployment_backup_restore_transcript(
+            deployment_backup_restore_transcript(true),
+        )
+        .expect("complete deployment backup/restore transcript should validate");
+
+        assert_eq!(
+            report.status,
+            RuntimeDeploymentBackupRestoreTranscriptStatus::ReadyForExternalReview
+        );
+        assert!(report.deployment_host_evidence);
+        assert!(report.service_lifecycle_reference_present);
+        assert!(report.backup_artifact_reference_present);
+        assert!(report.restore_execution_reference_present);
+        assert!(report.deployment_load_reference_present);
+        assert!(report.audit_replay_after_restore_validated);
+        assert!(report.audit_hash_chain_after_restore_validated);
+        assert!(report.sqlite_integrity_after_restore_validated);
+        assert!(report.sqlite_checkpoint_after_restore_validated);
+        assert!(report.runtime_checkpoint_restore_validated);
+        assert!(report.post_restore_runtime_smoke_passed);
+        assert!(report.rollback_reference_present);
+        assert!(report.recovery_runbook_reference_present);
+        assert_eq!(report.non_secret_reference_count, 10);
+        assert!(report.operator_approved);
+        assert!(report.reviewer_approved);
+        assert!(report.blocker_codes.is_empty());
+        assert!(!report.backup_restore_executed_by_validator);
+        assert!(!report.service_manager_action_performed_by_validator);
+        assert!(!report.deployment_path_mutated_by_validator);
+        assert!(!report.secrets_loaded);
+        assert!(!report.external_submission_performed);
+        assert!(!report.live_execution_performed);
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn deployment_backup_restore_transcript_blocks_missing_restore_evidence() {
+        let report = super::validate_deployment_backup_restore_transcript(
+            deployment_backup_restore_transcript(false),
+        )
+        .expect("incomplete deployment backup/restore transcript should block");
+
+        assert_eq!(
+            report.status,
+            RuntimeDeploymentBackupRestoreTranscriptStatus::Blocked
+        );
+        assert!(!report.deployment_host_evidence);
+        assert!(!report.restore_execution_reference_present);
+        assert!(!report.deployment_load_reference_present);
+        assert!(!report.runtime_checkpoint_restore_validated);
+        assert!(report
+            .blocker_codes
+            .iter()
+            .any(|code| code == "missing-restore-execution-reference"));
+        assert!(report
+            .blocker_codes
+            .iter()
+            .any(|code| code == "missing-deployment-load-reference"));
+        assert!(report
+            .blocker_codes
+            .iter()
+            .any(|code| code == "missing-runtime-checkpoint-restore-evidence"));
+        assert!(report
+            .blocker_codes
+            .iter()
+            .any(|code| code == "insufficient-non-secret-references"));
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn deployment_backup_restore_transcript_rejects_validator_execution() {
+        let mut transcript = deployment_backup_restore_transcript(true);
+        transcript.backup_restore_executed_by_validator = true;
+
+        let error = super::validate_deployment_backup_restore_transcript(transcript)
+            .expect_err("validator backup/restore execution must fail closed");
+
+        assert!(error
+            .to_string()
+            .contains("must not execute backup/restore"));
+    }
+
+    #[test]
     fn deployment_sqlite_schema_migration_transcript_validates_ready_evidence() {
         let report = super::validate_deployment_sqlite_schema_migration_transcript(
             deployment_sqlite_schema_migration_transcript(true),
@@ -9588,6 +10009,43 @@ redact_secrets = true
             live_execution_performed: false,
             production_ready_claimed: false,
             validated_at_unix_ms: 99_000,
+        }
+    }
+
+    fn deployment_backup_restore_transcript(
+        complete: bool,
+    ) -> RuntimeDeploymentBackupRestoreTranscript {
+        RuntimeDeploymentBackupRestoreTranscript {
+            transcript_id: if complete {
+                "deployment-backup-restore-ready".to_owned()
+            } else {
+                "deployment-backup-restore-blocked".to_owned()
+            },
+            host_label: "deployment-host-a".to_owned(),
+            deployment_host_evidence: complete,
+            service_lifecycle_reference_present: complete,
+            backup_artifact_reference_present: complete,
+            restore_execution_reference_present: complete,
+            deployment_load_reference_present: complete,
+            audit_replay_after_restore_validated: complete,
+            audit_hash_chain_after_restore_validated: complete,
+            sqlite_integrity_after_restore_validated: complete,
+            sqlite_checkpoint_after_restore_validated: complete,
+            runtime_checkpoint_restore_validated: complete,
+            post_restore_runtime_smoke_passed: complete,
+            rollback_reference_present: complete,
+            recovery_runbook_reference_present: complete,
+            non_secret_reference_count: if complete { 10 } else { 1 },
+            operator_approved: complete,
+            reviewer_approved: complete,
+            backup_restore_executed_by_validator: false,
+            service_manager_action_performed_by_validator: false,
+            deployment_path_mutated_by_validator: false,
+            secrets_loaded: false,
+            external_submission_performed: false,
+            live_execution_performed: false,
+            production_ready_claimed: false,
+            validated_at_unix_ms: 99_500,
         }
     }
 
