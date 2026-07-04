@@ -3,8 +3,8 @@
 #![allow(clippy::too_many_lines)]
 
 use crate::{
-    AppendOnlyAuditJournal, AuditEvent, AuditEventKind, AuditRecord, AuditValue, StateCheckpoint,
-    StateStore, StateStoreError,
+    AppendOnlyAuditJournal, AuditEvent, AuditEventKind, AuditRecord, AuditValue,
+    PaperBacktestRunReport, StateCheckpoint, StateStore, StateStoreError,
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -15,6 +15,9 @@ use std::{
 
 /// Stable testing, fuzzing, and backtesting boundary version for audit and handoff surfaces.
 pub const TESTING_BACKTESTING_VERSION: &str = "phase-15-testing-fuzzing-backtesting-v1";
+
+/// Stable version for local validation coverage review reports.
+pub const LOCAL_VALIDATION_COVERAGE_REVIEW_VERSION: &str = "local-validation-coverage-review-v1";
 
 /// State-store subsystem name for local validation run checkpoints.
 pub const TESTING_STATE_SUBSYSTEM: &str = "testing";
@@ -778,6 +781,107 @@ pub struct LocalValidationCorpusReport {
     pub production_ready: bool,
 }
 
+/// Caller-supplied local validation coverage review input.
+///
+/// This composes existing local validation-run, property-check, fuzz-corpus,
+/// validation-corpus, and paper-backtest reports. It does not run external
+/// fuzzers, download corpora, use live networks, submit execution, sign,
+/// broadcast, or approve production readiness.
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct LocalValidationCoverageReviewRequest {
+    /// Stable local review id.
+    pub review_id: String,
+    /// Local validation-run record.
+    pub validation_run: ValidationRunRecord,
+    /// Local property-check report.
+    pub property_check: LocalPropertyCheckReport,
+    /// Local fuzz-corpus replay report.
+    pub fuzz_corpus: LocalFuzzCorpusReplayReport,
+    /// Local validation-corpus breadth report.
+    pub validation_corpus: LocalValidationCorpusReport,
+    /// Local paper backtest corpus report.
+    pub paper_backtest: PaperBacktestRunReport,
+    /// Minimum local validation plans required.
+    pub min_validation_plans: usize,
+    /// Minimum deterministic property checks required.
+    pub min_property_checks: usize,
+    /// Minimum fuzz targets required.
+    pub min_fuzz_targets: usize,
+    /// Minimum paper backtest scenarios required.
+    pub min_backtest_scenarios: usize,
+    /// Remaining external evidence that this local review cannot satisfy.
+    pub remaining_external_evidence: Vec<String>,
+    /// Whether a live network was used. Must remain false here.
+    pub live_network_used: bool,
+    /// Whether an external fuzzer was invoked. Must remain false here.
+    pub external_fuzzer_invoked: bool,
+    /// Whether live execution was submitted. Must remain false here.
+    pub live_execution_submitted: bool,
+    /// Whether signing or broadcast occurred. Must remain false here.
+    pub signing_or_broadcast_performed: bool,
+    /// Whether the caller tried to claim production readiness. Must remain false here.
+    pub production_ready_claimed: bool,
+}
+
+/// Local validation coverage review status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum LocalValidationCoverageReviewStatus {
+    /// Local evidence is coherent enough for local review only.
+    ReadyForLocalReview,
+    /// Evidence is incomplete or unsafe and must fail closed.
+    Blocked,
+}
+
+/// Non-secret local validation coverage review report.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct LocalValidationCoverageReviewReport {
+    /// Stable review schema version.
+    pub version: String,
+    /// Stable local review id.
+    pub review_id: String,
+    /// Overall local review status.
+    pub status: LocalValidationCoverageReviewStatus,
+    /// Whether validation-run evidence is local and side-effect-free.
+    pub validation_run_ready: bool,
+    /// Whether property-check evidence is complete and passing.
+    pub property_check_ready: bool,
+    /// Whether fuzz-corpus evidence is complete and locally replayed.
+    pub fuzz_corpus_ready: bool,
+    /// Whether validation-corpus breadth evidence is complete.
+    pub validation_corpus_ready: bool,
+    /// Whether paper backtest evidence is local, replayed, and complete.
+    pub paper_backtest_ready: bool,
+    /// Local validation plan count reviewed.
+    pub validation_plan_count: usize,
+    /// Local property check count reviewed.
+    pub property_check_count: usize,
+    /// Local fuzz target count reviewed.
+    pub fuzz_target_count: usize,
+    /// Local paper backtest scenario count reviewed.
+    pub backtest_scenario_count: usize,
+    /// Whether local breadth floors were met.
+    pub local_breadth_requirements_met: bool,
+    /// Whether remaining external evidence is explicitly recorded.
+    pub remaining_external_evidence_recorded: bool,
+    /// Count of remaining external evidence items.
+    pub remaining_external_evidence_count: usize,
+    /// Whether a live network was used. Always false for a ready report.
+    pub live_network_used: bool,
+    /// Whether an external fuzzer was invoked. Always false for a ready report.
+    pub external_fuzzer_invoked: bool,
+    /// Whether live execution was submitted. Always false for a ready report.
+    pub live_execution_submitted: bool,
+    /// Whether signing or broadcast occurred. Always false for a ready report.
+    pub signing_or_broadcast_performed: bool,
+    /// Whether this report approves production readiness. Always false here.
+    pub production_ready: bool,
+    /// Sanitized local violation codes.
+    pub violation_codes: Vec<String>,
+}
+
 impl LocalPropertyCheckReport {
     /// Validate report invariants before audit/state persistence.
     pub fn validate(&self) -> Result<(), ValidationHarnessError> {
@@ -997,6 +1101,124 @@ impl LocalValidationCorpusReport {
             violations.push(ValidationHarnessViolation::new(
                 "VALIDATION_CORPUS_SIDE_EFFECT_DENIED",
                 "local validation corpus report must not record external fuzzers, live networks, live execution, signing, broadcasts, or production readiness",
+            ));
+        }
+
+        finish_validation(violations)
+    }
+}
+
+impl LocalValidationCoverageReviewRequest {
+    /// Validate local validation coverage review input shape.
+    pub fn validate(&self) -> Result<(), ValidationHarnessError> {
+        let mut violations = Vec::new();
+        validate_id(
+            "validation coverage review",
+            &self.review_id,
+            &mut violations,
+        );
+        if let Err(ValidationHarnessError::ValidationFailed {
+            violations: record_violations,
+        }) = self.validation_run.validate()
+        {
+            violations.extend(record_violations);
+        }
+        if let Err(ValidationHarnessError::ValidationFailed {
+            violations: record_violations,
+        }) = self.property_check.validate()
+        {
+            violations.extend(record_violations);
+        }
+        if let Err(ValidationHarnessError::ValidationFailed {
+            violations: record_violations,
+        }) = self.fuzz_corpus.validate()
+        {
+            violations.extend(record_violations);
+        }
+        if let Err(ValidationHarnessError::ValidationFailed {
+            violations: record_violations,
+        }) = self.validation_corpus.validate()
+        {
+            violations.extend(record_violations);
+        }
+        if self.min_validation_plans == 0
+            || self.min_property_checks == 0
+            || self.min_fuzz_targets == 0
+            || self.min_backtest_scenarios == 0
+        {
+            violations.push(ValidationHarnessViolation::new(
+                "VALIDATION_COVERAGE_REVIEW_MINIMUM_ZERO",
+                "validation coverage review minimums must be positive",
+            ));
+        }
+        if self.remaining_external_evidence.is_empty()
+            || self
+                .remaining_external_evidence
+                .iter()
+                .any(|item| item.trim().is_empty())
+        {
+            violations.push(ValidationHarnessViolation::new(
+                "VALIDATION_COVERAGE_REVIEW_EXTERNAL_EVIDENCE_MISSING",
+                "validation coverage review must keep unresolved external evidence explicit",
+            ));
+        }
+
+        finish_validation(violations)
+    }
+}
+
+impl LocalValidationCoverageReviewReport {
+    /// Validate local validation coverage review report invariants.
+    pub fn validate(&self) -> Result<(), ValidationHarnessError> {
+        let mut violations = Vec::new();
+        validate_id(
+            "validation coverage review",
+            &self.review_id,
+            &mut violations,
+        );
+        if self.version != LOCAL_VALIDATION_COVERAGE_REVIEW_VERSION {
+            violations.push(ValidationHarnessViolation::new(
+                "VALIDATION_COVERAGE_REVIEW_VERSION_MISMATCH",
+                "validation coverage review version is not recognized",
+            ));
+        }
+        let side_effected = self.live_network_used
+            || self.external_fuzzer_invoked
+            || self.live_execution_submitted
+            || self.signing_or_broadcast_performed;
+        let should_block = !self.validation_run_ready
+            || !self.property_check_ready
+            || !self.fuzz_corpus_ready
+            || !self.validation_corpus_ready
+            || !self.paper_backtest_ready
+            || !self.local_breadth_requirements_met
+            || !self.remaining_external_evidence_recorded
+            || side_effected
+            || self.production_ready;
+        if should_block && self.status != LocalValidationCoverageReviewStatus::Blocked {
+            violations.push(ValidationHarnessViolation::new(
+                "VALIDATION_COVERAGE_REVIEW_STATUS_SHOULD_BLOCK",
+                "incomplete or unsafe validation coverage evidence must block",
+            ));
+        }
+        if !should_block && self.status != LocalValidationCoverageReviewStatus::ReadyForLocalReview
+        {
+            violations.push(ValidationHarnessViolation::new(
+                "VALIDATION_COVERAGE_REVIEW_STATUS_SHOULD_BE_READY",
+                "coherent local validation coverage evidence must be ready for local review",
+            ));
+        }
+        if side_effected && self.status == LocalValidationCoverageReviewStatus::ReadyForLocalReview
+        {
+            violations.push(ValidationHarnessViolation::new(
+                "VALIDATION_COVERAGE_REVIEW_SIDE_EFFECT_FORBIDDEN",
+                "validation coverage review must not approve external fuzzers, live networks, live execution, signing, or broadcasts",
+            ));
+        }
+        if self.production_ready {
+            violations.push(ValidationHarnessViolation::new(
+                "VALIDATION_COVERAGE_REVIEW_PRODUCTION_READY_FORBIDDEN",
+                "validation coverage review must not approve production readiness",
             ));
         }
 
@@ -1318,6 +1540,197 @@ pub fn run_local_validation_corpus(
         live_execution_submitted: false,
         signing_or_broadcast_performed: false,
         production_ready: false,
+    };
+    report.validate()?;
+    Ok(report)
+}
+
+/// Review local validation coverage across validation-run, property, fuzz,
+/// corpus, and backtest evidence without invoking external tooling.
+pub fn review_local_validation_coverage(
+    request: LocalValidationCoverageReviewRequest,
+) -> Result<LocalValidationCoverageReviewReport, ValidationHarnessError> {
+    request.validate()?;
+
+    let validation_run_ready = request.validation_run.status == ValidationRunStatus::PlannedOnly
+        && request.validation_run.planned_test_cases > 0
+        && request.validation_run.planned_fixtures > 0
+        && request.validation_run.planned_fuzz_corpora > 0
+        && request.validation_run.planned_backtest_scenarios > 0
+        && !request.validation_run.external_fuzzer_invoked
+        && !request.validation_run.live_network_used
+        && !request.validation_run.live_execution_submitted
+        && !request.validation_run.signing_or_broadcast_performed;
+    let property_check_ready = request.property_check.checks_executed > 0
+        && request.property_check.checks_executed == request.property_check.checks_passed
+        && request.property_check.checks_failed == 0
+        && request.property_check.missing_fixture_references.is_empty()
+        && request.property_check.empty_fuzz_corpora.is_empty()
+        && request.property_check.nonlocal_backtest_datasets.is_empty()
+        && !request.property_check.forbidden_side_effect_flags_detected
+        && !request.property_check.external_fuzzer_invoked
+        && !request.property_check.live_network_used
+        && !request.property_check.live_execution_submitted
+        && !request.property_check.signing_or_broadcast_performed
+        && !request.property_check.production_ready;
+    let fuzz_corpus_ready = request.fuzz_corpus.status
+        == LocalFuzzCorpusReplayStatus::ReadyForLocalReview
+        && request.fuzz_corpus.corpus_count > 0
+        && request.fuzz_corpus.seed_count > 0
+        && request.fuzz_corpus.unique_seed_count == request.fuzz_corpus.seed_count
+        && !request.fuzz_corpus.target_summaries.is_empty()
+        && !request.fuzz_corpus.external_fuzzer_invoked
+        && !request.fuzz_corpus.live_network_used
+        && !request.fuzz_corpus.live_execution_submitted
+        && !request.fuzz_corpus.signing_or_broadcast_performed
+        && !request.fuzz_corpus.production_ready;
+    let validation_corpus_ready = request.validation_corpus.status
+        == LocalValidationCorpusStatus::ReadyForLocalReview
+        && request.validation_corpus.plan_count == request.validation_corpus.accepted_plan_count
+        && request.validation_corpus.property_checks_executed > 0
+        && request.validation_corpus.property_checks_failed == 0
+        && request.validation_corpus.corpus_breadth_requirements_met
+        && !request.validation_corpus.external_fuzzer_invoked
+        && !request.validation_corpus.live_network_used
+        && !request.validation_corpus.live_execution_submitted
+        && !request.validation_corpus.signing_or_broadcast_performed
+        && !request.validation_corpus.production_ready;
+    let paper_backtest_ready = request.paper_backtest.scenarios_executed > 0
+        && request.paper_backtest.total_steps > 0
+        && request.paper_backtest.replay_validated
+        && request.paper_backtest.historical_fixture_replay
+        && request.paper_backtest.local_fixture_only
+        && !request.paper_backtest.external_data_downloaded
+        && !request.paper_backtest.live_network_used
+        && !request.paper_backtest.external_execution_performed;
+    let validation_plan_count = request.validation_corpus.plan_count;
+    let property_check_count = request.validation_corpus.property_checks_executed;
+    let fuzz_target_count = request.fuzz_corpus.target_summaries.len();
+    let backtest_scenario_count = request.paper_backtest.scenarios_executed;
+    let local_breadth_requirements_met = validation_plan_count >= request.min_validation_plans
+        && property_check_count >= request.min_property_checks
+        && fuzz_target_count >= request.min_fuzz_targets
+        && backtest_scenario_count >= request.min_backtest_scenarios;
+    let remaining_external_evidence_recorded = !request.remaining_external_evidence.is_empty();
+    let live_network_used = request.live_network_used
+        || request.validation_run.live_network_used
+        || request.property_check.live_network_used
+        || request.fuzz_corpus.live_network_used
+        || request.validation_corpus.live_network_used
+        || request.paper_backtest.live_network_used;
+    let external_fuzzer_invoked = request.external_fuzzer_invoked
+        || request.validation_run.external_fuzzer_invoked
+        || request.property_check.external_fuzzer_invoked
+        || request.fuzz_corpus.external_fuzzer_invoked
+        || request.validation_corpus.external_fuzzer_invoked;
+    let live_execution_submitted = request.live_execution_submitted
+        || request.validation_run.live_execution_submitted
+        || request.property_check.live_execution_submitted
+        || request.fuzz_corpus.live_execution_submitted
+        || request.validation_corpus.live_execution_submitted
+        || request.paper_backtest.external_execution_performed;
+    let signing_or_broadcast_performed = request.signing_or_broadcast_performed
+        || request.validation_run.signing_or_broadcast_performed
+        || request.property_check.signing_or_broadcast_performed
+        || request.fuzz_corpus.signing_or_broadcast_performed
+        || request.validation_corpus.signing_or_broadcast_performed;
+
+    let mut violation_codes = Vec::new();
+    push_code_if(
+        &mut violation_codes,
+        !validation_run_ready,
+        "VALIDATION_COVERAGE_REVIEW_VALIDATION_RUN_NOT_READY",
+    );
+    push_code_if(
+        &mut violation_codes,
+        !property_check_ready,
+        "VALIDATION_COVERAGE_REVIEW_PROPERTY_CHECK_NOT_READY",
+    );
+    push_code_if(
+        &mut violation_codes,
+        !fuzz_corpus_ready,
+        "VALIDATION_COVERAGE_REVIEW_FUZZ_CORPUS_NOT_READY",
+    );
+    push_code_if(
+        &mut violation_codes,
+        !validation_corpus_ready,
+        "VALIDATION_COVERAGE_REVIEW_CORPUS_NOT_READY",
+    );
+    push_code_if(
+        &mut violation_codes,
+        !paper_backtest_ready,
+        "VALIDATION_COVERAGE_REVIEW_BACKTEST_NOT_READY",
+    );
+    push_code_if(
+        &mut violation_codes,
+        !local_breadth_requirements_met,
+        "VALIDATION_COVERAGE_REVIEW_BREADTH_MISSING",
+    );
+    push_code_if(
+        &mut violation_codes,
+        live_network_used,
+        "VALIDATION_COVERAGE_REVIEW_LIVE_NETWORK_USED",
+    );
+    push_code_if(
+        &mut violation_codes,
+        external_fuzzer_invoked,
+        "VALIDATION_COVERAGE_REVIEW_EXTERNAL_FUZZER_INVOKED",
+    );
+    push_code_if(
+        &mut violation_codes,
+        live_execution_submitted,
+        "VALIDATION_COVERAGE_REVIEW_LIVE_EXECUTION_SUBMITTED",
+    );
+    push_code_if(
+        &mut violation_codes,
+        signing_or_broadcast_performed,
+        "VALIDATION_COVERAGE_REVIEW_SIGNING_OR_BROADCAST",
+    );
+    push_code_if(
+        &mut violation_codes,
+        request.production_ready_claimed,
+        "VALIDATION_COVERAGE_REVIEW_PRODUCTION_READY_CLAIMED",
+    );
+
+    let blocked = !validation_run_ready
+        || !property_check_ready
+        || !fuzz_corpus_ready
+        || !validation_corpus_ready
+        || !paper_backtest_ready
+        || !local_breadth_requirements_met
+        || !remaining_external_evidence_recorded
+        || live_network_used
+        || external_fuzzer_invoked
+        || live_execution_submitted
+        || signing_or_broadcast_performed
+        || request.production_ready_claimed;
+
+    let report = LocalValidationCoverageReviewReport {
+        version: LOCAL_VALIDATION_COVERAGE_REVIEW_VERSION.to_owned(),
+        review_id: request.review_id,
+        status: if blocked {
+            LocalValidationCoverageReviewStatus::Blocked
+        } else {
+            LocalValidationCoverageReviewStatus::ReadyForLocalReview
+        },
+        validation_run_ready,
+        property_check_ready,
+        fuzz_corpus_ready,
+        validation_corpus_ready,
+        paper_backtest_ready,
+        validation_plan_count,
+        property_check_count,
+        fuzz_target_count,
+        backtest_scenario_count,
+        local_breadth_requirements_met,
+        remaining_external_evidence_recorded,
+        remaining_external_evidence_count: request.remaining_external_evidence.len(),
+        live_network_used,
+        external_fuzzer_invoked,
+        live_execution_submitted,
+        signing_or_broadcast_performed,
+        production_ready: false,
+        violation_codes,
     };
     report.validate()?;
     Ok(report)
@@ -1887,6 +2300,12 @@ fn validate_count(
     }
 }
 
+fn push_code_if(codes: &mut Vec<String>, condition: bool, code: &str) {
+    if condition {
+        codes.push(code.to_owned());
+    }
+}
+
 fn validate_test_cases(
     cases: &[ValidationTestCase],
     violations: &mut Vec<ValidationHarnessViolation>,
@@ -2251,19 +2670,21 @@ mod tests {
         append_validation_corpus_report_audit, append_validation_run_audit,
         persist_fuzz_corpus_replay_report_checkpoint, persist_property_check_report_checkpoint,
         persist_validation_corpus_report_checkpoint, persist_validation_run_checkpoint,
-        run_local_fuzz_corpus_replay, run_local_validation_corpus,
-        run_local_validation_property_checks, BacktestDatasetDefinition,
-        BacktestScenarioDefinition, DeterministicValidationHarness, ExpectedValidationOutcome,
-        FixtureKind, FuzzCorpusDefinition, FuzzSeedRecord, FuzzTargetKind,
-        LocalFuzzCorpusReplayReport, LocalFuzzCorpusReplayRequest, LocalFuzzCorpusReplayStatus,
-        LocalPropertyCheckReport, LocalValidationCorpusReport, LocalValidationCorpusRequest,
-        LocalValidationCorpusStatus, ValidationExecutionMode, ValidationFixtureRecord,
-        ValidationHarness, ValidationHarnessConfig, ValidationHarnessError, ValidationPlan,
-        ValidationRunRequest, ValidationRunStatus, ValidationSuiteKind, ValidationTestCase,
+        review_local_validation_coverage, run_local_fuzz_corpus_replay,
+        run_local_validation_corpus, run_local_validation_property_checks,
+        BacktestDatasetDefinition, BacktestScenarioDefinition, DeterministicValidationHarness,
+        ExpectedValidationOutcome, FixtureKind, FuzzCorpusDefinition, FuzzSeedRecord,
+        FuzzTargetKind, LocalFuzzCorpusReplayReport, LocalFuzzCorpusReplayRequest,
+        LocalFuzzCorpusReplayStatus, LocalPropertyCheckReport, LocalValidationCorpusReport,
+        LocalValidationCorpusRequest, LocalValidationCorpusStatus,
+        LocalValidationCoverageReviewRequest, LocalValidationCoverageReviewStatus,
+        ValidationExecutionMode, ValidationFixtureRecord, ValidationHarness,
+        ValidationHarnessConfig, ValidationHarnessError, ValidationPlan, ValidationRunRequest,
+        ValidationRunStatus, ValidationSuiteKind, ValidationTestCase,
         TESTING_LAST_FUZZ_CORPUS_REPLAY_REPORT_KEY, TESTING_LAST_PROPERTY_CHECK_REPORT_KEY,
         TESTING_LAST_VALIDATION_CORPUS_REPORT_KEY, TESTING_LAST_VALIDATION_RUN_CHECKPOINT_KEY,
     };
-    use crate::{AppendOnlyAuditJournal, SqliteWalStateStore, StateStore};
+    use crate::{AppendOnlyAuditJournal, PaperBacktestRunReport, SqliteWalStateStore, StateStore};
     use std::{env, fs, path::PathBuf, process};
 
     const VALID_DIGEST: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
@@ -2812,6 +3233,85 @@ mod tests {
     }
 
     #[test]
+    fn local_validation_coverage_review_accepts_complete_local_evidence() {
+        let report =
+            review_local_validation_coverage(local_validation_coverage_review_request(false, 2, 8))
+                .expect("complete local validation coverage should review");
+
+        assert_eq!(
+            report.status,
+            LocalValidationCoverageReviewStatus::ReadyForLocalReview
+        );
+        assert!(report.validation_run_ready);
+        assert!(report.property_check_ready);
+        assert!(report.fuzz_corpus_ready);
+        assert!(report.validation_corpus_ready);
+        assert!(report.paper_backtest_ready);
+        assert_eq!(report.validation_plan_count, 2);
+        assert_eq!(report.property_check_count, 8);
+        assert_eq!(report.fuzz_target_count, 2);
+        assert_eq!(report.backtest_scenario_count, 1);
+        assert!(report.local_breadth_requirements_met);
+        assert_eq!(report.remaining_external_evidence_count, 4);
+        assert!(report.violation_codes.is_empty());
+        assert!(!report.external_fuzzer_invoked);
+        assert!(!report.live_network_used);
+        assert!(!report.live_execution_submitted);
+        assert!(!report.signing_or_broadcast_performed);
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn local_validation_coverage_review_blocks_missing_breadth() {
+        let report = review_local_validation_coverage(local_validation_coverage_review_request(
+            false, 3, 20,
+        ))
+        .expect("missing local breadth should produce blocked report");
+
+        assert_eq!(report.status, LocalValidationCoverageReviewStatus::Blocked);
+        assert!(!report.local_breadth_requirements_met);
+        assert!(report
+            .violation_codes
+            .iter()
+            .any(|code| code == "VALIDATION_COVERAGE_REVIEW_BREADTH_MISSING"));
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn local_validation_coverage_review_fails_closed_on_side_effect_claims() {
+        let report =
+            review_local_validation_coverage(local_validation_coverage_review_request(true, 2, 8))
+                .expect("side-effect claims should produce blocked report");
+
+        assert_eq!(report.status, LocalValidationCoverageReviewStatus::Blocked);
+        assert!(report.external_fuzzer_invoked);
+        assert!(report.live_network_used);
+        assert!(report.live_execution_submitted);
+        assert!(report.signing_or_broadcast_performed);
+        assert!(report
+            .violation_codes
+            .iter()
+            .any(|code| code == "VALIDATION_COVERAGE_REVIEW_EXTERNAL_FUZZER_INVOKED"));
+        assert!(report
+            .violation_codes
+            .iter()
+            .any(|code| code == "VALIDATION_COVERAGE_REVIEW_LIVE_NETWORK_USED"));
+        assert!(report
+            .violation_codes
+            .iter()
+            .any(|code| code == "VALIDATION_COVERAGE_REVIEW_LIVE_EXECUTION_SUBMITTED"));
+        assert!(report
+            .violation_codes
+            .iter()
+            .any(|code| code == "VALIDATION_COVERAGE_REVIEW_SIGNING_OR_BROADCAST"));
+        assert!(report
+            .violation_codes
+            .iter()
+            .any(|code| code == "VALIDATION_COVERAGE_REVIEW_PRODUCTION_READY_CLAIMED"));
+        assert!(!report.production_ready);
+    }
+
+    #[test]
     fn local_validation_corpus_report_audit_and_state_reopen_locally() {
         let audit_path = temp_audit_path("validation-corpus");
         let state_path = temp_state_path("validation-corpus");
@@ -2898,6 +3398,111 @@ mod tests {
         for suffix in ["-wal", "-shm"] {
             let related = format!("{}{}", path.display(), suffix);
             let _ = fs::remove_file(related);
+        }
+    }
+
+    fn local_validation_coverage_review_request(
+        side_effect_claimed: bool,
+        min_validation_plans: usize,
+        min_property_checks: usize,
+    ) -> LocalValidationCoverageReviewRequest {
+        let config = ValidationHarnessConfig::default();
+        let validation_run = DeterministicValidationHarness
+            .validate_plan(ValidationRunRequest {
+                config: config.clone(),
+                plan: minimal_plan(),
+                requested_at_ms: 1_700_000_000_800,
+                operator_label: Some("local coverage review".to_owned()),
+            })
+            .expect("validation run should pass");
+        let property_check = run_local_validation_property_checks(&minimal_plan(), &config)
+            .expect("property checks should pass");
+        let fuzz_corpus = run_local_fuzz_corpus_replay(LocalFuzzCorpusReplayRequest {
+            replay_id: "coverage-review-fuzz".to_owned(),
+            config: config.clone(),
+            fuzz_corpora: vec![
+                FuzzCorpusDefinition::local_only(
+                    "coverage-command-parser",
+                    FuzzTargetKind::CommandParser,
+                    vec![FuzzSeedRecord::new(
+                        "coverage-seed-command",
+                        VALID_DIGEST,
+                        "local coverage command seed",
+                    )],
+                ),
+                FuzzCorpusDefinition::local_only(
+                    "coverage-redaction",
+                    FuzzTargetKind::Redaction,
+                    vec![FuzzSeedRecord::new(
+                        "coverage-seed-redaction",
+                        VALID_DIGEST,
+                        "local coverage redaction seed",
+                    )],
+                ),
+            ],
+            requested_at_ms: 1_700_000_000_801,
+            operator_label: Some("local coverage fuzz".to_owned()),
+        })
+        .expect("fuzz corpus should replay");
+        let validation_corpus = run_local_validation_corpus(LocalValidationCorpusRequest {
+            corpus_id: "coverage-review-validation-corpus".to_owned(),
+            config: config.clone(),
+            plans: vec![
+                minimal_plan_with_id("coverage-validation-plan-a"),
+                minimal_plan_with_id("coverage-validation-plan-b"),
+            ],
+            min_plan_count: 2,
+            min_test_case_count: 2,
+            min_fixture_count: 2,
+            min_fuzz_corpus_count: 2,
+            min_backtest_scenario_count: 2,
+            requested_at_ms: 1_700_000_000_802,
+            operator_label: Some("local coverage corpus".to_owned()),
+        })
+        .expect("validation corpus should pass");
+        LocalValidationCoverageReviewRequest {
+            review_id: "coverage-review".to_owned(),
+            validation_run,
+            property_check,
+            fuzz_corpus,
+            validation_corpus,
+            paper_backtest: local_paper_backtest_report(),
+            min_validation_plans,
+            min_property_checks,
+            min_fuzz_targets: 2,
+            min_backtest_scenarios: 1,
+            remaining_external_evidence: vec![
+                "external fuzz engine execution".to_owned(),
+                "broader external property-test execution".to_owned(),
+                "broader external/deployment replay corpus".to_owned(),
+                "production load and security validation".to_owned(),
+            ],
+            live_network_used: side_effect_claimed,
+            external_fuzzer_invoked: side_effect_claimed,
+            live_execution_submitted: side_effect_claimed,
+            signing_or_broadcast_performed: side_effect_claimed,
+            production_ready_claimed: side_effect_claimed,
+        }
+    }
+
+    fn local_paper_backtest_report() -> PaperBacktestRunReport {
+        PaperBacktestRunReport {
+            validation_version: "paper-backtest-local-v1".to_owned(),
+            corpus_id: "coverage-paper-backtest".to_owned(),
+            scenarios_executed: 1,
+            total_steps: 3,
+            filled_steps: 1,
+            partially_filled_steps: 1,
+            unfilled_steps: 1,
+            net_profit_quote: 1.25,
+            historical_fixture_replay: true,
+            local_fixture_only: true,
+            external_data_downloaded: false,
+            live_network_used: false,
+            external_execution_performed: false,
+            replay_validated: true,
+            scenario_reports: Vec::new(),
+            executed_at_unix_ms: 1_700_000_000_803,
         }
     }
 }

@@ -80,12 +80,12 @@ use arb_core::{
     preflight_dashboard_hosted_request, preflight_observability_endpoint,
     preflight_observability_metrics_scrape, record_observability_alert_route_dispatch,
     render_observability_export_dry_run, review_dashboard_hosted_security,
-    review_local_secret_backup_restore, review_market_data_provider_latency,
-    review_observability_operations, review_platform_adapter_controls,
-    review_platform_command_ingress, review_remote_command_security,
-    review_signer_runtime_isolation, review_signer_secret_scope, run_local_fuzz_corpus_replay,
-    run_local_graceful_shutdown_checkpoint, run_local_runtime_lifecycle,
-    run_local_validation_corpus, run_local_validation_property_checks,
+    review_local_secret_backup_restore, review_local_validation_coverage,
+    review_market_data_provider_latency, review_observability_operations,
+    review_platform_adapter_controls, review_platform_command_ingress,
+    review_remote_command_security, review_signer_runtime_isolation, review_signer_secret_scope,
+    run_local_fuzz_corpus_replay, run_local_graceful_shutdown_checkpoint,
+    run_local_runtime_lifecycle, run_local_validation_corpus, run_local_validation_property_checks,
     validate_audit_journal_durability, validate_cex_credential_scope_review,
     validate_cex_rate_limit, validate_channel_adapter, validate_channel_session,
     validate_dashboard_hosted_request, validate_dashboard_hosted_session,
@@ -146,17 +146,18 @@ use arb_core::{
     IncidentResponseExecutionTranscript, IncidentResponseExecutionTranscriptStatus, LiquidityRole,
     LocalFuzzCorpusReplayRequest, LocalFuzzCorpusReplayStatus,
     LocalTracingSubscriberValidationRequest, LocalTracingSubscriberValidationStatus,
-    LocalValidationCorpusRequest, LocalValidationCorpusStatus, MarketDataCapabilities,
-    MarketDataError, MarketDataProvider, MarketDataProviderHealthObservation,
-    MarketDataProviderLatencyReviewReport, MarketDataProviderLatencyReviewRequest,
-    MarketDataProviderLatencyReviewStatus, MarketDataProviderPreflightReport,
-    MarketDataProviderPreflightStatus, MarketDataQualityAssessmentInput,
-    MarketDataQualityAssessmentReport, MarketDataQualityAssessmentStatus,
-    MarketDataReconnectPlanInput, MarketDataReconnectPlanReport, MarketDataReconnectPlanStatus,
-    MarketDataRequest, MarketPair, MetricKind, MetricLabel, MetricSample, NormalizedQuote,
-    NotificationChannelProfile, NotificationChannelSafetyState, NotificationDispatchRecord,
-    NotificationDispatchStatus, NotificationPublisher, NotificationSeverity,
-    ObservabilityAccessContext, ObservabilityAlertRouteDispatchRequest,
+    LocalValidationCorpusRequest, LocalValidationCorpusStatus, LocalValidationCoverageReviewReport,
+    LocalValidationCoverageReviewRequest, LocalValidationCoverageReviewStatus,
+    MarketDataCapabilities, MarketDataError, MarketDataProvider,
+    MarketDataProviderHealthObservation, MarketDataProviderLatencyReviewReport,
+    MarketDataProviderLatencyReviewRequest, MarketDataProviderLatencyReviewStatus,
+    MarketDataProviderPreflightReport, MarketDataProviderPreflightStatus,
+    MarketDataQualityAssessmentInput, MarketDataQualityAssessmentReport,
+    MarketDataQualityAssessmentStatus, MarketDataReconnectPlanInput, MarketDataReconnectPlanReport,
+    MarketDataReconnectPlanStatus, MarketDataRequest, MarketPair, MetricKind, MetricLabel,
+    MetricSample, NormalizedQuote, NotificationChannelProfile, NotificationChannelSafetyState,
+    NotificationDispatchRecord, NotificationDispatchStatus, NotificationPublisher,
+    NotificationSeverity, ObservabilityAccessContext, ObservabilityAlertRouteDispatchRequest,
     ObservabilityAlertRouteDispatchStatus, ObservabilityBoundaryConfig,
     ObservabilityCollectionRequest, ObservabilityCollector, ObservabilityEndpointPreflight,
     ObservabilityLogRetentionExecutionRequest, ObservabilityLoopbackBindValidationRequest,
@@ -422,6 +423,9 @@ fn run_with_args(args: impl IntoIterator<Item = String>) -> Result<(), AgentCliE
             | "validate-strategy-replay-corpus"
             | "validate-opportunity-trace-recovery"),
         ) => run_opportunity_validation_command(command, args),
+        Some("validate-local-validation-coverage-review") => {
+            run_local_validation_coverage_review_runner()
+        }
         Some("validate-market-data-provider-preflight") => {
             run_market_data_provider_preflight_validation()
         }
@@ -855,6 +859,7 @@ fn print_usage() {
     println!("       arb-agent validate-local-property-checks --workspace <fresh-dir>");
     println!("       arb-agent validate-local-fuzz-corpus --workspace <fresh-dir>");
     println!("       arb-agent validate-local-validation-corpus --workspace <fresh-dir>");
+    println!("       arb-agent validate-local-validation-coverage-review");
     println!("       arb-agent validate-local-paper-backtest-corpus --workspace <fresh-dir>");
     println!("       arb-agent validate-market-data-boundary-audit --workspace <fresh-dir>");
     println!("       arb-agent validate-market-data-history-persistence --workspace <fresh-dir>");
@@ -6313,6 +6318,117 @@ fn run_local_validation_corpus_runner(
     Ok(())
 }
 
+fn run_local_validation_coverage_review_runner() -> Result<(), AgentCliError> {
+    let now_unix_ms = current_unix_ms()?;
+    let config = ValidationHarnessConfig::default();
+    let plan = local_validation_runner_plan(now_unix_ms);
+    let validation_run = DeterministicValidationHarness
+        .validate_plan(ValidationRunRequest {
+            config: config.clone(),
+            plan: plan.clone(),
+            requested_at_ms: now_unix_ms,
+            operator_label: Some("local-validation-coverage-review".to_owned()),
+        })
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let property_check = run_local_validation_property_checks(&plan, &config)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let fuzz_corpus = run_local_fuzz_corpus_replay(LocalFuzzCorpusReplayRequest {
+        replay_id: "local-validation-coverage-fuzz".to_owned(),
+        config: config.clone(),
+        fuzz_corpora: local_validation_runner_fuzz_corpora(),
+        requested_at_ms: now_unix_ms.saturating_add(1),
+        operator_label: Some("local-validation-coverage-fuzz".to_owned()),
+    })
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let validation_corpus = run_local_validation_corpus(LocalValidationCorpusRequest {
+        corpus_id: "local-validation-coverage-corpus".to_owned(),
+        config,
+        plans: local_validation_runner_corpus(now_unix_ms.saturating_add(2)),
+        min_plan_count: 3,
+        min_test_case_count: 5,
+        min_fixture_count: 3,
+        min_fuzz_corpus_count: 3,
+        min_backtest_scenario_count: 3,
+        requested_at_ms: now_unix_ms.saturating_add(3),
+        operator_label: Some("local-validation-coverage-corpus".to_owned()),
+    })
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let paper_backtest = run_local_paper_backtest_report(now_unix_ms.saturating_add(4))?;
+
+    let report = review_local_validation_coverage(LocalValidationCoverageReviewRequest {
+        review_id: "local-validation-coverage-review".to_owned(),
+        validation_run,
+        property_check,
+        fuzz_corpus,
+        validation_corpus,
+        paper_backtest,
+        min_validation_plans: 3,
+        min_property_checks: 12,
+        min_fuzz_targets: 2,
+        min_backtest_scenarios: 1,
+        remaining_external_evidence: vec![
+            "external fuzz engine execution".to_owned(),
+            "broader external property-test execution".to_owned(),
+            "broader external/deployment replay corpus".to_owned(),
+            "production load and security validation".to_owned(),
+        ],
+        live_network_used: false,
+        external_fuzzer_invoked: false,
+        live_execution_submitted: false,
+        signing_or_broadcast_performed: false,
+        production_ready_claimed: false,
+    })
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+
+    print_local_validation_coverage_review_report(&report);
+    Ok(())
+}
+
+fn print_local_validation_coverage_review_report(report: &LocalValidationCoverageReviewReport) {
+    println!("local-validation-coverage-review: validation passed");
+    println!(
+        "validation-coverage-review-status: {}",
+        validation_coverage_review_status_label(report.status)
+    );
+    println!("validation-run-ready: {}", report.validation_run_ready);
+    println!("property-check-ready: {}", report.property_check_ready);
+    println!("fuzz-corpus-ready: {}", report.fuzz_corpus_ready);
+    println!(
+        "validation-corpus-ready: {}",
+        report.validation_corpus_ready
+    );
+    println!("paper-backtest-ready: {}", report.paper_backtest_ready);
+    println!("validation-plan-count: {}", report.validation_plan_count);
+    println!("property-check-count: {}", report.property_check_count);
+    println!("fuzz-target-count: {}", report.fuzz_target_count);
+    println!(
+        "backtest-scenario-count: {}",
+        report.backtest_scenario_count
+    );
+    println!(
+        "local-breadth-requirements-met: {}",
+        report.local_breadth_requirements_met
+    );
+    println!(
+        "validation-coverage-remaining-external-evidence-count: {}",
+        report.remaining_external_evidence_count
+    );
+    println!(
+        "external-fuzzer-invoked: {}",
+        report.external_fuzzer_invoked
+    );
+    println!("live-network-used: {}", report.live_network_used);
+    println!(
+        "live-execution-submitted: {}",
+        report.live_execution_submitted
+    );
+    println!(
+        "signing-or-broadcast-performed: {}",
+        report.signing_or_broadcast_performed
+    );
+    println!("production-ready: false");
+}
+
 fn run_local_paper_backtest_corpus_runner(
     options: &LocalValidationRunOptions,
 ) -> Result<(), AgentCliError> {
@@ -6339,6 +6455,24 @@ fn run_local_paper_backtest_corpus_runner(
         persist_local_paper_backtest_corpus_report(&audit_path, &state_path, &report, now_unix_ms)?;
     print_local_paper_backtest_corpus_report(&report, replayed_records);
     Ok(())
+}
+
+fn run_local_paper_backtest_report(
+    now_unix_ms: u64,
+) -> Result<PaperBacktestRunReport, AgentCliError> {
+    let config = AgentConfig::from_toml_str(LOCAL_STRATEGY_PLANNER_CONFIG)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let adapter = PaperExecutionAdapter::new(
+        "local-validation-coverage-paper-backtest",
+        PolicyEngine::from_config(config),
+    )
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let corpus = local_paper_backtest_corpus(now_unix_ms)?;
+    let report = adapter
+        .run_backtest_corpus(&corpus, now_unix_ms.saturating_add(10_000))
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    validate_local_paper_backtest_corpus_report(&report, corpus.scenarios.len())?;
+    Ok(report)
 }
 
 fn run_policy_decision_audit_validation(
@@ -10826,6 +10960,15 @@ const fn deployment_response_drill_rehearsal_status_label(
 const fn validation_corpus_status_label(status: LocalValidationCorpusStatus) -> &'static str {
     match status {
         LocalValidationCorpusStatus::ReadyForLocalReview => "ready-for-local-review",
+    }
+}
+
+const fn validation_coverage_review_status_label(
+    status: LocalValidationCoverageReviewStatus,
+) -> &'static str {
+    match status {
+        LocalValidationCoverageReviewStatus::ReadyForLocalReview => "ready-for-local-review",
+        LocalValidationCoverageReviewStatus::Blocked => "blocked",
     }
 }
 

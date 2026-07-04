@@ -153,6 +153,17 @@ def command_set(workspace_root: pathlib.Path) -> list[tuple[str, list[str]]]:
             ],
         ),
         (
+            "local_validation_coverage_review",
+            [
+                "cargo",
+                "run",
+                "-p",
+                "arb-agent",
+                "--",
+                "validate-local-validation-coverage-review",
+            ],
+        ),
+        (
             "opportunity_trace_recovery",
             ["cargo", "run", "-p", "arb-agent", "--", "validate-opportunity-trace-recovery"],
         ),
@@ -375,7 +386,34 @@ def validate_components(components: list[dict[str, Any]]) -> list[str]:
     if paper_backtest.get("state-checkpoint-recovered") != "true":
         errors.append("local paper backtest corpus did not recover its state checkpoint")
 
-    trace = components[12]["parsed"]
+    validation_coverage = components[12]["parsed"]
+    if validation_coverage.get("validation-coverage-review-status") != "ready-for-local-review":
+        errors.append("local validation coverage review was not ready-for-local-review")
+    for key in (
+        "validation-run-ready",
+        "property-check-ready",
+        "fuzz-corpus-ready",
+        "validation-corpus-ready",
+        "paper-backtest-ready",
+        "local-breadth-requirements-met",
+    ):
+        if validation_coverage.get(key) != "true":
+            errors.append(f"local validation coverage review did not report {key}: true")
+    if parse_int(validation_coverage.get("validation-plan-count")) < 3:
+        errors.append("local validation coverage review validation plan count was below 3")
+    if parse_int(validation_coverage.get("property-check-count")) < 12:
+        errors.append("local validation coverage review property check count was below 12")
+    if parse_int(validation_coverage.get("fuzz-target-count")) < 2:
+        errors.append("local validation coverage review fuzz target count was below 2")
+    if parse_int(validation_coverage.get("backtest-scenario-count")) < 1:
+        errors.append("local validation coverage review backtest scenario count was below 1")
+    if (
+        parse_int(validation_coverage.get("validation-coverage-remaining-external-evidence-count"))
+        < 1
+    ):
+        errors.append("local validation coverage review did not retain external evidence gaps")
+
+    trace = components[13]["parsed"]
     if trace.get("trace-recovery-validated") != "true":
         errors.append("trace recovery was not validated")
     if trace.get("missing-trace-checkpoints") not in {"0", None}:
@@ -421,6 +459,7 @@ def main() -> int:
         "live_execution_performed": False,
         "production_ready": False,
         "opportunity_replay_latency_review_enforced": True,
+        "local_validation_coverage_review_enforced": True,
         "total_candidate_mentions": total_candidates,
         "components": [
             {
