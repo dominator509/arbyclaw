@@ -90,7 +90,7 @@ use arb_core::{
     validate_dashboard_hosted_request, validate_dashboard_hosted_session,
     validate_deployment_audit_sqlite_transcript, validate_deployment_disk_full_transcript,
     validate_deployment_failure_capture_transcript, validate_deployment_permission_transcript,
-    validate_deployment_retention_transcript,
+    validate_deployment_response_drill_rehearsal, validate_deployment_retention_transcript,
     validate_deployment_sqlite_schema_migration_transcript, validate_fee_schedule_verification,
     validate_historical_market_data_persistence, validate_incident_response_execution_transcript,
     validate_local_opportunity_quote_ingestion_load, validate_local_runtime_backup_restore,
@@ -125,6 +125,7 @@ use arb_core::{
     DashboardHostedSessionValidationStatus, DashboardPanel, DashboardPanelItem, DashboardPanelKind,
     DashboardRenderRequest, DashboardRenderer, DashboardSeverity, DashboardSnapshot,
     DeploymentFailureCaptureTranscript, DeploymentFailureCaptureTranscriptStatus,
+    DeploymentResponseDrillRehearsalRequest, DeploymentResponseDrillRehearsalStatus,
     DestinationAllowlist, DestinationApprovalSource, DestinationOwnershipReviewReport,
     DestinationOwnershipReviewStatus, DestinationPolicy, DeterministicAgenticHandoffPackager,
     DeterministicDashboardRenderer, DeterministicExecutionAdapterBoundary,
@@ -463,6 +464,7 @@ fn is_signer_web3_validation_command(command: &str) -> bool {
             | "validate-deployment-sqlite-schema-migration-transcript"
             | "validate-deployment-disk-full-transcript"
             | "validate-deployment-failure-capture-transcript"
+            | "validate-deployment-response-drill-rehearsal"
             | "validate-incident-response-execution-transcript"
             | "validate-deployment-permission-transcript"
             | "validate-deployment-retention-transcript"
@@ -582,6 +584,9 @@ fn run_signer_web3_validation_command(command: &str) -> Result<(), AgentCliError
         }
         "validate-deployment-failure-capture-transcript" => {
             run_deployment_failure_capture_transcript_validation()
+        }
+        "validate-deployment-response-drill-rehearsal" => {
+            run_deployment_response_drill_rehearsal_validation()
         }
         "validate-incident-response-execution-transcript" => {
             run_incident_response_execution_transcript_validation()
@@ -878,6 +883,7 @@ fn print_usage() {
     println!("       arb-agent validate-deployment-sqlite-schema-migration-transcript");
     println!("       arb-agent validate-deployment-disk-full-transcript");
     println!("       arb-agent validate-deployment-failure-capture-transcript");
+    println!("       arb-agent validate-deployment-response-drill-rehearsal");
     println!("       arb-agent validate-incident-response-execution-transcript");
     println!("       arb-agent validate-deployment-permission-transcript");
     println!("       arb-agent validate-deployment-retention-transcript");
@@ -10666,6 +10672,15 @@ const fn deployment_failure_capture_status_label(
     }
 }
 
+const fn deployment_response_drill_rehearsal_status_label(
+    status: DeploymentResponseDrillRehearsalStatus,
+) -> &'static str {
+    match status {
+        DeploymentResponseDrillRehearsalStatus::Validated => "validated",
+        DeploymentResponseDrillRehearsalStatus::Blocked => "blocked",
+    }
+}
+
 const fn validation_corpus_status_label(status: LocalValidationCorpusStatus) -> &'static str {
     match status {
         LocalValidationCorpusStatus::ReadyForLocalReview => "ready-for-local-review",
@@ -13044,6 +13059,95 @@ fn run_deployment_failure_capture_transcript_validation() -> Result<(), AgentCli
     Ok(())
 }
 
+fn run_deployment_response_drill_rehearsal_validation() -> Result<(), AgentCliError> {
+    let ready = validate_deployment_response_drill_rehearsal(
+        local_deployment_response_drill_rehearsal("ready", true),
+    )
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let blocked = validate_deployment_response_drill_rehearsal(
+        local_deployment_response_drill_rehearsal("blocked", false),
+    )
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+
+    if ready.status != DeploymentResponseDrillRehearsalStatus::Validated
+        || blocked.status != DeploymentResponseDrillRehearsalStatus::Blocked
+        || !ready.rollback_ready
+        || !ready.incident_response_ready
+        || !ready.failure_capture_ready
+        || !ready.plan_ids_match
+        || !ready.component_operator_approvals_present
+        || !ready.component_reviewer_approvals_present
+        || ready.production_ready
+        || blocked.production_ready
+        || ready.rollback_executed_by_validator
+        || blocked.rollback_executed_by_validator
+        || ready.incident_response_executed_by_validator
+        || blocked.incident_response_executed_by_validator
+        || ready.failure_injected_by_validator
+        || blocked.failure_injected_by_validator
+        || ready.service_manager_action_performed_by_validator
+        || blocked.service_manager_action_performed_by_validator
+        || ready.files_mutated_by_validator
+        || blocked.files_mutated_by_validator
+        || ready.alerts_sent_by_validator
+        || blocked.alerts_sent_by_validator
+        || ready.external_calls_performed
+        || blocked.external_calls_performed
+        || ready.live_execution_performed
+        || blocked.live_execution_performed
+        || blocked.blocker_codes.is_empty()
+    {
+        return Err(AgentCliError::Validation(
+            "deployment response drill rehearsal validation failed".to_owned(),
+        ));
+    }
+
+    println!("deployment-response-drill-rehearsal: validation passed");
+    println!(
+        "ready-rehearsal-status: {}",
+        deployment_response_drill_rehearsal_status_label(ready.status)
+    );
+    println!("ready-rollback-ready: {}", ready.rollback_ready);
+    println!(
+        "ready-incident-response-ready: {}",
+        ready.incident_response_ready
+    );
+    println!(
+        "ready-failure-capture-ready: {}",
+        ready.failure_capture_ready
+    );
+    println!("ready-plan-ids-match: {}", ready.plan_ids_match);
+    println!(
+        "ready-total-non-secret-reference-count: {}",
+        ready.total_non_secret_reference_count
+    );
+    println!(
+        "ready-component-operator-approvals-present: {}",
+        ready.component_operator_approvals_present
+    );
+    println!(
+        "ready-component-reviewer-approvals-present: {}",
+        ready.component_reviewer_approvals_present
+    );
+    println!("ready-operator-approved: {}", ready.operator_approved);
+    println!("ready-reviewer-approved: {}", ready.reviewer_approved);
+    println!(
+        "blocked-rehearsal-status: {}",
+        deployment_response_drill_rehearsal_status_label(blocked.status)
+    );
+    println!("blocked-blocker-count: {}", blocked.blocker_codes.len());
+    println!("rollback-executed-by-validator: false");
+    println!("incident-response-executed-by-validator: false");
+    println!("failure-injected-by-validator: false");
+    println!("service-manager-action-performed-by-validator: false");
+    println!("files-mutated-by-validator: false");
+    println!("alerts-sent-by-validator: false");
+    println!("external-calls-performed: false");
+    println!("live-execution-performed: false");
+    println!("production-ready: false");
+    Ok(())
+}
+
 fn local_deployment_disk_full_transcript(
     suffix: &str,
     complete: bool,
@@ -13278,6 +13382,42 @@ fn local_deployment_failure_capture_transcript(
         live_execution_performed: false,
         production_ready_claimed: false,
         validated_at_unix_ms: 98_000,
+    }
+}
+
+fn local_deployment_response_drill_rehearsal(
+    suffix: &str,
+    complete: bool,
+) -> DeploymentResponseDrillRehearsalRequest {
+    let plan_id = format!("phase-69-response-drill-{suffix}");
+    let mut rollback = local_rollback_execution_transcript(suffix, true);
+    rollback.plan_id.clone_from(&plan_id);
+    let mut incident = local_incident_response_execution_transcript(suffix, complete);
+    incident.plan_id.clone_from(&plan_id);
+    let mut failure = local_deployment_failure_capture_transcript(suffix, complete);
+    failure.plan_id.clone_from(&plan_id);
+
+    DeploymentResponseDrillRehearsalRequest {
+        rehearsal_id: format!("local-deployment-response-drill-{suffix}"),
+        plan_id,
+        rollback_report: validate_rollback_execution_transcript(rollback)
+            .expect("local rollback transcript fixture validates"),
+        incident_response_report: validate_incident_response_execution_transcript(incident)
+            .expect("local incident-response transcript fixture validates"),
+        failure_capture_report: validate_deployment_failure_capture_transcript(failure)
+            .expect("local failure-capture transcript fixture validates"),
+        operator_approved: complete,
+        reviewer_approved: complete,
+        rollback_executed_by_validator: false,
+        incident_response_executed_by_validator: false,
+        failure_injected_by_validator: false,
+        service_manager_action_performed_by_validator: false,
+        files_mutated_by_validator: false,
+        alerts_sent_by_validator: false,
+        external_calls_performed: false,
+        live_execution_performed: false,
+        production_ready_claimed: false,
+        validated_at_unix_ms: 99_000,
     }
 }
 

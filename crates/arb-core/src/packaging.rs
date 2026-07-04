@@ -21,6 +21,9 @@ pub const PACKAGING_INCIDENT_RESPONSE_EXECUTION_TRANSCRIPT_VERSION: &str =
 /// Stable local deployment panic/failure-capture transcript validation version.
 pub const PACKAGING_DEPLOYMENT_FAILURE_CAPTURE_TRANSCRIPT_VERSION: &str =
     "phase56-deployment-failure-capture-transcript-local-v1";
+/// Stable local deployment response drill rehearsal validation version.
+pub const PACKAGING_DEPLOYMENT_RESPONSE_DRILL_REHEARSAL_VERSION: &str =
+    "phase69-deployment-response-drill-rehearsal-local-v1";
 
 /// State-store subsystem name for local packaging/deployment checkpoints.
 pub const PACKAGING_STATE_SUBSYSTEM: &str = "packaging";
@@ -731,6 +734,16 @@ pub enum DeploymentFailureCaptureTranscriptStatus {
     Blocked,
 }
 
+/// Local validation status for composed deployment response drill rehearsal evidence.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum DeploymentResponseDrillRehearsalStatus {
+    /// Rollback, incident-response, and failure-capture evidence reports compose cleanly.
+    Validated,
+    /// One or more response-drill evidence reports are missing, blocked, mismatched, or unsafe.
+    Blocked,
+}
+
 /// Deterministic package/deployment record.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -1134,6 +1147,105 @@ pub struct DeploymentFailureCaptureTranscriptReport {
     /// Whether this report approves production readiness. Always false.
     pub production_ready: bool,
     /// Transcript validation timestamp in Unix milliseconds.
+    pub validated_at_unix_ms: u64,
+}
+
+/// Composed local response-drill rehearsal request.
+///
+/// This composes already-sanitized rollback, incident-response, and failure-capture
+/// reports. It does not execute rollback steps, incident response, service-manager
+/// actions, panic/failure injection, alert delivery, file mutation, external calls,
+/// live execution, or production readiness approval.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DeploymentResponseDrillRehearsalRequest {
+    /// Stable rehearsal id.
+    pub rehearsal_id: String,
+    /// Shared deployment plan/run id expected across all response-drill evidence.
+    pub plan_id: String,
+    /// Validated rollback execution evidence report.
+    pub rollback_report: RollbackExecutionTranscriptReport,
+    /// Validated incident-response execution evidence report.
+    pub incident_response_report: IncidentResponseExecutionTranscriptReport,
+    /// Validated daemon failure-capture evidence report.
+    pub failure_capture_report: DeploymentFailureCaptureTranscriptReport,
+    /// Whether operator approval/reference exists for the composed drill.
+    pub operator_approved: bool,
+    /// Whether independent reviewer approval/reference exists for the composed drill.
+    pub reviewer_approved: bool,
+    /// Whether this validator executed rollback. Must be false.
+    pub rollback_executed_by_validator: bool,
+    /// Whether this validator executed incident response. Must be false.
+    pub incident_response_executed_by_validator: bool,
+    /// Whether this validator injected failures. Must be false.
+    pub failure_injected_by_validator: bool,
+    /// Whether this validator performed service-manager actions. Must be false.
+    pub service_manager_action_performed_by_validator: bool,
+    /// Whether this validator mutated files. Must be false.
+    pub files_mutated_by_validator: bool,
+    /// Whether this validator sent alerts. Must be false.
+    pub alerts_sent_by_validator: bool,
+    /// Whether this validator performed external calls. Must be false.
+    pub external_calls_performed: bool,
+    /// Whether this validator performed live execution. Must be false.
+    pub live_execution_performed: bool,
+    /// Whether this request attempts to claim production readiness. Must be false.
+    pub production_ready_claimed: bool,
+    /// Rehearsal validation timestamp in Unix milliseconds.
+    pub validated_at_unix_ms: u64,
+}
+
+/// Non-secret local validation report for composed response-drill rehearsal evidence.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DeploymentResponseDrillRehearsalReport {
+    /// Response drill rehearsal validation version.
+    pub validation_version: String,
+    /// Stable rehearsal id.
+    pub rehearsal_id: String,
+    /// Shared deployment plan/run id.
+    pub plan_id: String,
+    /// Whether rollback evidence report is ready.
+    pub rollback_ready: bool,
+    /// Whether incident-response evidence report is ready.
+    pub incident_response_ready: bool,
+    /// Whether failure-capture evidence report is ready.
+    pub failure_capture_ready: bool,
+    /// Whether all reports share the requested plan id.
+    pub plan_ids_match: bool,
+    /// Total non-secret evidence reference count across composed reports.
+    pub total_non_secret_reference_count: u64,
+    /// Whether every composed report includes operator approval.
+    pub component_operator_approvals_present: bool,
+    /// Whether every composed report includes reviewer approval.
+    pub component_reviewer_approvals_present: bool,
+    /// Whether operator approval/reference exists for the composed drill.
+    pub operator_approved: bool,
+    /// Whether independent reviewer approval/reference exists for the composed drill.
+    pub reviewer_approved: bool,
+    /// Validation status.
+    pub status: DeploymentResponseDrillRehearsalStatus,
+    /// Non-secret blocker codes.
+    pub blocker_codes: Vec<String>,
+    /// Whether this validator executed rollback. Always false.
+    pub rollback_executed_by_validator: bool,
+    /// Whether this validator executed incident response. Always false.
+    pub incident_response_executed_by_validator: bool,
+    /// Whether this validator injected failures. Always false.
+    pub failure_injected_by_validator: bool,
+    /// Whether this validator performed service-manager actions. Always false.
+    pub service_manager_action_performed_by_validator: bool,
+    /// Whether this validator mutated files. Always false.
+    pub files_mutated_by_validator: bool,
+    /// Whether this validator sent alerts. Always false.
+    pub alerts_sent_by_validator: bool,
+    /// Whether this validator performed external calls. Always false.
+    pub external_calls_performed: bool,
+    /// Whether this validator performed live execution. Always false.
+    pub live_execution_performed: bool,
+    /// Whether this report approves production readiness. Always false.
+    pub production_ready: bool,
+    /// Rehearsal validation timestamp in Unix milliseconds.
     pub validated_at_unix_ms: u64,
 }
 
@@ -1641,6 +1753,129 @@ impl DeploymentFailureCaptureTranscriptReport {
     }
 }
 
+impl DeploymentResponseDrillRehearsalRequest {
+    /// Validate composed response-drill rehearsal request invariants.
+    pub fn validate(&self) -> Result<(), PackagingBoundaryError> {
+        let mut violations = Vec::new();
+        if self.rehearsal_id.trim().is_empty() {
+            violations.push(PackagingBoundaryViolation::new(
+                "PACKAGING_RESPONSE_DRILL_REHEARSAL_ID_EMPTY",
+                "deployment response drill rehearsal id must be non-empty",
+            ));
+        }
+        if self.plan_id.trim().is_empty() {
+            violations.push(PackagingBoundaryViolation::new(
+                "PACKAGING_RESPONSE_DRILL_PLAN_ID_EMPTY",
+                "deployment response drill rehearsal plan id must be non-empty",
+            ));
+        }
+        if contains_secret_like_text(&self.rehearsal_id) || contains_secret_like_text(&self.plan_id)
+        {
+            violations.push(PackagingBoundaryViolation::new(
+                "PACKAGING_RESPONSE_DRILL_SECRET_LIKE",
+                "deployment response drill rehearsal ids must not contain secret-like text",
+            ));
+        }
+        if self.validated_at_unix_ms == 0 {
+            violations.push(PackagingBoundaryViolation::new(
+                "PACKAGING_RESPONSE_DRILL_TIMESTAMP_EMPTY",
+                "deployment response drill rehearsal timestamp must be non-zero",
+            ));
+        }
+        if self.rollback_executed_by_validator
+            || self.incident_response_executed_by_validator
+            || self.failure_injected_by_validator
+            || self.service_manager_action_performed_by_validator
+            || self.files_mutated_by_validator
+            || self.alerts_sent_by_validator
+            || self.external_calls_performed
+            || self.live_execution_performed
+        {
+            violations.push(PackagingBoundaryViolation::new(
+                "PACKAGING_RESPONSE_DRILL_VALIDATOR_SIDE_EFFECT_DENIED",
+                "deployment response drill rehearsal validator must not execute rollback, execute incident response, inject failures, perform service actions, mutate files, send alerts, call externally, or perform live execution",
+            ));
+        }
+        if self.production_ready_claimed {
+            violations.push(PackagingBoundaryViolation::new(
+                "PACKAGING_RESPONSE_DRILL_PRODUCTION_CLAIM_DENIED",
+                "deployment response drill rehearsal must not claim production readiness",
+            ));
+        }
+
+        if let Err(PackagingBoundaryError::ValidationFailed { violations: nested }) =
+            self.rollback_report.validate()
+        {
+            violations.extend(nested);
+        }
+        if let Err(PackagingBoundaryError::ValidationFailed { violations: nested }) =
+            self.incident_response_report.validate()
+        {
+            violations.extend(nested);
+        }
+        if let Err(PackagingBoundaryError::ValidationFailed { violations: nested }) =
+            self.failure_capture_report.validate()
+        {
+            violations.extend(nested);
+        }
+
+        finish_validation(violations)
+    }
+}
+
+impl DeploymentResponseDrillRehearsalReport {
+    /// Validate composed response-drill rehearsal report invariants.
+    pub fn validate(&self) -> Result<(), PackagingBoundaryError> {
+        let mut violations = Vec::new();
+        if self.validation_version != PACKAGING_DEPLOYMENT_RESPONSE_DRILL_REHEARSAL_VERSION {
+            violations.push(PackagingBoundaryViolation::new(
+                "PACKAGING_RESPONSE_DRILL_VERSION_MISMATCH",
+                format!(
+                    "validation_version must be {PACKAGING_DEPLOYMENT_RESPONSE_DRILL_REHEARSAL_VERSION}"
+                ),
+            ));
+        }
+        if self.rehearsal_id.trim().is_empty() || self.plan_id.trim().is_empty() {
+            violations.push(PackagingBoundaryViolation::new(
+                "PACKAGING_RESPONSE_DRILL_REPORT_ID_EMPTY",
+                "deployment response drill rehearsal report requires rehearsal id and plan id",
+            ));
+        }
+        if self.rollback_executed_by_validator
+            || self.incident_response_executed_by_validator
+            || self.failure_injected_by_validator
+            || self.service_manager_action_performed_by_validator
+            || self.files_mutated_by_validator
+            || self.alerts_sent_by_validator
+            || self.external_calls_performed
+            || self.live_execution_performed
+            || self.production_ready
+        {
+            violations.push(PackagingBoundaryViolation::new(
+                "PACKAGING_RESPONSE_DRILL_REPORT_SIDE_EFFECT_DENIED",
+                "deployment response drill rehearsal report must not contain validator side effects or production readiness",
+            ));
+        }
+        if self.status == DeploymentResponseDrillRehearsalStatus::Validated
+            && !self.blocker_codes.is_empty()
+        {
+            violations.push(PackagingBoundaryViolation::new(
+                "PACKAGING_RESPONSE_DRILL_VALIDATED_WITH_BLOCKERS",
+                "validated deployment response drill rehearsal report must not contain blockers",
+            ));
+        }
+        if self.status == DeploymentResponseDrillRehearsalStatus::Blocked
+            && self.blocker_codes.is_empty()
+        {
+            violations.push(PackagingBoundaryViolation::new(
+                "PACKAGING_RESPONSE_DRILL_BLOCKED_WITHOUT_BLOCKERS",
+                "blocked deployment response drill rehearsal report requires blocker codes",
+            ));
+        }
+        finish_validation(violations)
+    }
+}
+
 /// Validate local rollback metadata without executing rollback steps.
 #[must_use]
 pub fn validate_local_deployment_rollback_plan(
@@ -1789,6 +2024,70 @@ pub fn validate_deployment_failure_capture_transcript(
         live_execution_performed: false,
         production_ready: false,
         validated_at_unix_ms: transcript.validated_at_unix_ms,
+    };
+    report.validate()?;
+    Ok(report)
+}
+
+/// Validate composed local rollback, incident-response, and failure-capture evidence.
+///
+/// This consumes sanitized local reports only. It does not execute rollback,
+/// incident response, service-manager actions, panic/failure injection, alert
+/// delivery, file mutation, external calls, live execution, or production
+/// readiness approval.
+pub fn validate_deployment_response_drill_rehearsal(
+    request: DeploymentResponseDrillRehearsalRequest,
+) -> Result<DeploymentResponseDrillRehearsalReport, PackagingBoundaryError> {
+    request.validate()?;
+    let blocker_codes = deployment_response_drill_rehearsal_blockers(&request);
+    let rollback_ready =
+        request.rollback_report.status == RollbackExecutionTranscriptStatus::ReadyForExternalReview;
+    let incident_response_ready = request.incident_response_report.status
+        == IncidentResponseExecutionTranscriptStatus::ReadyForExternalReview;
+    let failure_capture_ready = request.failure_capture_report.status
+        == DeploymentFailureCaptureTranscriptStatus::ReadyForExternalReview;
+    let plan_ids_match = request.rollback_report.plan_id == request.plan_id
+        && request.incident_response_report.plan_id == request.plan_id
+        && request.failure_capture_report.plan_id == request.plan_id;
+    let component_operator_approvals_present = request.rollback_report.operator_approved
+        && request.incident_response_report.operator_approved
+        && request.failure_capture_report.operator_approved;
+    let component_reviewer_approvals_present = request.rollback_report.reviewer_approved
+        && request.incident_response_report.reviewer_approved
+        && request.failure_capture_report.reviewer_approved;
+    let total_non_secret_reference_count = request.rollback_report.non_secret_reference_count
+        + request.incident_response_report.non_secret_reference_count
+        + request.failure_capture_report.non_secret_reference_count;
+    let status = if blocker_codes.is_empty() {
+        DeploymentResponseDrillRehearsalStatus::Validated
+    } else {
+        DeploymentResponseDrillRehearsalStatus::Blocked
+    };
+    let report = DeploymentResponseDrillRehearsalReport {
+        validation_version: PACKAGING_DEPLOYMENT_RESPONSE_DRILL_REHEARSAL_VERSION.to_owned(),
+        rehearsal_id: request.rehearsal_id,
+        plan_id: request.plan_id,
+        rollback_ready,
+        incident_response_ready,
+        failure_capture_ready,
+        plan_ids_match,
+        total_non_secret_reference_count,
+        component_operator_approvals_present,
+        component_reviewer_approvals_present,
+        operator_approved: request.operator_approved,
+        reviewer_approved: request.reviewer_approved,
+        status,
+        blocker_codes,
+        rollback_executed_by_validator: false,
+        incident_response_executed_by_validator: false,
+        failure_injected_by_validator: false,
+        service_manager_action_performed_by_validator: false,
+        files_mutated_by_validator: false,
+        alerts_sent_by_validator: false,
+        external_calls_performed: false,
+        live_execution_performed: false,
+        production_ready: false,
+        validated_at_unix_ms: request.validated_at_unix_ms,
     };
     report.validate()?;
     Ok(report)
@@ -2257,16 +2556,69 @@ fn deployment_failure_capture_blockers(
     blockers
 }
 
+fn deployment_response_drill_rehearsal_blockers(
+    request: &DeploymentResponseDrillRehearsalRequest,
+) -> Vec<String> {
+    let mut blockers = Vec::new();
+    if request.rollback_report.status != RollbackExecutionTranscriptStatus::ReadyForExternalReview {
+        blockers.push("rollback-transcript-not-ready".to_owned());
+    }
+    if request.incident_response_report.status
+        != IncidentResponseExecutionTranscriptStatus::ReadyForExternalReview
+    {
+        blockers.push("incident-response-transcript-not-ready".to_owned());
+    }
+    if request.failure_capture_report.status
+        != DeploymentFailureCaptureTranscriptStatus::ReadyForExternalReview
+    {
+        blockers.push("failure-capture-transcript-not-ready".to_owned());
+    }
+    if request.rollback_report.plan_id != request.plan_id
+        || request.incident_response_report.plan_id != request.plan_id
+        || request.failure_capture_report.plan_id != request.plan_id
+    {
+        blockers.push("response-drill-plan-id-mismatch".to_owned());
+    }
+    if !request.rollback_report.operator_approved
+        || !request.incident_response_report.operator_approved
+        || !request.failure_capture_report.operator_approved
+    {
+        blockers.push("missing-component-operator-approval".to_owned());
+    }
+    if !request.rollback_report.reviewer_approved
+        || !request.incident_response_report.reviewer_approved
+        || !request.failure_capture_report.reviewer_approved
+    {
+        blockers.push("missing-component-reviewer-approval".to_owned());
+    }
+    if request.rollback_report.non_secret_reference_count
+        + request.incident_response_report.non_secret_reference_count
+        + request.failure_capture_report.non_secret_reference_count
+        < 18
+    {
+        blockers.push("insufficient-composed-non-secret-references".to_owned());
+    }
+    if !request.operator_approved {
+        blockers.push("missing-response-drill-operator-approval".to_owned());
+    }
+    if !request.reviewer_approved {
+        blockers.push("missing-response-drill-reviewer-approval".to_owned());
+    }
+    blockers
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
         append_deployment_package_record_audit, append_rollback_validation_audit,
         persist_deployment_package_record_checkpoint, persist_rollback_validation_checkpoint,
         validate_deployment_failure_capture_transcript,
+        validate_deployment_response_drill_rehearsal,
         validate_incident_response_execution_transcript, validate_local_deployment_rollback_plan,
         validate_rollback_execution_transcript, DeploymentFailureCaptureTranscript,
         DeploymentFailureCaptureTranscriptStatus, DeploymentNetworkExposure, DeploymentPackagePlan,
-        DeploymentPackageRequest, DeploymentPackageStatus, DeterministicPackagingDeploymentPlanner,
+        DeploymentPackageRequest, DeploymentPackageStatus, DeploymentResponseDrillRehearsalRequest,
+        DeploymentResponseDrillRehearsalStatus, DeterministicPackagingDeploymentPlanner,
         IncidentResponseExecutionTranscript, IncidentResponseExecutionTranscriptStatus,
         PackageTargetPlan, PackagingBoundaryConfig, PackagingBoundaryError,
         PackagingDeploymentPlanner, RollbackExecutionTranscript, RollbackExecutionTranscriptStatus,
@@ -2719,6 +3071,78 @@ mod tests {
         assert!(error.to_string().contains("must not install hooks"));
     }
 
+    #[test]
+    fn deployment_response_drill_rehearsal_validates_composed_evidence_shape() {
+        let report =
+            validate_deployment_response_drill_rehearsal(deployment_response_drill_rehearsal(true))
+                .expect("complete deployment response drill rehearsal should validate");
+
+        assert_eq!(
+            report.status,
+            DeploymentResponseDrillRehearsalStatus::Validated
+        );
+        assert!(report.rollback_ready);
+        assert!(report.incident_response_ready);
+        assert!(report.failure_capture_ready);
+        assert!(report.plan_ids_match);
+        assert_eq!(report.total_non_secret_reference_count, 24);
+        assert!(report.component_operator_approvals_present);
+        assert!(report.component_reviewer_approvals_present);
+        assert!(report.operator_approved);
+        assert!(report.reviewer_approved);
+        assert!(report.blocker_codes.is_empty());
+        assert!(!report.rollback_executed_by_validator);
+        assert!(!report.incident_response_executed_by_validator);
+        assert!(!report.failure_injected_by_validator);
+        assert!(!report.service_manager_action_performed_by_validator);
+        assert!(!report.files_mutated_by_validator);
+        assert!(!report.alerts_sent_by_validator);
+        assert!(!report.external_calls_performed);
+        assert!(!report.live_execution_performed);
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn deployment_response_drill_rehearsal_blocks_missing_component_evidence() {
+        let report = validate_deployment_response_drill_rehearsal(
+            deployment_response_drill_rehearsal(false),
+        )
+        .expect("incomplete deployment response drill rehearsal should produce blocked report");
+
+        assert_eq!(
+            report.status,
+            DeploymentResponseDrillRehearsalStatus::Blocked
+        );
+        assert!(report.rollback_ready);
+        assert!(!report.incident_response_ready);
+        assert!(!report.failure_capture_ready);
+        assert!(report.plan_ids_match);
+        assert!(report
+            .blocker_codes
+            .iter()
+            .any(|code| code == "incident-response-transcript-not-ready"));
+        assert!(report
+            .blocker_codes
+            .iter()
+            .any(|code| code == "failure-capture-transcript-not-ready"));
+        assert!(report
+            .blocker_codes
+            .iter()
+            .any(|code| code == "missing-response-drill-reviewer-approval"));
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn deployment_response_drill_rehearsal_rejects_validator_side_effects() {
+        let mut request = deployment_response_drill_rehearsal(true);
+        request.service_manager_action_performed_by_validator = true;
+
+        let error = validate_deployment_response_drill_rehearsal(request)
+            .expect_err("validator service-manager action must fail closed");
+
+        assert!(error.to_string().contains("must not execute rollback"));
+    }
+
     fn temp_audit_path(label: &str) -> PathBuf {
         let mut path = env::temp_dir();
         let nanos = std::time::SystemTime::now()
@@ -2845,6 +3269,45 @@ mod tests {
             live_execution_performed: false,
             production_ready_claimed: false,
             validated_at_unix_ms: 98_000,
+        }
+    }
+
+    fn deployment_response_drill_rehearsal(
+        complete: bool,
+    ) -> DeploymentResponseDrillRehearsalRequest {
+        let plan_id = "phase-69-response-drill".to_owned();
+        let mut rollback = rollback_execution_transcript(true);
+        rollback.plan_id.clone_from(&plan_id);
+        let mut incident = incident_response_execution_transcript(complete);
+        incident.plan_id.clone_from(&plan_id);
+        let mut failure = deployment_failure_capture_transcript(complete);
+        failure.plan_id.clone_from(&plan_id);
+
+        DeploymentResponseDrillRehearsalRequest {
+            rehearsal_id: if complete {
+                "deployment-response-drill-ready".to_owned()
+            } else {
+                "deployment-response-drill-blocked".to_owned()
+            },
+            plan_id,
+            rollback_report: validate_rollback_execution_transcript(rollback)
+                .expect("rollback transcript fixture validates"),
+            incident_response_report: validate_incident_response_execution_transcript(incident)
+                .expect("incident transcript fixture validates"),
+            failure_capture_report: validate_deployment_failure_capture_transcript(failure)
+                .expect("failure capture transcript fixture validates"),
+            operator_approved: complete,
+            reviewer_approved: complete,
+            rollback_executed_by_validator: false,
+            incident_response_executed_by_validator: false,
+            failure_injected_by_validator: false,
+            service_manager_action_performed_by_validator: false,
+            files_mutated_by_validator: false,
+            alerts_sent_by_validator: false,
+            external_calls_performed: false,
+            live_execution_performed: false,
+            production_ready_claimed: false,
+            validated_at_unix_ms: 99_000,
         }
     }
 }

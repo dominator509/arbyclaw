@@ -145,6 +145,18 @@ COMPONENT_COMMANDS = [
         ],
         False,
     ),
+    (
+        "deployment-response-drill-rehearsal",
+        [
+            "cargo",
+            "run",
+            "-p",
+            "arb-agent",
+            "--",
+            "validate-deployment-response-drill-rehearsal",
+        ],
+        False,
+    ),
 ]
 
 BOOLEAN_SAFETY_FIELDS = (
