@@ -11066,6 +11066,12 @@ fn build_local_communications_channel_adapter_for_scenario(
         channel_authenticated: scenario.channel_authenticated(),
         platform_identity_authorized: scenario.platform_identity_authorized(),
         replay_protection_checked: true,
+        require_delivery_kill_switch: true,
+        require_audit_state_preflight: true,
+        require_delivery_idempotency: true,
+        require_rate_limit_controls: true,
+        require_outage_backoff_controls: true,
+        require_payload_redaction: true,
         replay_nonce_reused: scenario.replay_nonce_reused(),
         provider_rate_limited: scenario.provider_unavailable(),
         provider_outage_observed: scenario.provider_unavailable(),
@@ -11156,6 +11162,12 @@ fn build_local_communications_platform_adapter_review(
         platform_identity_authorized: true,
         channel_permission_granted: true,
         command_injection_blocked: true,
+        require_delivery_kill_switch: true,
+        require_audit_state_preflight: true,
+        require_delivery_idempotency: true,
+        require_rate_limit_controls: true,
+        require_outage_backoff_controls: true,
+        require_payload_redaction: true,
         token_revoked: false,
         provider_rate_limited: false,
         provider_outage_observed: false,
@@ -11278,6 +11290,12 @@ fn communications_runtime_validation_passed(
         && records.dispatch.status == NotificationDispatchStatus::RecordedLocally
         && !records.dispatch.outbound_network_used
         && records.channel_adapter.status == ChannelAdapterValidationStatus::ReadyForLocalReview
+        && records.channel_adapter.require_delivery_kill_switch
+        && records.channel_adapter.require_audit_state_preflight
+        && records.channel_adapter.require_delivery_idempotency
+        && records.channel_adapter.require_rate_limit_controls
+        && records.channel_adapter.require_outage_backoff_controls
+        && records.channel_adapter.require_payload_redaction
         && !records.channel_adapter.outbound_delivery_requested
         && !records.channel_adapter.outbound_network_used
         && !records.channel_adapter.message_delivered
@@ -11307,6 +11325,12 @@ fn communications_runtime_validation_passed(
         && records.platform_adapter.platform_identity_authorized
         && records.platform_adapter.channel_permission_granted
         && records.platform_adapter.command_injection_blocked
+        && records.platform_adapter.require_delivery_kill_switch
+        && records.platform_adapter.require_audit_state_preflight
+        && records.platform_adapter.require_delivery_idempotency
+        && records.platform_adapter.require_rate_limit_controls
+        && records.platform_adapter.require_outage_backoff_controls
+        && records.platform_adapter.require_payload_redaction
         && !records.platform_adapter.token_revoked
         && !records.platform_adapter.provider_rate_limited
         && !records.platform_adapter.provider_outage_observed
@@ -11358,14 +11382,7 @@ fn print_communications_runtime_report(
         "remote-command-injection-detected: {}",
         records.remote_envelope.command_injection_detected
     );
-    println!(
-        "channel-adapter-ready: {}",
-        records.channel_adapter.status == ChannelAdapterValidationStatus::ReadyForLocalReview
-    );
-    println!(
-        "channel-adapter-message-delivered: {}",
-        records.channel_adapter.message_delivered
-    );
+    print_communications_channel_adapter_report(&records.channel_adapter);
     println!(
         "channel-session-ready: {}",
         records.channel_session.status == ChannelSessionValidationStatus::ReadyForLocalReview
@@ -11434,6 +11451,41 @@ fn print_communications_checkpoint_keys() {
     );
 }
 
+fn print_communications_channel_adapter_report(report: &ChannelAdapterValidationReport) {
+    println!(
+        "channel-adapter-ready: {}",
+        report.status == ChannelAdapterValidationStatus::ReadyForLocalReview
+    );
+    println!(
+        "channel-adapter-delivery-kill-switch-required: {}",
+        report.require_delivery_kill_switch
+    );
+    println!(
+        "channel-adapter-audit-state-preflight-required: {}",
+        report.require_audit_state_preflight
+    );
+    println!(
+        "channel-adapter-idempotency-required: {}",
+        report.require_delivery_idempotency
+    );
+    println!(
+        "channel-adapter-rate-limit-controls-required: {}",
+        report.require_rate_limit_controls
+    );
+    println!(
+        "channel-adapter-outage-backoff-required: {}",
+        report.require_outage_backoff_controls
+    );
+    println!(
+        "channel-adapter-payload-redaction-required: {}",
+        report.require_payload_redaction
+    );
+    println!(
+        "channel-adapter-message-delivered: {}",
+        report.message_delivered
+    );
+}
+
 fn print_communications_platform_adapter_report(report: &PlatformAdapterReviewReport) {
     println!(
         "platform-adapter-ready: {}",
@@ -11462,6 +11514,30 @@ fn print_communications_platform_adapter_report(report: &PlatformAdapterReviewRe
     println!(
         "platform-adapter-command-injection-blocked: {}",
         report.command_injection_blocked
+    );
+    println!(
+        "platform-adapter-delivery-kill-switch-required: {}",
+        report.require_delivery_kill_switch
+    );
+    println!(
+        "platform-adapter-audit-state-preflight-required: {}",
+        report.require_audit_state_preflight
+    );
+    println!(
+        "platform-adapter-idempotency-required: {}",
+        report.require_delivery_idempotency
+    );
+    println!(
+        "platform-adapter-rate-limit-controls-required: {}",
+        report.require_rate_limit_controls
+    );
+    println!(
+        "platform-adapter-outage-backoff-required: {}",
+        report.require_outage_backoff_controls
+    );
+    println!(
+        "platform-adapter-payload-redaction-required: {}",
+        report.require_payload_redaction
     );
     println!("platform-adapter-token-revoked: {}", report.token_revoked);
     println!(

@@ -748,6 +748,18 @@ pub struct ChannelAdapterValidationRequest {
     pub platform_identity_authorized: bool,
     /// Whether replay protection was represented as checked.
     pub replay_protection_checked: bool,
+    /// Whether a future outbound adapter must retain a delivery kill switch.
+    pub require_delivery_kill_switch: bool,
+    /// Whether future outbound delivery requires audit/state preflight.
+    pub require_audit_state_preflight: bool,
+    /// Whether future outbound delivery requires idempotency controls.
+    pub require_delivery_idempotency: bool,
+    /// Whether future outbound delivery requires rate-limit controls.
+    pub require_rate_limit_controls: bool,
+    /// Whether future outbound delivery requires outage/backoff controls.
+    pub require_outage_backoff_controls: bool,
+    /// Whether future outbound delivery requires payload redaction controls.
+    pub require_payload_redaction: bool,
     /// Whether this adapter nonce was already used.
     pub replay_nonce_reused: bool,
     /// Whether a caller-supplied local provider rate limit observation blocks delivery.
@@ -796,6 +808,18 @@ pub struct ChannelAdapterValidationReport {
     pub platform_identity_authorized: bool,
     /// Whether replay protection was represented as checked.
     pub replay_protection_checked: bool,
+    /// Whether a future outbound adapter must retain a delivery kill switch.
+    pub require_delivery_kill_switch: bool,
+    /// Whether future outbound delivery requires audit/state preflight.
+    pub require_audit_state_preflight: bool,
+    /// Whether future outbound delivery requires idempotency controls.
+    pub require_delivery_idempotency: bool,
+    /// Whether future outbound delivery requires rate-limit controls.
+    pub require_rate_limit_controls: bool,
+    /// Whether future outbound delivery requires outage/backoff controls.
+    pub require_outage_backoff_controls: bool,
+    /// Whether future outbound delivery requires payload redaction controls.
+    pub require_payload_redaction: bool,
     /// Whether this adapter nonce was already used.
     pub replay_nonce_reused: bool,
     /// Whether a caller-supplied provider rate limit blocks delivery.
@@ -910,6 +934,18 @@ pub struct PlatformAdapterReviewRequest {
     pub channel_permission_granted: bool,
     /// Whether command-injection-like input was blocked before adapter use.
     pub command_injection_blocked: bool,
+    /// Whether a future outbound adapter must retain a delivery kill switch.
+    pub require_delivery_kill_switch: bool,
+    /// Whether future outbound delivery requires audit/state preflight.
+    pub require_audit_state_preflight: bool,
+    /// Whether future outbound delivery requires idempotency controls.
+    pub require_delivery_idempotency: bool,
+    /// Whether future outbound delivery requires rate-limit controls.
+    pub require_rate_limit_controls: bool,
+    /// Whether future outbound delivery requires outage/backoff controls.
+    pub require_outage_backoff_controls: bool,
+    /// Whether future outbound delivery requires payload redaction controls.
+    pub require_payload_redaction: bool,
     /// Whether the caller-supplied token reference is revoked.
     pub token_revoked: bool,
     /// Whether caller-supplied provider rate-limit observation blocks delivery.
@@ -960,6 +996,18 @@ pub struct PlatformAdapterReviewReport {
     pub channel_permission_granted: bool,
     /// Whether command-injection-like input was blocked before adapter use.
     pub command_injection_blocked: bool,
+    /// Whether a future outbound adapter must retain a delivery kill switch.
+    pub require_delivery_kill_switch: bool,
+    /// Whether future outbound delivery requires audit/state preflight.
+    pub require_audit_state_preflight: bool,
+    /// Whether future outbound delivery requires idempotency controls.
+    pub require_delivery_idempotency: bool,
+    /// Whether future outbound delivery requires rate-limit controls.
+    pub require_rate_limit_controls: bool,
+    /// Whether future outbound delivery requires outage/backoff controls.
+    pub require_outage_backoff_controls: bool,
+    /// Whether future outbound delivery requires payload redaction controls.
+    pub require_payload_redaction: bool,
     /// Whether the caller-supplied token reference is revoked.
     pub token_revoked: bool,
     /// Whether caller-supplied provider rate-limit observation blocks delivery.
@@ -1410,6 +1458,42 @@ impl ChannelAdapterValidationRequest {
                 "channel adapter validation timestamp must be non-zero",
             ));
         }
+        for (enabled, code, message) in [
+            (
+                self.require_delivery_kill_switch,
+                "COMMUNICATION_CHANNEL_ADAPTER_DELIVERY_KILL_SWITCH_REQUIRED",
+                "future channel delivery requires a kill switch",
+            ),
+            (
+                self.require_audit_state_preflight,
+                "COMMUNICATION_CHANNEL_ADAPTER_AUDIT_STATE_PREFLIGHT_REQUIRED",
+                "future channel delivery requires audit/state preflight",
+            ),
+            (
+                self.require_delivery_idempotency,
+                "COMMUNICATION_CHANNEL_ADAPTER_IDEMPOTENCY_REQUIRED",
+                "future channel delivery requires idempotency controls",
+            ),
+            (
+                self.require_rate_limit_controls,
+                "COMMUNICATION_CHANNEL_ADAPTER_RATE_LIMIT_CONTROLS_REQUIRED",
+                "future channel delivery requires rate-limit controls",
+            ),
+            (
+                self.require_outage_backoff_controls,
+                "COMMUNICATION_CHANNEL_ADAPTER_OUTAGE_BACKOFF_REQUIRED",
+                "future channel delivery requires outage/backoff controls",
+            ),
+            (
+                self.require_payload_redaction,
+                "COMMUNICATION_CHANNEL_ADAPTER_PAYLOAD_REDACTION_REQUIRED",
+                "future channel delivery requires payload redaction controls",
+            ),
+        ] {
+            if !enabled {
+                violations.push(CommunicationViolation::new(code, message));
+            }
+        }
         finish_validation(violations)
     }
 }
@@ -1459,6 +1543,12 @@ impl ChannelAdapterValidationReport {
                     || !self.channel_authenticated
                     || !self.platform_identity_authorized
                     || !self.replay_protection_checked
+                    || !self.require_delivery_kill_switch
+                    || !self.require_audit_state_preflight
+                    || !self.require_delivery_idempotency
+                    || !self.require_rate_limit_controls
+                    || !self.require_outage_backoff_controls
+                    || !self.require_payload_redaction
                     || self.replay_nonce_reused
                     || self.provider_rate_limited
                     || self.provider_outage_observed
@@ -1599,6 +1689,42 @@ impl PlatformAdapterReviewRequest {
                 "platform adapter channel id must not look like secret material",
             ));
         }
+        for (enabled, code, message) in [
+            (
+                self.require_delivery_kill_switch,
+                "COMMUNICATION_PLATFORM_ADAPTER_DELIVERY_KILL_SWITCH_REQUIRED",
+                "future platform delivery requires a kill switch",
+            ),
+            (
+                self.require_audit_state_preflight,
+                "COMMUNICATION_PLATFORM_ADAPTER_AUDIT_STATE_PREFLIGHT_REQUIRED",
+                "future platform delivery requires audit/state preflight",
+            ),
+            (
+                self.require_delivery_idempotency,
+                "COMMUNICATION_PLATFORM_ADAPTER_IDEMPOTENCY_REQUIRED",
+                "future platform delivery requires idempotency controls",
+            ),
+            (
+                self.require_rate_limit_controls,
+                "COMMUNICATION_PLATFORM_ADAPTER_RATE_LIMIT_CONTROLS_REQUIRED",
+                "future platform delivery requires rate-limit controls",
+            ),
+            (
+                self.require_outage_backoff_controls,
+                "COMMUNICATION_PLATFORM_ADAPTER_OUTAGE_BACKOFF_REQUIRED",
+                "future platform delivery requires outage/backoff controls",
+            ),
+            (
+                self.require_payload_redaction,
+                "COMMUNICATION_PLATFORM_ADAPTER_PAYLOAD_REDACTION_REQUIRED",
+                "future platform delivery requires payload redaction controls",
+            ),
+        ] {
+            if !enabled {
+                violations.push(CommunicationViolation::new(code, message));
+            }
+        }
         finish_validation(violations)
     }
 }
@@ -1649,6 +1775,12 @@ impl PlatformAdapterReviewReport {
                     || !self.platform_identity_authorized
                     || !self.channel_permission_granted
                     || !self.command_injection_blocked
+                    || !self.require_delivery_kill_switch
+                    || !self.require_audit_state_preflight
+                    || !self.require_delivery_idempotency
+                    || !self.require_rate_limit_controls
+                    || !self.require_outage_backoff_controls
+                    || !self.require_payload_redaction
                     || self.token_revoked
                     || self.provider_rate_limited
                     || self.provider_outage_observed
@@ -1905,6 +2037,12 @@ pub fn validate_channel_adapter(
         !request.channel_authenticated,
         !request.platform_identity_authorized,
         !request.replay_protection_checked,
+        !request.require_delivery_kill_switch,
+        !request.require_audit_state_preflight,
+        !request.require_delivery_idempotency,
+        !request.require_rate_limit_controls,
+        !request.require_outage_backoff_controls,
+        !request.require_payload_redaction,
         request.replay_nonce_reused,
         request.provider_rate_limited,
         request.provider_outage_observed,
@@ -1935,6 +2073,12 @@ pub fn validate_channel_adapter(
         channel_authenticated: request.channel_authenticated,
         platform_identity_authorized: request.platform_identity_authorized,
         replay_protection_checked: request.replay_protection_checked,
+        require_delivery_kill_switch: request.require_delivery_kill_switch,
+        require_audit_state_preflight: request.require_audit_state_preflight,
+        require_delivery_idempotency: request.require_delivery_idempotency,
+        require_rate_limit_controls: request.require_rate_limit_controls,
+        require_outage_backoff_controls: request.require_outage_backoff_controls,
+        require_payload_redaction: request.require_payload_redaction,
         replay_nonce_reused: request.replay_nonce_reused,
         provider_rate_limited: request.provider_rate_limited,
         provider_outage_observed: request.provider_outage_observed,
@@ -2068,6 +2212,12 @@ pub fn review_platform_adapter_controls(
         !request.platform_identity_authorized,
         !request.channel_permission_granted,
         !request.command_injection_blocked,
+        !request.require_delivery_kill_switch,
+        !request.require_audit_state_preflight,
+        !request.require_delivery_idempotency,
+        !request.require_rate_limit_controls,
+        !request.require_outage_backoff_controls,
+        !request.require_payload_redaction,
         request.token_revoked,
         request.provider_rate_limited,
         request.provider_outage_observed,
@@ -2099,6 +2249,12 @@ pub fn review_platform_adapter_controls(
         platform_identity_authorized: request.platform_identity_authorized,
         channel_permission_granted: request.channel_permission_granted,
         command_injection_blocked: request.command_injection_blocked,
+        require_delivery_kill_switch: request.require_delivery_kill_switch,
+        require_audit_state_preflight: request.require_audit_state_preflight,
+        require_delivery_idempotency: request.require_delivery_idempotency,
+        require_rate_limit_controls: request.require_rate_limit_controls,
+        require_outage_backoff_controls: request.require_outage_backoff_controls,
+        require_payload_redaction: request.require_payload_redaction,
         token_revoked: request.token_revoked,
         provider_rate_limited: request.provider_rate_limited,
         provider_outage_observed: request.provider_outage_observed,
@@ -3590,6 +3746,30 @@ pub fn append_platform_adapter_review_audit(
             "command_injection_blocked",
             AuditValue::Bool(report.command_injection_blocked),
         )
+        .with_metadata(
+            "require_delivery_kill_switch",
+            AuditValue::Bool(report.require_delivery_kill_switch),
+        )
+        .with_metadata(
+            "require_audit_state_preflight",
+            AuditValue::Bool(report.require_audit_state_preflight),
+        )
+        .with_metadata(
+            "require_delivery_idempotency",
+            AuditValue::Bool(report.require_delivery_idempotency),
+        )
+        .with_metadata(
+            "require_rate_limit_controls",
+            AuditValue::Bool(report.require_rate_limit_controls),
+        )
+        .with_metadata(
+            "require_outage_backoff_controls",
+            AuditValue::Bool(report.require_outage_backoff_controls),
+        )
+        .with_metadata(
+            "require_payload_redaction",
+            AuditValue::Bool(report.require_payload_redaction),
+        )
         .with_metadata("token_revoked", AuditValue::Bool(report.token_revoked))
         .with_metadata(
             "provider_rate_limited",
@@ -4290,6 +4470,12 @@ mod tests {
             channel_authenticated: true,
             platform_identity_authorized: true,
             replay_protection_checked: true,
+            require_delivery_kill_switch: true,
+            require_audit_state_preflight: true,
+            require_delivery_idempotency: true,
+            require_rate_limit_controls: true,
+            require_outage_backoff_controls: true,
+            require_payload_redaction: true,
             replay_nonce_reused: false,
             provider_rate_limited: false,
             provider_outage_observed: false,
@@ -4314,6 +4500,12 @@ mod tests {
             platform_identity_authorized: true,
             channel_permission_granted: true,
             command_injection_blocked: true,
+            require_delivery_kill_switch: true,
+            require_audit_state_preflight: true,
+            require_delivery_idempotency: true,
+            require_rate_limit_controls: true,
+            require_outage_backoff_controls: true,
+            require_payload_redaction: true,
             token_revoked: false,
             provider_rate_limited: false,
             provider_outage_observed: false,
@@ -4902,6 +5094,12 @@ mod tests {
         assert!(report.channel_authenticated);
         assert!(report.platform_identity_authorized);
         assert!(report.replay_protection_checked);
+        assert!(report.require_delivery_kill_switch);
+        assert!(report.require_audit_state_preflight);
+        assert!(report.require_delivery_idempotency);
+        assert!(report.require_rate_limit_controls);
+        assert!(report.require_outage_backoff_controls);
+        assert!(report.require_payload_redaction);
         assert!(!report.replay_nonce_reused);
         assert!(!report.provider_rate_limited);
         assert!(!report.provider_outage_observed);
@@ -4939,6 +5137,37 @@ mod tests {
         assert!(!report.live_execution_performed);
         assert!(!report.signing_or_broadcast_performed);
         assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn channel_adapter_validation_requires_future_delivery_preconditions() {
+        let mut request = ready_channel_adapter_request();
+        request.validation_id = "channel-adapter-validation-missing-preconditions".to_owned();
+        request.require_delivery_kill_switch = false;
+        request.require_audit_state_preflight = false;
+        request.require_delivery_idempotency = false;
+        request.require_rate_limit_controls = false;
+        request.require_outage_backoff_controls = false;
+        request.require_payload_redaction = false;
+
+        let error = validate_channel_adapter(&request)
+            .expect_err("channel adapter must require future delivery preconditions");
+        for expected in [
+            "COMMUNICATION_CHANNEL_ADAPTER_DELIVERY_KILL_SWITCH_REQUIRED",
+            "COMMUNICATION_CHANNEL_ADAPTER_AUDIT_STATE_PREFLIGHT_REQUIRED",
+            "COMMUNICATION_CHANNEL_ADAPTER_IDEMPOTENCY_REQUIRED",
+            "COMMUNICATION_CHANNEL_ADAPTER_RATE_LIMIT_CONTROLS_REQUIRED",
+            "COMMUNICATION_CHANNEL_ADAPTER_OUTAGE_BACKOFF_REQUIRED",
+            "COMMUNICATION_CHANNEL_ADAPTER_PAYLOAD_REDACTION_REQUIRED",
+        ] {
+            assert!(
+                error
+                    .violations()
+                    .iter()
+                    .any(|violation| violation.code() == expected),
+                "missing expected violation {expected}"
+            );
+        }
     }
 
     #[test]
@@ -4995,6 +5224,12 @@ mod tests {
             ChannelAdapterValidationStatus::ReadyForLocalReview
         );
         assert!(!recovered_report.outbound_delivery_requested);
+        assert!(recovered_report.require_delivery_kill_switch);
+        assert!(recovered_report.require_audit_state_preflight);
+        assert!(recovered_report.require_delivery_idempotency);
+        assert!(recovered_report.require_rate_limit_controls);
+        assert!(recovered_report.require_outage_backoff_controls);
+        assert!(recovered_report.require_payload_redaction);
         assert!(!recovered_report.outbound_network_used);
         assert!(!recovered_report.message_delivered);
         assert!(!recovered_report.remote_commands_enabled);
@@ -5110,6 +5345,12 @@ mod tests {
         assert!(report.platform_identity_authorized);
         assert!(report.channel_permission_granted);
         assert!(report.command_injection_blocked);
+        assert!(report.require_delivery_kill_switch);
+        assert!(report.require_audit_state_preflight);
+        assert!(report.require_delivery_idempotency);
+        assert!(report.require_rate_limit_controls);
+        assert!(report.require_outage_backoff_controls);
+        assert!(report.require_payload_redaction);
         assert!(!report.token_revoked);
         assert!(!report.provider_rate_limited);
         assert!(!report.provider_outage_observed);
@@ -5151,6 +5392,37 @@ mod tests {
         assert!(!report.live_execution_performed);
         assert!(!report.signing_or_broadcast_performed);
         assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn platform_adapter_review_requires_future_delivery_preconditions() {
+        let mut request = ready_platform_adapter_review_request();
+        request.review_id = "platform-adapter-review-missing-preconditions".to_owned();
+        request.require_delivery_kill_switch = false;
+        request.require_audit_state_preflight = false;
+        request.require_delivery_idempotency = false;
+        request.require_rate_limit_controls = false;
+        request.require_outage_backoff_controls = false;
+        request.require_payload_redaction = false;
+
+        let error = review_platform_adapter_controls(&request)
+            .expect_err("platform adapter must require future delivery preconditions");
+        for expected in [
+            "COMMUNICATION_PLATFORM_ADAPTER_DELIVERY_KILL_SWITCH_REQUIRED",
+            "COMMUNICATION_PLATFORM_ADAPTER_AUDIT_STATE_PREFLIGHT_REQUIRED",
+            "COMMUNICATION_PLATFORM_ADAPTER_IDEMPOTENCY_REQUIRED",
+            "COMMUNICATION_PLATFORM_ADAPTER_RATE_LIMIT_CONTROLS_REQUIRED",
+            "COMMUNICATION_PLATFORM_ADAPTER_OUTAGE_BACKOFF_REQUIRED",
+            "COMMUNICATION_PLATFORM_ADAPTER_PAYLOAD_REDACTION_REQUIRED",
+        ] {
+            assert!(
+                error
+                    .violations()
+                    .iter()
+                    .any(|violation| violation.code() == expected),
+                "missing expected violation {expected}"
+            );
+        }
     }
 
     #[test]
@@ -5211,6 +5483,12 @@ mod tests {
         assert!(!recovered_report.token_secret_material_present);
         assert!(recovered_report.channel_permission_granted);
         assert!(recovered_report.command_injection_blocked);
+        assert!(recovered_report.require_delivery_kill_switch);
+        assert!(recovered_report.require_audit_state_preflight);
+        assert!(recovered_report.require_delivery_idempotency);
+        assert!(recovered_report.require_rate_limit_controls);
+        assert!(recovered_report.require_outage_backoff_controls);
+        assert!(recovered_report.require_payload_redaction);
         assert!(!recovered_report.token_revoked);
         assert!(!recovered_report.outbound_network_used);
         assert!(!recovered_report.message_delivered);
