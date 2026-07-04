@@ -55,10 +55,26 @@ The current authoritative baseline is the Phase 18 agentic handoff package snaps
 - Phase 42 - Local Web3 Unsigned Payload Review
 - Phase 43 - Local Web3 Broadcast Readiness Review
 - Phase 44 - Local Web3 Unsigned Transaction Construction
+- Phase 45 - Local Web3 Provider Nonce Reconciliation
+- Phase 46 - Local Web3 Raw Transaction Serialization Review
+- Phase 47 - Local Web3 Broadcast Adapter Control Review
+- Phase 48 - Local Web3 Sandbox/Live Discrepancy Calibration
+- Phase 49 - Local Production Runtime Preflight
+- Phase 50 - Local Service-Manager Lifecycle Transcript Validation
+- Phase 51 - Local Deployment Disk-Full Transcript Validation
+- Phase 52 - Local Deployment Retention Transcript Validation
+- Phase 53 - Local Deployment Permission Transcript Validation
+- Phase 54 - Local Rollback Execution Transcript Validation
+- Phase 55 - Local Incident-Response Execution Transcript Validation
+- Phase 56 - Local Deployment Failure-Capture Transcript Validation
+- Phase 57 - Local Deployment Audit/SQLite Transcript Validation
+- Phase 58 - Container Validator Fail-Closed Timeout Hardening
+- Phase 59 - Service-Manager Concurrent Lifecycle Transcript Hardening
+- Phase 60 - Deployment Permission Runtime-Write Evidence Hardening
 
 ## Current Production Readiness
 
-96% as of Phase 58 governance. Phase 58 adds container validator fail-closed timeout hardening, Phase 57 adds local deployment audit/SQLite transcript validation, Phase 56 adds local deployment failure-capture transcript validation, Phase 55 adds local incident-response execution transcript validation through arb-agent validate-incident-response-execution-transcript, Phase 54 adds local rollback execution transcript validation through arb-agent validate-rollback-execution-transcript, Phases 50 through 53 add sanitized service-manager/deployment disk-full/deployment retention/deployment permission transcript validation, and Phase 28 now composes 26 local runtime/deployment probes by combining the deployment-host runtime helper with eight sanitized runtime/deployment transcript validators. Live exchange/RPC adapter implementation, real provider-backed nonce retrieval, provider-backed validation, custody-backed signer implementation, broader external/deployment scenario-corpus validation, deployment-host audit validation, physical disk-full evidence, deployment-host retention/rotation execution, operator-controlled service-manager lifecycle execution evidence, rollback execution evidence, incident-response execution evidence, external sandbox/live calibration evidence, and real deployment-host validation remain environment-limited. This percentage is a governance approximation only and does not imply readiness for live funds or production deployment.
+96% as of Phase 60 governance. Phase 60 adds sanitized runtime-write permission-denial evidence requirements to the local deployment permission transcript, Phase 59 adds service-manager concurrent lifecycle transcript hardening, Phase 58 adds container validator fail-closed timeout hardening, Phase 57 adds local deployment audit/SQLite transcript validation, Phase 56 adds local deployment failure-capture transcript validation, Phase 55 adds local incident-response execution transcript validation through arb-agent validate-incident-response-execution-transcript, Phase 54 adds local rollback execution transcript validation through arb-agent validate-rollback-execution-transcript, Phases 50 through 53 add sanitized service-manager/deployment disk-full/deployment retention/deployment permission transcript validation, and Phase 28 now composes 26 local runtime/deployment probes by combining the deployment-host runtime helper with eight sanitized runtime/deployment transcript validators. Live exchange/RPC adapter implementation, real provider-backed nonce retrieval, provider-backed validation, custody-backed signer implementation, broader external/deployment scenario-corpus validation, deployment-host audit validation, real deployment-host runtime-write permission-denial execution, physical disk-full evidence, deployment-host retention/rotation execution, operator-controlled service-manager lifecycle execution evidence, rollback execution evidence, incident-response execution evidence, external sandbox/live calibration evidence, and real deployment-host validation remain environment-limited. This percentage is a governance approximation only and does not imply readiness for live funds or production deployment.
 
 ## Non-Negotiable Safety State
 
