@@ -6058,6 +6058,11 @@ fn run_local_validation_corpus_runner(
         corpus_id: "local-validation-corpus".to_owned(),
         config: ValidationHarnessConfig::default(),
         plans: local_validation_runner_corpus(now_unix_ms),
+        min_plan_count: 3,
+        min_test_case_count: 5,
+        min_fixture_count: 3,
+        min_fuzz_corpus_count: 3,
+        min_backtest_scenario_count: 3,
         requested_at_ms: now_unix_ms,
         operator_label: Some("local-validation-corpus-runner".to_owned()),
     })
@@ -6115,6 +6120,18 @@ fn run_local_validation_corpus_runner(
     );
     println!("property-checks-passed: {}", report.property_checks_passed);
     println!("property-checks-failed: {}", report.property_checks_failed);
+    println!("min-validation-plans: {}", report.min_plan_count);
+    println!("min-test-cases: {}", report.min_test_case_count);
+    println!("min-fixtures: {}", report.min_fixture_count);
+    println!("min-fuzz-corpora: {}", report.min_fuzz_corpus_count);
+    println!(
+        "min-backtest-scenarios: {}",
+        report.min_backtest_scenario_count
+    );
+    println!(
+        "corpus-breadth-requirements-met: {}",
+        report.corpus_breadth_requirements_met
+    );
     println!("audit-records-replayed: {}", replayed.next_sequence() - 1);
     println!("state-checkpoint-recovered: true");
     println!(
@@ -10471,7 +10488,24 @@ fn local_validation_runner_corpus(now_unix_ms: u64) -> Vec<ValidationPlan> {
         ExpectedValidationOutcome::Pass,
     ));
 
-    vec![validation_plan, replay_plan]
+    let mut safety_plan = local_validation_runner_plan(now_unix_ms.saturating_add(2));
+    "local-validation-corpus-plan-c".clone_into(&mut safety_plan.plan_id);
+    safety_plan.test_cases.push(ValidationTestCase::new(
+        "local-corpus-redaction-regression",
+        "Validation corpus checks local redaction and denial metadata without secret fixtures",
+        ValidationSuiteKind::Security,
+        "testing",
+        ExpectedValidationOutcome::Pass,
+    ));
+    safety_plan.test_cases.push(ValidationTestCase::new(
+        "local-corpus-paper-backtest-regression",
+        "Validation corpus checks local paper backtest metadata without external datasets",
+        ValidationSuiteKind::Backtest,
+        "testing",
+        ExpectedValidationOutcome::Pass,
+    ));
+
+    vec![validation_plan, replay_plan, safety_plan]
 }
 
 fn local_validation_runner_fuzz_corpora() -> Vec<FuzzCorpusDefinition> {

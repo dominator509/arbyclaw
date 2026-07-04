@@ -616,6 +616,16 @@ pub struct LocalValidationCorpusRequest {
     pub config: ValidationHarnessConfig,
     /// Caller-supplied local validation plans.
     pub plans: Vec<ValidationPlan>,
+    /// Minimum number of local plans required for this corpus.
+    pub min_plan_count: usize,
+    /// Minimum aggregate test cases required for this corpus.
+    pub min_test_case_count: usize,
+    /// Minimum aggregate local fixtures required for this corpus.
+    pub min_fixture_count: usize,
+    /// Minimum aggregate local fuzz corpora required for this corpus.
+    pub min_fuzz_corpus_count: usize,
+    /// Minimum aggregate local backtest scenarios required for this corpus.
+    pub min_backtest_scenario_count: usize,
     /// Request timestamp in Unix epoch milliseconds.
     pub requested_at_ms: u64,
     /// Operator-facing label. Must not contain secrets.
@@ -742,6 +752,18 @@ pub struct LocalValidationCorpusReport {
     pub property_checks_passed: usize,
     /// Aggregate deterministic local property checks failed.
     pub property_checks_failed: usize,
+    /// Minimum number of local plans required by the request.
+    pub min_plan_count: usize,
+    /// Minimum aggregate test cases required by the request.
+    pub min_test_case_count: usize,
+    /// Minimum aggregate local fixtures required by the request.
+    pub min_fixture_count: usize,
+    /// Minimum aggregate local fuzz corpora required by the request.
+    pub min_fuzz_corpus_count: usize,
+    /// Minimum aggregate local backtest scenarios required by the request.
+    pub min_backtest_scenario_count: usize,
+    /// Whether aggregate corpus breadth satisfied the request.
+    pub corpus_breadth_requirements_met: bool,
     /// Whether secret-like text was redacted from local record fields.
     pub secret_redaction_applied: bool,
     /// Whether external fuzzer process invocation occurred. Always false here.
@@ -950,6 +972,19 @@ impl LocalValidationCorpusReport {
             violations.push(ValidationHarnessViolation::new(
                 "VALIDATION_CORPUS_PROPERTY_CHECKS_FAILED",
                 "local validation corpus property checks must all pass",
+            ));
+        }
+
+        if !self.corpus_breadth_requirements_met
+            || self.plan_count < self.min_plan_count
+            || self.planned_test_cases < self.min_test_case_count
+            || self.planned_fixtures < self.min_fixture_count
+            || self.planned_fuzz_corpora < self.min_fuzz_corpus_count
+            || self.planned_backtest_scenarios < self.min_backtest_scenario_count
+        {
+            violations.push(ValidationHarnessViolation::new(
+                "VALIDATION_CORPUS_BREADTH_REQUIREMENTS_NOT_MET",
+                "local validation corpus must satisfy requested plan, test, fixture, fuzz, and backtest breadth requirements",
             ));
         }
 
@@ -1206,6 +1241,11 @@ pub fn run_local_validation_corpus(
     finish_validation(violations)?;
 
     request.config.validate()?;
+    let min_plan_count = request.min_plan_count;
+    let min_test_case_count = request.min_test_case_count;
+    let min_fixture_count = request.min_fixture_count;
+    let min_fuzz_corpus_count = request.min_fuzz_corpus_count;
+    let min_backtest_scenario_count = request.min_backtest_scenario_count;
 
     let harness = DeterministicValidationHarness;
     let plan_count = request.plans.len();
@@ -1239,6 +1279,12 @@ pub fn run_local_validation_corpus(
         secret_redaction_applied |= run_record.secret_redaction_applied;
     }
 
+    let corpus_breadth_requirements_met = plan_count >= min_plan_count
+        && planned_test_cases >= min_test_case_count
+        && planned_fixtures >= min_fixture_count
+        && planned_fuzz_corpora >= min_fuzz_corpus_count
+        && planned_backtest_scenarios >= min_backtest_scenario_count;
+
     let operator_label = request.operator_label.as_ref().map(|label| {
         let (sanitized, redacted) = sanitize_validation_text(label, 256);
         secret_redaction_applied |= redacted;
@@ -1260,6 +1306,12 @@ pub fn run_local_validation_corpus(
         property_checks_executed,
         property_checks_passed,
         property_checks_failed,
+        min_plan_count,
+        min_test_case_count,
+        min_fixture_count,
+        min_fuzz_corpus_count,
+        min_backtest_scenario_count,
+        corpus_breadth_requirements_met,
         secret_redaction_applied,
         external_fuzzer_invoked: false,
         live_network_used: false,
@@ -1331,6 +1383,30 @@ pub fn append_validation_corpus_report_audit(
         .with_metadata(
             "property_checks_failed",
             AuditValue::Text(report.property_checks_failed.to_string()),
+        )
+        .with_metadata(
+            "min_plan_count",
+            AuditValue::Text(report.min_plan_count.to_string()),
+        )
+        .with_metadata(
+            "min_test_case_count",
+            AuditValue::Text(report.min_test_case_count.to_string()),
+        )
+        .with_metadata(
+            "min_fixture_count",
+            AuditValue::Text(report.min_fixture_count.to_string()),
+        )
+        .with_metadata(
+            "min_fuzz_corpus_count",
+            AuditValue::Text(report.min_fuzz_corpus_count.to_string()),
+        )
+        .with_metadata(
+            "min_backtest_scenario_count",
+            AuditValue::Text(report.min_backtest_scenario_count.to_string()),
+        )
+        .with_metadata(
+            "corpus_breadth_requirements_met",
+            AuditValue::Bool(report.corpus_breadth_requirements_met),
         )
         .with_metadata(
             "external_fuzzer_invoked",
@@ -2651,6 +2727,11 @@ mod tests {
                 minimal_plan_with_id("phase15-validation-plan-a"),
                 minimal_plan_with_id("phase15-validation-plan-b"),
             ],
+            min_plan_count: 2,
+            min_test_case_count: 2,
+            min_fixture_count: 2,
+            min_fuzz_corpus_count: 2,
+            min_backtest_scenario_count: 2,
             requested_at_ms: 1_700_000_000_500,
             operator_label: Some("local corpus review".to_owned()),
         })
@@ -2669,6 +2750,12 @@ mod tests {
         assert_eq!(report.property_checks_executed, 8);
         assert_eq!(report.property_checks_passed, 8);
         assert_eq!(report.property_checks_failed, 0);
+        assert_eq!(report.min_plan_count, 2);
+        assert_eq!(report.min_test_case_count, 2);
+        assert_eq!(report.min_fixture_count, 2);
+        assert_eq!(report.min_fuzz_corpus_count, 2);
+        assert_eq!(report.min_backtest_scenario_count, 2);
+        assert!(report.corpus_breadth_requirements_met);
         assert!(!report.external_fuzzer_invoked);
         assert!(!report.live_network_used);
         assert!(!report.live_execution_submitted);
@@ -2682,6 +2769,11 @@ mod tests {
             corpus_id: "phase15-empty-validation-corpus".to_owned(),
             config: ValidationHarnessConfig::default(),
             plans: Vec::new(),
+            min_plan_count: 1,
+            min_test_case_count: 1,
+            min_fixture_count: 1,
+            min_fuzz_corpus_count: 1,
+            min_backtest_scenario_count: 1,
             requested_at_ms: 1_700_000_000_600,
             operator_label: None,
         })
@@ -2696,6 +2788,30 @@ mod tests {
     }
 
     #[test]
+    fn local_validation_corpus_rejects_insufficient_breadth() {
+        let error = run_local_validation_corpus(LocalValidationCorpusRequest {
+            corpus_id: "phase15-narrow-validation-corpus".to_owned(),
+            config: ValidationHarnessConfig::default(),
+            plans: vec![minimal_plan_with_id("phase15-validation-plan-a")],
+            min_plan_count: 2,
+            min_test_case_count: 2,
+            min_fixture_count: 2,
+            min_fuzz_corpus_count: 2,
+            min_backtest_scenario_count: 2,
+            requested_at_ms: 1_700_000_000_650,
+            operator_label: None,
+        })
+        .expect_err("narrow validation corpus must fail closed");
+        let ValidationHarnessError::ValidationFailed { violations } = error else {
+            panic!("expected validation failure");
+        };
+        assert!(violations
+            .iter()
+            .map(super::ValidationHarnessViolation::code)
+            .any(|code| code == "VALIDATION_CORPUS_BREADTH_REQUIREMENTS_NOT_MET"));
+    }
+
+    #[test]
     fn local_validation_corpus_report_audit_and_state_reopen_locally() {
         let audit_path = temp_audit_path("validation-corpus");
         let state_path = temp_state_path("validation-corpus");
@@ -2706,6 +2822,11 @@ mod tests {
                 minimal_plan_with_id("phase15-validation-plan-a"),
                 minimal_plan_with_id("phase15-validation-plan-b"),
             ],
+            min_plan_count: 2,
+            min_test_case_count: 2,
+            min_fixture_count: 2,
+            min_fuzz_corpus_count: 2,
+            min_backtest_scenario_count: 2,
             requested_at_ms: 1_700_000_000_700,
             operator_label: Some("local-corpus-review".to_owned()),
         })
@@ -2735,6 +2856,10 @@ mod tests {
             serde_json::from_str(&recovered.value).expect("checkpoint decodes");
         assert_eq!(recovered_report.plan_count, 2);
         assert_eq!(recovered_report.property_checks_failed, 0);
+        assert!(recovered_report.corpus_breadth_requirements_met);
+        assert!(recovered
+            .value
+            .contains("\"corpus_breadth_requirements_met\":true"));
         assert!(!recovered_report.external_fuzzer_invoked);
         assert!(!recovered_report.live_network_used);
         assert!(!recovered_report.live_execution_submitted);

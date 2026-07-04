@@ -21,6 +21,15 @@ from typing import Any
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 TIMEOUT_SECONDS = 900
 
+def parse_int(value: str | None) -> int:
+    if value is None:
+        return 0
+    try:
+        return int(value)
+    except ValueError:
+        return 0
+
+
 def command_set(workspace_root: pathlib.Path) -> list[tuple[str, list[str]]]:
     return [
         (
@@ -320,6 +329,21 @@ def validate_components(components: list[dict[str, Any]]) -> list[str]:
         errors.append("local validation corpus did not accept every validation plan")
     if validation_corpus.get("property-checks-failed") not in {"0", None}:
         errors.append("local validation corpus reported failed property checks")
+    if validation_corpus.get("corpus-breadth-requirements-met") != "true":
+        errors.append("local validation corpus breadth requirements were not met")
+    for reported_key, minimum_key in (
+        ("validation-plans", "min-validation-plans"),
+        ("planned-test-cases", "min-test-cases"),
+        ("planned-fixtures", "min-fixtures"),
+        ("planned-fuzz-corpora", "min-fuzz-corpora"),
+        ("planned-backtest-scenarios", "min-backtest-scenarios"),
+    ):
+        if parse_int(validation_corpus.get(reported_key)) < parse_int(
+            validation_corpus.get(minimum_key)
+        ):
+            errors.append(
+                f"local validation corpus {reported_key} below {minimum_key}"
+            )
     if validation_corpus.get("state-checkpoint-recovered") != "true":
         errors.append("local validation corpus did not recover its state checkpoint")
 
