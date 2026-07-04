@@ -21,6 +21,7 @@ from typing import Any
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 TARGET = "aarch64-unknown-linux-gnu"
 TARGET_CC = "aarch64-linux-gnu-gcc"
+TARGET_AR = "aarch64-linux-gnu-ar"
 RUSTUP_LIST_TIMEOUT_SECONDS = 30
 RUSTUP_INSTALL_TIMEOUT_SECONDS = 300
 CARGO_CHECK_TIMEOUT_SECONDS = 600
@@ -140,6 +141,7 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
     if host_check_attempted:
         cargo_env = os.environ.copy()
         cargo_env["CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER"] = TARGET_CC
+        cargo_env["AR_aarch64_unknown_linux_gnu"] = TARGET_AR
         cargo_env["CC_aarch64_unknown_linux_gnu"] = TARGET_CC
         cargo_env["PKG_CONFIG_ALLOW_CROSS"] = "1"
         check = run(
@@ -150,7 +152,7 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
         check_returncode = check.returncode
         check_output_tail = check.stdout.splitlines()[-20:]
         cargo_check_environment = "host"
-    else:
+    if check_returncode != 0:
         docker_probe = run(["docker", "version"], timeout=DOCKER_PROBE_TIMEOUT_SECONDS)
         docker_probe_returncode = docker_probe.returncode
         docker_probe_output_tail = docker_probe.stdout.splitlines()[-20:]
