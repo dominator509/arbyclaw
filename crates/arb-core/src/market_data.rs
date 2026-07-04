@@ -42,6 +42,10 @@ pub const MARKET_DATA_LAST_HISTORICAL_PERSISTENCE_CHECKPOINT_KEY: &str =
 pub const MARKET_DATA_PROVIDER_LATENCY_REVIEW_VERSION: &str =
     "market-data-provider-latency-review-v1";
 
+/// Stable version for local market-data provider rate-limit/outage reconciliation records.
+pub const MARKET_DATA_PROVIDER_RECONCILIATION_REVIEW_VERSION: &str =
+    "market-data-provider-reconciliation-review-v1";
+
 /// A normalized base/quote market pair.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -822,6 +826,92 @@ pub struct MarketDataProviderLatencyReviewReport {
     pub violation_codes: Vec<String>,
 }
 
+/// Caller-supplied local provider rate-limit/outage reconciliation evidence.
+///
+/// This composes existing local preflight, reconnect, and latency/backpressure
+/// reports. It does not call providers, open sockets, load credentials, or
+/// approve production readiness.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MarketDataProviderReconciliationReviewRequest {
+    /// Stable local review id.
+    pub review_id: String,
+    /// Ready local latency/backpressure review.
+    pub latency_review: MarketDataProviderLatencyReviewReport,
+    /// Degraded preflight proving rate-limit and outage inputs fail closed.
+    pub degraded_preflight: MarketDataProviderPreflightReport,
+    /// Ready reconnect/backoff report for retry-after accounting.
+    pub rate_limit_reconnect: MarketDataReconnectPlanReport,
+    /// Blocked reconnect/backoff report for outage exhaustion accounting.
+    pub outage_reconnect: MarketDataReconnectPlanReport,
+    /// Minimum local degraded samples required before this evidence is useful.
+    pub min_degraded_samples_checked: u64,
+    /// Remaining external evidence that this local review cannot satisfy.
+    pub remaining_external_evidence: Vec<String>,
+    /// Whether a live network was used. Must remain false here.
+    pub live_network_used: bool,
+    /// Whether a WebSocket connection was opened. Must remain false here.
+    pub websocket_connection_opened: bool,
+    /// Whether provider credentials were loaded. Must remain false here.
+    pub credential_loaded: bool,
+    /// Whether the caller tried to claim production readiness. Must remain false here.
+    pub production_ready_claimed: bool,
+}
+
+/// Local provider rate-limit/outage reconciliation review status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum MarketDataProviderReconciliationReviewStatus {
+    /// Existing local evidence is coherent enough for local review only.
+    ReadyForLocalReview,
+    /// Evidence is incomplete or unsafe and must fail closed.
+    Blocked,
+}
+
+/// Non-secret local provider rate-limit/outage reconciliation report.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MarketDataProviderReconciliationReviewReport {
+    /// Stable review schema version.
+    pub version: String,
+    /// Stable local review id.
+    pub review_id: String,
+    /// Overall local review status.
+    pub status: MarketDataProviderReconciliationReviewStatus,
+    /// Provider represented by the local evidence.
+    pub provider_name: String,
+    /// Whether prerequisite latency/backpressure review is ready.
+    pub latency_review_ready: bool,
+    /// Whether degraded preflight blocked on rate-limit evidence.
+    pub rate_limit_fail_closed: bool,
+    /// Whether degraded preflight blocked on outage evidence.
+    pub outage_fail_closed: bool,
+    /// Whether stale data was also blocked during degraded provider evidence.
+    pub stale_data_fail_closed: bool,
+    /// Whether degraded provider latency was blocked.
+    pub latency_fail_closed: bool,
+    /// Whether local degraded sample count met the review floor.
+    pub degraded_sample_floor_met: bool,
+    /// Whether retry-after/backoff accounting produced a ready reconnect plan.
+    pub rate_limit_reconnect_ready: bool,
+    /// Whether outage exhaustion produced a blocked reconnect plan.
+    pub outage_reconnect_blocked: bool,
+    /// Whether remaining external evidence is still explicitly recorded.
+    pub remaining_external_evidence_recorded: bool,
+    /// Count of remaining external evidence items.
+    pub remaining_external_evidence_count: usize,
+    /// Whether a live network was used. Always false for a ready report.
+    pub live_network_used: bool,
+    /// Whether a WebSocket connection was opened. Always false for a ready report.
+    pub websocket_connection_opened: bool,
+    /// Whether provider credentials were loaded. Always false for a ready report.
+    pub credential_loaded: bool,
+    /// Whether this report approves production readiness. Always false here.
+    pub production_ready: bool,
+    /// Sanitized local violation codes.
+    pub violation_codes: Vec<String>,
+}
+
 /// Caller-supplied local historical market-data persistence input.
 ///
 /// This boundary persists already-normalized quotes and order books for later
@@ -1529,6 +1619,131 @@ impl MarketDataProviderLatencyReviewReport {
             violations.push(MarketDataViolation::new(
                 "MARKET_DATA_PROVIDER_LATENCY_REVIEW_PRODUCTION_READY_FORBIDDEN",
                 "market-data provider latency review must not approve production readiness",
+            ));
+        }
+
+        if violations.is_empty() {
+            Ok(())
+        } else {
+            Err(MarketDataError::ValidationFailed { violations })
+        }
+    }
+}
+
+impl MarketDataProviderReconciliationReviewRequest {
+    /// Validate local provider reconciliation review input shape.
+    pub fn validate(&self) -> Result<(), MarketDataError> {
+        let mut violations = Vec::new();
+        validate_id(
+            "market-data provider reconciliation review",
+            &self.review_id,
+            &mut violations,
+        );
+        if let Err(MarketDataError::ValidationFailed {
+            violations: report_violations,
+        }) = self.latency_review.validate()
+        {
+            violations.extend(report_violations);
+        }
+        if let Err(MarketDataError::ValidationFailed {
+            violations: report_violations,
+        }) = self.degraded_preflight.validate()
+        {
+            violations.extend(report_violations);
+        }
+        if let Err(MarketDataError::ValidationFailed {
+            violations: report_violations,
+        }) = self.rate_limit_reconnect.validate()
+        {
+            violations.extend(report_violations);
+        }
+        if let Err(MarketDataError::ValidationFailed {
+            violations: report_violations,
+        }) = self.outage_reconnect.validate()
+        {
+            violations.extend(report_violations);
+        }
+        if self.min_degraded_samples_checked == 0 {
+            violations.push(MarketDataViolation::new(
+                "MARKET_DATA_PROVIDER_RECONCILIATION_SAMPLE_FLOOR_ZERO",
+                "market-data provider reconciliation review requires a positive degraded sample floor",
+            ));
+        }
+        if self.remaining_external_evidence.is_empty()
+            || self
+                .remaining_external_evidence
+                .iter()
+                .any(|item| item.trim().is_empty())
+        {
+            violations.push(MarketDataViolation::new(
+                "MARKET_DATA_PROVIDER_RECONCILIATION_EXTERNAL_EVIDENCE_MISSING",
+                "market-data provider reconciliation review must keep unresolved external evidence explicit",
+            ));
+        }
+
+        if violations.is_empty() {
+            Ok(())
+        } else {
+            Err(MarketDataError::ValidationFailed { violations })
+        }
+    }
+}
+
+impl MarketDataProviderReconciliationReviewReport {
+    /// Validate local provider reconciliation review report invariants.
+    pub fn validate(&self) -> Result<(), MarketDataError> {
+        let mut violations = Vec::new();
+        validate_id(
+            "market-data provider reconciliation review",
+            &self.review_id,
+            &mut violations,
+        );
+        validate_id("market-data provider", &self.provider_name, &mut violations);
+        if self.version != MARKET_DATA_PROVIDER_RECONCILIATION_REVIEW_VERSION {
+            violations.push(MarketDataViolation::new(
+                "MARKET_DATA_PROVIDER_RECONCILIATION_VERSION_MISMATCH",
+                "market-data provider reconciliation review version is not recognized",
+            ));
+        }
+        let side_effected =
+            self.live_network_used || self.websocket_connection_opened || self.credential_loaded;
+        let should_block = !self.latency_review_ready
+            || !self.rate_limit_fail_closed
+            || !self.outage_fail_closed
+            || !self.stale_data_fail_closed
+            || !self.latency_fail_closed
+            || !self.degraded_sample_floor_met
+            || !self.rate_limit_reconnect_ready
+            || !self.outage_reconnect_blocked
+            || !self.remaining_external_evidence_recorded
+            || side_effected
+            || self.production_ready;
+        if should_block && self.status != MarketDataProviderReconciliationReviewStatus::Blocked {
+            violations.push(MarketDataViolation::new(
+                "MARKET_DATA_PROVIDER_RECONCILIATION_STATUS_SHOULD_BLOCK",
+                "incomplete or unsafe market-data provider reconciliation evidence must block",
+            ));
+        }
+        if !should_block
+            && self.status != MarketDataProviderReconciliationReviewStatus::ReadyForLocalReview
+        {
+            violations.push(MarketDataViolation::new(
+                "MARKET_DATA_PROVIDER_RECONCILIATION_STATUS_SHOULD_BE_READY",
+                "coherent local market-data provider reconciliation evidence must be ready for local review",
+            ));
+        }
+        if side_effected
+            && self.status == MarketDataProviderReconciliationReviewStatus::ReadyForLocalReview
+        {
+            violations.push(MarketDataViolation::new(
+                "MARKET_DATA_PROVIDER_RECONCILIATION_SIDE_EFFECT_FORBIDDEN",
+                "market-data provider reconciliation review must not use live network, WebSocket, or credentials",
+            ));
+        }
+        if self.production_ready {
+            violations.push(MarketDataViolation::new(
+                "MARKET_DATA_PROVIDER_RECONCILIATION_PRODUCTION_READY_FORBIDDEN",
+                "market-data provider reconciliation review must not approve production readiness",
             ));
         }
 
@@ -2455,6 +2670,188 @@ pub fn review_market_data_provider_latency(
         capture_latency_budget_met,
         reconnect_delay_budget_met,
         sample_floor_met,
+        remaining_external_evidence_recorded,
+        remaining_external_evidence_count: request.remaining_external_evidence.len(),
+        live_network_used,
+        websocket_connection_opened,
+        credential_loaded,
+        production_ready: false,
+        violation_codes,
+    };
+    report.validate()?;
+    Ok(report)
+}
+
+/// Review local market-data provider rate-limit/outage reconciliation without side effects.
+pub fn review_market_data_provider_reconciliation(
+    request: MarketDataProviderReconciliationReviewRequest,
+) -> Result<MarketDataProviderReconciliationReviewReport, MarketDataError> {
+    request.validate()?;
+
+    let latency_review_ready = request.latency_review.status
+        == MarketDataProviderLatencyReviewStatus::ReadyForLocalReview
+        && !request.latency_review.live_network_used
+        && !request.latency_review.websocket_connection_opened
+        && !request.latency_review.credential_loaded
+        && !request.latency_review.production_ready;
+    let rate_limit_fail_closed = request.degraded_preflight.status
+        == MarketDataProviderPreflightStatus::Blocked
+        && request.degraded_preflight.rate_limit_blocked
+        && request
+            .degraded_preflight
+            .violation_codes
+            .iter()
+            .any(|code| code == "MARKET_DATA_PREFLIGHT_RATE_LIMITED");
+    let outage_fail_closed = request.degraded_preflight.status
+        == MarketDataProviderPreflightStatus::Blocked
+        && request.degraded_preflight.outage_blocked
+        && request
+            .degraded_preflight
+            .violation_codes
+            .iter()
+            .any(|code| code == "MARKET_DATA_PREFLIGHT_OUTAGE");
+    let stale_data_fail_closed = request.degraded_preflight.stale_data_blocked;
+    let latency_fail_closed = request.degraded_preflight.latency_blocked;
+    let degraded_sample_floor_met =
+        request.degraded_preflight.samples_checked >= request.min_degraded_samples_checked;
+    let rate_limit_reconnect_ready = request.rate_limit_reconnect.status
+        == MarketDataReconnectPlanStatus::ReadyForLocalReview
+        && request
+            .rate_limit_reconnect
+            .provider_retry_after_ms
+            .is_some()
+        && request
+            .rate_limit_reconnect
+            .violation_codes
+            .iter()
+            .any(|code| code == "MARKET_DATA_RECONNECT_RATE_LIMIT_RETRY_AFTER_APPLIED")
+        && !request.rate_limit_reconnect.outage_blocked
+        && !request.rate_limit_reconnect.retry_budget_exhausted
+        && !request.rate_limit_reconnect.live_network_used
+        && !request.rate_limit_reconnect.websocket_connection_opened
+        && !request.rate_limit_reconnect.credential_loaded
+        && !request.rate_limit_reconnect.production_ready;
+    let outage_reconnect_blocked = request.outage_reconnect.status
+        == MarketDataReconnectPlanStatus::Blocked
+        && request.outage_reconnect.outage_blocked
+        && request.outage_reconnect.retry_budget_exhausted
+        && !request.outage_reconnect.live_network_used
+        && !request.outage_reconnect.websocket_connection_opened
+        && !request.outage_reconnect.credential_loaded
+        && !request.outage_reconnect.production_ready;
+    let remaining_external_evidence_recorded = !request.remaining_external_evidence.is_empty();
+    let live_network_used = request.live_network_used
+        || request.latency_review.live_network_used
+        || request.degraded_preflight.live_network_used
+        || request.rate_limit_reconnect.live_network_used
+        || request.outage_reconnect.live_network_used;
+    let websocket_connection_opened = request.websocket_connection_opened
+        || request.latency_review.websocket_connection_opened
+        || request.rate_limit_reconnect.websocket_connection_opened
+        || request.outage_reconnect.websocket_connection_opened;
+    let credential_loaded = request.credential_loaded
+        || request.latency_review.credential_loaded
+        || request.degraded_preflight.credential_loaded
+        || request.rate_limit_reconnect.credential_loaded
+        || request.outage_reconnect.credential_loaded;
+    let blocked = !latency_review_ready
+        || !rate_limit_fail_closed
+        || !outage_fail_closed
+        || !stale_data_fail_closed
+        || !latency_fail_closed
+        || !degraded_sample_floor_met
+        || !rate_limit_reconnect_ready
+        || !outage_reconnect_blocked
+        || !remaining_external_evidence_recorded
+        || live_network_used
+        || websocket_connection_opened
+        || credential_loaded
+        || request.production_ready_claimed;
+
+    let mut violation_codes = Vec::new();
+    push_if(
+        &mut violation_codes,
+        !latency_review_ready,
+        "MARKET_DATA_PROVIDER_RECONCILIATION_LATENCY_REVIEW_NOT_READY",
+    );
+    push_if(
+        &mut violation_codes,
+        !rate_limit_fail_closed,
+        "MARKET_DATA_PROVIDER_RECONCILIATION_RATE_LIMIT_NOT_FAIL_CLOSED",
+    );
+    push_if(
+        &mut violation_codes,
+        !outage_fail_closed,
+        "MARKET_DATA_PROVIDER_RECONCILIATION_OUTAGE_NOT_FAIL_CLOSED",
+    );
+    push_if(
+        &mut violation_codes,
+        !stale_data_fail_closed,
+        "MARKET_DATA_PROVIDER_RECONCILIATION_STALE_DATA_NOT_FAIL_CLOSED",
+    );
+    push_if(
+        &mut violation_codes,
+        !latency_fail_closed,
+        "MARKET_DATA_PROVIDER_RECONCILIATION_LATENCY_NOT_FAIL_CLOSED",
+    );
+    push_if(
+        &mut violation_codes,
+        !degraded_sample_floor_met,
+        "MARKET_DATA_PROVIDER_RECONCILIATION_SAMPLE_FLOOR_MISSING",
+    );
+    push_if(
+        &mut violation_codes,
+        !rate_limit_reconnect_ready,
+        "MARKET_DATA_PROVIDER_RECONCILIATION_RATE_LIMIT_RECONNECT_NOT_READY",
+    );
+    push_if(
+        &mut violation_codes,
+        !outage_reconnect_blocked,
+        "MARKET_DATA_PROVIDER_RECONCILIATION_OUTAGE_RECONNECT_NOT_BLOCKED",
+    );
+    push_if(
+        &mut violation_codes,
+        !remaining_external_evidence_recorded,
+        "MARKET_DATA_PROVIDER_RECONCILIATION_EXTERNAL_EVIDENCE_MISSING",
+    );
+    push_if(
+        &mut violation_codes,
+        live_network_used,
+        "MARKET_DATA_PROVIDER_RECONCILIATION_LIVE_NETWORK_USED",
+    );
+    push_if(
+        &mut violation_codes,
+        websocket_connection_opened,
+        "MARKET_DATA_PROVIDER_RECONCILIATION_WEBSOCKET_OPENED",
+    );
+    push_if(
+        &mut violation_codes,
+        credential_loaded,
+        "MARKET_DATA_PROVIDER_RECONCILIATION_CREDENTIAL_LOADED",
+    );
+    push_if(
+        &mut violation_codes,
+        request.production_ready_claimed,
+        "MARKET_DATA_PROVIDER_RECONCILIATION_PRODUCTION_READY_CLAIMED",
+    );
+
+    let report = MarketDataProviderReconciliationReviewReport {
+        version: MARKET_DATA_PROVIDER_RECONCILIATION_REVIEW_VERSION.to_owned(),
+        review_id: request.review_id,
+        status: if blocked {
+            MarketDataProviderReconciliationReviewStatus::Blocked
+        } else {
+            MarketDataProviderReconciliationReviewStatus::ReadyForLocalReview
+        },
+        provider_name: request.latency_review.provider_name,
+        latency_review_ready,
+        rate_limit_fail_closed,
+        outage_fail_closed,
+        stale_data_fail_closed,
+        latency_fail_closed,
+        degraded_sample_floor_met,
+        rate_limit_reconnect_ready,
+        outage_reconnect_blocked,
         remaining_external_evidence_recorded,
         remaining_external_evidence_count: request.remaining_external_evidence.len(),
         live_network_used,
@@ -3416,14 +3813,16 @@ mod tests {
         persist_market_data_quality_assessment_checkpoint,
         persist_market_data_reconnect_plan_checkpoint,
         persist_paid_market_data_provider_evaluation_checkpoint,
-        review_market_data_provider_latency, validate_historical_market_data_persistence,
-        validate_market_data_provider_preflight, validate_market_data_reconnect_plan,
-        validate_paid_market_data_provider_evaluation, FreshnessStatus,
-        HistoricalMarketDataPersistenceInput, HistoricalMarketDataPersistenceReport,
-        HistoricalMarketDataPersistenceStatus, MarketDataCapabilities,
-        MarketDataProviderHealthObservation, MarketDataProviderLatencyReviewRequest,
-        MarketDataProviderLatencyReviewStatus, MarketDataProviderPreflightReport,
-        MarketDataProviderPreflightStatus, MarketDataQualityAssessmentInput,
+        review_market_data_provider_latency, review_market_data_provider_reconciliation,
+        validate_historical_market_data_persistence, validate_market_data_provider_preflight,
+        validate_market_data_reconnect_plan, validate_paid_market_data_provider_evaluation,
+        FreshnessStatus, HistoricalMarketDataPersistenceInput,
+        HistoricalMarketDataPersistenceReport, HistoricalMarketDataPersistenceStatus,
+        MarketDataCapabilities, MarketDataProviderHealthObservation,
+        MarketDataProviderLatencyReviewRequest, MarketDataProviderLatencyReviewStatus,
+        MarketDataProviderPreflightReport, MarketDataProviderPreflightStatus,
+        MarketDataProviderReconciliationReviewRequest,
+        MarketDataProviderReconciliationReviewStatus, MarketDataQualityAssessmentInput,
         MarketDataQualityAssessmentReport, MarketDataQualityAssessmentStatus,
         MarketDataReconnectPlanInput, MarketDataReconnectPlanReport, MarketDataReconnectPlanStatus,
         MarketDataRequest, MarketPair, NormalizedQuote, OrderBookSnapshot,
@@ -4279,6 +4678,89 @@ mod tests {
     }
 
     #[test]
+    fn market_data_provider_reconciliation_review_accepts_local_fail_closed_evidence() {
+        let report = review_market_data_provider_reconciliation(
+            market_data_provider_reconciliation_review_request(false, true),
+        )
+        .expect("local provider reconciliation review should validate");
+
+        assert_eq!(
+            report.status,
+            MarketDataProviderReconciliationReviewStatus::ReadyForLocalReview
+        );
+        assert!(report.latency_review_ready);
+        assert!(report.rate_limit_fail_closed);
+        assert!(report.outage_fail_closed);
+        assert!(report.stale_data_fail_closed);
+        assert!(report.latency_fail_closed);
+        assert!(report.degraded_sample_floor_met);
+        assert!(report.rate_limit_reconnect_ready);
+        assert!(report.outage_reconnect_blocked);
+        assert!(report.remaining_external_evidence_recorded);
+        assert_eq!(report.remaining_external_evidence_count, 5);
+        assert!(report.violation_codes.is_empty());
+        assert!(!report.live_network_used);
+        assert!(!report.websocket_connection_opened);
+        assert!(!report.credential_loaded);
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn market_data_provider_reconciliation_review_blocks_missing_outage_evidence() {
+        let report = review_market_data_provider_reconciliation(
+            market_data_provider_reconciliation_review_request(false, false),
+        )
+        .expect("missing outage evidence should still produce fail-closed report");
+
+        assert_eq!(
+            report.status,
+            MarketDataProviderReconciliationReviewStatus::Blocked
+        );
+        assert!(!report.outage_reconnect_blocked);
+        assert!(
+            report
+                .violation_codes
+                .iter()
+                .any(|code| code
+                    == "MARKET_DATA_PROVIDER_RECONCILIATION_OUTAGE_RECONNECT_NOT_BLOCKED")
+        );
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn market_data_provider_reconciliation_review_fails_closed_on_side_effect_claims() {
+        let report = review_market_data_provider_reconciliation(
+            market_data_provider_reconciliation_review_request(true, true),
+        )
+        .expect("side-effect flags should still produce fail-closed report");
+
+        assert_eq!(
+            report.status,
+            MarketDataProviderReconciliationReviewStatus::Blocked
+        );
+        assert!(report.live_network_used);
+        assert!(report.websocket_connection_opened);
+        assert!(report.credential_loaded);
+        assert!(report
+            .violation_codes
+            .iter()
+            .any(|code| code == "MARKET_DATA_PROVIDER_RECONCILIATION_LIVE_NETWORK_USED"));
+        assert!(report
+            .violation_codes
+            .iter()
+            .any(|code| code == "MARKET_DATA_PROVIDER_RECONCILIATION_WEBSOCKET_OPENED"));
+        assert!(report
+            .violation_codes
+            .iter()
+            .any(|code| code == "MARKET_DATA_PROVIDER_RECONCILIATION_CREDENTIAL_LOADED"));
+        assert!(report
+            .violation_codes
+            .iter()
+            .any(|code| code == "MARKET_DATA_PROVIDER_RECONCILIATION_PRODUCTION_READY_CLAIMED"));
+        assert!(!report.production_ready);
+    }
+
+    #[test]
     fn paid_market_data_provider_evaluation_audit_and_state_reopen_locally() {
         let report =
             validate_paid_market_data_provider_evaluation(PaidMarketDataProviderEvaluationInput {
@@ -4781,6 +5263,92 @@ mod tests {
                 "live REST/WebSocket exchange adapters".to_owned(),
                 "provider-backed latency and throughput measurement".to_owned(),
                 "provider-side rate-limit and outage reconciliation".to_owned(),
+                "deployment-host market-data resource profiling".to_owned(),
+                "external sandbox/live calibration".to_owned(),
+            ],
+            live_network_used: side_effect_claimed,
+            websocket_connection_opened: side_effect_claimed,
+            credential_loaded: side_effect_claimed,
+            production_ready_claimed: side_effect_claimed,
+        }
+    }
+
+    fn market_data_provider_reconciliation_review_request(
+        side_effect_claimed: bool,
+        outage_evidence_ready: bool,
+    ) -> MarketDataProviderReconciliationReviewRequest {
+        let latency_review = review_market_data_provider_latency(
+            market_data_provider_latency_review_request(false, 50, 25, 500),
+        )
+        .expect("latency review should validate");
+        let degraded_preflight =
+            validate_market_data_provider_preflight(MarketDataProviderHealthObservation {
+                provider_name: "local-review-degraded".to_owned(),
+                read_only: true,
+                rate_limited: true,
+                outage_observed: true,
+                reconnect_required: true,
+                reconnect_backoff_planned: false,
+                samples_checked: 5,
+                fresh_samples: 3,
+                stale_samples: 2,
+                max_observed_latency_ms: 250,
+                max_allowed_latency_ms: 100,
+                live_network_used: false,
+                credential_loaded: false,
+            })
+            .expect("degraded preflight should validate");
+        let rate_limit_reconnect =
+            validate_market_data_reconnect_plan(MarketDataReconnectPlanInput {
+                plan_id: "local-provider-reconciliation-rate-limit".to_owned(),
+                provider_name: "local-review-degraded".to_owned(),
+                venue: local_cex_venue("paper-provider-reconciliation"),
+                disconnected_at_unix_ms: 20_000,
+                planned_at_unix_ms: 20_050,
+                attempt_number: 3,
+                max_attempts: 5,
+                base_backoff_ms: 100,
+                max_backoff_ms: 1_000,
+                planned_delay_ms: 500,
+                provider_retry_after_ms: Some(450),
+                rate_limited: true,
+                outage_observed: false,
+                live_network_used: false,
+                websocket_connection_opened: false,
+                credential_loaded: false,
+            })
+            .expect("rate-limit reconnect plan should validate");
+        let outage_reconnect = validate_market_data_reconnect_plan(MarketDataReconnectPlanInput {
+            plan_id: "local-provider-reconciliation-outage".to_owned(),
+            provider_name: "local-review-degraded".to_owned(),
+            venue: local_cex_venue("paper-provider-reconciliation"),
+            disconnected_at_unix_ms: 30_000,
+            planned_at_unix_ms: 30_010,
+            attempt_number: if outage_evidence_ready { 6 } else { 2 },
+            max_attempts: 5,
+            base_backoff_ms: 100,
+            max_backoff_ms: 1_000,
+            planned_delay_ms: 1_000,
+            provider_retry_after_ms: Some(800),
+            rate_limited: true,
+            outage_observed: outage_evidence_ready,
+            live_network_used: false,
+            websocket_connection_opened: false,
+            credential_loaded: false,
+        })
+        .expect("outage reconnect plan should validate");
+
+        MarketDataProviderReconciliationReviewRequest {
+            review_id: "local-provider-reconciliation-review".to_owned(),
+            latency_review,
+            degraded_preflight,
+            rate_limit_reconnect,
+            outage_reconnect,
+            min_degraded_samples_checked: 5,
+            remaining_external_evidence: vec![
+                "live REST/WebSocket exchange adapters".to_owned(),
+                "provider-backed rate-limit reconciliation".to_owned(),
+                "provider-backed outage reconciliation".to_owned(),
                 "deployment-host market-data resource profiling".to_owned(),
                 "external sandbox/live calibration".to_owned(),
             ],

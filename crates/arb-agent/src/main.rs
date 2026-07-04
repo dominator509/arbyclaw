@@ -82,11 +82,11 @@ use arb_core::{
     render_observability_export_dry_run, review_dashboard_hosted_runtime_readiness,
     review_dashboard_hosted_security, review_local_secret_backup_restore,
     review_local_validation_coverage, review_market_data_provider_latency,
-    review_observability_operations, review_platform_adapter_controls,
-    review_platform_command_ingress, review_remote_command_security,
-    review_signer_runtime_isolation, review_signer_secret_scope, run_local_fuzz_corpus_replay,
-    run_local_graceful_shutdown_checkpoint, run_local_runtime_lifecycle,
-    run_local_validation_corpus, run_local_validation_property_checks,
+    review_market_data_provider_reconciliation, review_observability_operations,
+    review_platform_adapter_controls, review_platform_command_ingress,
+    review_remote_command_security, review_signer_runtime_isolation, review_signer_secret_scope,
+    run_local_fuzz_corpus_replay, run_local_graceful_shutdown_checkpoint,
+    run_local_runtime_lifecycle, run_local_validation_corpus, run_local_validation_property_checks,
     validate_audit_journal_durability, validate_cex_credential_scope_review,
     validate_cex_rate_limit, validate_channel_adapter, validate_channel_session,
     validate_dashboard_hosted_request, validate_dashboard_hosted_session,
@@ -155,12 +155,14 @@ use arb_core::{
     MarketDataProviderHealthObservation, MarketDataProviderLatencyReviewReport,
     MarketDataProviderLatencyReviewRequest, MarketDataProviderLatencyReviewStatus,
     MarketDataProviderPreflightReport, MarketDataProviderPreflightStatus,
-    MarketDataQualityAssessmentInput, MarketDataQualityAssessmentReport,
-    MarketDataQualityAssessmentStatus, MarketDataReconnectPlanInput, MarketDataReconnectPlanReport,
-    MarketDataReconnectPlanStatus, MarketDataRequest, MarketPair, MetricKind, MetricLabel,
-    MetricSample, NormalizedQuote, NotificationChannelProfile, NotificationChannelSafetyState,
-    NotificationDispatchRecord, NotificationDispatchStatus, NotificationPublisher,
-    NotificationSeverity, ObservabilityAccessContext, ObservabilityAlertRouteDispatchRequest,
+    MarketDataProviderReconciliationReviewReport, MarketDataProviderReconciliationReviewRequest,
+    MarketDataProviderReconciliationReviewStatus, MarketDataQualityAssessmentInput,
+    MarketDataQualityAssessmentReport, MarketDataQualityAssessmentStatus,
+    MarketDataReconnectPlanInput, MarketDataReconnectPlanReport, MarketDataReconnectPlanStatus,
+    MarketDataRequest, MarketPair, MetricKind, MetricLabel, MetricSample, NormalizedQuote,
+    NotificationChannelProfile, NotificationChannelSafetyState, NotificationDispatchRecord,
+    NotificationDispatchStatus, NotificationPublisher, NotificationSeverity,
+    ObservabilityAccessContext, ObservabilityAlertRouteDispatchRequest,
     ObservabilityAlertRouteDispatchStatus, ObservabilityBoundaryConfig,
     ObservabilityCollectionRequest, ObservabilityCollector, ObservabilityEndpointPreflight,
     ObservabilityLogRetentionExecutionRequest, ObservabilityLoopbackBindValidationRequest,
@@ -433,6 +435,9 @@ fn run_with_args(args: impl IntoIterator<Item = String>) -> Result<(), AgentCliE
         }
         Some("validate-market-data-provider-preflight") => {
             run_market_data_provider_preflight_validation()
+        }
+        Some("validate-market-data-provider-reconciliation") => {
+            run_market_data_provider_reconciliation_validation()
         }
         Some("validate-market-data-reconnect-plan") => run_market_data_reconnect_plan_validation(),
         Some("validate-market-data-quality-assessment") => {
@@ -851,6 +856,7 @@ fn print_usage() {
     println!("       arb-agent validate-opportunity-quote-load");
     println!("       arb-agent validate-opportunity-provider-ingestion");
     println!("       arb-agent validate-market-data-provider-preflight");
+    println!("       arb-agent validate-market-data-provider-reconciliation");
     println!("       arb-agent validate-market-data-reconnect-plan");
     println!("       arb-agent validate-market-data-quality-assessment");
     println!("       arb-agent validate-paid-market-data-provider-evaluation");
@@ -1407,6 +1413,185 @@ fn build_market_data_provider_latency_review(
         production_ready_claimed: false,
     })
     .map_err(|error| AgentCliError::Validation(error.to_string()))
+}
+
+fn run_market_data_provider_reconciliation_validation() -> Result<(), AgentCliError> {
+    let clean = validate_market_data_provider_preflight(MarketDataProviderHealthObservation {
+        provider_name: "local-market-data-reconciliation-clean".to_owned(),
+        read_only: true,
+        rate_limited: false,
+        outage_observed: false,
+        reconnect_required: true,
+        reconnect_backoff_planned: true,
+        samples_checked: 4,
+        fresh_samples: 4,
+        stale_samples: 0,
+        max_observed_latency_ms: 12,
+        max_allowed_latency_ms: 50,
+        live_network_used: false,
+        credential_loaded: false,
+    })
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let degraded = validate_market_data_provider_preflight(MarketDataProviderHealthObservation {
+        provider_name: "local-market-data-reconciliation-degraded".to_owned(),
+        read_only: true,
+        rate_limited: true,
+        outage_observed: true,
+        reconnect_required: true,
+        reconnect_backoff_planned: false,
+        samples_checked: 5,
+        fresh_samples: 3,
+        stale_samples: 2,
+        max_observed_latency_ms: 250,
+        max_allowed_latency_ms: 100,
+        live_network_used: false,
+        credential_loaded: false,
+    })
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let latency_review = build_market_data_provider_latency_review(&clean, &degraded)?;
+    let rate_limit_reconnect = validate_market_data_reconnect_plan(MarketDataReconnectPlanInput {
+        plan_id: "cli-market-data-reconciliation-rate-limit".to_owned(),
+        provider_name: degraded.provider_name.clone(),
+        venue: local_provider_venue("paper-provider-reconciliation"),
+        disconnected_at_unix_ms: 20_000,
+        planned_at_unix_ms: 20_050,
+        attempt_number: 3,
+        max_attempts: 5,
+        base_backoff_ms: 100,
+        max_backoff_ms: 1_000,
+        planned_delay_ms: 500,
+        provider_retry_after_ms: Some(450),
+        rate_limited: true,
+        outage_observed: false,
+        live_network_used: false,
+        websocket_connection_opened: false,
+        credential_loaded: false,
+    })
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let outage_reconnect = validate_market_data_reconnect_plan(MarketDataReconnectPlanInput {
+        plan_id: "cli-market-data-reconciliation-outage".to_owned(),
+        provider_name: degraded.provider_name.clone(),
+        venue: local_provider_venue("paper-provider-reconciliation"),
+        disconnected_at_unix_ms: 30_000,
+        planned_at_unix_ms: 30_010,
+        attempt_number: 6,
+        max_attempts: 5,
+        base_backoff_ms: 100,
+        max_backoff_ms: 1_000,
+        planned_delay_ms: 1_000,
+        provider_retry_after_ms: Some(800),
+        rate_limited: true,
+        outage_observed: true,
+        live_network_used: false,
+        websocket_connection_opened: false,
+        credential_loaded: false,
+    })
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let review =
+        review_market_data_provider_reconciliation(MarketDataProviderReconciliationReviewRequest {
+            review_id: "cli-market-data-provider-reconciliation-review".to_owned(),
+            latency_review,
+            degraded_preflight: degraded,
+            rate_limit_reconnect,
+            outage_reconnect,
+            min_degraded_samples_checked: 5,
+            remaining_external_evidence: vec![
+                "live REST/WebSocket exchange adapters".to_owned(),
+                "provider-backed rate-limit reconciliation".to_owned(),
+                "provider-backed outage reconciliation".to_owned(),
+                "deployment-host market-data resource profiling".to_owned(),
+                "external sandbox/live calibration".to_owned(),
+            ],
+            live_network_used: false,
+            websocket_connection_opened: false,
+            credential_loaded: false,
+            production_ready_claimed: false,
+        })
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+
+    print_market_data_provider_reconciliation_review(&review);
+    validate_market_data_provider_reconciliation_cli(&clean, &review)
+}
+
+fn print_market_data_provider_reconciliation_review(
+    review: &MarketDataProviderReconciliationReviewReport,
+) {
+    println!("market-data-provider-reconciliation: validation passed");
+    println!(
+        "market-data-provider-reconciliation-review: {}",
+        market_data_provider_reconciliation_review_status_label(review.status)
+    );
+    println!(
+        "provider-reconciliation-latency-review-ready: {}",
+        review.latency_review_ready
+    );
+    println!(
+        "provider-reconciliation-rate-limit-fail-closed: {}",
+        review.rate_limit_fail_closed
+    );
+    println!(
+        "provider-reconciliation-outage-fail-closed: {}",
+        review.outage_fail_closed
+    );
+    println!(
+        "provider-reconciliation-stale-data-fail-closed: {}",
+        review.stale_data_fail_closed
+    );
+    println!(
+        "provider-reconciliation-latency-fail-closed: {}",
+        review.latency_fail_closed
+    );
+    println!(
+        "provider-reconciliation-degraded-sample-floor-met: {}",
+        review.degraded_sample_floor_met
+    );
+    println!(
+        "provider-reconciliation-rate-limit-reconnect-ready: {}",
+        review.rate_limit_reconnect_ready
+    );
+    println!(
+        "provider-reconciliation-outage-reconnect-blocked: {}",
+        review.outage_reconnect_blocked
+    );
+    println!(
+        "provider-reconciliation-remaining-external-evidence-count: {}",
+        review.remaining_external_evidence_count
+    );
+    println!("live-network-used: {}", review.live_network_used);
+    println!(
+        "websocket-connection-opened: {}",
+        review.websocket_connection_opened
+    );
+    println!("credential-loaded: {}", review.credential_loaded);
+    println!("production-ready: {}", review.production_ready);
+}
+
+fn validate_market_data_provider_reconciliation_cli(
+    clean: &MarketDataProviderPreflightReport,
+    review: &MarketDataProviderReconciliationReviewReport,
+) -> Result<(), AgentCliError> {
+    if clean.production_ready
+        || review.status != MarketDataProviderReconciliationReviewStatus::ReadyForLocalReview
+        || !review.latency_review_ready
+        || !review.rate_limit_fail_closed
+        || !review.outage_fail_closed
+        || !review.stale_data_fail_closed
+        || !review.latency_fail_closed
+        || !review.degraded_sample_floor_met
+        || !review.rate_limit_reconnect_ready
+        || !review.outage_reconnect_blocked
+        || review.remaining_external_evidence_count == 0
+        || review.live_network_used
+        || review.websocket_connection_opened
+        || review.credential_loaded
+        || review.production_ready
+    {
+        return Err(AgentCliError::Validation(
+            "market-data provider reconciliation validation failed".to_owned(),
+        ));
+    }
+
+    Ok(())
 }
 
 fn run_market_data_reconnect_plan_validation() -> Result<(), AgentCliError> {
@@ -15922,6 +16107,17 @@ const fn market_data_provider_latency_review_status_label(
     match status {
         MarketDataProviderLatencyReviewStatus::ReadyForLocalReview => "ready-for-local-review",
         MarketDataProviderLatencyReviewStatus::Blocked => "blocked",
+    }
+}
+
+const fn market_data_provider_reconciliation_review_status_label(
+    status: MarketDataProviderReconciliationReviewStatus,
+) -> &'static str {
+    match status {
+        MarketDataProviderReconciliationReviewStatus::ReadyForLocalReview => {
+            "ready-for-local-review"
+        }
+        MarketDataProviderReconciliationReviewStatus::Blocked => "blocked",
     }
 }
 

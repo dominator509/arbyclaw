@@ -72,6 +72,17 @@ def command_set(workspace_root: pathlib.Path) -> list[tuple[str, list[str]]]:
             ["cargo", "run", "-p", "arb-agent", "--", "validate-market-data-provider-preflight"],
         ),
         (
+            "market_data_provider_reconciliation",
+            [
+                "cargo",
+                "run",
+                "-p",
+                "arb-agent",
+                "--",
+                "validate-market-data-provider-reconciliation",
+            ],
+        ),
+        (
             "market_data_reconnect_plan",
             ["cargo", "run", "-p", "arb-agent", "--", "validate-market-data-reconnect-plan"],
         ),
@@ -291,6 +302,33 @@ def validate_components(components: list[dict[str, Any]]) -> list[str]:
         "5",
         errors,
         "market_data_provider_preflight",
+    )
+
+    reconciliation = by_name["market_data_provider_reconciliation"]["parsed"]
+    require(
+        reconciliation,
+        "market-data-provider-reconciliation-review",
+        "ready-for-local-review",
+        errors,
+        "market_data_provider_reconciliation",
+    )
+    for key in (
+        "provider-reconciliation-latency-review-ready",
+        "provider-reconciliation-rate-limit-fail-closed",
+        "provider-reconciliation-outage-fail-closed",
+        "provider-reconciliation-stale-data-fail-closed",
+        "provider-reconciliation-latency-fail-closed",
+        "provider-reconciliation-degraded-sample-floor-met",
+        "provider-reconciliation-rate-limit-reconnect-ready",
+        "provider-reconciliation-outage-reconnect-blocked",
+    ):
+        require(reconciliation, key, "true", errors, "market_data_provider_reconciliation")
+    require(
+        reconciliation,
+        "provider-reconciliation-remaining-external-evidence-count",
+        "5",
+        errors,
+        "market_data_provider_reconciliation",
     )
 
     reconnect = by_name["market_data_reconnect_plan"]["parsed"]
@@ -536,6 +574,7 @@ def main() -> int:
         "production_ready": False,
         "audit_records_replayed": audit_records,
         "market_data_provider_latency_review_enforced": True,
+        "market_data_provider_reconciliation_review_enforced": True,
         "components": [
             {
                 "name": component["name"],
