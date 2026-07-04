@@ -378,18 +378,20 @@ pub use observability::{
 pub use opportunity::{
     discover_opportunities_from_local_providers,
     phase27_local_opportunity_historical_fixture_corpus, phase27_local_opportunity_replay_corpus,
-    validate_local_opportunity_quote_ingestion_load, DeterministicOpportunityEngine,
-    OpportunityCandidate, OpportunityDiscoveryConfig, OpportunityDiscoveryRequest,
-    OpportunityEngine, OpportunityError, OpportunityHistoricalFixtureCorpus,
-    OpportunityHistoricalFixtureRunReport, OpportunityInventoryLimit, OpportunityLeg,
-    OpportunityLegSide, OpportunityLiquidityModel, OpportunityProviderIngestionReport,
-    OpportunityProviderIngestionRequest, OpportunityQuoteIngestionLoadReport,
-    OpportunityQuoteIngestionLoadRequest, OpportunityReplayCorpus, OpportunityReplayExpectation,
+    review_opportunity_replay_latency, validate_local_opportunity_quote_ingestion_load,
+    DeterministicOpportunityEngine, OpportunityCandidate, OpportunityDiscoveryConfig,
+    OpportunityDiscoveryRequest, OpportunityEngine, OpportunityError,
+    OpportunityHistoricalFixtureCorpus, OpportunityHistoricalFixtureRunReport,
+    OpportunityInventoryLimit, OpportunityLeg, OpportunityLegSide, OpportunityLiquidityModel,
+    OpportunityProviderIngestionReport, OpportunityProviderIngestionRequest,
+    OpportunityQuoteIngestionLoadReport, OpportunityQuoteIngestionLoadRequest,
+    OpportunityReplayCorpus, OpportunityReplayExpectation, OpportunityReplayLatencyReviewReport,
+    OpportunityReplayLatencyReviewRequest, OpportunityReplayLatencyReviewStatus,
     OpportunityReplayLoadIteration, OpportunityReplayLoadReport, OpportunityReplayRouteCount,
     OpportunityReplayRunReport, OpportunityReplayScenario, OpportunityReplayScenarioReport,
     OpportunityReplayStatus, OpportunityReplayViolation, OpportunityRouteKind, OpportunityScore,
     OpportunityTransferRisk, OpportunityTransferRiskProfile, OpportunityViolation,
-    OPPORTUNITY_ENGINE_VERSION,
+    OPPORTUNITY_ENGINE_VERSION, OPPORTUNITY_REPLAY_LATENCY_REVIEW_VERSION,
 };
 
 pub use paper::{

@@ -15,6 +15,10 @@ use std::{cmp::Ordering, collections::HashSet, error::Error, fmt};
 /// Stable opportunity-engine version for audit and replay surfaces.
 pub const OPPORTUNITY_ENGINE_VERSION: &str = "phase-27-opportunity-replay-v1";
 
+/// Stable local opportunity replay latency review version.
+pub const OPPORTUNITY_REPLAY_LATENCY_REVIEW_VERSION: &str =
+    "phase71-opportunity-replay-latency-review-local-v1";
+
 /// Deterministic route classification for opportunity records.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -1398,6 +1402,86 @@ pub struct OpportunityReplayLoadReport {
     pub production_ready: bool,
 }
 
+/// Local opportunity replay latency review status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum OpportunityReplayLatencyReviewStatus {
+    /// Local replay load evidence meets the supplied latency and throughput budgets.
+    ReadyForLocalReview,
+    /// Local replay load evidence is unsafe or does not meet supplied budgets.
+    Blocked,
+}
+
+/// Local opportunity replay latency review request.
+///
+/// This consumes sanitized local replay load evidence only. It does not run
+/// benchmarks, download data, call providers, submit adapters, sign, broadcast,
+/// execute live orders, or claim production readiness.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct OpportunityReplayLatencyReviewRequest {
+    /// Stable local review id.
+    pub review_id: String,
+    /// Local replay/load aggregate to review.
+    pub load_report: OpportunityReplayLoadReport,
+    /// Maximum allowed average replay iteration duration.
+    pub max_average_elapsed_ms: u64,
+    /// Maximum allowed single replay iteration duration.
+    pub max_single_iteration_elapsed_ms: u64,
+    /// Minimum required scenarios replayed across all iterations.
+    pub min_total_scenarios_replayed: u64,
+    /// Minimum required candidates emitted across all iterations.
+    pub min_total_candidates: u64,
+    /// Whether external calls were performed by this review.
+    pub external_calls_performed: bool,
+    /// Whether external data was downloaded by this review.
+    pub external_data_downloaded: bool,
+    /// Whether live execution was performed by this review.
+    pub live_execution_performed: bool,
+    /// Whether this review claims production readiness.
+    pub production_ready_claimed: bool,
+}
+
+/// Local opportunity replay latency review report.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct OpportunityReplayLatencyReviewReport {
+    /// Stable validation version.
+    pub validation_version: String,
+    /// Stable local review id.
+    pub review_id: String,
+    /// Reviewed replay corpus id.
+    pub corpus_id: String,
+    /// Review status.
+    pub status: OpportunityReplayLatencyReviewStatus,
+    /// Whether local latency budgets were met.
+    pub latency_budget_met: bool,
+    /// Whether local scenario/candidate throughput budgets were met.
+    pub throughput_budget_met: bool,
+    /// Number of reviewed iterations.
+    pub iterations_reviewed: u64,
+    /// Total scenarios replayed across reviewed iterations.
+    pub total_scenarios_replayed: u64,
+    /// Total candidates emitted across reviewed iterations.
+    pub total_candidates: u64,
+    /// Observed average local replay duration.
+    pub observed_average_elapsed_ms: u64,
+    /// Observed maximum local replay duration.
+    pub observed_max_elapsed_ms: u64,
+    /// Local blocker codes.
+    pub blocker_codes: Vec<String>,
+    /// Remaining external evidence required before production performance claims.
+    pub remaining_external_evidence: Vec<String>,
+    /// Whether this review performed external calls. Always false.
+    pub external_calls_performed: bool,
+    /// Whether this review downloaded external data. Always false.
+    pub external_data_downloaded: bool,
+    /// Whether this review performed live execution. Always false.
+    pub live_execution_performed: bool,
+    /// Whether this review approves production readiness. Always false.
+    pub production_ready: bool,
+}
+
 /// Local quote-ingestion load/backpressure request.
 ///
 /// This request describes a deterministic synthetic local fixture. It does not
@@ -1638,6 +1722,150 @@ impl OpportunityReplayLoadReport {
         }
         finish_validation(violations)
     }
+}
+
+impl OpportunityReplayLatencyReviewRequest {
+    /// Validate local replay latency review input.
+    pub fn validate(&self) -> Result<(), OpportunityError> {
+        let mut violations = Vec::new();
+        validate_id(
+            "opportunity replay latency review",
+            &self.review_id,
+            &mut violations,
+        );
+        if let Err(OpportunityError::ValidationFailed {
+            violations: report_violations,
+        }) = self.load_report.validate()
+        {
+            violations.extend(report_violations);
+        }
+        if self.max_average_elapsed_ms == 0
+            || self.max_single_iteration_elapsed_ms == 0
+            || self.min_total_scenarios_replayed == 0
+            || self.min_total_candidates == 0
+        {
+            violations.push(OpportunityViolation::new(
+                "OPPORTUNITY_REPLAY_LATENCY_REVIEW_BUDGET_ZERO",
+                "latency review budgets and minimum replay counts must be non-zero",
+            ));
+        }
+        if self.external_calls_performed
+            || self.external_data_downloaded
+            || self.live_execution_performed
+        {
+            violations.push(OpportunityViolation::new(
+                "OPPORTUNITY_REPLAY_LATENCY_REVIEW_SIDE_EFFECT",
+                "latency review must remain local-only",
+            ));
+        }
+        if self.production_ready_claimed {
+            violations.push(OpportunityViolation::new(
+                "OPPORTUNITY_REPLAY_LATENCY_REVIEW_READINESS_CLAIM",
+                "latency review must not claim production readiness",
+            ));
+        }
+        finish_validation(violations)
+    }
+}
+
+impl OpportunityReplayLatencyReviewReport {
+    /// Validate local replay latency review report invariants.
+    pub fn validate(&self) -> Result<(), OpportunityError> {
+        let mut violations = Vec::new();
+        if self.validation_version != OPPORTUNITY_REPLAY_LATENCY_REVIEW_VERSION {
+            violations.push(OpportunityViolation::new(
+                "OPPORTUNITY_REPLAY_LATENCY_REVIEW_VERSION",
+                "unexpected opportunity replay latency review version",
+            ));
+        }
+        validate_id(
+            "opportunity replay latency review report",
+            &self.review_id,
+            &mut violations,
+        );
+        validate_id(
+            "opportunity replay latency review corpus",
+            &self.corpus_id,
+            &mut violations,
+        );
+        if self.iterations_reviewed == 0
+            || self.total_scenarios_replayed == 0
+            || self.total_candidates == 0
+        {
+            violations.push(OpportunityViolation::new(
+                "OPPORTUNITY_REPLAY_LATENCY_REVIEW_COUNTS_EMPTY",
+                "latency review report requires reviewed iterations, scenarios, and candidates",
+            ));
+        }
+        if self.external_calls_performed
+            || self.external_data_downloaded
+            || self.live_execution_performed
+            || self.production_ready
+        {
+            violations.push(OpportunityViolation::new(
+                "OPPORTUNITY_REPLAY_LATENCY_REVIEW_FORBIDDEN_SIDE_EFFECT",
+                "latency review report must remain local-only and not approve production readiness",
+            ));
+        }
+        if self.status == OpportunityReplayLatencyReviewStatus::ReadyForLocalReview
+            && !self.blocker_codes.is_empty()
+        {
+            violations.push(OpportunityViolation::new(
+                "OPPORTUNITY_REPLAY_LATENCY_REVIEW_READY_BLOCKERS",
+                "ready latency review must not contain blockers",
+            ));
+        }
+        if self.status == OpportunityReplayLatencyReviewStatus::Blocked
+            && self.blocker_codes.is_empty()
+        {
+            violations.push(OpportunityViolation::new(
+                "OPPORTUNITY_REPLAY_LATENCY_REVIEW_BLOCKED_WITHOUT_CODES",
+                "blocked latency review requires blocker codes",
+            ));
+        }
+        finish_validation(violations)
+    }
+}
+
+/// Review local opportunity replay load evidence against supplied latency and throughput budgets.
+pub fn review_opportunity_replay_latency(
+    request: OpportunityReplayLatencyReviewRequest,
+) -> Result<OpportunityReplayLatencyReviewReport, OpportunityError> {
+    request.validate()?;
+    let latency_budget_met = request.load_report.average_elapsed_ms
+        <= request.max_average_elapsed_ms
+        && request.load_report.max_elapsed_ms <= request.max_single_iteration_elapsed_ms;
+    let throughput_budget_met = request.load_report.total_scenarios_replayed
+        >= request.min_total_scenarios_replayed
+        && request.load_report.total_candidates >= request.min_total_candidates;
+    let blocker_codes =
+        opportunity_replay_latency_blockers(latency_budget_met, throughput_budget_met);
+    let status = if blocker_codes.is_empty() {
+        OpportunityReplayLatencyReviewStatus::ReadyForLocalReview
+    } else {
+        OpportunityReplayLatencyReviewStatus::Blocked
+    };
+    let report = OpportunityReplayLatencyReviewReport {
+        validation_version: OPPORTUNITY_REPLAY_LATENCY_REVIEW_VERSION.to_owned(),
+        review_id: request.review_id,
+        corpus_id: request.load_report.corpus_id,
+        status,
+        latency_budget_met,
+        throughput_budget_met,
+        iterations_reviewed: request.load_report.iterations_attempted,
+        total_scenarios_replayed: request.load_report.total_scenarios_replayed,
+        total_candidates: request.load_report.total_candidates,
+        observed_average_elapsed_ms: request.load_report.average_elapsed_ms,
+        observed_max_elapsed_ms: request.load_report.max_elapsed_ms,
+        blocker_codes,
+        remaining_external_evidence: opportunity_replay_latency_remaining_external_evidence(),
+        external_calls_performed: false,
+        external_data_downloaded: false,
+        live_execution_performed: false,
+        production_ready: false,
+    };
+    report.validate()?;
+    Ok(report)
 }
 
 impl OpportunityQuoteIngestionLoadRequest {
@@ -3459,6 +3687,30 @@ fn validate_id(label: &'static str, value: &str, violations: &mut Vec<Opportunit
     }
 }
 
+fn opportunity_replay_latency_blockers(
+    latency_budget_met: bool,
+    throughput_budget_met: bool,
+) -> Vec<String> {
+    let mut blockers = Vec::new();
+    if !latency_budget_met {
+        blockers.push("local-opportunity-replay-latency-budget-exceeded".to_owned());
+    }
+    if !throughput_budget_met {
+        blockers.push("local-opportunity-replay-throughput-budget-missed".to_owned());
+    }
+    blockers
+}
+
+fn opportunity_replay_latency_remaining_external_evidence() -> Vec<String> {
+    vec![
+        "broader external/deployment opportunity replay corpus evidence is missing".to_owned(),
+        "live/provider market-data ranking latency evidence is missing".to_owned(),
+        "deployment-host opportunity replay resource profile evidence is missing".to_owned(),
+        "sandbox/live opportunity discrepancy calibration evidence is missing".to_owned(),
+        "production load and backtest evidence is missing".to_owned(),
+    ]
+}
+
 fn finish_validation(violations: Vec<OpportunityViolation>) -> Result<(), OpportunityError> {
     if violations.is_empty() {
         Ok(())
@@ -3566,14 +3818,16 @@ mod tests {
     use super::{
         discover_opportunities_from_local_providers,
         phase27_local_opportunity_historical_fixture_corpus,
-        phase27_local_opportunity_replay_corpus, validate_local_opportunity_quote_ingestion_load,
-        DeterministicOpportunityEngine, OpportunityDiscoveryConfig, OpportunityDiscoveryRequest,
-        OpportunityEngine, OpportunityInventoryLimit, OpportunityProviderIngestionRequest,
+        phase27_local_opportunity_replay_corpus, review_opportunity_replay_latency,
+        validate_local_opportunity_quote_ingestion_load, DeterministicOpportunityEngine,
+        OpportunityDiscoveryConfig, OpportunityDiscoveryRequest, OpportunityEngine,
+        OpportunityInventoryLimit, OpportunityProviderIngestionRequest,
         OpportunityQuoteIngestionLoadRequest, OpportunityReplayCorpus,
-        OpportunityReplayExpectation, OpportunityReplayLoadIteration, OpportunityReplayLoadReport,
-        OpportunityReplayRouteCount, OpportunityReplayRunReport, OpportunityReplayScenario,
-        OpportunityReplayScenarioReport, OpportunityReplayStatus, OpportunityRouteKind,
-        OpportunityTransferRiskProfile,
+        OpportunityReplayExpectation, OpportunityReplayLatencyReviewRequest,
+        OpportunityReplayLatencyReviewStatus, OpportunityReplayLoadIteration,
+        OpportunityReplayLoadReport, OpportunityReplayRouteCount, OpportunityReplayRunReport,
+        OpportunityReplayScenario, OpportunityReplayScenarioReport, OpportunityReplayStatus,
+        OpportunityRouteKind, OpportunityTransferRiskProfile,
     };
     use crate::{
         FeeModelError, FeeProvider, FeeSchedule, MarketDataCapabilities, MarketDataError,
@@ -4175,6 +4429,126 @@ mod tests {
         assert!(mismatch_error
             .to_string()
             .contains("OPPORTUNITY_REPLAY_LOAD_CORPUS_MISMATCH"));
+    }
+
+    #[test]
+    fn opportunity_replay_latency_review_accepts_local_budgets_without_readiness() {
+        let load_report = OpportunityReplayLoadReport::from_iterations(vec![
+            OpportunityReplayLoadIteration {
+                iteration_id: "run-1".to_owned(),
+                elapsed_ms: 3,
+                report: valid_replay_report("phase27-local-replay", 9, 8),
+            },
+            OpportunityReplayLoadIteration {
+                iteration_id: "run-2".to_owned(),
+                elapsed_ms: 5,
+                report: valid_replay_report("phase27-local-replay", 9, 8),
+            },
+        ])
+        .expect("valid replay iterations should aggregate");
+
+        let report = review_opportunity_replay_latency(OpportunityReplayLatencyReviewRequest {
+            review_id: "local-opportunity-replay-latency".to_owned(),
+            load_report,
+            max_average_elapsed_ms: 5,
+            max_single_iteration_elapsed_ms: 8,
+            min_total_scenarios_replayed: 18,
+            min_total_candidates: 16,
+            external_calls_performed: false,
+            external_data_downloaded: false,
+            live_execution_performed: false,
+            production_ready_claimed: false,
+        })
+        .expect("local replay latency review should pass");
+
+        assert_eq!(
+            report.status,
+            OpportunityReplayLatencyReviewStatus::ReadyForLocalReview
+        );
+        assert!(report.latency_budget_met);
+        assert!(report.throughput_budget_met);
+        assert_eq!(report.iterations_reviewed, 2);
+        assert_eq!(report.total_scenarios_replayed, 18);
+        assert_eq!(report.total_candidates, 16);
+        assert!(report.blocker_codes.is_empty());
+        assert!(!report.remaining_external_evidence.is_empty());
+        assert!(!report.external_calls_performed);
+        assert!(!report.external_data_downloaded);
+        assert!(!report.live_execution_performed);
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn opportunity_replay_latency_review_blocks_budget_misses() {
+        let load_report = OpportunityReplayLoadReport::from_iterations(vec![
+            OpportunityReplayLoadIteration {
+                iteration_id: "run-1".to_owned(),
+                elapsed_ms: 10,
+                report: valid_replay_report("phase27-local-replay", 9, 8),
+            },
+            OpportunityReplayLoadIteration {
+                iteration_id: "run-2".to_owned(),
+                elapsed_ms: 12,
+                report: valid_replay_report("phase27-local-replay", 9, 8),
+            },
+        ])
+        .expect("valid replay iterations should aggregate");
+
+        let report = review_opportunity_replay_latency(OpportunityReplayLatencyReviewRequest {
+            review_id: "local-opportunity-replay-latency-blocked".to_owned(),
+            load_report,
+            max_average_elapsed_ms: 4,
+            max_single_iteration_elapsed_ms: 8,
+            min_total_scenarios_replayed: 20,
+            min_total_candidates: 20,
+            external_calls_performed: false,
+            external_data_downloaded: false,
+            live_execution_performed: false,
+            production_ready_claimed: false,
+        })
+        .expect("blocked local replay latency review should still return a report");
+
+        assert_eq!(report.status, OpportunityReplayLatencyReviewStatus::Blocked);
+        assert!(!report.latency_budget_met);
+        assert!(!report.throughput_budget_met);
+        assert!(report
+            .blocker_codes
+            .iter()
+            .any(|code| { code == "local-opportunity-replay-latency-budget-exceeded" }));
+        assert!(report
+            .blocker_codes
+            .iter()
+            .any(|code| { code == "local-opportunity-replay-throughput-budget-missed" }));
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn opportunity_replay_latency_review_rejects_side_effect_claims() {
+        let load_report =
+            OpportunityReplayLoadReport::from_iterations(vec![OpportunityReplayLoadIteration {
+                iteration_id: "run-1".to_owned(),
+                elapsed_ms: 3,
+                report: valid_replay_report("phase27-local-replay", 9, 8),
+            }])
+            .expect("valid replay iterations should aggregate");
+
+        let error = review_opportunity_replay_latency(OpportunityReplayLatencyReviewRequest {
+            review_id: "local-opportunity-replay-latency-unsafe".to_owned(),
+            load_report,
+            max_average_elapsed_ms: 5,
+            max_single_iteration_elapsed_ms: 8,
+            min_total_scenarios_replayed: 9,
+            min_total_candidates: 8,
+            external_calls_performed: true,
+            external_data_downloaded: true,
+            live_execution_performed: true,
+            production_ready_claimed: true,
+        })
+        .expect_err("side effects and readiness claims must be rejected");
+
+        assert!(error
+            .to_string()
+            .contains("OPPORTUNITY_REPLAY_LATENCY_REVIEW_SIDE_EFFECT"));
     }
 
     #[test]

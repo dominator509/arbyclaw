@@ -971,6 +971,34 @@ fn run_opportunity_replay_validation(iterations: usize) -> Result<(), AgentCliEr
 
     let load_report = OpportunityReplayLoadReport::from_iterations(load_iterations)
         .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let latency_review = local_opportunity_replay_latency_review(&load_report)?;
+    print_opportunity_replay_load_report(&load_report, &latency_review);
+
+    Ok(())
+}
+
+fn local_opportunity_replay_latency_review(
+    load_report: &OpportunityReplayLoadReport,
+) -> Result<arb_core::OpportunityReplayLatencyReviewReport, AgentCliError> {
+    arb_core::review_opportunity_replay_latency(arb_core::OpportunityReplayLatencyReviewRequest {
+        review_id: "local-opportunity-replay-latency".to_owned(),
+        load_report: load_report.clone(),
+        max_average_elapsed_ms: load_report.average_elapsed_ms.max(1),
+        max_single_iteration_elapsed_ms: load_report.max_elapsed_ms.max(1),
+        min_total_scenarios_replayed: load_report.total_scenarios_replayed.max(1),
+        min_total_candidates: load_report.total_candidates.max(1),
+        external_calls_performed: false,
+        external_data_downloaded: false,
+        live_execution_performed: false,
+        production_ready_claimed: false,
+    })
+    .map_err(|error| AgentCliError::Validation(error.to_string()))
+}
+
+fn print_opportunity_replay_load_report(
+    load_report: &OpportunityReplayLoadReport,
+    latency_review: &arb_core::OpportunityReplayLatencyReviewReport,
+) {
     println!("opportunity-replay-load-validation: passed");
     println!(
         "opportunity-replay-load-iterations-attempted: {}",
@@ -1004,9 +1032,23 @@ fn run_opportunity_replay_validation(iterations: usize) -> Result<(), AgentCliEr
         "opportunity-replay-load-total-candidates: {}",
         load_report.total_candidates
     );
+    println!(
+        "opportunity-replay-latency-review: {:?}",
+        latency_review.status
+    );
+    println!(
+        "opportunity-replay-latency-budget-met: {}",
+        latency_review.latency_budget_met
+    );
+    println!(
+        "opportunity-replay-throughput-budget-met: {}",
+        latency_review.throughput_budget_met
+    );
+    println!(
+        "opportunity-replay-latency-review-remaining-external-evidence-count: {}",
+        latency_review.remaining_external_evidence.len()
+    );
     println!("production-ready: false");
-
-    Ok(())
 }
 
 fn run_opportunity_quote_load_validation(

@@ -238,6 +238,22 @@ def validate_components(components: list[dict[str, Any]]) -> list[str]:
         "opportunity-replay-iterations-attempted"
     ):
         errors.append("opportunity replay iterations did not all pass")
+    if replay.get("opportunity-replay-latency-review") != "ReadyForLocalReview":
+        errors.append("opportunity replay latency review was not ReadyForLocalReview")
+    if replay.get("opportunity-replay-latency-budget-met") != "true":
+        errors.append("opportunity replay latency budget was not met")
+    if replay.get("opportunity-replay-throughput-budget-met") != "true":
+        errors.append("opportunity replay throughput budget was not met")
+    remaining_external = replay.get(
+        "opportunity-replay-latency-review-remaining-external-evidence-count"
+    )
+    try:
+        if int(remaining_external or "0") <= 0:
+            errors.append(
+                "opportunity replay latency review did not preserve external evidence blockers"
+            )
+    except ValueError:
+        errors.append("opportunity replay latency review external blocker count was invalid")
 
     quote_load = components[1]["parsed"]
     if quote_load.get("candidate-backpressure-applied") != "true":
@@ -404,6 +420,7 @@ def main() -> int:
         "signing_or_broadcast_performed": False,
         "live_execution_performed": False,
         "production_ready": False,
+        "opportunity_replay_latency_review_enforced": True,
         "total_candidate_mentions": total_candidates,
         "components": [
             {
@@ -435,6 +452,7 @@ def main() -> int:
         print("signing-or-broadcast-performed: false")
         print("live-execution-performed: false")
         print("production-ready: false")
+        print("opportunity-replay-latency-review-enforced: true")
     return 0
 
 
