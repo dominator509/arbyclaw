@@ -124,6 +124,9 @@ TRANSCRIPT_COMPONENTS = [
         "expected": {
             "deployment-permission-transcript": "validation passed",
             "ready-transcript-status": "ready-for-external-review",
+            "ready-runtime-write-attempt-reference-present": "true",
+            "ready-runtime-write-permission-denied": "true",
+            "ready-runtime-write-error-classified": "true",
             "blocked-transcript-status": "blocked",
             "permission-changed-by-validator": "false",
             "production-path-mutated-by-validator": "false",

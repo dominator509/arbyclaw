@@ -161,7 +161,7 @@ pub const RUNTIME_SERVICE_MANAGER_LIFECYCLE_TRANSCRIPT_VERSION: &str =
 
 /// Stable local deployment permission transcript validation version.
 pub const RUNTIME_DEPLOYMENT_PERMISSION_TRANSCRIPT_VERSION: &str =
-    "phase53-deployment-permission-transcript-local-v1";
+    "phase60-deployment-permission-transcript-local-v2";
 
 /// Stable local deployment-host audit/SQLite transcript validation version.
 pub const RUNTIME_DEPLOYMENT_AUDIT_SQLITE_TRANSCRIPT_VERSION: &str =
@@ -1123,6 +1123,12 @@ pub struct RuntimeDeploymentPermissionTranscript {
     pub host_label: String,
     /// Whether evidence came from a physical/deployment-like host.
     pub deployment_host_evidence: bool,
+    /// Whether a runtime write attempt evidence reference is present.
+    pub runtime_write_attempt_reference_present: bool,
+    /// Whether the referenced runtime write was denied by filesystem permissions.
+    pub runtime_write_permission_denied: bool,
+    /// Whether the runtime write failure was classified as a permission denial.
+    pub runtime_write_error_classified: bool,
     /// Whether audit append failed closed under permission denial.
     pub audit_write_failed_closed: bool,
     /// Whether SQLite/state writes failed closed under permission denial.
@@ -1169,6 +1175,12 @@ pub struct RuntimeDeploymentPermissionTranscriptReport {
     pub host_label: String,
     /// Whether deployment-like host evidence is present.
     pub deployment_host_evidence: bool,
+    /// Whether a runtime write attempt evidence reference is present.
+    pub runtime_write_attempt_reference_present: bool,
+    /// Whether the referenced runtime write was denied by filesystem permissions.
+    pub runtime_write_permission_denied: bool,
+    /// Whether the runtime write failure was classified as a permission denial.
+    pub runtime_write_error_classified: bool,
     /// Whether audit write fail-closed evidence is present.
     pub audit_write_failed_closed: bool,
     /// Whether state write fail-closed evidence is present.
@@ -3594,6 +3606,9 @@ pub fn validate_deployment_permission_transcript(
         transcript_id: transcript.transcript_id,
         host_label: transcript.host_label,
         deployment_host_evidence: transcript.deployment_host_evidence,
+        runtime_write_attempt_reference_present: transcript.runtime_write_attempt_reference_present,
+        runtime_write_permission_denied: transcript.runtime_write_permission_denied,
+        runtime_write_error_classified: transcript.runtime_write_error_classified,
         audit_write_failed_closed: transcript.audit_write_failed_closed,
         state_write_failed_closed: transcript.state_write_failed_closed,
         adapter_evaluation_blocked: transcript.adapter_evaluation_blocked,
@@ -4381,6 +4396,15 @@ fn deployment_permission_blockers(
     if !transcript.deployment_host_evidence {
         blockers.push("missing-deployment-host-evidence".to_owned());
     }
+    if !transcript.runtime_write_attempt_reference_present {
+        blockers.push("missing-runtime-write-attempt-reference".to_owned());
+    }
+    if !transcript.runtime_write_permission_denied {
+        blockers.push("missing-runtime-write-permission-denial-evidence".to_owned());
+    }
+    if !transcript.runtime_write_error_classified {
+        blockers.push("missing-runtime-write-error-classification".to_owned());
+    }
     if !transcript.audit_write_failed_closed {
         blockers.push("missing-audit-write-fail-closed-evidence".to_owned());
     }
@@ -4402,7 +4426,7 @@ fn deployment_permission_blockers(
     if !transcript.recovery_runbook_reference_present {
         blockers.push("missing-recovery-runbook-reference".to_owned());
     }
-    if transcript.non_secret_reference_count < 4 {
+    if transcript.non_secret_reference_count < 7 {
         blockers.push("insufficient-non-secret-references".to_owned());
     }
     if !transcript.operator_approved {
@@ -7484,6 +7508,9 @@ redact_secrets = true
             RuntimeDeploymentPermissionTranscriptStatus::ReadyForExternalReview
         );
         assert!(report.deployment_host_evidence);
+        assert!(report.runtime_write_attempt_reference_present);
+        assert!(report.runtime_write_permission_denied);
+        assert!(report.runtime_write_error_classified);
         assert!(report.audit_write_failed_closed);
         assert!(report.state_write_failed_closed);
         assert!(report.adapter_evaluation_blocked);
@@ -7491,7 +7518,7 @@ redact_secrets = true
         assert!(report.audit_replay_after_restore_validated);
         assert!(report.sqlite_reopen_after_restore_validated);
         assert!(report.recovery_runbook_reference_present);
-        assert_eq!(report.non_secret_reference_count, 6);
+        assert_eq!(report.non_secret_reference_count, 9);
         assert!(report.operator_approved);
         assert!(report.blocker_codes.is_empty());
         assert!(!report.permission_changed_by_validator);
@@ -7514,12 +7541,27 @@ redact_secrets = true
             RuntimeDeploymentPermissionTranscriptStatus::Blocked
         );
         assert!(!report.deployment_host_evidence);
+        assert!(!report.runtime_write_attempt_reference_present);
+        assert!(!report.runtime_write_permission_denied);
+        assert!(!report.runtime_write_error_classified);
         assert!(!report.state_write_failed_closed);
         assert!(!report.adapter_evaluation_blocked);
         assert!(report
             .blocker_codes
             .iter()
             .any(|code| code == "missing-deployment-host-evidence"));
+        assert!(report
+            .blocker_codes
+            .iter()
+            .any(|code| code == "missing-runtime-write-attempt-reference"));
+        assert!(report
+            .blocker_codes
+            .iter()
+            .any(|code| code == "missing-runtime-write-permission-denial-evidence"));
+        assert!(report
+            .blocker_codes
+            .iter()
+            .any(|code| code == "missing-runtime-write-error-classification"));
         assert!(report
             .blocker_codes
             .iter()
@@ -7984,6 +8026,9 @@ redact_secrets = true
             },
             host_label: "deployment-host-a".to_owned(),
             deployment_host_evidence: complete,
+            runtime_write_attempt_reference_present: complete,
+            runtime_write_permission_denied: complete,
+            runtime_write_error_classified: complete,
             audit_write_failed_closed: true,
             state_write_failed_closed: complete,
             adapter_evaluation_blocked: complete,
@@ -7991,7 +8036,7 @@ redact_secrets = true
             audit_replay_after_restore_validated: complete,
             sqlite_reopen_after_restore_validated: complete,
             recovery_runbook_reference_present: complete,
-            non_secret_reference_count: if complete { 6 } else { 1 },
+            non_secret_reference_count: if complete { 9 } else { 1 },
             operator_approved: complete,
             permission_changed_by_validator: false,
             production_path_mutated_by_validator: false,

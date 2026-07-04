@@ -12376,6 +12376,18 @@ fn run_deployment_permission_transcript_validation() -> Result<(), AgentCliError
         ready.deployment_host_evidence
     );
     println!(
+        "ready-runtime-write-attempt-reference-present: {}",
+        ready.runtime_write_attempt_reference_present
+    );
+    println!(
+        "ready-runtime-write-permission-denied: {}",
+        ready.runtime_write_permission_denied
+    );
+    println!(
+        "ready-runtime-write-error-classified: {}",
+        ready.runtime_write_error_classified
+    );
+    println!(
         "ready-audit-write-failed-closed: {}",
         ready.audit_write_failed_closed
     );
@@ -12765,6 +12777,9 @@ fn local_deployment_permission_transcript(
         transcript_id: format!("local-deployment-permission-{suffix}"),
         host_label: "deployment-host-a".to_owned(),
         deployment_host_evidence: complete,
+        runtime_write_attempt_reference_present: complete,
+        runtime_write_permission_denied: complete,
+        runtime_write_error_classified: complete,
         audit_write_failed_closed: true,
         state_write_failed_closed: complete,
         adapter_evaluation_blocked: complete,
@@ -12772,7 +12787,7 @@ fn local_deployment_permission_transcript(
         audit_replay_after_restore_validated: complete,
         sqlite_reopen_after_restore_validated: complete,
         recovery_runbook_reference_present: complete,
-        non_secret_reference_count: if complete { 6 } else { 1 },
+        non_secret_reference_count: if complete { 9 } else { 1 },
         operator_approved: complete,
         permission_changed_by_validator: false,
         production_path_mutated_by_validator: false,
