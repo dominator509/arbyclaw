@@ -122,6 +122,18 @@ COMPONENT_COMMANDS = [
         False,
     ),
     (
+        "deployment-graceful-shutdown-transcript",
+        [
+            "cargo",
+            "run",
+            "-p",
+            "arb-agent",
+            "--",
+            "validate-deployment-graceful-shutdown-transcript",
+        ],
+        False,
+    ),
+    (
         "service-manager-lifecycle-rehearsal",
         [
             "cargo",
@@ -273,6 +285,7 @@ def build_report() -> dict[str, Any]:
         "remaining_external_evidence": [
             "operator-controlled service lifecycle execution evidence",
             "deployment-host backup/restore execution evidence",
+            "deployment-host graceful shutdown execution evidence",
             "deployment-host audit and SQLite recovery evidence",
             "deployment-host SQLite schema migration execution evidence",
             "physical disk-full fail-closed evidence",

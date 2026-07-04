@@ -92,8 +92,8 @@ use arb_core::{
     validate_dashboard_hosted_request, validate_dashboard_hosted_session,
     validate_deployment_audit_sqlite_transcript, validate_deployment_backup_restore_transcript,
     validate_deployment_disk_full_transcript, validate_deployment_failure_capture_transcript,
-    validate_deployment_permission_transcript, validate_deployment_response_drill_rehearsal,
-    validate_deployment_retention_transcript,
+    validate_deployment_graceful_shutdown_transcript, validate_deployment_permission_transcript,
+    validate_deployment_response_drill_rehearsal, validate_deployment_retention_transcript,
     validate_deployment_sqlite_schema_migration_transcript, validate_fee_schedule_verification,
     validate_historical_market_data_persistence, validate_incident_response_execution_transcript,
     validate_local_opportunity_quote_ingestion_load, validate_local_runtime_backup_restore,
@@ -184,7 +184,8 @@ use arb_core::{
     RollbackExecutionTranscript, RollbackExecutionTranscriptStatus, RoutedOperatorCommand, Runbook,
     RunbookStep, RuntimeDeploymentAuditSqliteTranscript,
     RuntimeDeploymentAuditSqliteTranscriptStatus, RuntimeDeploymentBackupRestoreTranscript,
-    RuntimeDeploymentBackupRestoreTranscriptStatus, RuntimeDeploymentPermissionTranscript,
+    RuntimeDeploymentBackupRestoreTranscriptStatus, RuntimeDeploymentGracefulShutdownTranscript,
+    RuntimeDeploymentGracefulShutdownTranscriptStatus, RuntimeDeploymentPermissionTranscript,
     RuntimeDeploymentPermissionTranscriptStatus, RuntimeDeploymentSmokeLoadIteration,
     RuntimeDeploymentSmokeLoadValidationReport, RuntimeDeploymentSmokeValidationRequest,
     RuntimeDeploymentSqliteSchemaMigrationTranscript,
@@ -473,6 +474,7 @@ fn is_signer_web3_validation_command(command: &str) -> bool {
         "validate-signer-authorization-envelope"
             | "validate-deployment-audit-sqlite-transcript"
             | "validate-deployment-backup-restore-transcript"
+            | "validate-deployment-graceful-shutdown-transcript"
             | "validate-deployment-sqlite-schema-migration-transcript"
             | "validate-deployment-disk-full-transcript"
             | "validate-deployment-failure-capture-transcript"
@@ -590,6 +592,9 @@ fn run_signer_web3_validation_command(command: &str) -> Result<(), AgentCliError
         }
         "validate-deployment-backup-restore-transcript" => {
             run_deployment_backup_restore_transcript_validation()
+        }
+        "validate-deployment-graceful-shutdown-transcript" => {
+            run_deployment_graceful_shutdown_transcript_validation()
         }
         "validate-deployment-sqlite-schema-migration-transcript" => {
             run_deployment_sqlite_schema_migration_transcript_validation()
@@ -897,6 +902,7 @@ fn print_usage() {
     println!("       arb-agent validate-audit-retention-execution --workspace <fresh-dir>");
     println!("       arb-agent validate-deployment-audit-sqlite-transcript");
     println!("       arb-agent validate-deployment-backup-restore-transcript");
+    println!("       arb-agent validate-deployment-graceful-shutdown-transcript");
     println!("       arb-agent validate-deployment-sqlite-schema-migration-transcript");
     println!("       arb-agent validate-deployment-disk-full-transcript");
     println!("       arb-agent validate-deployment-failure-capture-transcript");
@@ -10926,6 +10932,17 @@ const fn deployment_backup_restore_status_label(
     }
 }
 
+const fn deployment_graceful_shutdown_status_label(
+    status: RuntimeDeploymentGracefulShutdownTranscriptStatus,
+) -> &'static str {
+    match status {
+        RuntimeDeploymentGracefulShutdownTranscriptStatus::ReadyForExternalReview => {
+            "ready-for-external-review"
+        }
+        RuntimeDeploymentGracefulShutdownTranscriptStatus::Blocked => "blocked",
+    }
+}
+
 const fn deployment_sqlite_schema_migration_status_label(
     status: RuntimeDeploymentSqliteSchemaMigrationTranscriptStatus,
 ) -> &'static str {
@@ -13189,6 +13206,92 @@ fn run_deployment_backup_restore_transcript_validation() -> Result<(), AgentCliE
     Ok(())
 }
 
+fn run_deployment_graceful_shutdown_transcript_validation() -> Result<(), AgentCliError> {
+    let ready = validate_deployment_graceful_shutdown_transcript(
+        local_deployment_graceful_shutdown_transcript("ready", true),
+    )
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let blocked = validate_deployment_graceful_shutdown_transcript(
+        local_deployment_graceful_shutdown_transcript("blocked", false),
+    )
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+
+    if ready.status != RuntimeDeploymentGracefulShutdownTranscriptStatus::ReadyForExternalReview
+        || blocked.status != RuntimeDeploymentGracefulShutdownTranscriptStatus::Blocked
+        || ready.production_ready
+        || blocked.production_ready
+        || ready.service_manager_action_performed_by_validator
+        || blocked.service_manager_action_performed_by_validator
+        || ready.deployment_path_mutated_by_validator
+        || blocked.deployment_path_mutated_by_validator
+        || ready.secrets_loaded
+        || blocked.secrets_loaded
+        || ready.external_submission_performed
+        || blocked.external_submission_performed
+        || ready.live_execution_performed
+        || blocked.live_execution_performed
+        || blocked.blocker_codes.is_empty()
+    {
+        return Err(AgentCliError::Validation(
+            "deployment graceful-shutdown transcript validation failed".to_owned(),
+        ));
+    }
+
+    println!("deployment-graceful-shutdown-transcript: validation passed");
+    println!(
+        "ready-transcript-status: {}",
+        deployment_graceful_shutdown_status_label(ready.status)
+    );
+    println!(
+        "ready-deployment-host-evidence: {}",
+        ready.deployment_host_evidence
+    );
+    println!(
+        "ready-service-lifecycle-reference-present: {}",
+        ready.service_lifecycle_reference_present
+    );
+    println!(
+        "ready-shutdown-request-reference-present: {}",
+        ready.shutdown_request_reference_present
+    );
+    println!(
+        "ready-service-stopped-reference-present: {}",
+        ready.service_stopped_reference_present
+    );
+    println!(
+        "ready-graceful-shutdown-checkpoint-reference-present: {}",
+        ready.graceful_shutdown_checkpoint_reference_present
+    );
+    println!(
+        "ready-audit-shutdown-validated: {}",
+        ready.audit_replay_after_shutdown_validated
+    );
+    println!(
+        "ready-sqlite-shutdown-validated: {}",
+        ready.sqlite_reopen_after_shutdown_validated
+    );
+    println!(
+        "ready-restart-recovery-after-shutdown-validated: {}",
+        ready.restart_recovery_after_shutdown_validated
+    );
+    println!(
+        "ready-post-shutdown-runtime-smoke-passed: {}",
+        ready.post_shutdown_runtime_smoke_passed
+    );
+    println!(
+        "blocked-transcript-status: {}",
+        deployment_graceful_shutdown_status_label(blocked.status)
+    );
+    println!("blocked-blocker-count: {}", blocked.blocker_codes.len());
+    println!("service-manager-action-performed-by-validator: false");
+    println!("deployment-path-mutated-by-validator: false");
+    println!("secrets-loaded: false");
+    println!("external-submission-performed: false");
+    println!("live-execution-performed: false");
+    println!("production-ready: false");
+    Ok(())
+}
+
 fn run_deployment_sqlite_schema_migration_transcript_validation() -> Result<(), AgentCliError> {
     let ready = validate_deployment_sqlite_schema_migration_transcript(
         local_deployment_sqlite_schema_migration_transcript("ready", true),
@@ -13726,6 +13829,35 @@ fn local_deployment_backup_restore_transcript(
         live_execution_performed: false,
         production_ready_claimed: false,
         validated_at_unix_ms: 95_650,
+    }
+}
+
+fn local_deployment_graceful_shutdown_transcript(
+    suffix: &str,
+    complete: bool,
+) -> RuntimeDeploymentGracefulShutdownTranscript {
+    RuntimeDeploymentGracefulShutdownTranscript {
+        transcript_id: format!("local-deployment-graceful-shutdown-{suffix}"),
+        host_label: "deployment-host-a".to_owned(),
+        deployment_host_evidence: complete,
+        service_lifecycle_reference_present: complete,
+        shutdown_request_reference_present: complete,
+        service_stopped_reference_present: complete,
+        graceful_shutdown_checkpoint_reference_present: complete,
+        audit_replay_after_shutdown_validated: complete,
+        sqlite_reopen_after_shutdown_validated: complete,
+        restart_recovery_after_shutdown_validated: complete,
+        post_shutdown_runtime_smoke_passed: complete,
+        operator_approved: complete,
+        reviewer_approved: complete,
+        non_secret_reference_count: if complete { 9 } else { 1 },
+        service_manager_action_performed_by_validator: false,
+        deployment_path_mutated_by_validator: false,
+        secrets_loaded: false,
+        external_submission_performed: false,
+        live_execution_performed: false,
+        production_ready_claimed: false,
+        validated_at_unix_ms: 95_700,
     }
 }
 

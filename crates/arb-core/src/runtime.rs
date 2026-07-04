@@ -147,6 +147,10 @@ pub const RUNTIME_BACKUP_RESTORE_VALIDATION_VERSION: &str =
 pub const RUNTIME_DEPLOYMENT_BACKUP_RESTORE_TRANSCRIPT_VERSION: &str =
     "phase75-deployment-backup-restore-transcript-local-v1";
 
+/// Stable local deployment-host graceful-shutdown transcript validation version.
+pub const RUNTIME_DEPLOYMENT_GRACEFUL_SHUTDOWN_TRANSCRIPT_VERSION: &str =
+    "phase76-deployment-graceful-shutdown-transcript-local-v1";
+
 /// Stable local runtime restart recovery validation version.
 pub const RUNTIME_RESTART_RECOVERY_VALIDATION_VERSION: &str =
     "phase26-runtime-restart-recovery-local-v1";
@@ -1375,6 +1379,16 @@ pub enum RuntimeDeploymentBackupRestoreTranscriptStatus {
     Blocked,
 }
 
+/// Local validation status for sanitized deployment-host graceful-shutdown transcripts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum RuntimeDeploymentGracefulShutdownTranscriptStatus {
+    /// Transcript contains all required graceful-shutdown execution evidence references.
+    ReadyForExternalReview,
+    /// Transcript is missing graceful-shutdown evidence or contains unsafe flags.
+    Blocked,
+}
+
 /// Local validation status for sanitized deployment-host SQLite schema migration transcripts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -1719,6 +1733,112 @@ pub struct RuntimeDeploymentBackupRestoreTranscriptReport {
     pub blocker_codes: Vec<String>,
     /// Whether this validator executed backup/restore actions. Always false.
     pub backup_restore_executed_by_validator: bool,
+    /// Whether this validator performed service-manager actions. Always false.
+    pub service_manager_action_performed_by_validator: bool,
+    /// Whether this validator mutated deployment paths. Always false.
+    pub deployment_path_mutated_by_validator: bool,
+    /// Whether this validator loaded secrets. Always false.
+    pub secrets_loaded: bool,
+    /// Whether this validator submitted externally. Always false.
+    pub external_submission_performed: bool,
+    /// Whether live execution was performed. Always false.
+    pub live_execution_performed: bool,
+    /// Whether this report approves production readiness. Always false.
+    pub production_ready: bool,
+    /// Transcript validation timestamp in Unix milliseconds.
+    pub validated_at_unix_ms: u64,
+}
+
+/// Sanitized deployment-host graceful-shutdown validation request.
+///
+/// This contains only reference presence and outcome flags. It must not embed
+/// host paths, service logs, command output, audit payloads, checkpoint values,
+/// secrets, or evidence artifact contents.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RuntimeDeploymentGracefulShutdownTranscript {
+    /// Stable transcript id.
+    pub transcript_id: String,
+    /// Non-secret deployment-host or runner label.
+    pub host_label: String,
+    /// Whether evidence came from a physical/deployment-like host.
+    pub deployment_host_evidence: bool,
+    /// Whether service lifecycle context evidence is present.
+    pub service_lifecycle_reference_present: bool,
+    /// Whether graceful-shutdown request evidence is present.
+    pub shutdown_request_reference_present: bool,
+    /// Whether stop/quiesce observation evidence is present.
+    pub service_stopped_reference_present: bool,
+    /// Whether the local graceful-shutdown checkpoint evidence is present.
+    pub graceful_shutdown_checkpoint_reference_present: bool,
+    /// Whether audit replay after shutdown was validated.
+    pub audit_replay_after_shutdown_validated: bool,
+    /// Whether SQLite reopen/checkpoint recovery after shutdown was validated.
+    pub sqlite_reopen_after_shutdown_validated: bool,
+    /// Whether restart recovery after shutdown was validated.
+    pub restart_recovery_after_shutdown_validated: bool,
+    /// Whether post-shutdown runtime smoke evidence is present.
+    pub post_shutdown_runtime_smoke_passed: bool,
+    /// Whether operator review/approval reference is present.
+    pub operator_approved: bool,
+    /// Whether reviewer approval/reference is present.
+    pub reviewer_approved: bool,
+    /// Count of non-secret evidence references.
+    pub non_secret_reference_count: u64,
+    /// Whether this validator performed service-manager actions. Must be false.
+    pub service_manager_action_performed_by_validator: bool,
+    /// Whether this validator mutated deployment paths. Must be false.
+    pub deployment_path_mutated_by_validator: bool,
+    /// Whether this validator loaded secrets. Must be false.
+    pub secrets_loaded: bool,
+    /// Whether this validator submitted externally. Must be false.
+    pub external_submission_performed: bool,
+    /// Whether live execution was performed. Must be false.
+    pub live_execution_performed: bool,
+    /// Whether this transcript attempts to claim production readiness. Must be false.
+    pub production_ready_claimed: bool,
+    /// Transcript validation timestamp in Unix milliseconds.
+    pub validated_at_unix_ms: u64,
+}
+
+/// Non-secret local validation report for deployment-host graceful-shutdown evidence.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RuntimeDeploymentGracefulShutdownTranscriptReport {
+    /// Deployment graceful-shutdown transcript validation version.
+    pub validation_version: String,
+    /// Stable transcript id.
+    pub transcript_id: String,
+    /// Non-secret deployment-host or runner label.
+    pub host_label: String,
+    /// Whether deployment-like host evidence is present.
+    pub deployment_host_evidence: bool,
+    /// Whether service lifecycle context evidence is present.
+    pub service_lifecycle_reference_present: bool,
+    /// Whether graceful-shutdown request evidence is present.
+    pub shutdown_request_reference_present: bool,
+    /// Whether stop/quiesce observation evidence is present.
+    pub service_stopped_reference_present: bool,
+    /// Whether the local graceful-shutdown checkpoint evidence is present.
+    pub graceful_shutdown_checkpoint_reference_present: bool,
+    /// Whether audit replay after shutdown was validated.
+    pub audit_replay_after_shutdown_validated: bool,
+    /// Whether SQLite reopen/checkpoint recovery after shutdown was validated.
+    pub sqlite_reopen_after_shutdown_validated: bool,
+    /// Whether restart recovery after shutdown was validated.
+    pub restart_recovery_after_shutdown_validated: bool,
+    /// Whether post-shutdown runtime smoke evidence is present.
+    pub post_shutdown_runtime_smoke_passed: bool,
+    /// Whether operator review/approval reference is present.
+    pub operator_approved: bool,
+    /// Whether reviewer approval/reference is present.
+    pub reviewer_approved: bool,
+    /// Count of non-secret evidence references.
+    pub non_secret_reference_count: u64,
+    /// Validation status.
+    pub status: RuntimeDeploymentGracefulShutdownTranscriptStatus,
+    /// Non-secret blocker codes.
+    pub blocker_codes: Vec<String>,
     /// Whether this validator performed service-manager actions. Always false.
     pub service_manager_action_performed_by_validator: bool,
     /// Whether this validator mutated deployment paths. Always false.
@@ -3509,6 +3629,92 @@ impl RuntimeDeploymentBackupRestoreTranscriptReport {
     }
 }
 
+impl RuntimeDeploymentGracefulShutdownTranscript {
+    /// Validate sanitized deployment graceful-shutdown transcript input.
+    pub fn validate(&self) -> Result<(), RuntimeLifecycleError> {
+        if self.transcript_id.trim().is_empty() {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "deployment graceful-shutdown transcript id is required".to_owned(),
+            });
+        }
+        if self.host_label.trim().is_empty() {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "deployment graceful-shutdown host label is required".to_owned(),
+            });
+        }
+        if self.validated_at_unix_ms == 0 {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "deployment graceful-shutdown transcript timestamp must be non-zero"
+                    .to_owned(),
+            });
+        }
+        if self.service_manager_action_performed_by_validator
+            || self.deployment_path_mutated_by_validator
+            || self.secrets_loaded
+            || self.external_submission_performed
+            || self.live_execution_performed
+        {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "deployment graceful-shutdown transcript validator must not perform service actions, mutate deployment paths, load secrets, submit externally, or perform live execution".to_owned(),
+            });
+        }
+        if self.production_ready_claimed {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason:
+                    "deployment graceful-shutdown transcript must not claim production readiness"
+                        .to_owned(),
+            });
+        }
+        Ok(())
+    }
+}
+
+impl RuntimeDeploymentGracefulShutdownTranscriptReport {
+    /// Validate deployment graceful-shutdown transcript report invariants.
+    pub fn validate(&self) -> Result<(), RuntimeLifecycleError> {
+        if self.validation_version != RUNTIME_DEPLOYMENT_GRACEFUL_SHUTDOWN_TRANSCRIPT_VERSION {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: format!(
+                    "validation_version must be {RUNTIME_DEPLOYMENT_GRACEFUL_SHUTDOWN_TRANSCRIPT_VERSION}"
+                ),
+            });
+        }
+        if self.transcript_id.trim().is_empty() || self.host_label.trim().is_empty() {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "deployment graceful-shutdown report requires id and host label".to_owned(),
+            });
+        }
+        if self.service_manager_action_performed_by_validator
+            || self.deployment_path_mutated_by_validator
+            || self.secrets_loaded
+            || self.external_submission_performed
+            || self.live_execution_performed
+            || self.production_ready
+        {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "deployment graceful-shutdown report must not contain validator side effects or production readiness".to_owned(),
+            });
+        }
+        if self.status == RuntimeDeploymentGracefulShutdownTranscriptStatus::ReadyForExternalReview
+            && !self.blocker_codes.is_empty()
+        {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "ready deployment graceful-shutdown report must not contain blockers"
+                    .to_owned(),
+            });
+        }
+        if self.status == RuntimeDeploymentGracefulShutdownTranscriptStatus::Blocked
+            && self.blocker_codes.is_empty()
+        {
+            return Err(RuntimeLifecycleError::ValidationFailed {
+                reason: "blocked deployment graceful-shutdown report requires blocker codes"
+                    .to_owned(),
+            });
+        }
+        Ok(())
+    }
+}
+
 impl RuntimeDeploymentSqliteSchemaMigrationTranscript {
     /// Validate sanitized deployment SQLite schema migration transcript input.
     pub fn validate(&self) -> Result<(), RuntimeLifecycleError> {
@@ -4810,6 +5016,54 @@ pub fn validate_deployment_backup_restore_transcript(
     Ok(report)
 }
 
+/// Validate sanitized deployment-host graceful-shutdown evidence metadata.
+///
+/// This consumes operator-supplied reference metadata only. It does not stop
+/// services, inspect deployment paths, mutate deployment paths, call service
+/// managers, load secrets, submit adapters, perform live execution, or claim
+/// production readiness.
+pub fn validate_deployment_graceful_shutdown_transcript(
+    transcript: RuntimeDeploymentGracefulShutdownTranscript,
+) -> Result<RuntimeDeploymentGracefulShutdownTranscriptReport, RuntimeLifecycleError> {
+    transcript.validate()?;
+    let blocker_codes = deployment_graceful_shutdown_blockers(&transcript);
+    let status = if blocker_codes.is_empty() {
+        RuntimeDeploymentGracefulShutdownTranscriptStatus::ReadyForExternalReview
+    } else {
+        RuntimeDeploymentGracefulShutdownTranscriptStatus::Blocked
+    };
+    let report = RuntimeDeploymentGracefulShutdownTranscriptReport {
+        validation_version: RUNTIME_DEPLOYMENT_GRACEFUL_SHUTDOWN_TRANSCRIPT_VERSION.to_owned(),
+        transcript_id: transcript.transcript_id,
+        host_label: transcript.host_label,
+        deployment_host_evidence: transcript.deployment_host_evidence,
+        service_lifecycle_reference_present: transcript.service_lifecycle_reference_present,
+        shutdown_request_reference_present: transcript.shutdown_request_reference_present,
+        service_stopped_reference_present: transcript.service_stopped_reference_present,
+        graceful_shutdown_checkpoint_reference_present: transcript
+            .graceful_shutdown_checkpoint_reference_present,
+        audit_replay_after_shutdown_validated: transcript.audit_replay_after_shutdown_validated,
+        sqlite_reopen_after_shutdown_validated: transcript.sqlite_reopen_after_shutdown_validated,
+        restart_recovery_after_shutdown_validated: transcript
+            .restart_recovery_after_shutdown_validated,
+        post_shutdown_runtime_smoke_passed: transcript.post_shutdown_runtime_smoke_passed,
+        operator_approved: transcript.operator_approved,
+        reviewer_approved: transcript.reviewer_approved,
+        non_secret_reference_count: transcript.non_secret_reference_count,
+        status,
+        blocker_codes,
+        service_manager_action_performed_by_validator: false,
+        deployment_path_mutated_by_validator: false,
+        secrets_loaded: false,
+        external_submission_performed: false,
+        live_execution_performed: false,
+        production_ready: false,
+        validated_at_unix_ms: transcript.validated_at_unix_ms,
+    };
+    report.validate()?;
+    Ok(report)
+}
+
 /// Validate sanitized deployment-host SQLite schema migration evidence metadata.
 ///
 /// This consumes operator-supplied reference metadata only. It does not execute
@@ -5852,6 +6106,49 @@ fn deployment_backup_restore_blockers(
         blockers.push("missing-recovery-runbook-reference".to_owned());
     }
     if transcript.non_secret_reference_count < 9 {
+        blockers.push("insufficient-non-secret-references".to_owned());
+    }
+    if !transcript.operator_approved {
+        blockers.push("missing-operator-approval".to_owned());
+    }
+    if !transcript.reviewer_approved {
+        blockers.push("missing-reviewer-approval".to_owned());
+    }
+    blockers
+}
+
+fn deployment_graceful_shutdown_blockers(
+    transcript: &RuntimeDeploymentGracefulShutdownTranscript,
+) -> Vec<String> {
+    let mut blockers = Vec::new();
+    if !transcript.deployment_host_evidence {
+        blockers.push("missing-deployment-host-evidence".to_owned());
+    }
+    if !transcript.service_lifecycle_reference_present {
+        blockers.push("missing-service-lifecycle-reference".to_owned());
+    }
+    if !transcript.shutdown_request_reference_present {
+        blockers.push("missing-shutdown-request-reference".to_owned());
+    }
+    if !transcript.service_stopped_reference_present {
+        blockers.push("missing-service-stopped-reference".to_owned());
+    }
+    if !transcript.graceful_shutdown_checkpoint_reference_present {
+        blockers.push("missing-graceful-shutdown-checkpoint-reference".to_owned());
+    }
+    if !transcript.audit_replay_after_shutdown_validated {
+        blockers.push("missing-audit-replay-after-shutdown-evidence".to_owned());
+    }
+    if !transcript.sqlite_reopen_after_shutdown_validated {
+        blockers.push("missing-sqlite-reopen-after-shutdown-evidence".to_owned());
+    }
+    if !transcript.restart_recovery_after_shutdown_validated {
+        blockers.push("missing-restart-recovery-after-shutdown-evidence".to_owned());
+    }
+    if !transcript.post_shutdown_runtime_smoke_passed {
+        blockers.push("missing-post-shutdown-runtime-smoke-evidence".to_owned());
+    }
+    if transcript.non_secret_reference_count < 8 {
         blockers.push("insufficient-non-secret-references".to_owned());
     }
     if !transcript.operator_approved {
@@ -7742,10 +8039,11 @@ mod tests {
         validate_local_runtime_restart_recovery_with_trace_recovery,
         RuntimeDeploymentAuditSqliteTranscript, RuntimeDeploymentAuditSqliteTranscriptStatus,
         RuntimeDeploymentBackupRestoreTranscript, RuntimeDeploymentBackupRestoreTranscriptStatus,
-        RuntimeDeploymentPermissionTranscript, RuntimeDeploymentPermissionTranscriptStatus,
-        RuntimeDeploymentSmokeLoadIteration, RuntimeDeploymentSmokeLoadValidationReport,
-        RuntimeDeploymentSmokeValidationReport, RuntimeDeploymentSmokeValidationRequest,
-        RuntimeDeploymentSqliteSchemaMigrationTranscript,
+        RuntimeDeploymentGracefulShutdownTranscript,
+        RuntimeDeploymentGracefulShutdownTranscriptStatus, RuntimeDeploymentPermissionTranscript,
+        RuntimeDeploymentPermissionTranscriptStatus, RuntimeDeploymentSmokeLoadIteration,
+        RuntimeDeploymentSmokeLoadValidationReport, RuntimeDeploymentSmokeValidationReport,
+        RuntimeDeploymentSmokeValidationRequest, RuntimeDeploymentSqliteSchemaMigrationTranscript,
         RuntimeDeploymentSqliteSchemaMigrationTranscriptStatus, RuntimeGracefulShutdownRequest,
         RuntimeLifecycleError, RuntimeLifecycleRequest, RuntimeLifecycleStatus,
         RuntimeLoadProfileReviewRequest, RuntimeLoadProfileReviewStatus,
@@ -9439,6 +9737,81 @@ redact_secrets = true
     }
 
     #[test]
+    fn deployment_graceful_shutdown_transcript_validates_shutdown_evidence() {
+        let report = super::validate_deployment_graceful_shutdown_transcript(
+            deployment_graceful_shutdown_transcript(true),
+        )
+        .expect("complete deployment graceful-shutdown transcript should validate");
+
+        assert_eq!(
+            report.status,
+            RuntimeDeploymentGracefulShutdownTranscriptStatus::ReadyForExternalReview
+        );
+        assert!(report.deployment_host_evidence);
+        assert!(report.service_lifecycle_reference_present);
+        assert!(report.shutdown_request_reference_present);
+        assert!(report.service_stopped_reference_present);
+        assert!(report.graceful_shutdown_checkpoint_reference_present);
+        assert!(report.audit_replay_after_shutdown_validated);
+        assert!(report.sqlite_reopen_after_shutdown_validated);
+        assert!(report.restart_recovery_after_shutdown_validated);
+        assert!(report.post_shutdown_runtime_smoke_passed);
+        assert_eq!(report.non_secret_reference_count, 9);
+        assert!(report.operator_approved);
+        assert!(report.reviewer_approved);
+        assert!(report.blocker_codes.is_empty());
+        assert!(!report.service_manager_action_performed_by_validator);
+        assert!(!report.deployment_path_mutated_by_validator);
+        assert!(!report.secrets_loaded);
+        assert!(!report.external_submission_performed);
+        assert!(!report.live_execution_performed);
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn deployment_graceful_shutdown_transcript_blocks_missing_shutdown_evidence() {
+        let report = super::validate_deployment_graceful_shutdown_transcript(
+            deployment_graceful_shutdown_transcript(false),
+        )
+        .expect("incomplete deployment graceful-shutdown transcript should block");
+
+        assert_eq!(
+            report.status,
+            RuntimeDeploymentGracefulShutdownTranscriptStatus::Blocked
+        );
+        assert!(!report.deployment_host_evidence);
+        assert!(!report.shutdown_request_reference_present);
+        assert!(!report.service_stopped_reference_present);
+        assert!(!report.restart_recovery_after_shutdown_validated);
+        assert!(report
+            .blocker_codes
+            .iter()
+            .any(|code| code == "missing-shutdown-request-reference"));
+        assert!(report
+            .blocker_codes
+            .iter()
+            .any(|code| code == "missing-restart-recovery-after-shutdown-evidence"));
+        assert!(report
+            .blocker_codes
+            .iter()
+            .any(|code| code == "insufficient-non-secret-references"));
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn deployment_graceful_shutdown_transcript_rejects_validator_service_actions() {
+        let mut transcript = deployment_graceful_shutdown_transcript(true);
+        transcript.service_manager_action_performed_by_validator = true;
+
+        let error = super::validate_deployment_graceful_shutdown_transcript(transcript)
+            .expect_err("validator service-manager action must fail closed");
+
+        assert!(error
+            .to_string()
+            .contains("must not perform service actions"));
+    }
+
+    #[test]
     fn deployment_sqlite_schema_migration_transcript_validates_ready_evidence() {
         let report = super::validate_deployment_sqlite_schema_migration_transcript(
             deployment_sqlite_schema_migration_transcript(true),
@@ -10046,6 +10419,38 @@ redact_secrets = true
             live_execution_performed: false,
             production_ready_claimed: false,
             validated_at_unix_ms: 99_500,
+        }
+    }
+
+    fn deployment_graceful_shutdown_transcript(
+        complete: bool,
+    ) -> RuntimeDeploymentGracefulShutdownTranscript {
+        RuntimeDeploymentGracefulShutdownTranscript {
+            transcript_id: if complete {
+                "deployment-graceful-shutdown-ready".to_owned()
+            } else {
+                "deployment-graceful-shutdown-blocked".to_owned()
+            },
+            host_label: "deployment-host-a".to_owned(),
+            deployment_host_evidence: complete,
+            service_lifecycle_reference_present: complete,
+            shutdown_request_reference_present: complete,
+            service_stopped_reference_present: complete,
+            graceful_shutdown_checkpoint_reference_present: complete,
+            audit_replay_after_shutdown_validated: complete,
+            sqlite_reopen_after_shutdown_validated: complete,
+            restart_recovery_after_shutdown_validated: complete,
+            post_shutdown_runtime_smoke_passed: complete,
+            operator_approved: complete,
+            reviewer_approved: complete,
+            non_secret_reference_count: if complete { 9 } else { 1 },
+            service_manager_action_performed_by_validator: false,
+            deployment_path_mutated_by_validator: false,
+            secrets_loaded: false,
+            external_submission_performed: false,
+            live_execution_performed: false,
+            production_ready_claimed: false,
+            validated_at_unix_ms: 99_750,
         }
     }
 
