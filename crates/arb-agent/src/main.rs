@@ -85,15 +85,15 @@ use arb_core::{
     preflight_observability_metrics_scrape, record_observability_alert_route_dispatch,
     render_observability_export_dry_run, review_cex_live_adapter_boundary,
     review_dashboard_hosted_runtime_readiness, review_dashboard_hosted_security,
-    review_dex_live_adapter_boundary, review_fee_schedule_reconciliation,
-    review_local_secret_backup_restore, review_local_validation_coverage,
-    review_market_data_bad_data_rejection, review_market_data_live_provider_boundary,
-    review_market_data_provider_latency, review_market_data_provider_reconciliation,
-    review_observability_operations, review_platform_adapter_controls,
-    review_platform_command_ingress, review_remote_command_security,
-    review_signer_runtime_isolation, review_signer_secret_scope, run_local_fuzz_corpus_replay,
-    run_local_graceful_shutdown_checkpoint, run_local_runtime_lifecycle,
-    run_local_validation_corpus, run_local_validation_property_checks,
+    review_dex_live_adapter_boundary, review_fee_live_provider_boundary,
+    review_fee_schedule_reconciliation, review_local_secret_backup_restore,
+    review_local_validation_coverage, review_market_data_bad_data_rejection,
+    review_market_data_live_provider_boundary, review_market_data_provider_latency,
+    review_market_data_provider_reconciliation, review_observability_operations,
+    review_platform_adapter_controls, review_platform_command_ingress,
+    review_remote_command_security, review_signer_runtime_isolation, review_signer_secret_scope,
+    run_local_fuzz_corpus_replay, run_local_graceful_shutdown_checkpoint,
+    run_local_runtime_lifecycle, run_local_validation_corpus, run_local_validation_property_checks,
     validate_audit_journal_durability, validate_cex_credential_scope_review,
     validate_cex_rate_limit, validate_channel_adapter, validate_channel_session,
     validate_dashboard_hosted_request, validate_dashboard_hosted_session,
@@ -156,7 +156,8 @@ use arb_core::{
     ExecutionAdapterConfig, ExecutionAdapterRequest, ExecutionAdapterRunStatus, ExecutionIntent,
     ExecutionIntentKind, ExecutionPlanStatus, ExecutionPlanner, ExecutionPlannerConfig,
     ExecutionPlannerRequest, ExecutionScope, ExpectedValidationOutcome, FeeAdjustedEdge,
-    FeeEstimate, FeeModelError, FeeProvider, FeeSchedule, FeeScheduleReconciliationReviewRequest,
+    FeeEstimate, FeeLiveProviderBoundaryReviewRequest, FeeLiveProviderBoundaryReviewStatus,
+    FeeModelError, FeeProvider, FeeSchedule, FeeScheduleReconciliationReviewRequest,
     FeeScheduleReconciliationReviewStatus, FeeScheduleVerificationInput,
     FeeScheduleVerificationReport, FeeScheduleVerificationStatus, FixtureKind,
     FuzzCorpusDefinition, FuzzSeedRecord, FuzzTargetKind, HealthStatus,
@@ -480,6 +481,7 @@ fn run_with_args(args: impl IntoIterator<Item = String>) -> Result<(), AgentCliE
         Some("validate-fee-schedule-reconciliation") => {
             run_fee_schedule_reconciliation_validation()
         }
+        Some("validate-fee-live-provider-boundary") => run_fee_live_provider_boundary_validation(),
         Some("validate-cex-governance-review") => run_cex_governance_review_validation(),
         Some("validate-cex-market-data-request-plans") => {
             run_cex_market_data_request_plan_validation()
@@ -921,6 +923,7 @@ fn print_usage() {
     println!("       arb-agent validate-paid-market-data-provider-evaluation");
     println!("       arb-agent validate-fee-schedule-verification");
     println!("       arb-agent validate-fee-schedule-reconciliation");
+    println!("       arb-agent validate-fee-live-provider-boundary");
     println!("       arb-agent validate-cex-governance-review");
     println!("       arb-agent validate-cex-market-data-request-plans");
     println!("       arb-agent validate-cex-live-adapter-boundary");
@@ -3145,6 +3148,76 @@ fn run_fee_schedule_reconciliation_validation() -> Result<(), AgentCliError> {
     Ok(())
 }
 
+fn run_fee_live_provider_boundary_validation() -> Result<(), AgentCliError> {
+    let report = review_fee_live_provider_boundary(local_fee_live_provider_boundary_request()?)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+
+    println!("fee-live-provider-boundary: validation passed");
+    println!(
+        "fee-live-provider-boundary-status: {}",
+        fee_live_provider_boundary_status_label(report.status)
+    );
+    println!(
+        "fee-live-provider-reconciliation-review-ready: {}",
+        report.fee_reconciliation_review_ready
+    );
+    println!(
+        "fee-live-provider-provider-fee-evidence-available: {}",
+        report.provider_fee_evidence_available
+    );
+    println!(
+        "fee-live-provider-account-tier-evidence-available: {}",
+        report.account_tier_evidence_available
+    );
+    println!(
+        "fee-live-provider-gas-fee-evidence-available: {}",
+        report.gas_fee_evidence_available
+    );
+    println!(
+        "fee-live-provider-withdrawal-cost-evidence-available: {}",
+        report.withdrawal_cost_evidence_available
+    );
+    println!(
+        "fee-live-provider-remaining-external-evidence-count: {}",
+        report.remaining_external_evidence_count
+    );
+    println!("fee-live-provider-blocker-count: {}", report.blockers.len());
+    println!(
+        "live-provider-call-performed: {}",
+        report.live_provider_call_performed
+    );
+    println!("rpc-call-performed: {}", report.rpc_call_performed);
+    println!("credential-loaded: {}", report.credential_loaded);
+    println!(
+        "signing-or-broadcast-performed: {}",
+        report.signing_or_broadcast_performed
+    );
+    println!("withdrawal-performed: {}", report.withdrawal_performed);
+    println!("production-ready: {}", report.production_ready);
+
+    if report.status != FeeLiveProviderBoundaryReviewStatus::BlockedPendingProviderFeeValidation
+        || !report.fee_reconciliation_review_ready
+        || report.provider_fee_evidence_available
+        || report.account_tier_evidence_available
+        || report.gas_fee_evidence_available
+        || report.withdrawal_cost_evidence_available
+        || report.remaining_external_evidence_count != 4
+        || report.blockers.len() != 4
+        || report.live_provider_call_performed
+        || report.rpc_call_performed
+        || report.credential_loaded
+        || report.signing_or_broadcast_performed
+        || report.withdrawal_performed
+        || report.production_ready
+    {
+        return Err(AgentCliError::Validation(
+            "fee live-provider boundary validation failed".to_owned(),
+        ));
+    }
+
+    Ok(())
+}
+
 fn local_fee_schedule_reconciliation_review_request(
 ) -> Result<FeeScheduleReconciliationReviewRequest, AgentCliError> {
     let current_review = validate_fee_schedule_verification(FeeScheduleVerificationInput {
@@ -3193,6 +3266,34 @@ fn local_fee_schedule_reconciliation_review_request(
         ],
         live_provider_call_performed: false,
         credential_loaded: false,
+        production_ready_claimed: false,
+    })
+}
+
+fn local_fee_live_provider_boundary_request(
+) -> Result<FeeLiveProviderBoundaryReviewRequest, AgentCliError> {
+    Ok(FeeLiveProviderBoundaryReviewRequest {
+        review_id: "local-fee-live-provider-boundary".to_owned(),
+        reconciliation_review: review_fee_schedule_reconciliation(
+            local_fee_schedule_reconciliation_review_request()?,
+        )
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?,
+        provider_fee_evidence_available: false,
+        account_tier_evidence_available: false,
+        gas_fee_evidence_available: false,
+        withdrawal_cost_evidence_available: false,
+        min_remaining_external_evidence: 4,
+        remaining_external_evidence: vec![
+            "provider-backed maker/taker fee evidence".to_owned(),
+            "external account-tier fee evidence".to_owned(),
+            "gas/RPC/network fee evidence".to_owned(),
+            "withdrawal-cost fee evidence".to_owned(),
+        ],
+        live_provider_call_performed: false,
+        rpc_call_performed: false,
+        credential_loaded: false,
+        signing_or_broadcast_performed: false,
+        withdrawal_performed: false,
         production_ready_claimed: false,
     })
 }
@@ -18101,24 +18202,36 @@ const fn fee_schedule_reconciliation_review_status_label(
     }
 }
 
+const fn fee_live_provider_boundary_status_label(
+    status: FeeLiveProviderBoundaryReviewStatus,
+) -> &'static str {
+    match status {
+        FeeLiveProviderBoundaryReviewStatus::BlockedPendingProviderFeeValidation => {
+            "blocked-pending-provider-fee-validation"
+        }
+        FeeLiveProviderBoundaryReviewStatus::Blocked => "blocked",
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
         config_migration_status_label, execution_adapter_run_status_label,
-        fee_schedule_reconciliation_review_status_label, fee_schedule_verification_status_label,
-        fuzz_corpus_replay_status_label, market_data_preflight_status_label,
-        market_data_quality_assessment_status_label, market_data_reconnect_plan_status_label,
-        opportunity_planner_handoff_status_label, opportunity_replay_status_label,
-        paid_market_data_provider_evaluation_status_label, parse_local_iteration_options,
-        parse_local_validation_run_options, parse_runtime_smoke_options,
-        recovery_disposition_label, run_agentic_handoff_audit_validation,
-        run_audit_durability_validation, run_audit_retention_execution_validation,
-        run_communications_outbox_validation, run_communications_runtime_validation,
-        run_config_migration_validation, run_connector_lifecycle_audit_validation,
-        run_dashboard_loopback_runtime_validation, run_dashboard_runtime_validation,
-        run_deployment_config_redaction_validation, run_deployment_log_redaction_validation,
-        run_destination_boundary_audit_validation, run_execution_adapter_audit_validation,
-        run_execution_planner_audit_validation, run_fee_boundary_audit_validation,
+        fee_live_provider_boundary_status_label, fee_schedule_reconciliation_review_status_label,
+        fee_schedule_verification_status_label, fuzz_corpus_replay_status_label,
+        market_data_preflight_status_label, market_data_quality_assessment_status_label,
+        market_data_reconnect_plan_status_label, opportunity_planner_handoff_status_label,
+        opportunity_replay_status_label, paid_market_data_provider_evaluation_status_label,
+        parse_local_iteration_options, parse_local_validation_run_options,
+        parse_runtime_smoke_options, recovery_disposition_label,
+        run_agentic_handoff_audit_validation, run_audit_durability_validation,
+        run_audit_retention_execution_validation, run_communications_outbox_validation,
+        run_communications_runtime_validation, run_config_migration_validation,
+        run_connector_lifecycle_audit_validation, run_dashboard_loopback_runtime_validation,
+        run_dashboard_runtime_validation, run_deployment_config_redaction_validation,
+        run_deployment_log_redaction_validation, run_destination_boundary_audit_validation,
+        run_execution_adapter_audit_validation, run_execution_planner_audit_validation,
+        run_fee_boundary_audit_validation, run_fee_live_provider_boundary_validation,
         run_fee_schedule_reconciliation_validation, run_fee_schedule_verification_validation,
         run_local_fuzz_corpus_runner, run_local_paper_backtest_corpus_runner,
         run_local_property_check_runner, run_local_validation_corpus_runner,
@@ -18146,10 +18259,11 @@ mod tests {
         strategy_profile_replay_status_label, strategy_profitability_tuning_status_label,
         validation_corpus_status_label, validation_run_status_label,
         write_runtime_supervised_restart_seed, ConfigMigrationStatus, ExecutionAdapterRunStatus,
-        FeeScheduleReconciliationReviewStatus, FeeScheduleVerificationStatus,
-        LocalFuzzCorpusReplayStatus, LocalValidationCorpusStatus, LocalValidationRunOptions,
-        MarketDataProviderPreflightStatus, MarketDataQualityAssessmentStatus,
-        MarketDataReconnectPlanStatus, OpportunityPlannerHandoffStatus, OpportunityReplayStatus,
+        FeeLiveProviderBoundaryReviewStatus, FeeScheduleReconciliationReviewStatus,
+        FeeScheduleVerificationStatus, LocalFuzzCorpusReplayStatus, LocalValidationCorpusStatus,
+        LocalValidationRunOptions, MarketDataProviderPreflightStatus,
+        MarketDataQualityAssessmentStatus, MarketDataReconnectPlanStatus,
+        OpportunityPlannerHandoffStatus, OpportunityReplayStatus,
         PaidMarketDataProviderEvaluationStatus, RuntimeConfigReloadStatus,
         RuntimeRestartRecoveryDisposition, SqliteWalSchemaMigrationStatus,
         StrategyProfileReplayValidationStatus, StrategyProfitabilityTuningValidationStatus,
@@ -18518,6 +18632,20 @@ mod tests {
     }
 
     #[test]
+    fn fee_live_provider_boundary_status_labels_are_operator_facing() {
+        assert_eq!(
+            fee_live_provider_boundary_status_label(
+                FeeLiveProviderBoundaryReviewStatus::BlockedPendingProviderFeeValidation
+            ),
+            "blocked-pending-provider-fee-validation"
+        );
+        assert_eq!(
+            fee_live_provider_boundary_status_label(FeeLiveProviderBoundaryReviewStatus::Blocked),
+            "blocked"
+        );
+    }
+
+    #[test]
     fn opportunity_replay_validation_runs_local_corpus_only() {
         run_opportunity_replay_validation(2).expect("local opportunity replay should pass");
     }
@@ -18642,6 +18770,12 @@ mod tests {
     fn fee_schedule_reconciliation_validation_runs_local_records_only() {
         run_fee_schedule_reconciliation_validation()
             .expect("local fee schedule reconciliation should pass");
+    }
+
+    #[test]
+    fn fee_live_provider_boundary_validation_runs_local_records_only() {
+        run_fee_live_provider_boundary_validation()
+            .expect("local fee live-provider boundary should pass");
     }
 
     #[test]

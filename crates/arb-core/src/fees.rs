@@ -17,6 +17,9 @@ pub const FEE_MODEL_VERSION: &str = "phase-5-fees-v1";
 pub const FEE_SCHEDULE_RECONCILIATION_REVIEW_VERSION: &str =
     "fee-schedule-reconciliation-review-v1";
 
+/// Stable version for local fee live-provider boundary review reports.
+pub const FEE_LIVE_PROVIDER_BOUNDARY_REVIEW_VERSION: &str = "fee-live-provider-boundary-review-v1";
+
 /// State-store subsystem name for local fee verification checkpoints.
 pub const FEE_STATE_SUBSYSTEM: &str = "fees";
 
@@ -361,6 +364,97 @@ pub struct FeeScheduleReconciliationReviewReport {
     pub violation_codes: Vec<String>,
 }
 
+/// Local fee live-provider boundary request.
+///
+/// This records whether local fee validation prerequisites exist and keeps the
+/// missing provider-backed fee/account/gas/withdrawal evidence explicit. It
+/// does not call exchanges, query RPC endpoints, load credentials, sign,
+/// broadcast, withdraw, bridge, or approve production readiness.
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FeeLiveProviderBoundaryReviewRequest {
+    /// Stable non-secret live-provider boundary review id.
+    pub review_id: String,
+    /// Local fee reconciliation prerequisite.
+    pub reconciliation_review: FeeScheduleReconciliationReviewReport,
+    /// Whether provider/API maker-taker fee evidence is available.
+    pub provider_fee_evidence_available: bool,
+    /// Whether account-tier fee evidence is available.
+    pub account_tier_evidence_available: bool,
+    /// Whether gas/RPC/network fee evidence is available.
+    pub gas_fee_evidence_available: bool,
+    /// Whether withdrawal-cost evidence is available.
+    pub withdrawal_cost_evidence_available: bool,
+    /// Minimum number of remaining external provider-backed evidence items.
+    pub min_remaining_external_evidence: usize,
+    /// Non-secret descriptions of external evidence still required.
+    pub remaining_external_evidence: Vec<String>,
+    /// Whether any live provider/API call was performed. Must remain false.
+    pub live_provider_call_performed: bool,
+    /// Whether any RPC call was performed. Must remain false.
+    pub rpc_call_performed: bool,
+    /// Whether any credential was loaded. Must remain false.
+    pub credential_loaded: bool,
+    /// Whether signing or broadcast was performed. Must remain false.
+    pub signing_or_broadcast_performed: bool,
+    /// Whether any withdrawal was performed. Must remain false.
+    pub withdrawal_performed: bool,
+    /// Whether this review claims production readiness. Must remain false.
+    pub production_ready_claimed: bool,
+}
+
+/// Local fee live-provider boundary review status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum FeeLiveProviderBoundaryReviewStatus {
+    /// Local prerequisites exist but provider-backed fee validation is missing.
+    BlockedPendingProviderFeeValidation,
+    /// The boundary is unsafe or internally incomplete.
+    Blocked,
+}
+
+/// Non-secret local fee live-provider boundary report.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FeeLiveProviderBoundaryReviewReport {
+    /// Stable report schema version.
+    pub version: String,
+    /// Stable non-secret live-provider boundary review id.
+    pub review_id: String,
+    /// Review status.
+    pub status: FeeLiveProviderBoundaryReviewStatus,
+    /// Whether local fee schedule verification and reconciliation are ready.
+    pub fee_reconciliation_review_ready: bool,
+    /// Whether provider/API maker-taker fee evidence is available.
+    pub provider_fee_evidence_available: bool,
+    /// Whether account-tier fee evidence is available.
+    pub account_tier_evidence_available: bool,
+    /// Whether gas/RPC/network fee evidence is available.
+    pub gas_fee_evidence_available: bool,
+    /// Whether withdrawal-cost evidence is available.
+    pub withdrawal_cost_evidence_available: bool,
+    /// Whether unresolved external provider-backed evidence references were recorded.
+    pub remaining_external_evidence_recorded: bool,
+    /// Number of unresolved external provider-backed evidence references.
+    pub remaining_external_evidence_count: usize,
+    /// Whether any live provider/API call was performed. Always false here.
+    pub live_provider_call_performed: bool,
+    /// Whether any RPC call was performed. Always false here.
+    pub rpc_call_performed: bool,
+    /// Whether any credential was loaded. Always false here.
+    pub credential_loaded: bool,
+    /// Whether signing or broadcast was performed. Always false here.
+    pub signing_or_broadcast_performed: bool,
+    /// Whether any withdrawal was performed. Always false here.
+    pub withdrawal_performed: bool,
+    /// Whether this report approves production readiness. Always false here.
+    pub production_ready: bool,
+    /// Sanitized local blocker descriptions.
+    pub blockers: Vec<String>,
+    /// Sanitized local violation codes.
+    pub violation_codes: Vec<String>,
+}
+
 impl FeeScheduleVerificationInput {
     /// Validate local fee verification input shape.
     pub fn validate(&self) -> Result<(), FeeModelError> {
@@ -547,6 +641,109 @@ impl FeeScheduleReconciliationReviewReport {
             violations.push(FeeModelViolation::new(
                 "FEE_RECONCILIATION_PRODUCTION_READY_FORBIDDEN",
                 "local fee reconciliation must not approve production readiness",
+            ));
+        }
+
+        if violations.is_empty() {
+            Ok(())
+        } else {
+            Err(FeeModelError::ValidationFailed { violations })
+        }
+    }
+}
+
+impl FeeLiveProviderBoundaryReviewRequest {
+    /// Validate local fee live-provider boundary request shape.
+    pub fn validate(&self) -> Result<(), FeeModelError> {
+        self.reconciliation_review.validate()?;
+        let mut violations = Vec::new();
+        validate_text(
+            "fee live-provider boundary review",
+            &self.review_id,
+            &mut violations,
+        );
+        if self.min_remaining_external_evidence == 0 {
+            violations.push(FeeModelViolation::new(
+                "FEE_LIVE_PROVIDER_EXTERNAL_EVIDENCE_FLOOR_ZERO",
+                "fee live-provider boundary must require remaining external evidence",
+            ));
+        }
+        if self
+            .remaining_external_evidence
+            .iter()
+            .any(|item| item.trim().is_empty())
+        {
+            violations.push(FeeModelViolation::new(
+                "FEE_LIVE_PROVIDER_EXTERNAL_EVIDENCE_BLANK",
+                "fee live-provider boundary evidence references must be non-empty",
+            ));
+        }
+
+        if violations.is_empty() {
+            Ok(())
+        } else {
+            Err(FeeModelError::ValidationFailed { violations })
+        }
+    }
+}
+
+impl FeeLiveProviderBoundaryReviewReport {
+    /// Validate local fee live-provider boundary report invariants.
+    pub fn validate(&self) -> Result<(), FeeModelError> {
+        let mut violations = Vec::new();
+        if self.version != FEE_LIVE_PROVIDER_BOUNDARY_REVIEW_VERSION {
+            violations.push(FeeModelViolation::new(
+                "FEE_LIVE_PROVIDER_VERSION_INVALID",
+                "fee live-provider boundary report version is invalid",
+            ));
+        }
+        validate_text(
+            "fee live-provider boundary report",
+            &self.review_id,
+            &mut violations,
+        );
+
+        let no_side_effects = !self.live_provider_call_performed
+            && !self.rpc_call_performed
+            && !self.credential_loaded
+            && !self.signing_or_broadcast_performed
+            && !self.withdrawal_performed
+            && !self.production_ready;
+        let provider_evidence_missing = !self.provider_fee_evidence_available
+            && !self.account_tier_evidence_available
+            && !self.gas_fee_evidence_available
+            && !self.withdrawal_cost_evidence_available;
+        let should_be_pending_provider_validation = self.fee_reconciliation_review_ready
+            && provider_evidence_missing
+            && self.remaining_external_evidence_recorded
+            && no_side_effects;
+        if should_be_pending_provider_validation
+            && self.status
+                != FeeLiveProviderBoundaryReviewStatus::BlockedPendingProviderFeeValidation
+        {
+            violations.push(FeeModelViolation::new(
+                "FEE_LIVE_PROVIDER_STATUS_SHOULD_BE_PENDING_VALIDATION",
+                "complete local fee prerequisites with missing provider evidence must remain blocked pending provider fee validation",
+            ));
+        }
+        if !should_be_pending_provider_validation
+            && self.status != FeeLiveProviderBoundaryReviewStatus::Blocked
+        {
+            violations.push(FeeModelViolation::new(
+                "FEE_LIVE_PROVIDER_STATUS_SHOULD_BLOCK",
+                "unsafe or incomplete fee live-provider boundary evidence must be blocked",
+            ));
+        }
+        if self.production_ready {
+            violations.push(FeeModelViolation::new(
+                "FEE_LIVE_PROVIDER_PRODUCTION_READY_FORBIDDEN",
+                "fee live-provider boundary must not approve production readiness",
+            ));
+        }
+        if self.blockers.is_empty() {
+            violations.push(FeeModelViolation::new(
+                "FEE_LIVE_PROVIDER_BLOCKERS_EMPTY",
+                "fee live-provider boundary must record unresolved blockers",
             ));
         }
 
@@ -761,6 +958,135 @@ pub fn review_fee_schedule_reconciliation(
         live_provider_call_performed,
         credential_loaded,
         production_ready: false,
+        violation_codes,
+    };
+    report.validate()?;
+    Ok(report)
+}
+
+/// Review local fee live-provider prerequisites without external calls.
+pub fn review_fee_live_provider_boundary(
+    request: FeeLiveProviderBoundaryReviewRequest,
+) -> Result<FeeLiveProviderBoundaryReviewReport, FeeModelError> {
+    request.validate()?;
+
+    let fee_reconciliation_review_ready = request.reconciliation_review.status
+        == FeeScheduleReconciliationReviewStatus::ReadyForLocalReview
+        && request.reconciliation_review.current_fee_review_ready
+        && request.reconciliation_review.unverified_schedule_blocked
+        && request.reconciliation_review.maker_taker_unverified_blocked
+        && request.reconciliation_review.network_fee_unverified_blocked
+        && request
+            .reconciliation_review
+            .withdrawal_fee_unreviewed_blocked
+        && request.reconciliation_review.stale_review_blocked
+        && !request.reconciliation_review.live_provider_call_performed
+        && !request.reconciliation_review.credential_loaded
+        && !request.reconciliation_review.production_ready;
+    let remaining_external_evidence_recorded =
+        request.remaining_external_evidence.len() >= request.min_remaining_external_evidence;
+    let live_provider_call_performed = request.live_provider_call_performed
+        || request.reconciliation_review.live_provider_call_performed;
+    let credential_loaded =
+        request.credential_loaded || request.reconciliation_review.credential_loaded;
+    let production_ready_claimed =
+        request.production_ready_claimed || request.reconciliation_review.production_ready;
+
+    let mut violation_codes = Vec::new();
+    push_if(
+        &mut violation_codes,
+        !fee_reconciliation_review_ready,
+        "FEE_LIVE_PROVIDER_RECONCILIATION_NOT_READY",
+    );
+    push_if(
+        &mut violation_codes,
+        !remaining_external_evidence_recorded,
+        "FEE_LIVE_PROVIDER_EXTERNAL_EVIDENCE_MISSING",
+    );
+    push_if(
+        &mut violation_codes,
+        live_provider_call_performed,
+        "FEE_LIVE_PROVIDER_CALL_PERFORMED",
+    );
+    push_if(
+        &mut violation_codes,
+        request.rpc_call_performed,
+        "FEE_LIVE_PROVIDER_RPC_CALL_PERFORMED",
+    );
+    push_if(
+        &mut violation_codes,
+        credential_loaded,
+        "FEE_LIVE_PROVIDER_CREDENTIAL_LOADED",
+    );
+    push_if(
+        &mut violation_codes,
+        request.signing_or_broadcast_performed,
+        "FEE_LIVE_PROVIDER_SIGNING_OR_BROADCAST",
+    );
+    push_if(
+        &mut violation_codes,
+        request.withdrawal_performed,
+        "FEE_LIVE_PROVIDER_WITHDRAWAL_PERFORMED",
+    );
+    push_if(
+        &mut violation_codes,
+        production_ready_claimed,
+        "FEE_LIVE_PROVIDER_PRODUCTION_READY_CLAIMED",
+    );
+
+    let mut blockers = Vec::new();
+    if !request.provider_fee_evidence_available {
+        blockers.push("provider-backed maker/taker fee validation missing".to_owned());
+    }
+    if !request.account_tier_evidence_available {
+        blockers.push("external account-tier fee validation missing".to_owned());
+    }
+    if !request.gas_fee_evidence_available {
+        blockers.push("gas/RPC/network fee validation missing".to_owned());
+    }
+    if !request.withdrawal_cost_evidence_available {
+        blockers.push("withdrawal-cost validation missing".to_owned());
+    }
+    if !remaining_external_evidence_recorded {
+        blockers.push("remaining external fee evidence references below floor".to_owned());
+    }
+
+    let provider_evidence_missing = !request.provider_fee_evidence_available
+        && !request.account_tier_evidence_available
+        && !request.gas_fee_evidence_available
+        && !request.withdrawal_cost_evidence_available;
+    let safe_pending_provider_validation = fee_reconciliation_review_ready
+        && provider_evidence_missing
+        && remaining_external_evidence_recorded
+        && !live_provider_call_performed
+        && !request.rpc_call_performed
+        && !credential_loaded
+        && !request.signing_or_broadcast_performed
+        && !request.withdrawal_performed
+        && !production_ready_claimed;
+
+    let report = FeeLiveProviderBoundaryReviewReport {
+        version: FEE_LIVE_PROVIDER_BOUNDARY_REVIEW_VERSION.to_owned(),
+        review_id: request.review_id,
+        status: if safe_pending_provider_validation {
+            FeeLiveProviderBoundaryReviewStatus::BlockedPendingProviderFeeValidation
+        } else {
+            FeeLiveProviderBoundaryReviewStatus::Blocked
+        },
+        fee_reconciliation_review_ready,
+        provider_fee_evidence_available: request.provider_fee_evidence_available,
+        account_tier_evidence_available: request.account_tier_evidence_available,
+        gas_fee_evidence_available: request.gas_fee_evidence_available,
+        withdrawal_cost_evidence_available: request.withdrawal_cost_evidence_available,
+        remaining_external_evidence_recorded,
+        remaining_external_evidence_count: request.remaining_external_evidence.len(),
+        live_provider_call_performed,
+        rpc_call_performed: request.rpc_call_performed,
+        credential_loaded,
+        signing_or_broadcast_performed: request.signing_or_broadcast_performed,
+        withdrawal_performed: request.withdrawal_performed,
+        production_ready: false,
+        blockers,
         violation_codes,
     };
     report.validate()?;
@@ -1067,10 +1393,12 @@ fn is_non_negative_finite(value: f64) -> bool {
 mod tests {
     use super::{
         append_fee_schedule_verification_audit, persist_fee_schedule_verification_checkpoint,
-        review_fee_schedule_reconciliation, validate_fee_schedule_verification, FeeAdjustedEdge,
-        FeeSchedule, FeeScheduleReconciliationReviewRequest, FeeScheduleReconciliationReviewStatus,
-        FeeScheduleVerificationInput, FeeScheduleVerificationReport, FeeScheduleVerificationStatus,
-        LiquidityRole, FEE_LAST_VERIFICATION_CHECKPOINT_KEY, FEE_STATE_SUBSYSTEM,
+        review_fee_live_provider_boundary, review_fee_schedule_reconciliation,
+        validate_fee_schedule_verification, FeeAdjustedEdge, FeeLiveProviderBoundaryReviewRequest,
+        FeeLiveProviderBoundaryReviewStatus, FeeSchedule, FeeScheduleReconciliationReviewRequest,
+        FeeScheduleReconciliationReviewStatus, FeeScheduleVerificationInput,
+        FeeScheduleVerificationReport, FeeScheduleVerificationStatus, LiquidityRole,
+        FEE_LAST_VERIFICATION_CHECKPOINT_KEY, FEE_STATE_SUBSYSTEM,
     };
     use crate::{
         AppendOnlyAuditJournal, InMemoryStateStore, MarketPair, StateStore, VenueKind, VenueRef,
@@ -1279,6 +1607,71 @@ mod tests {
     }
 
     #[test]
+    fn fee_live_provider_boundary_blocks_pending_provider_fee_validation() {
+        let report =
+            review_fee_live_provider_boundary(fee_live_provider_boundary_request(false, 4))
+                .expect("fee live-provider boundary should validate");
+
+        assert_eq!(
+            report.status,
+            FeeLiveProviderBoundaryReviewStatus::BlockedPendingProviderFeeValidation
+        );
+        assert!(report.fee_reconciliation_review_ready);
+        assert!(!report.provider_fee_evidence_available);
+        assert!(!report.account_tier_evidence_available);
+        assert!(!report.gas_fee_evidence_available);
+        assert!(!report.withdrawal_cost_evidence_available);
+        assert!(report.remaining_external_evidence_recorded);
+        assert_eq!(report.remaining_external_evidence_count, 4);
+        assert_eq!(report.blockers.len(), 4);
+        assert!(!report.live_provider_call_performed);
+        assert!(!report.rpc_call_performed);
+        assert!(!report.credential_loaded);
+        assert!(!report.signing_or_broadcast_performed);
+        assert!(!report.withdrawal_performed);
+        assert!(!report.production_ready);
+        assert!(report.violation_codes.is_empty());
+    }
+
+    #[test]
+    fn fee_live_provider_boundary_fails_closed_on_side_effect_claims() {
+        let report = review_fee_live_provider_boundary(fee_live_provider_boundary_request(true, 4))
+            .expect("fee live-provider boundary should produce blocked report");
+
+        assert_eq!(report.status, FeeLiveProviderBoundaryReviewStatus::Blocked);
+        assert!(report.live_provider_call_performed);
+        assert!(report.rpc_call_performed);
+        assert!(report.credential_loaded);
+        assert!(report.signing_or_broadcast_performed);
+        assert!(report.withdrawal_performed);
+        assert!(!report.production_ready);
+        assert!(report
+            .violation_codes
+            .iter()
+            .any(|code| code == "FEE_LIVE_PROVIDER_CALL_PERFORMED"));
+        assert!(report
+            .violation_codes
+            .iter()
+            .any(|code| code == "FEE_LIVE_PROVIDER_RPC_CALL_PERFORMED"));
+        assert!(report
+            .violation_codes
+            .iter()
+            .any(|code| code == "FEE_LIVE_PROVIDER_CREDENTIAL_LOADED"));
+        assert!(report
+            .violation_codes
+            .iter()
+            .any(|code| code == "FEE_LIVE_PROVIDER_SIGNING_OR_BROADCAST"));
+        assert!(report
+            .violation_codes
+            .iter()
+            .any(|code| code == "FEE_LIVE_PROVIDER_WITHDRAWAL_PERFORMED"));
+        assert!(report
+            .violation_codes
+            .iter()
+            .any(|code| code == "FEE_LIVE_PROVIDER_PRODUCTION_READY_CLAIMED"));
+    }
+
+    #[test]
     fn fee_schedule_verification_audit_and_state_reopen_locally() {
         let report = validate_fee_schedule_verification(FeeScheduleVerificationInput {
             schedule: verified_schedule(),
@@ -1398,6 +1791,36 @@ mod tests {
             ],
             live_provider_call_performed: side_effect_claimed,
             credential_loaded: side_effect_claimed,
+            production_ready_claimed: side_effect_claimed,
+        }
+    }
+
+    fn fee_live_provider_boundary_request(
+        side_effect_claimed: bool,
+        min_remaining_external_evidence: usize,
+    ) -> FeeLiveProviderBoundaryReviewRequest {
+        FeeLiveProviderBoundaryReviewRequest {
+            review_id: "fee-live-provider-boundary-review".to_owned(),
+            reconciliation_review: review_fee_schedule_reconciliation(fee_reconciliation_request(
+                false, 4,
+            ))
+            .expect("fee reconciliation should validate"),
+            provider_fee_evidence_available: false,
+            account_tier_evidence_available: false,
+            gas_fee_evidence_available: false,
+            withdrawal_cost_evidence_available: false,
+            min_remaining_external_evidence,
+            remaining_external_evidence: vec![
+                "provider-backed maker/taker fee evidence".to_owned(),
+                "external account-tier fee evidence".to_owned(),
+                "gas/RPC/network fee evidence".to_owned(),
+                "withdrawal-cost fee evidence".to_owned(),
+            ],
+            live_provider_call_performed: side_effect_claimed,
+            rpc_call_performed: side_effect_claimed,
+            credential_loaded: side_effect_claimed,
+            signing_or_broadcast_performed: side_effect_claimed,
+            withdrawal_performed: side_effect_claimed,
             production_ready_claimed: side_effect_claimed,
         }
     }

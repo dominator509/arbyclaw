@@ -257,9 +257,11 @@ pub use strategy::{
 
 pub use fees::{
     append_fee_schedule_verification_audit, persist_fee_schedule_verification_checkpoint,
-    review_fee_schedule_reconciliation, validate_fee_schedule_verification, FeeAdjustedEdge,
-    FeeEstimate, FeeModelError, FeeModelViolation, FeeProvider, FeeSchedule,
-    FeeScheduleReconciliationReviewReport, FeeScheduleReconciliationReviewRequest,
+    review_fee_live_provider_boundary, review_fee_schedule_reconciliation,
+    validate_fee_schedule_verification, FeeAdjustedEdge, FeeEstimate,
+    FeeLiveProviderBoundaryReviewReport, FeeLiveProviderBoundaryReviewRequest,
+    FeeLiveProviderBoundaryReviewStatus, FeeModelError, FeeModelViolation, FeeProvider,
+    FeeSchedule, FeeScheduleReconciliationReviewReport, FeeScheduleReconciliationReviewRequest,
     FeeScheduleReconciliationReviewStatus, FeeScheduleVerificationInput,
     FeeScheduleVerificationReport, FeeScheduleVerificationStatus, LiquidityRole,
     FEE_LAST_VERIFICATION_CHECKPOINT_KEY, FEE_MODEL_VERSION,

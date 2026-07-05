@@ -35,6 +35,7 @@ DANGEROUS_TRUE_KEYS = {
     "signing-or-broadcast-performed",
     "signing-performed",
     "signer-material-loaded",
+    "withdrawal-performed",
     "websocket-connection-opened",
 }
 
@@ -156,6 +157,10 @@ def command_set(workspace_root: pathlib.Path) -> list[tuple[str, list[str]]]:
         (
             "fee_schedule_reconciliation",
             ["cargo", "run", "-p", "arb-agent", "--", "validate-fee-schedule-reconciliation"],
+        ),
+        (
+            "fee_live_provider_boundary",
+            ["cargo", "run", "-p", "arb-agent", "--", "validate-fee-live-provider-boundary"],
         ),
         (
             "fee_boundary_audit",
@@ -586,6 +591,50 @@ def validate_components(components: list[dict[str, Any]]) -> list[str]:
         "fee_schedule_reconciliation",
     )
 
+    fee_live_provider = by_name["fee_live_provider_boundary"]["parsed"]
+    require(
+        fee_live_provider,
+        "fee-live-provider-boundary",
+        "validation passed",
+        errors,
+        "fee_live_provider_boundary",
+    )
+    require(
+        fee_live_provider,
+        "fee-live-provider-boundary-status",
+        "blocked-pending-provider-fee-validation",
+        errors,
+        "fee_live_provider_boundary",
+    )
+    require(
+        fee_live_provider,
+        "fee-live-provider-reconciliation-review-ready",
+        "true",
+        errors,
+        "fee_live_provider_boundary",
+    )
+    for key in (
+        "fee-live-provider-provider-fee-evidence-available",
+        "fee-live-provider-account-tier-evidence-available",
+        "fee-live-provider-gas-fee-evidence-available",
+        "fee-live-provider-withdrawal-cost-evidence-available",
+    ):
+        require(fee_live_provider, key, "false", errors, "fee_live_provider_boundary")
+    require(
+        fee_live_provider,
+        "fee-live-provider-remaining-external-evidence-count",
+        "4",
+        errors,
+        "fee_live_provider_boundary",
+    )
+    require(
+        fee_live_provider,
+        "fee-live-provider-blocker-count",
+        "4",
+        errors,
+        "fee_live_provider_boundary",
+    )
+
     fee_audit = by_name["fee_boundary_audit"]["parsed"]
     require(fee_audit, "current-fee-review-status", "ready-for-local-review", errors, "fee_boundary_audit")
     require(fee_audit, "blocked-fee-review-status", "blocked", errors, "fee_boundary_audit")
@@ -793,6 +842,7 @@ def main() -> int:
         "live_execution_performed": False,
         "production_ready": False,
         "audit_records_replayed": audit_records,
+        "fee_live_provider_boundary_enforced": True,
         "fee_schedule_reconciliation_review_enforced": True,
         "market_data_bad_data_rejection_review_enforced": True,
         "market_data_live_provider_boundary_enforced": True,
@@ -808,7 +858,8 @@ def main() -> int:
         ],
         "remaining_external_evidence": [
             "live REST/WebSocket exchange adapters",
-            "provider-backed market-data session, latency, rate-limit/outage, bad-data, and fee validation",
+            "provider-backed market-data session, latency, rate-limit/outage, and bad-data validation",
+            "provider-backed fee, account-tier, gas/RPC, and withdrawal-cost validation",
             "external exchange sandbox/live order lifecycle calibration",
             "live DEX/RPC simulation and router validation without broadcasts",
             "external DEX/RPC nonce and confirmation validation without broadcasts",
