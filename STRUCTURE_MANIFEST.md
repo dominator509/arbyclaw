@@ -18,11 +18,11 @@ Note: this manifest intentionally excludes `STRUCTURE_MANIFEST.md` itself to avo
 | `.obsidian/workspace.json` | 4685 | `742aa0f28f03923f7c619003f3cc10a1bf0f6e4f3d89dd090fc808eac3bad1f6` |
 | `.repomixignore` | 171 | `7ccfc5b52e0da64d2c098867d2288d6d318769847ab57fb7b882f12706b05d63` |
 | `AGENTS.md` | 5792 | `8db69cfbb401dc7d1f084f245e5590bdcaf1a77b435614d3d0ef279b17dca917` |
-| `ARCHITECTURE.md` | 108212 | `dea045aac6bfec2f33f62b73fddf0bb54212512326f97692c6b87e99542683dd` |
+| `ARCHITECTURE.md` | 110256 | `ae9dff81674340dd66b35ecc210051ae1c38016967e965a12a7a06d0ca9ed2c7` |
 | `CLAUDE.md` | 3831 | `c44e443a7f24d16316c867ca60b6c698b03929fa676d48dfc27202e5bc116570` |
 | `Cargo.lock` | 29221 | `546ceaf1e2fd861ac858ea6a498ca5faf7fa09f4828230ab1531b09314069c94` |
 | `Cargo.toml` | 523 | `5b9927a75c5f3eba1a71280d272714aaecb780b984f7194158d3c4b56f827348` |
-| `HANDOFF_CONTEXT.md` | 47560 | `806c1135230ea664ea6d6fcc24e39084d0afe64a8e586cbf526e748119e3ba25` |
+| `HANDOFF_CONTEXT.md` | 48386 | `88dded03a4b8ca754819ca24999a14a60332040c61fafb5eaa2d5caf2ade762e` |
 | `PHASE_0_SUBROADMAP.md` | 3721 | `12eb329c53bd73740cab3715173152556132f1e911cf8c29a2bced12ae45c8b1` |
 | `PHASE_100_SUBROADMAP.md` | 2062 | `25cf52b6178fb2f98f30bf3fd8cb9f5b77bb422e612e4e3d163af14b4d996306` |
 | `PHASE_101_SUBROADMAP.md` | 1528 | `5ef164b8f497107fbafe03dfaa59e50c19152c1d14a1ebc01ac78ddf50132d0d` |
@@ -39,6 +39,7 @@ Note: this manifest intentionally excludes `STRUCTURE_MANIFEST.md` itself to avo
 | `PHASE_111_SUBROADMAP.md` | 1634 | `3d3dac4841b7e9082b696d0d5f6d19a0cd60a7b5edc216b629f5c65c0416cd9a` |
 | `PHASE_112_SUBROADMAP.md` | 1634 | `5a51991296bd1fdf684a5b423c460e626fe2ca64e693b803f000b2cacf66c909` |
 | `PHASE_113_SUBROADMAP.md` | 1901 | `de99ef770d684b783cfdf24bf573dafda4ea291b349659ee872f45addae0ecc9` |
+| `PHASE_114_SUBROADMAP.md` | 1723 | `8c492c06954c98d991b94f064d1eb30c56e973389bb31f5c0c2fbe30fd441b9e` |
 | `PHASE_11_SUBROADMAP.md` | 6566 | `651fcd4b1efc90ffae58874df44db099ece97ad13b219b80933bf4796089b621` |
 | `PHASE_12_SUBROADMAP.md` | 9265 | `fe00c9ec5cd7cdd6b4e80256eae3340b46198e0752f87a73c324a06a350a6b9a` |
 | `PHASE_13_SUBROADMAP.md` | 7384 | `17bdf6904a09728f58fb86bcfc26a583cae7f07d81dba92682fede50c92c7ee6` |
@@ -137,9 +138,9 @@ Note: this manifest intentionally excludes `STRUCTURE_MANIFEST.md` itself to avo
 | `PHASE_98_SUBROADMAP.md` | 1756 | `729574396d685a37c1bbc12e6c51743605d21ee474c4c8411dfe91d3b0857f6c` |
 | `PHASE_99_SUBROADMAP.md` | 1826 | `9f353a8c25713fbf2b4ab7555fa271ce1da16f2407fff9e4a8c1a471f67a4997` |
 | `PHASE_9_SUBROADMAP.md` | 4869 | `11e604792daef7ed160d0c9f282ec9be1725ba614642bea6d7d02fb16179c280` |
-| `PRODUCTION_GAP_TRACKER.md` | 628311 | `1f6002c7fa3f3595fd73a8b6abcd6024fec8e0dee9443dee4f59d37b43b337c1` |
+| `PRODUCTION_GAP_TRACKER.md` | 629976 | `7926478781e78f4f61938eb62712d65fa0425b08ff7c637de6ff009ce020fd02` |
 | `README.md` | 32548 | `1f41f74b1e23c84f848eb53b2db4aec780556cffba37413da92f2ab4fafe9053` |
-| `ROADMAP.md` | 237493 | `55f90fa9611d8d888a333ed3c6fd939cfda6f50ddfffef6aca3e4d5e17195805` |
+| `ROADMAP.md` | 237960 | `e3dc218a6f44aa2f7164bedfd61befea085c4d3ae98073d09cda469dfca6e89a` |
 | `RTK.md` | 514 | `56005802a4e3650bcf5639ddec1dae6b9838a4e8e77a4996af1dc40b67d15ce3` |
 | `SECURITY.md` | 20783 | `4e5c985e1926a439ef88c3bd82a380bf5044f7ba75455658082f6fcaa2d8bf10` |
 | `config.example.toml` | 758 | `0ba26b8473522e751187f0a9eee2c882bb1b1f3c3e50aec3823f72545d3022f5` |
@@ -201,10 +202,10 @@ Note: this manifest intentionally excludes `STRUCTURE_MANIFEST.md` itself to avo
 | `scripts/validate_connector_scenario_gate.py` | 35901 | `497700d560b30efe0220194a140264bc0c20ff30e90e857c6b5b5ade7bcbbca6` |
 | `scripts/validate_container_example.py` | 7752 | `efd2031f7ecdd24f91f192e6d0cd638be19183a5b31b15a06d0d21a776a3d0e1` |
 | `scripts/validate_dependency_license_policy.py` | 4974 | `fd8b0c72722ea24b901909e6aefda01e481e187351a4be6fbb34db306d757111` |
-| `scripts/validate_deployment_evidence_bundle.py` | 15670 | `e3679db6fbb9c77916f75f127dba88dbb1e8cc0cbb2eaeda2361434e9730899d` |
-| `scripts/validate_deployment_evidence_checklist.py` | 10528 | `620531fd392ebd095c58cf15f3cd32c75e2e8a75b5f362bef58171960d0bf64b` |
-| `scripts/validate_deployment_host_runtime.py` | 193269 | `6402e4b989aa05f9bd29150332a24d37c8ce9feb6da6a70860b797c4e86e39b8` |
-| `scripts/validate_deployment_runtime_gate.py` | 47630 | `814693cf21310120e3de48d9697dd01b895c193e859125d32facfb427c5edbbe` |
+| `scripts/validate_deployment_evidence_bundle.py` | 16197 | `92ad852925b2b411adee77f9bd0842b0a879ead0ba65cf0904e72f0618b2373a` |
+| `scripts/validate_deployment_evidence_checklist.py` | 10585 | `79e21192a0b164936e8891fb10402e50fcd7d15c9882fcfb41ab2c6c49ecf816` |
+| `scripts/validate_deployment_host_runtime.py` | 202214 | `a2abee43db42c42121da8ef448b3c3f29624e8bb97004af9d6ef95c0b92c86ea` |
+| `scripts/validate_deployment_runtime_gate.py` | 50138 | `2d85c213a0db202ebd7e47ad66043d66ac25f42725ef6879cbf5afd62a150b1b` |
 | `scripts/validate_deployment_static_hardening.py` | 12429 | `40b5ed0b2a9305cbc09ae8b948c3bf11df3a48c33f2c458e360d2548fec1d096` |
 | `scripts/validate_execution_path_gate.py` | 20942 | `54fbc19d1672b5fcd9a3ae659c388f3aeae4787d5331dbc8468524615a98bf98` |
 | `scripts/validate_hardening_core_gate.py` | 11633 | `7323f9760b3137845299d89579ff2be20abba982770a1d61b0dcd3ff331ce2ed` |
@@ -215,7 +216,7 @@ Note: this manifest intentionally excludes `STRUCTURE_MANIFEST.md` itself to avo
 | `scripts/validate_production_container.py` | 9446 | `f93ff00a90a5fd205b13567d80f6683d4c9e3d4e6a0a2cb10059679be05cbc03` |
 | `scripts/validate_release_artifact.py` | 17133 | `cf681d8e05ba80b2b8c60545bda089a98bf697fb504881de17810c45f3b587dc` |
 | `scripts/validate_rollback_drill.py` | 6632 | `fe7a34f02fa465fc94407b6409ca2e63aeaaa18544f9eb839e8f14922c50192c` |
-| `scripts/validate_structure.py` | 5870 | `2a060deb91adebe8c2fec6150192f86d375a306d514c5910772af3d8a156579e` |
+| `scripts/validate_structure.py` | 5870 | `3fb2eaf97fd4213e5aa87f12e7a31a94d8d2a4fe65ef219ed6a9675c85d182be` |
 | `scripts/validate_systemd_example.py` | 8782 | `5b0cfb954acaf09c128462e17b7a3dbf8ba7ebb4190ebefa8c9528436b0ca355` |
 | `scripts/validate_systemd_lifecycle.py` | 8777 | `01e0d6caee333cfff07faa643ba5a7eb48e44849864245c11254997bc803363c` |
 | `security-audit/README.md` | 933 | `ff88ebe5cd1d0ce1b109967c6387886133e94980da31df49ad5ddf81ea360a58` |

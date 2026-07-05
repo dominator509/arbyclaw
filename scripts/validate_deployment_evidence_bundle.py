@@ -29,6 +29,9 @@ def component_commands(bundle_workspace: pathlib.Path) -> list[tuple[str, list[s
     observability_provider_boundary_workspace = (
         bundle_workspace / "observability-provider-boundary"
     )
+    observability_provider_submission_workspace = (
+        bundle_workspace / "observability-provider-submission"
+    )
     communications_delivery_provider_workspace = (
         bundle_workspace / "communications-delivery-provider"
     )
@@ -79,6 +82,18 @@ def component_commands(bundle_workspace: pathlib.Path) -> list[tuple[str, list[s
             "--run-observability-provider-boundary",
             "--observability-provider-boundary-workspace",
             str(observability_provider_boundary_workspace),
+            "--json",
+        ],
+        True,
+    ),
+    (
+        "deployment-host-observability-provider-submission",
+        [
+            sys.executable,
+            "scripts/validate_deployment_host_runtime.py",
+            "--run-observability-provider-submission-preflight",
+            "--observability-provider-submission-workspace",
+            str(observability_provider_submission_workspace),
             "--json",
         ],
         True,

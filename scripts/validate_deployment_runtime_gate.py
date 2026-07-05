@@ -45,6 +45,7 @@ EXPECTED_COMPONENTS = {
     "observability_runtime": "observability_runtime_requested",
     "observability_metrics_runtime": "observability_metrics_runtime_requested",
     "observability_provider_boundary": "observability_provider_boundary_requested",
+    "observability_provider_submission": "observability_provider_submission_requested",
     "runtime_panic_hook": "runtime_panic_hook_requested",
     "dashboard_runtime": "dashboard_runtime_requested",
     "communications_runtime": "communications_runtime_requested",
@@ -560,6 +561,9 @@ def build_command(args: argparse.Namespace, workspace: pathlib.Path) -> list[str
         "--run-observability-provider-boundary",
         "--observability-provider-boundary-workspace",
         str(workspace / "observability-provider-boundary"),
+        "--run-observability-provider-submission-preflight",
+        "--observability-provider-submission-workspace",
+        str(workspace / "observability-provider-submission"),
         "--run-runtime-panic-hook",
         "--runtime-panic-hook-workspace",
         str(workspace / "runtime-panic-hook"),
@@ -704,6 +708,53 @@ def validate_report(report: dict[str, Any]) -> list[str]:
                     )
             except ValueError:
                 errors.append(f"observability provider boundary {key} was not an integer")
+
+    observability_submission = report.get("observability_provider_submission")
+    if not isinstance(observability_submission, dict):
+        errors.append("observability_provider_submission report missing or invalid")
+    else:
+        if observability_submission.get("observability_provider_submission_passed") is not True:
+            errors.append("observability provider submission was not marked as passed")
+        for key in (
+            "provider_boundary_ready",
+            "telemetry_kill_switch_armed",
+            "audit_state_preflight_required",
+            "export_idempotency_required",
+            "exporter_backpressure_required",
+            "alert_delivery_authorization_required",
+            "telemetry_redaction_required",
+            "checkpoint_recovered",
+        ):
+            if observability_submission.get(key) != "true":
+                errors.append(f"observability provider submission {key} was not true")
+        for key in (
+            "provider_validation_evidence_available",
+            "telemetry_export_requested",
+            "outbound_alert_delivery_requested",
+            "external_submission_requested",
+            "public_network_exposure_requested",
+            "service_manager_action_requested",
+            "sensitive_material_loaded",
+            "live_execution_requested",
+            "production_ready",
+        ):
+            if observability_submission.get(key) != "false":
+                errors.append(f"observability provider submission {key} was not false")
+        if observability_submission.get("status") != "blocked-pending-provider-validation":
+            errors.append(
+                "observability provider submission status was not blocked-pending-provider-validation"
+            )
+        for key, expected in (
+            ("blocker_count", 1),
+            ("audit_records_replayed", 1),
+        ):
+            try:
+                if int(observability_submission.get(key, "0")) != expected:
+                    errors.append(
+                        f"observability provider submission {key} was not {expected}"
+                    )
+            except ValueError:
+                errors.append(f"observability provider submission {key} was not an integer")
 
     delivery_provider = report.get("communications_delivery_provider")
     if not isinstance(delivery_provider, dict):

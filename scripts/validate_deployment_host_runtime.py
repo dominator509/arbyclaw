@@ -18,6 +18,10 @@ telemetry export, alert delivery, public exposure, or deployment mutation. When
 `--run-observability-provider-boundary` is provided, it composes the local
 provider-boundary CLI output into the same report without exporter sessions, log
 shipping, alert delivery, public exposure, service-manager actions, sensitive
+material loading, or deployment mutation. When
+`--run-observability-provider-submission-preflight` is provided, it composes the
+local provider-submission preflight CLI output without exporter sessions, log
+shipping, alert delivery, public exposure, service-manager actions, sensitive
 material loading, or deployment mutation. When `--run-graceful-shutdown` is
 provided, it runs the local graceful-shutdown checkpoint/reopen CLI against a
 fresh workspace without stopping services or mutating deployment state. When
@@ -199,6 +203,11 @@ def parse_args() -> argparse.Namespace:
         help="run arb-agent validate-observability-provider-boundary against --observability-provider-boundary-workspace",
     )
     parser.add_argument(
+        "--run-observability-provider-submission-preflight",
+        action="store_true",
+        help="run arb-agent validate-observability-provider-submission-preflight against --observability-provider-submission-workspace",
+    )
+    parser.add_argument(
         "--run-runtime-panic-hook",
         action="store_true",
         help="run arb-agent validate-runtime-panic-hook against --runtime-panic-hook-workspace",
@@ -329,6 +338,11 @@ def parse_args() -> argparse.Namespace:
         "--observability-provider-boundary-workspace",
         type=pathlib.Path,
         help="fresh non-secret workspace for validate-observability-provider-boundary",
+    )
+    parser.add_argument(
+        "--observability-provider-submission-workspace",
+        type=pathlib.Path,
+        help="fresh non-secret workspace for validate-observability-provider-submission-preflight",
     )
     parser.add_argument(
         "--runtime-panic-hook-workspace",
@@ -1321,6 +1335,34 @@ def observability_provider_boundary_command(
         "arb-agent",
         "--",
         "validate-observability-provider-boundary",
+        "--workspace",
+        str(workspace),
+    ]
+
+
+def observability_provider_submission_command(
+    agent_bin: pathlib.Path | None, workspace: pathlib.Path
+) -> list[str]:
+    if agent_bin is not None:
+        if not agent_bin.exists():
+            raise ValueError(f"agent binary does not exist: {relative_or_absolute(agent_bin)}")
+        return [
+            str(agent_bin),
+            "validate-observability-provider-submission-preflight",
+            "--workspace",
+            str(workspace),
+        ]
+
+    cargo = shutil.which("cargo")
+    if cargo is None:
+        raise RuntimeError("cargo unavailable and --agent-bin was not provided")
+    return [
+        cargo,
+        "run",
+        "-p",
+        "arb-agent",
+        "--",
+        "validate-observability-provider-submission-preflight",
         "--workspace",
         str(workspace),
     ]
@@ -2649,6 +2691,82 @@ def run_observability_provider_boundary(
     }
 
 
+def run_observability_provider_submission(
+    workspace: pathlib.Path | None,
+    agent_bin: pathlib.Path | None,
+) -> dict[str, Any]:
+    provider_workspace = validate_fresh_workspace(
+        workspace,
+        "--observability-provider-submission-workspace",
+        "--run-observability-provider-submission-preflight",
+    )
+    command = observability_provider_submission_command(agent_bin, provider_workspace)
+    completed = subprocess.run(
+        command,
+        cwd=ROOT,
+        check=False,
+        encoding="utf-8",
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        timeout=LOCAL_RUNTIME_HELPER_TIMEOUT_SECONDS,
+    )
+    parsed = parse_key_value_output(completed.stdout)
+    return {
+        "command_kind": "agent-bin" if agent_bin is not None else "cargo-run",
+        "returncode": completed.returncode,
+        "workspace": relative_or_absolute(provider_workspace),
+        "stdout_line_count": len(completed.stdout.splitlines()),
+        "audit_records_replayed": parsed.get(
+            "observability-provider-submission-audit-records-replayed"
+        ),
+        "checkpoint_recovered": parsed.get(
+            "observability-provider-submission-checkpoint-recovered"
+        ),
+        "status": parsed.get("observability-provider-submission-preflight-status"),
+        "provider_boundary_ready": parsed.get(
+            "observability-provider-submission-boundary-ready"
+        ),
+        "telemetry_kill_switch_armed": parsed.get(
+            "observability-provider-submission-kill-switch-armed"
+        ),
+        "audit_state_preflight_required": parsed.get(
+            "observability-provider-submission-audit-state-preflight-required"
+        ),
+        "export_idempotency_required": parsed.get(
+            "observability-provider-submission-idempotency-required"
+        ),
+        "exporter_backpressure_required": parsed.get(
+            "observability-provider-submission-backpressure-required"
+        ),
+        "alert_delivery_authorization_required": parsed.get(
+            "observability-provider-submission-alert-authorization-required"
+        ),
+        "telemetry_redaction_required": parsed.get(
+            "observability-provider-submission-redaction-required"
+        ),
+        "provider_validation_evidence_available": parsed.get(
+            "observability-provider-submission-provider-validation-evidence-available"
+        ),
+        "blocker_count": parsed.get("observability-provider-submission-blocker-count"),
+        "telemetry_export_requested": parsed.get("telemetry-export-requested"),
+        "outbound_alert_delivery_requested": parsed.get(
+            "outbound-alert-delivery-requested"
+        ),
+        "external_submission_requested": parsed.get("external-submission-requested"),
+        "public_network_exposure_requested": parsed.get(
+            "public-network-exposure-requested"
+        ),
+        "service_manager_action_requested": parsed.get(
+            "service-manager-action-requested"
+        ),
+        "sensitive_material_loaded": parsed.get("sensitive-material-loaded"),
+        "live_execution_requested": parsed.get("live-execution-requested"),
+        "production_ready": parsed.get("production-ready"),
+        "observability_provider_submission_passed": completed.returncode == 0,
+    }
+
+
 def run_runtime_panic_hook(
     workspace: pathlib.Path | None,
     agent_bin: pathlib.Path | None,
@@ -3210,6 +3328,16 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
         )
         if observability_provider_boundary_report["returncode"] != 0:
             raise RuntimeError("validate-observability-provider-boundary failed")
+    observability_provider_submission_report = None
+    if args.run_observability_provider_submission_preflight:
+        observability_provider_submission_report = run_observability_provider_submission(
+            args.observability_provider_submission_workspace,
+            args.agent_bin,
+        )
+        if observability_provider_submission_report["returncode"] != 0:
+            raise RuntimeError(
+                "validate-observability-provider-submission-preflight failed"
+            )
     panic_hook_report = None
     if args.run_runtime_panic_hook:
         panic_hook_report = run_runtime_panic_hook(
@@ -3298,6 +3426,8 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
         "observability_metrics_runtime_requested": args.run_observability_metrics_runtime,
         "observability_provider_boundary": observability_provider_boundary_report,
         "observability_provider_boundary_requested": args.run_observability_provider_boundary,
+        "observability_provider_submission": observability_provider_submission_report,
+        "observability_provider_submission_requested": args.run_observability_provider_submission_preflight,
         "runtime_panic_hook": panic_hook_report,
         "runtime_panic_hook_requested": args.run_runtime_panic_hook,
         "dashboard_runtime": dashboard_report,
@@ -4358,6 +4488,87 @@ def print_text_report(report: dict[str, Any]) -> None:
             f"{provider_boundary.get('live_execution_performed', '')}"
         )
         print(f"production-ready: {provider_boundary.get('production_ready', '')}")
+    if report["observability_provider_submission"] is not None:
+        submission = report["observability_provider_submission"]
+        print(
+            "observability provider submission passed: "
+            f"{str(submission['observability_provider_submission_passed']).lower()}"
+        )
+        print(f"observability provider submission workspace: {submission['workspace']}")
+        print(
+            "observability-provider-submission-preflight-status: "
+            f"{submission.get('status', '')}"
+        )
+        print(
+            "observability-provider-submission-boundary-ready: "
+            f"{submission.get('provider_boundary_ready', '')}"
+        )
+        print(
+            "observability-provider-submission-kill-switch-armed: "
+            f"{submission.get('telemetry_kill_switch_armed', '')}"
+        )
+        print(
+            "observability-provider-submission-audit-state-preflight-required: "
+            f"{submission.get('audit_state_preflight_required', '')}"
+        )
+        print(
+            "observability-provider-submission-idempotency-required: "
+            f"{submission.get('export_idempotency_required', '')}"
+        )
+        print(
+            "observability-provider-submission-backpressure-required: "
+            f"{submission.get('exporter_backpressure_required', '')}"
+        )
+        print(
+            "observability-provider-submission-alert-authorization-required: "
+            f"{submission.get('alert_delivery_authorization_required', '')}"
+        )
+        print(
+            "observability-provider-submission-redaction-required: "
+            f"{submission.get('telemetry_redaction_required', '')}"
+        )
+        print(
+            "observability-provider-submission-provider-validation-evidence-available: "
+            f"{submission.get('provider_validation_evidence_available', '')}"
+        )
+        print(
+            "observability-provider-submission-blocker-count: "
+            f"{submission.get('blocker_count', '')}"
+        )
+        print(
+            "observability-provider-submission-audit-records-replayed: "
+            f"{submission.get('audit_records_replayed', '')}"
+        )
+        print(
+            "observability-provider-submission-checkpoint-recovered: "
+            f"{submission.get('checkpoint_recovered', '')}"
+        )
+        print(
+            "telemetry-export-requested: "
+            f"{submission.get('telemetry_export_requested', '')}"
+        )
+        print(
+            "outbound-alert-delivery-requested: "
+            f"{submission.get('outbound_alert_delivery_requested', '')}"
+        )
+        print(
+            "external-submission-requested: "
+            f"{submission.get('external_submission_requested', '')}"
+        )
+        print(
+            "public-network-exposure-requested: "
+            f"{submission.get('public_network_exposure_requested', '')}"
+        )
+        print(
+            "service-manager-action-requested: "
+            f"{submission.get('service_manager_action_requested', '')}"
+        )
+        print(
+            "sensitive-material-loaded: "
+            f"{submission.get('sensitive_material_loaded', '')}"
+        )
+        print(f"live-execution-requested: {submission.get('live_execution_requested', '')}")
+        print(f"production-ready: {submission.get('production_ready', '')}")
     if report["runtime_panic_hook"] is not None:
         panic_hook = report["runtime_panic_hook"]
         print(
