@@ -743,6 +743,14 @@ pub enum DexProtocolRiskReviewStatus {
     Blocked,
 }
 
+/// Local DEX/Web3 live-adapter implementation boundary review status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum DexLiveAdapterBoundaryReviewStatus {
+    /// Local prerequisites exist, but live adapter implementation and external validation are missing.
+    BlockedPendingLiveAdapterImplementation,
+}
+
 /// Local pre-sign Web3 safety review status.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -960,6 +968,140 @@ pub struct DexProtocolRiskReviewReport {
     pub live_execution_performed: bool,
     /// Whether this report claims production readiness. Always false here.
     pub production_ready: bool,
+}
+
+/// Non-secret local review request for the DEX/Web3 live-adapter boundary.
+///
+/// This consumes local validation booleans only. It must not perform HTTP/RPC
+/// calls, load signer material, sign, broadcast, bridge, externally submit, or
+/// claim production readiness.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DexLiveAdapterBoundaryReviewRequest {
+    /// Stable review id.
+    pub review_id: String,
+    /// Connector or adapter label under review.
+    pub connector_name: String,
+    /// Venue/router metadata under review.
+    pub venue: VenueRef,
+    /// Whether local HTTP quote request-plan validation exists.
+    pub http_quote_request_plan_validated: bool,
+    /// Whether local RPC quote request-plan validation exists.
+    pub rpc_quote_request_plan_validated: bool,
+    /// Whether local RPC simulation request-plan validation exists.
+    pub rpc_simulation_request_plan_validated: bool,
+    /// Whether local response transcript parsing exists.
+    pub response_transcript_parsing_validated: bool,
+    /// Whether local transaction lifecycle transcript parsing exists.
+    pub transaction_lifecycle_transcript_validated: bool,
+    /// Whether local protocol/token/gas/MEV risk review exists.
+    pub protocol_risk_reviewed: bool,
+    /// Whether local signer authorization metadata was reviewed.
+    pub signer_authorization_reviewed: bool,
+    /// Whether local nonce reconciliation metadata was reviewed.
+    pub nonce_reconciliation_reviewed: bool,
+    /// Whether local raw transaction serialization metadata was reviewed.
+    pub raw_transaction_serialization_reviewed: bool,
+    /// Whether local broadcast adapter controls were reviewed.
+    pub broadcast_control_reviewed: bool,
+    /// Whether external testnet quote evidence is available.
+    pub testnet_quote_evidence_available: bool,
+    /// Whether external testnet simulation evidence is available.
+    pub testnet_simulation_evidence_available: bool,
+    /// Whether external provider nonce evidence is available.
+    pub provider_nonce_evidence_available: bool,
+    /// Whether external signer custody evidence is available.
+    pub signer_custody_evidence_available: bool,
+    /// Whether external broadcast permission/control evidence is available.
+    pub broadcast_permission_evidence_available: bool,
+    /// Whether credential or signer material was loaded. Must remain false.
+    pub credential_material_loaded: bool,
+    /// Whether an RPC call was performed. Must remain false.
+    pub rpc_call_performed: bool,
+    /// Whether an HTTP call was performed. Must remain false.
+    pub http_call_performed: bool,
+    /// Whether signing occurred. Must remain false.
+    pub signing_performed: bool,
+    /// Whether broadcast occurred. Must remain false.
+    pub broadcast_performed: bool,
+    /// Whether bridge execution occurred. Must remain false.
+    pub bridge_performed: bool,
+    /// Whether external submission occurred. Must remain false.
+    pub external_submission_performed: bool,
+    /// Whether live execution occurred. Must remain false.
+    pub live_execution_performed: bool,
+    /// Whether the request attempts to claim production readiness. Must remain false.
+    pub production_ready_claimed: bool,
+    /// Validation timestamp in Unix milliseconds.
+    pub validated_at_unix_ms: u64,
+}
+
+/// Non-secret local DEX/Web3 live-adapter boundary review report.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DexLiveAdapterBoundaryReviewReport {
+    /// Framework version that produced this report.
+    pub framework_version: String,
+    /// Stable review id.
+    pub review_id: String,
+    /// Connector or adapter label under review.
+    pub connector_name: String,
+    /// Venue/router metadata under review.
+    pub venue: VenueRef,
+    /// Local review status.
+    pub status: DexLiveAdapterBoundaryReviewStatus,
+    /// Whether local HTTP quote request-plan validation exists.
+    pub http_quote_request_plan_validated: bool,
+    /// Whether local RPC quote request-plan validation exists.
+    pub rpc_quote_request_plan_validated: bool,
+    /// Whether local RPC simulation request-plan validation exists.
+    pub rpc_simulation_request_plan_validated: bool,
+    /// Whether local response transcript parsing exists.
+    pub response_transcript_parsing_validated: bool,
+    /// Whether local transaction lifecycle transcript parsing exists.
+    pub transaction_lifecycle_transcript_validated: bool,
+    /// Whether local protocol/token/gas/MEV risk review exists.
+    pub protocol_risk_reviewed: bool,
+    /// Whether local signer authorization metadata was reviewed.
+    pub signer_authorization_reviewed: bool,
+    /// Whether local nonce reconciliation metadata was reviewed.
+    pub nonce_reconciliation_reviewed: bool,
+    /// Whether local raw transaction serialization metadata was reviewed.
+    pub raw_transaction_serialization_reviewed: bool,
+    /// Whether local broadcast adapter controls were reviewed.
+    pub broadcast_control_reviewed: bool,
+    /// Whether external testnet quote evidence is available.
+    pub testnet_quote_evidence_available: bool,
+    /// Whether external testnet simulation evidence is available.
+    pub testnet_simulation_evidence_available: bool,
+    /// Whether external provider nonce evidence is available.
+    pub provider_nonce_evidence_available: bool,
+    /// Whether external signer custody evidence is available.
+    pub signer_custody_evidence_available: bool,
+    /// Whether external broadcast permission/control evidence is available.
+    pub broadcast_permission_evidence_available: bool,
+    /// Whether credential or signer material was loaded. Always false here.
+    pub credential_material_loaded: bool,
+    /// Whether an RPC call was performed. Always false here.
+    pub rpc_call_performed: bool,
+    /// Whether an HTTP call was performed. Always false here.
+    pub http_call_performed: bool,
+    /// Whether signing occurred. Always false here.
+    pub signing_performed: bool,
+    /// Whether broadcast occurred. Always false here.
+    pub broadcast_performed: bool,
+    /// Whether bridge execution occurred. Always false here.
+    pub bridge_performed: bool,
+    /// Whether external submission occurred. Always false here.
+    pub external_submission_performed: bool,
+    /// Whether live execution occurred. Always false here.
+    pub live_execution_performed: bool,
+    /// Whether this local review claims production readiness. Always false.
+    pub production_ready: bool,
+    /// Validation timestamp in Unix milliseconds.
+    pub validated_at_unix_ms: u64,
+    /// Remaining blocker codes for live adapter implementation and validation.
+    pub blocker_codes: Vec<String>,
 }
 
 impl DexResponseTranscript {
@@ -1646,6 +1788,133 @@ impl DexProtocolRiskReviewReport {
         }
         finish_validation(violations)
     }
+}
+
+impl DexLiveAdapterBoundaryReviewRequest {
+    /// Validate request shape and side-effect flags before building a report.
+    pub fn validate(&self) -> Result<(), DexConnectorError> {
+        let mut violations = Vec::new();
+        validate_id("DEX live adapter review", &self.review_id, &mut violations);
+        validate_id(
+            "DEX live adapter connector",
+            &self.connector_name,
+            &mut violations,
+        );
+        validate_dex_venue_ref(&self.venue, &mut violations);
+        if self.validated_at_unix_ms == 0 {
+            violations.push(DexConnectorViolation::new(
+                "DEX_LIVE_ADAPTER_REVIEW_TIMESTAMP_REQUIRED",
+                "DEX/Web3 live adapter boundary review timestamp is required",
+            ));
+        }
+        if self.credential_material_loaded
+            || self.rpc_call_performed
+            || self.http_call_performed
+            || self.signing_performed
+            || self.broadcast_performed
+            || self.bridge_performed
+            || self.external_submission_performed
+            || self.live_execution_performed
+            || self.production_ready_claimed
+        {
+            violations.push(DexConnectorViolation::new(
+                "DEX_LIVE_ADAPTER_REVIEW_SIDE_EFFECT",
+                "DEX/Web3 live adapter boundary review must not load credentials, call providers, sign, broadcast, bridge, submit externally, execute live, or claim readiness",
+            ));
+        }
+        finish_validation(violations)
+    }
+}
+
+impl DexLiveAdapterBoundaryReviewReport {
+    /// Validate report invariants before callers persist or aggregate it.
+    pub fn validate(&self) -> Result<(), DexConnectorError> {
+        let mut violations = Vec::new();
+        if self.framework_version != DEX_CONNECTOR_FRAMEWORK_VERSION {
+            violations.push(DexConnectorViolation::new(
+                "DEX_FRAMEWORK_VERSION_MISMATCH",
+                "DEX/Web3 live adapter boundary review has an unexpected framework version",
+            ));
+        }
+        validate_id("DEX live adapter review", &self.review_id, &mut violations);
+        validate_id(
+            "DEX live adapter connector",
+            &self.connector_name,
+            &mut violations,
+        );
+        validate_dex_venue_ref(&self.venue, &mut violations);
+        if self.credential_material_loaded
+            || self.rpc_call_performed
+            || self.http_call_performed
+            || self.signing_performed
+            || self.broadcast_performed
+            || self.bridge_performed
+            || self.external_submission_performed
+            || self.live_execution_performed
+            || self.production_ready
+        {
+            violations.push(DexConnectorViolation::new(
+                "DEX_LIVE_ADAPTER_REVIEW_SIDE_EFFECT",
+                "DEX/Web3 live adapter boundary report must remain side-effect free and not claim readiness",
+            ));
+        }
+        if self.blocker_codes.is_empty() {
+            violations.push(DexConnectorViolation::new(
+                "DEX_LIVE_ADAPTER_REVIEW_BLOCKERS_REQUIRED",
+                "DEX/Web3 live adapter boundary report must retain live-adapter blockers",
+            ));
+        }
+        finish_validation(violations)
+    }
+}
+
+/// Review local DEX/Web3 live-adapter implementation prerequisites without
+/// performing any live adapter work.
+///
+/// This converts the loose RPC/signing/broadcast "not implemented" boundary
+/// into a typed, auditable report. It remains blocked until real sandbox/testnet
+/// adapter evidence exists outside this local-only validator.
+pub fn review_dex_live_adapter_boundary(
+    request: DexLiveAdapterBoundaryReviewRequest,
+) -> Result<DexLiveAdapterBoundaryReviewReport, DexConnectorError> {
+    request.validate()?;
+    let blocker_codes = dex_live_adapter_boundary_blockers(&request);
+    let report = DexLiveAdapterBoundaryReviewReport {
+        framework_version: DEX_CONNECTOR_FRAMEWORK_VERSION.to_owned(),
+        review_id: request.review_id,
+        connector_name: request.connector_name,
+        venue: request.venue,
+        status: DexLiveAdapterBoundaryReviewStatus::BlockedPendingLiveAdapterImplementation,
+        http_quote_request_plan_validated: request.http_quote_request_plan_validated,
+        rpc_quote_request_plan_validated: request.rpc_quote_request_plan_validated,
+        rpc_simulation_request_plan_validated: request.rpc_simulation_request_plan_validated,
+        response_transcript_parsing_validated: request.response_transcript_parsing_validated,
+        transaction_lifecycle_transcript_validated: request
+            .transaction_lifecycle_transcript_validated,
+        protocol_risk_reviewed: request.protocol_risk_reviewed,
+        signer_authorization_reviewed: request.signer_authorization_reviewed,
+        nonce_reconciliation_reviewed: request.nonce_reconciliation_reviewed,
+        raw_transaction_serialization_reviewed: request.raw_transaction_serialization_reviewed,
+        broadcast_control_reviewed: request.broadcast_control_reviewed,
+        testnet_quote_evidence_available: request.testnet_quote_evidence_available,
+        testnet_simulation_evidence_available: request.testnet_simulation_evidence_available,
+        provider_nonce_evidence_available: request.provider_nonce_evidence_available,
+        signer_custody_evidence_available: request.signer_custody_evidence_available,
+        broadcast_permission_evidence_available: request.broadcast_permission_evidence_available,
+        credential_material_loaded: false,
+        rpc_call_performed: false,
+        http_call_performed: false,
+        signing_performed: false,
+        broadcast_performed: false,
+        bridge_performed: false,
+        external_submission_performed: false,
+        live_execution_performed: false,
+        production_ready: false,
+        validated_at_unix_ms: request.validated_at_unix_ms,
+        blocker_codes,
+    };
+    report.validate()?;
+    Ok(report)
 }
 
 impl DexRequestPlan {
@@ -7736,6 +8005,61 @@ fn validate_dex_venue_ref_result(venue: &VenueRef) -> Result<(), DexConnectorErr
     finish_validation(violations)
 }
 
+fn dex_live_adapter_boundary_blockers(
+    request: &DexLiveAdapterBoundaryReviewRequest,
+) -> Vec<String> {
+    let mut blockers = Vec::new();
+    if !request.http_quote_request_plan_validated {
+        blockers.push("local-http-quote-request-plan-validation-missing".to_owned());
+    }
+    if !request.rpc_quote_request_plan_validated {
+        blockers.push("local-rpc-quote-request-plan-validation-missing".to_owned());
+    }
+    if !request.rpc_simulation_request_plan_validated {
+        blockers.push("local-rpc-simulation-request-plan-validation-missing".to_owned());
+    }
+    if !request.response_transcript_parsing_validated {
+        blockers.push("local-response-transcript-parsing-missing".to_owned());
+    }
+    if !request.transaction_lifecycle_transcript_validated {
+        blockers.push("local-transaction-lifecycle-transcript-parsing-missing".to_owned());
+    }
+    if !request.protocol_risk_reviewed {
+        blockers.push("local-protocol-risk-review-missing".to_owned());
+    }
+    if !request.signer_authorization_reviewed {
+        blockers.push("local-signer-authorization-review-missing".to_owned());
+    }
+    if !request.nonce_reconciliation_reviewed {
+        blockers.push("local-nonce-reconciliation-review-missing".to_owned());
+    }
+    if !request.raw_transaction_serialization_reviewed {
+        blockers.push("local-raw-transaction-serialization-review-missing".to_owned());
+    }
+    if !request.broadcast_control_reviewed {
+        blockers.push("local-broadcast-control-review-missing".to_owned());
+    }
+    if !request.testnet_quote_evidence_available {
+        blockers.push("testnet-quote-evidence-missing".to_owned());
+    }
+    if !request.testnet_simulation_evidence_available {
+        blockers.push("testnet-simulation-evidence-missing".to_owned());
+    }
+    if !request.provider_nonce_evidence_available {
+        blockers.push("provider-nonce-evidence-missing".to_owned());
+    }
+    if !request.signer_custody_evidence_available {
+        blockers.push("signer-custody-evidence-missing".to_owned());
+    }
+    if !request.broadcast_permission_evidence_available {
+        blockers.push("broadcast-permission-evidence-missing".to_owned());
+    }
+    if blockers.is_empty() {
+        blockers.push("live-dex-web3-adapter-implementation-review-required".to_owned());
+    }
+    blockers
+}
+
 fn has_duplicate_nonce(nonces: &[u64]) -> bool {
     let mut seen = HashSet::new();
     nonces.iter().any(|nonce| !seen.insert(*nonce))
@@ -8021,7 +8345,8 @@ mod tests {
         persist_web3_sandbox_live_discrepancy_calibration_checkpoint,
         persist_web3_unsigned_payload_review_checkpoint,
         persist_web3_unsigned_transaction_construction_checkpoint,
-        validate_dex_intent_id_uniqueness, DexConnectorError, DexConnectorRegistry, DexPolicyGate,
+        validate_dex_intent_id_uniqueness, DexConnectorError, DexConnectorRegistry,
+        DexLiveAdapterBoundaryReviewRequest, DexLiveAdapterBoundaryReviewStatus, DexPolicyGate,
         DexProtocolRiskReviewRequest, DexProtocolRiskReviewStatus, DexQuoteConnector,
         DexRequestPlan, DexRequestPlanKind, DexResponseTranscript, DexRouteKind,
         DexRouterCapabilities, DexRouterProfile, DexSimulationStatus, DexSwapLifecycleRecord,
@@ -10424,6 +10749,114 @@ redact_secrets = true
             .violations()
             .iter()
             .any(|violation| violation.code() == "DEX_PROTOCOL_REVIEW_SIDE_EFFECT_FLAG"));
+    }
+
+    #[test]
+    fn dex_live_adapter_boundary_blocks_until_testnet_and_live_evidence_exists() {
+        let report = super::review_dex_live_adapter_boundary(DexLiveAdapterBoundaryReviewRequest {
+            review_id: "local-dex-live-adapter-boundary".to_owned(),
+            connector_name: "uniswap-v3-local-boundary".to_owned(),
+            venue: venue(),
+            http_quote_request_plan_validated: true,
+            rpc_quote_request_plan_validated: true,
+            rpc_simulation_request_plan_validated: true,
+            response_transcript_parsing_validated: true,
+            transaction_lifecycle_transcript_validated: true,
+            protocol_risk_reviewed: true,
+            signer_authorization_reviewed: true,
+            nonce_reconciliation_reviewed: true,
+            raw_transaction_serialization_reviewed: true,
+            broadcast_control_reviewed: true,
+            testnet_quote_evidence_available: false,
+            testnet_simulation_evidence_available: false,
+            provider_nonce_evidence_available: false,
+            signer_custody_evidence_available: false,
+            broadcast_permission_evidence_available: false,
+            credential_material_loaded: false,
+            rpc_call_performed: false,
+            http_call_performed: false,
+            signing_performed: false,
+            broadcast_performed: false,
+            bridge_performed: false,
+            external_submission_performed: false,
+            live_execution_performed: false,
+            production_ready_claimed: false,
+            validated_at_unix_ms: 1_700_000_901,
+        })
+        .expect("DEX live adapter boundary review should report blockers");
+
+        assert_eq!(
+            report.status,
+            DexLiveAdapterBoundaryReviewStatus::BlockedPendingLiveAdapterImplementation
+        );
+        assert!(report.http_quote_request_plan_validated);
+        assert!(report.rpc_quote_request_plan_validated);
+        assert!(report.rpc_simulation_request_plan_validated);
+        assert!(report.response_transcript_parsing_validated);
+        assert!(report.transaction_lifecycle_transcript_validated);
+        assert!(report.protocol_risk_reviewed);
+        assert!(report.signer_authorization_reviewed);
+        assert!(report.nonce_reconciliation_reviewed);
+        assert!(report.raw_transaction_serialization_reviewed);
+        assert!(report.broadcast_control_reviewed);
+        for expected in [
+            "testnet-quote-evidence-missing",
+            "testnet-simulation-evidence-missing",
+            "provider-nonce-evidence-missing",
+            "signer-custody-evidence-missing",
+            "broadcast-permission-evidence-missing",
+        ] {
+            assert!(report.blocker_codes.iter().any(|code| code == expected));
+        }
+        assert!(!report.credential_material_loaded);
+        assert!(!report.rpc_call_performed);
+        assert!(!report.http_call_performed);
+        assert!(!report.signing_performed);
+        assert!(!report.broadcast_performed);
+        assert!(!report.bridge_performed);
+        assert!(!report.external_submission_performed);
+        assert!(!report.live_execution_performed);
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn dex_live_adapter_boundary_rejects_side_effect_claims() {
+        let error = super::review_dex_live_adapter_boundary(DexLiveAdapterBoundaryReviewRequest {
+            review_id: "local-dex-live-adapter-boundary".to_owned(),
+            connector_name: "uniswap-v3-local-boundary".to_owned(),
+            venue: venue(),
+            http_quote_request_plan_validated: true,
+            rpc_quote_request_plan_validated: true,
+            rpc_simulation_request_plan_validated: true,
+            response_transcript_parsing_validated: true,
+            transaction_lifecycle_transcript_validated: true,
+            protocol_risk_reviewed: true,
+            signer_authorization_reviewed: true,
+            nonce_reconciliation_reviewed: true,
+            raw_transaction_serialization_reviewed: true,
+            broadcast_control_reviewed: true,
+            testnet_quote_evidence_available: true,
+            testnet_simulation_evidence_available: true,
+            provider_nonce_evidence_available: true,
+            signer_custody_evidence_available: true,
+            broadcast_permission_evidence_available: true,
+            credential_material_loaded: true,
+            rpc_call_performed: true,
+            http_call_performed: true,
+            signing_performed: true,
+            broadcast_performed: true,
+            bridge_performed: true,
+            external_submission_performed: true,
+            live_execution_performed: true,
+            production_ready_claimed: true,
+            validated_at_unix_ms: 1_700_000_902,
+        })
+        .expect_err("side-effect DEX live adapter boundary review must fail closed");
+
+        assert!(error
+            .violations()
+            .iter()
+            .any(|violation| violation.code() == "DEX_LIVE_ADAPTER_REVIEW_SIDE_EFFECT"));
     }
 
     #[test]

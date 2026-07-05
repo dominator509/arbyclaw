@@ -248,6 +248,17 @@ def command_set(workspace_root: pathlib.Path) -> list[tuple[str, list[str]]]:
             ],
         ),
         (
+            "dex_live_adapter_boundary",
+            [
+                "cargo",
+                "run",
+                "-p",
+                "arb-agent",
+                "--",
+                "validate-dex-live-adapter-boundary",
+            ],
+        ),
+        (
             "connector_lifecycle_audit",
             [
                 "cargo",
@@ -635,6 +646,50 @@ def validate_components(components: list[dict[str, Any]]) -> list[str]:
     require(dex_protocol, "gas-slippage-ready", "true", errors, "dex_protocol_risk_review")
     require(dex_protocol, "mev-controls-ready", "true", errors, "dex_protocol_risk_review")
     require(dex_protocol, "terms-metadata-ready", "true", errors, "dex_protocol_risk_review")
+
+    dex_live_adapter = by_name["dex_live_adapter_boundary"]["parsed"]
+    require(
+        dex_live_adapter,
+        "dex-live-adapter-boundary",
+        "validation passed",
+        errors,
+        "dex_live_adapter_boundary",
+    )
+    require(
+        dex_live_adapter,
+        "dex-live-adapter-boundary-status",
+        "blocked-pending-live-adapter-implementation",
+        errors,
+        "dex_live_adapter_boundary",
+    )
+    for key in (
+        "dex-live-adapter-http-quote-plan-validated",
+        "dex-live-adapter-rpc-quote-plan-validated",
+        "dex-live-adapter-rpc-simulation-plan-validated",
+        "dex-live-adapter-response-transcript-validated",
+        "dex-live-adapter-transaction-lifecycle-transcript-validated",
+        "dex-live-adapter-protocol-risk-reviewed",
+        "dex-live-adapter-signer-authorization-reviewed",
+        "dex-live-adapter-nonce-reconciliation-reviewed",
+        "dex-live-adapter-raw-transaction-serialization-reviewed",
+        "dex-live-adapter-broadcast-control-reviewed",
+    ):
+        require(dex_live_adapter, key, "true", errors, "dex_live_adapter_boundary")
+    for key in (
+        "dex-live-adapter-testnet-quote-evidence-available",
+        "dex-live-adapter-testnet-simulation-evidence-available",
+        "dex-live-adapter-provider-nonce-evidence-available",
+        "dex-live-adapter-signer-custody-evidence-available",
+        "dex-live-adapter-broadcast-permission-evidence-available",
+    ):
+        require(dex_live_adapter, key, "false", errors, "dex_live_adapter_boundary")
+    require(
+        dex_live_adapter,
+        "dex-live-adapter-blocker-count",
+        "5",
+        errors,
+        "dex_live_adapter_boundary",
+    )
 
     lifecycle = by_name["connector_lifecycle_audit"]["parsed"]
     require(lifecycle, "cex-lifecycle-final-status", "Filled", errors, "connector_lifecycle_audit")

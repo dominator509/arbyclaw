@@ -85,14 +85,14 @@ use arb_core::{
     preflight_observability_metrics_scrape, record_observability_alert_route_dispatch,
     render_observability_export_dry_run, review_cex_live_adapter_boundary,
     review_dashboard_hosted_runtime_readiness, review_dashboard_hosted_security,
-    review_fee_schedule_reconciliation, review_local_secret_backup_restore,
-    review_local_validation_coverage, review_market_data_bad_data_rejection,
-    review_market_data_provider_latency, review_market_data_provider_reconciliation,
-    review_observability_operations, review_platform_adapter_controls,
-    review_platform_command_ingress, review_remote_command_security,
-    review_signer_runtime_isolation, review_signer_secret_scope, run_local_fuzz_corpus_replay,
-    run_local_graceful_shutdown_checkpoint, run_local_runtime_lifecycle,
-    run_local_validation_corpus, run_local_validation_property_checks,
+    review_dex_live_adapter_boundary, review_fee_schedule_reconciliation,
+    review_local_secret_backup_restore, review_local_validation_coverage,
+    review_market_data_bad_data_rejection, review_market_data_provider_latency,
+    review_market_data_provider_reconciliation, review_observability_operations,
+    review_platform_adapter_controls, review_platform_command_ingress,
+    review_remote_command_security, review_signer_runtime_isolation, review_signer_secret_scope,
+    run_local_fuzz_corpus_replay, run_local_graceful_shutdown_checkpoint,
+    run_local_runtime_lifecycle, run_local_validation_corpus, run_local_validation_property_checks,
     validate_audit_journal_durability, validate_cex_credential_scope_review,
     validate_cex_rate_limit, validate_channel_adapter, validate_channel_session,
     validate_dashboard_hosted_request, validate_dashboard_hosted_session,
@@ -147,16 +147,18 @@ use arb_core::{
     DeterministicExecutionAdapterBoundary, DeterministicExecutionPlanner,
     DeterministicNotificationBoundary, DeterministicObservabilityCollector,
     DeterministicOperatorCommandRouter, DeterministicOpportunityEngine,
-    DeterministicValidationHarness, DexProtocolRiskReviewRequest, DexProtocolRiskReviewStatus,
-    DexRequestPlan, DexRequestPlanKind, DexResponseTranscript, DexRouteKind, DexSimulationStatus,
-    DexSwapLifecycleRecord, DexSwapMode, DexSwapQuoteRequest, DexSwapQuoteResponse,
-    DexSwapValidationRecord, ExecutionAdapter, ExecutionAdapterConfig, ExecutionAdapterRequest,
-    ExecutionAdapterRunStatus, ExecutionIntent, ExecutionIntentKind, ExecutionPlanStatus,
-    ExecutionPlanner, ExecutionPlannerConfig, ExecutionPlannerRequest, ExecutionScope,
-    ExpectedValidationOutcome, FeeAdjustedEdge, FeeEstimate, FeeModelError, FeeProvider,
-    FeeSchedule, FeeScheduleReconciliationReviewRequest, FeeScheduleReconciliationReviewStatus,
-    FeeScheduleVerificationInput, FeeScheduleVerificationReport, FeeScheduleVerificationStatus,
-    FixtureKind, FuzzCorpusDefinition, FuzzSeedRecord, FuzzTargetKind, HealthStatus,
+    DeterministicValidationHarness, DexLiveAdapterBoundaryReviewReport,
+    DexLiveAdapterBoundaryReviewRequest, DexLiveAdapterBoundaryReviewStatus,
+    DexProtocolRiskReviewRequest, DexProtocolRiskReviewStatus, DexRequestPlan, DexRequestPlanKind,
+    DexResponseTranscript, DexRouteKind, DexSimulationStatus, DexSwapLifecycleRecord, DexSwapMode,
+    DexSwapQuoteRequest, DexSwapQuoteResponse, DexSwapValidationRecord, ExecutionAdapter,
+    ExecutionAdapterConfig, ExecutionAdapterRequest, ExecutionAdapterRunStatus, ExecutionIntent,
+    ExecutionIntentKind, ExecutionPlanStatus, ExecutionPlanner, ExecutionPlannerConfig,
+    ExecutionPlannerRequest, ExecutionScope, ExpectedValidationOutcome, FeeAdjustedEdge,
+    FeeEstimate, FeeModelError, FeeProvider, FeeSchedule, FeeScheduleReconciliationReviewRequest,
+    FeeScheduleReconciliationReviewStatus, FeeScheduleVerificationInput,
+    FeeScheduleVerificationReport, FeeScheduleVerificationStatus, FixtureKind,
+    FuzzCorpusDefinition, FuzzSeedRecord, FuzzTargetKind, HealthStatus,
     HistoricalMarketDataPersistenceInput, HistoricalMarketDataPersistenceReport,
     HistoricalMarketDataPersistenceStatus, IncidentResponseExecutionTranscript,
     IncidentResponseExecutionTranscriptStatus, LiquidityRole, LocalFuzzCorpusReplayRequest,
@@ -484,6 +486,7 @@ fn run_with_args(args: impl IntoIterator<Item = String>) -> Result<(), AgentCliE
             run_dex_transaction_lifecycle_transcript_validation()
         }
         Some("validate-dex-protocol-risk-review") => run_dex_protocol_risk_review_validation(),
+        Some("validate-dex-live-adapter-boundary") => run_dex_live_adapter_boundary_validation(),
         Some("validate-strategy-constrained-planner") => {
             run_strategy_constrained_planner_validation()
         }
@@ -919,6 +922,7 @@ fn print_usage() {
     println!("       arb-agent validate-dex-response-transcripts");
     println!("       arb-agent validate-dex-transaction-lifecycle-transcripts");
     println!("       arb-agent validate-dex-protocol-risk-review");
+    println!("       arb-agent validate-dex-live-adapter-boundary");
     println!("       arb-agent validate-opportunity-historical-fixtures");
     println!("       arb-agent validate-opportunity-planner-handoff");
     println!("       arb-agent validate-strategy-profitability-tuning");
@@ -3458,6 +3462,180 @@ fn validate_cex_live_adapter_boundary_report(
     {
         return Err(AgentCliError::Validation(
             "CEX live adapter boundary validation failed".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
+fn run_dex_live_adapter_boundary_validation() -> Result<(), AgentCliError> {
+    let report = local_dex_live_adapter_boundary_report()?;
+    print_dex_live_adapter_boundary_report(&report);
+    validate_dex_live_adapter_boundary_report(&report)?;
+    Ok(())
+}
+
+fn local_dex_live_adapter_boundary_report(
+) -> Result<DexLiveAdapterBoundaryReviewReport, AgentCliError> {
+    review_dex_live_adapter_boundary(DexLiveAdapterBoundaryReviewRequest {
+        review_id: "cli-dex-live-adapter-boundary".to_owned(),
+        connector_name: "uniswap-v3-local-boundary".to_owned(),
+        venue: local_dex_venue("paper-uniswap"),
+        http_quote_request_plan_validated: true,
+        rpc_quote_request_plan_validated: true,
+        rpc_simulation_request_plan_validated: true,
+        response_transcript_parsing_validated: true,
+        transaction_lifecycle_transcript_validated: true,
+        protocol_risk_reviewed: true,
+        signer_authorization_reviewed: true,
+        nonce_reconciliation_reviewed: true,
+        raw_transaction_serialization_reviewed: true,
+        broadcast_control_reviewed: true,
+        testnet_quote_evidence_available: false,
+        testnet_simulation_evidence_available: false,
+        provider_nonce_evidence_available: false,
+        signer_custody_evidence_available: false,
+        broadcast_permission_evidence_available: false,
+        credential_material_loaded: false,
+        rpc_call_performed: false,
+        http_call_performed: false,
+        signing_performed: false,
+        broadcast_performed: false,
+        bridge_performed: false,
+        external_submission_performed: false,
+        live_execution_performed: false,
+        production_ready_claimed: false,
+        validated_at_unix_ms: current_unix_ms()?,
+    })
+    .map_err(|error| AgentCliError::Validation(error.to_string()))
+}
+
+fn print_dex_live_adapter_boundary_report(report: &DexLiveAdapterBoundaryReviewReport) {
+    println!("dex-live-adapter-boundary: validation passed");
+    println!(
+        "dex-live-adapter-boundary-status: {}",
+        dex_live_adapter_boundary_status_label(report.status)
+    );
+    print_dex_live_adapter_local_prerequisites(report);
+    print_dex_live_adapter_external_evidence(report);
+    println!(
+        "dex-live-adapter-blocker-count: {}",
+        report.blocker_codes.len()
+    );
+    println!("credential-loaded: {}", report.credential_material_loaded);
+    println!("rpc-call-performed: {}", report.rpc_call_performed);
+    println!("http-call-performed: {}", report.http_call_performed);
+    println!("signing-performed: {}", report.signing_performed);
+    println!("broadcast-performed: {}", report.broadcast_performed);
+    println!("bridge-performed: {}", report.bridge_performed);
+    println!(
+        "external-submission-performed: {}",
+        report.external_submission_performed
+    );
+    println!(
+        "live-execution-performed: {}",
+        report.live_execution_performed
+    );
+    println!("production-ready: {}", report.production_ready);
+}
+
+fn print_dex_live_adapter_local_prerequisites(report: &DexLiveAdapterBoundaryReviewReport) {
+    println!(
+        "dex-live-adapter-http-quote-plan-validated: {}",
+        report.http_quote_request_plan_validated
+    );
+    println!(
+        "dex-live-adapter-rpc-quote-plan-validated: {}",
+        report.rpc_quote_request_plan_validated
+    );
+    println!(
+        "dex-live-adapter-rpc-simulation-plan-validated: {}",
+        report.rpc_simulation_request_plan_validated
+    );
+    println!(
+        "dex-live-adapter-response-transcript-validated: {}",
+        report.response_transcript_parsing_validated
+    );
+    println!(
+        "dex-live-adapter-transaction-lifecycle-transcript-validated: {}",
+        report.transaction_lifecycle_transcript_validated
+    );
+    println!(
+        "dex-live-adapter-protocol-risk-reviewed: {}",
+        report.protocol_risk_reviewed
+    );
+    println!(
+        "dex-live-adapter-signer-authorization-reviewed: {}",
+        report.signer_authorization_reviewed
+    );
+    println!(
+        "dex-live-adapter-nonce-reconciliation-reviewed: {}",
+        report.nonce_reconciliation_reviewed
+    );
+    println!(
+        "dex-live-adapter-raw-transaction-serialization-reviewed: {}",
+        report.raw_transaction_serialization_reviewed
+    );
+    println!(
+        "dex-live-adapter-broadcast-control-reviewed: {}",
+        report.broadcast_control_reviewed
+    );
+}
+
+fn print_dex_live_adapter_external_evidence(report: &DexLiveAdapterBoundaryReviewReport) {
+    println!(
+        "dex-live-adapter-testnet-quote-evidence-available: {}",
+        report.testnet_quote_evidence_available
+    );
+    println!(
+        "dex-live-adapter-testnet-simulation-evidence-available: {}",
+        report.testnet_simulation_evidence_available
+    );
+    println!(
+        "dex-live-adapter-provider-nonce-evidence-available: {}",
+        report.provider_nonce_evidence_available
+    );
+    println!(
+        "dex-live-adapter-signer-custody-evidence-available: {}",
+        report.signer_custody_evidence_available
+    );
+    println!(
+        "dex-live-adapter-broadcast-permission-evidence-available: {}",
+        report.broadcast_permission_evidence_available
+    );
+}
+
+fn validate_dex_live_adapter_boundary_report(
+    report: &DexLiveAdapterBoundaryReviewReport,
+) -> Result<(), AgentCliError> {
+    if report.status != DexLiveAdapterBoundaryReviewStatus::BlockedPendingLiveAdapterImplementation
+        || !report.http_quote_request_plan_validated
+        || !report.rpc_quote_request_plan_validated
+        || !report.rpc_simulation_request_plan_validated
+        || !report.response_transcript_parsing_validated
+        || !report.transaction_lifecycle_transcript_validated
+        || !report.protocol_risk_reviewed
+        || !report.signer_authorization_reviewed
+        || !report.nonce_reconciliation_reviewed
+        || !report.raw_transaction_serialization_reviewed
+        || !report.broadcast_control_reviewed
+        || report.testnet_quote_evidence_available
+        || report.testnet_simulation_evidence_available
+        || report.provider_nonce_evidence_available
+        || report.signer_custody_evidence_available
+        || report.broadcast_permission_evidence_available
+        || report.blocker_codes.len() != 5
+        || report.credential_material_loaded
+        || report.rpc_call_performed
+        || report.http_call_performed
+        || report.signing_performed
+        || report.broadcast_performed
+        || report.bridge_performed
+        || report.external_submission_performed
+        || report.live_execution_performed
+        || report.production_ready
+    {
+        return Err(AgentCliError::Validation(
+            "DEX live adapter boundary validation failed".to_owned(),
         ));
     }
     Ok(())
@@ -17629,6 +17807,16 @@ const fn cex_live_adapter_boundary_status_label(
 ) -> &'static str {
     match status {
         CexLiveAdapterBoundaryReviewStatus::BlockedPendingLiveAdapterImplementation => {
+            "blocked-pending-live-adapter-implementation"
+        }
+    }
+}
+
+const fn dex_live_adapter_boundary_status_label(
+    status: DexLiveAdapterBoundaryReviewStatus,
+) -> &'static str {
+    match status {
+        DexLiveAdapterBoundaryReviewStatus::BlockedPendingLiveAdapterImplementation => {
             "blocked-pending-live-adapter-implementation"
         }
     }
