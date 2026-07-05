@@ -48,6 +48,7 @@ EXPECTED_COMPONENTS = {
     "observability_provider_submission": "observability_provider_submission_requested",
     "runtime_panic_hook": "runtime_panic_hook_requested",
     "dashboard_runtime": "dashboard_runtime_requested",
+    "dashboard_session_lifecycle": "dashboard_session_lifecycle_requested",
     "dashboard_loopback_runtime": "dashboard_loopback_runtime_requested",
     "communications_runtime": "communications_runtime_requested",
     "communications_delivery_provider": "communications_delivery_provider_requested",
@@ -571,6 +572,9 @@ def build_command(args: argparse.Namespace, workspace: pathlib.Path) -> list[str
         "--run-dashboard-runtime",
         "--dashboard-workspace",
         str(workspace / "dashboard-runtime"),
+        "--run-dashboard-session-lifecycle",
+        "--dashboard-session-workspace",
+        str(workspace / "dashboard-session-lifecycle"),
         "--run-dashboard-loopback-runtime",
         "--dashboard-loopback-workspace",
         str(workspace / "dashboard-loopback-runtime"),
@@ -704,6 +708,52 @@ def validate_report(report: dict[str, Any]) -> list[str]:
                     )
             except ValueError:
                 errors.append(f"dashboard loopback runtime {key} was not an integer")
+
+    dashboard_session = report.get("dashboard_session_lifecycle")
+    if not isinstance(dashboard_session, dict):
+        errors.append("dashboard_session_lifecycle report missing or invalid")
+    else:
+        if dashboard_session.get("dashboard_session_lifecycle_passed") is not True:
+            errors.append("dashboard session lifecycle was not marked as passed")
+        if dashboard_session.get("status") != "ready-for-local-review":
+            errors.append("dashboard session lifecycle status was not ready-for-local-review")
+        for key in (
+            "checkpoint_recovered",
+            "session_reference_recorded",
+            "csrf_reference_recorded",
+            "authenticated",
+            "authorized",
+            "csrf_lifecycle_validated",
+            "session_revocation_supported",
+            "read_only_role",
+            "rate_limit_validated",
+            "loopback_only",
+        ):
+            if dashboard_session.get(key) != "true":
+                errors.append(f"dashboard session lifecycle {key} was not true")
+        for key in (
+            "public_network_exposed",
+            "live_controls_enabled",
+            "secret_material_present",
+            "persistent_dashboard_server_started",
+            "session_revoked",
+            "external_submission_performed",
+            "live_execution_performed",
+            "production_ready",
+        ):
+            if dashboard_session.get(key) != "false":
+                errors.append(f"dashboard session lifecycle {key} was not false")
+        for key, expected in (
+            ("audit_records_replayed", 1),
+            ("missing_control_count", 0),
+        ):
+            try:
+                if int(dashboard_session.get(key, "0")) != expected:
+                    errors.append(
+                        f"dashboard session lifecycle {key} was not {expected}"
+                    )
+            except ValueError:
+                errors.append(f"dashboard session lifecycle {key} was not an integer")
 
     provider_boundary = report.get("observability_provider_boundary")
     if not isinstance(provider_boundary, dict):

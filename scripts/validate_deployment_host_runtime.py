@@ -218,6 +218,11 @@ def parse_args() -> argparse.Namespace:
         help="run arb-agent validate-dashboard-runtime against --dashboard-workspace",
     )
     parser.add_argument(
+        "--run-dashboard-session-lifecycle",
+        action="store_true",
+        help="run arb-agent validate-dashboard-session-lifecycle against --dashboard-session-workspace",
+    )
+    parser.add_argument(
         "--run-dashboard-loopback-runtime",
         action="store_true",
         help="run arb-agent validate-dashboard-loopback-runtime against --dashboard-loopback-workspace",
@@ -358,6 +363,11 @@ def parse_args() -> argparse.Namespace:
         "--dashboard-workspace",
         type=pathlib.Path,
         help="fresh non-secret workspace for validate-dashboard-runtime",
+    )
+    parser.add_argument(
+        "--dashboard-session-workspace",
+        type=pathlib.Path,
+        help="fresh non-secret workspace for validate-dashboard-session-lifecycle",
     )
     parser.add_argument(
         "--dashboard-loopback-workspace",
@@ -1429,6 +1439,34 @@ def dashboard_runtime_command(
         "arb-agent",
         "--",
         "validate-dashboard-runtime",
+        "--workspace",
+        str(workspace),
+    ]
+
+
+def dashboard_session_lifecycle_command(
+    agent_bin: pathlib.Path | None, workspace: pathlib.Path
+) -> list[str]:
+    if agent_bin is not None:
+        if not agent_bin.exists():
+            raise ValueError(f"agent binary does not exist: {relative_or_absolute(agent_bin)}")
+        return [
+            str(agent_bin),
+            "validate-dashboard-session-lifecycle",
+            "--workspace",
+            str(workspace),
+        ]
+
+    cargo = shutil.which("cargo")
+    if cargo is None:
+        raise RuntimeError("cargo unavailable and --agent-bin was not provided")
+    return [
+        cargo,
+        "run",
+        "-p",
+        "arb-agent",
+        "--",
+        "validate-dashboard-session-lifecycle",
         "--workspace",
         str(workspace),
     ]
@@ -2940,6 +2978,71 @@ def run_dashboard_runtime(
     }
 
 
+def run_dashboard_session_lifecycle(
+    workspace: pathlib.Path | None,
+    agent_bin: pathlib.Path | None,
+) -> dict[str, Any]:
+    dashboard_workspace = validate_fresh_workspace(
+        workspace,
+        "--dashboard-session-workspace",
+        "--run-dashboard-session-lifecycle",
+    )
+    command = dashboard_session_lifecycle_command(agent_bin, dashboard_workspace)
+    completed = subprocess.run(
+        command,
+        cwd=ROOT,
+        check=False,
+        encoding="utf-8",
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        timeout=LOCAL_RUNTIME_HELPER_TIMEOUT_SECONDS,
+    )
+    parsed = parse_key_value_output(completed.stdout)
+    return {
+        "command_kind": "agent-bin" if agent_bin is not None else "cargo-run",
+        "returncode": completed.returncode,
+        "workspace": relative_or_absolute(dashboard_workspace),
+        "stdout_line_count": len(completed.stdout.splitlines()),
+        "status": parsed.get("dashboard-session-lifecycle-status"),
+        "audit_records_replayed": parsed.get(
+            "dashboard-session-lifecycle-audit-records-replayed"
+        ),
+        "checkpoint_recovered": parsed.get(
+            "dashboard-session-lifecycle-checkpoint-recovered"
+        ),
+        "session_reference_recorded": parsed.get(
+            "dashboard-session-reference-recorded"
+        ),
+        "csrf_reference_recorded": parsed.get("dashboard-csrf-reference-recorded"),
+        "authenticated": parsed.get("dashboard-session-authenticated"),
+        "authorized": parsed.get("dashboard-session-authorized"),
+        "csrf_lifecycle_validated": parsed.get(
+            "dashboard-session-csrf-lifecycle-validated"
+        ),
+        "session_revocation_supported": parsed.get(
+            "dashboard-session-revocation-supported"
+        ),
+        "session_revoked": parsed.get("dashboard-session-revoked"),
+        "read_only_role": parsed.get("dashboard-session-read-only-role"),
+        "rate_limit_validated": parsed.get("dashboard-session-rate-limit-validated"),
+        "loopback_only": parsed.get("dashboard-session-loopback-only"),
+        "missing_control_count": parsed.get(
+            "dashboard-session-missing-control-count"
+        ),
+        "public_network_exposed": parsed.get("public-network-exposed"),
+        "live_controls_enabled": parsed.get("live-controls-enabled"),
+        "secret_material_present": parsed.get("secret-material-present"),
+        "persistent_dashboard_server_started": parsed.get(
+            "persistent-dashboard-server-started"
+        ),
+        "external_submission_performed": parsed.get("external-submission-performed"),
+        "live_execution_performed": parsed.get("live-execution-performed"),
+        "production_ready": parsed.get("production-ready"),
+        "dashboard_session_lifecycle_passed": completed.returncode == 0,
+    }
+
+
 def run_dashboard_loopback_runtime(
     workspace: pathlib.Path | None,
     agent_bin: pathlib.Path | None,
@@ -3458,6 +3561,14 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
         )
         if dashboard_report["returncode"] != 0:
             raise RuntimeError("validate-dashboard-runtime failed")
+    dashboard_session_report = None
+    if args.run_dashboard_session_lifecycle:
+        dashboard_session_report = run_dashboard_session_lifecycle(
+            args.dashboard_session_workspace,
+            args.agent_bin,
+        )
+        if dashboard_session_report["returncode"] != 0:
+            raise RuntimeError("validate-dashboard-session-lifecycle failed")
     dashboard_loopback_report = None
     if args.run_dashboard_loopback_runtime:
         dashboard_loopback_report = run_dashboard_loopback_runtime(
@@ -3544,6 +3655,8 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
         "runtime_panic_hook_requested": args.run_runtime_panic_hook,
         "dashboard_runtime": dashboard_report,
         "dashboard_runtime_requested": args.run_dashboard_runtime,
+        "dashboard_session_lifecycle": dashboard_session_report,
+        "dashboard_session_lifecycle_requested": args.run_dashboard_session_lifecycle,
         "dashboard_loopback_runtime": dashboard_loopback_report,
         "dashboard_loopback_runtime_requested": args.run_dashboard_loopback_runtime,
         "communications_runtime": communications_report,
@@ -3672,6 +3785,10 @@ def print_text_report(report: dict[str, Any]) -> None:
     print(
         "dashboard runtime requested: "
         f"{str(report['dashboard_runtime_requested']).lower()}"
+    )
+    print(
+        "dashboard session lifecycle requested: "
+        f"{str(report['dashboard_session_lifecycle_requested']).lower()}"
     )
     print(
         "dashboard loopback runtime requested: "
@@ -4828,6 +4945,64 @@ def print_text_report(report: dict[str, Any]) -> None:
         )
         print(f"live-execution-performed: {dashboard.get('live_execution_performed', '')}")
         print(f"production-ready: {dashboard.get('production_ready', '')}")
+    if report["dashboard_session_lifecycle"] is not None:
+        session = report["dashboard_session_lifecycle"]
+        print(
+            "dashboard session lifecycle passed: "
+            f"{str(session['dashboard_session_lifecycle_passed']).lower()}"
+        )
+        print(f"dashboard session lifecycle workspace: {session['workspace']}")
+        print(f"dashboard-session-lifecycle-status: {session.get('status', '')}")
+        print(
+            "dashboard-session-lifecycle-audit-records-replayed: "
+            f"{session.get('audit_records_replayed', '')}"
+        )
+        print(
+            "dashboard-session-lifecycle-checkpoint-recovered: "
+            f"{session.get('checkpoint_recovered', '')}"
+        )
+        print(
+            "dashboard-session-reference-recorded: "
+            f"{session.get('session_reference_recorded', '')}"
+        )
+        print(
+            "dashboard-csrf-reference-recorded: "
+            f"{session.get('csrf_reference_recorded', '')}"
+        )
+        print(f"dashboard-session-authenticated: {session.get('authenticated', '')}")
+        print(f"dashboard-session-authorized: {session.get('authorized', '')}")
+        print(
+            "dashboard-session-csrf-lifecycle-validated: "
+            f"{session.get('csrf_lifecycle_validated', '')}"
+        )
+        print(
+            "dashboard-session-revocation-supported: "
+            f"{session.get('session_revocation_supported', '')}"
+        )
+        print(f"dashboard-session-revoked: {session.get('session_revoked', '')}")
+        print(f"dashboard-session-read-only-role: {session.get('read_only_role', '')}")
+        print(
+            "dashboard-session-rate-limit-validated: "
+            f"{session.get('rate_limit_validated', '')}"
+        )
+        print(f"dashboard-session-loopback-only: {session.get('loopback_only', '')}")
+        print(
+            "dashboard-session-missing-control-count: "
+            f"{session.get('missing_control_count', '')}"
+        )
+        print(f"public-network-exposed: {session.get('public_network_exposed', '')}")
+        print(f"live-controls-enabled: {session.get('live_controls_enabled', '')}")
+        print(f"secret-material-present: {session.get('secret_material_present', '')}")
+        print(
+            "persistent-dashboard-server-started: "
+            f"{session.get('persistent_dashboard_server_started', '')}"
+        )
+        print(
+            "external-submission-performed: "
+            f"{session.get('external_submission_performed', '')}"
+        )
+        print(f"live-execution-performed: {session.get('live_execution_performed', '')}")
+        print(f"production-ready: {session.get('production_ready', '')}")
     if report["dashboard_loopback_runtime"] is not None:
         loopback = report["dashboard_loopback_runtime"]
         print(
