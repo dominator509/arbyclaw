@@ -58,6 +58,7 @@ REQUIRED_BUNDLE_COMPONENTS = (
     "systemd-lifecycle-plan",
     "deployment-host-runtime-plan",
     "deployment-host-observability-metrics-runtime",
+    "deployment-host-observability-provider-boundary",
     "deployment-host-static-hardening-config-smoke",
     "deployment-host-config-redaction",
     "deployment-host-log-redaction",

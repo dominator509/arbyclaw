@@ -14,8 +14,12 @@ non-secret report without starting exporters, serving public endpoints, sending
 alerts, or changing runtime deployment behavior. When
 `--run-observability-metrics-runtime` is provided, it composes the bounded local
 metrics runtime CLI output into the same report without daemon hosting,
-telemetry export, alert delivery, public exposure, or deployment mutation. When `--run-graceful-shutdown`
-is provided, it runs the local graceful-shutdown checkpoint/reopen CLI against a
+telemetry export, alert delivery, public exposure, or deployment mutation. When
+`--run-observability-provider-boundary` is provided, it composes the local
+provider-boundary CLI output into the same report without exporter sessions, log
+shipping, alert delivery, public exposure, service-manager actions, sensitive
+material loading, or deployment mutation. When `--run-graceful-shutdown` is
+provided, it runs the local graceful-shutdown checkpoint/reopen CLI against a
 fresh workspace without stopping services or mutating deployment state. When
 `--run-deployment-static-hardening` is provided, it runs the static deployment
 hardening/config smoke validator through the same report without installing or
@@ -183,6 +187,11 @@ def parse_args() -> argparse.Namespace:
         help="run arb-agent validate-observability-metrics-runtime against --observability-metrics-workspace",
     )
     parser.add_argument(
+        "--run-observability-provider-boundary",
+        action="store_true",
+        help="run arb-agent validate-observability-provider-boundary against --observability-provider-boundary-workspace",
+    )
+    parser.add_argument(
         "--run-runtime-panic-hook",
         action="store_true",
         help="run arb-agent validate-runtime-panic-hook against --runtime-panic-hook-workspace",
@@ -298,6 +307,11 @@ def parse_args() -> argparse.Namespace:
         "--observability-metrics-workspace",
         type=pathlib.Path,
         help="fresh non-secret workspace for validate-observability-metrics-runtime",
+    )
+    parser.add_argument(
+        "--observability-provider-boundary-workspace",
+        type=pathlib.Path,
+        help="fresh non-secret workspace for validate-observability-provider-boundary",
     )
     parser.add_argument(
         "--runtime-panic-hook-workspace",
@@ -1252,6 +1266,34 @@ def observability_metrics_runtime_command(
         "arb-agent",
         "--",
         "validate-observability-metrics-runtime",
+        "--workspace",
+        str(workspace),
+    ]
+
+
+def observability_provider_boundary_command(
+    agent_bin: pathlib.Path | None, workspace: pathlib.Path
+) -> list[str]:
+    if agent_bin is not None:
+        if not agent_bin.exists():
+            raise ValueError(f"agent binary does not exist: {relative_or_absolute(agent_bin)}")
+        return [
+            str(agent_bin),
+            "validate-observability-provider-boundary",
+            "--workspace",
+            str(workspace),
+        ]
+
+    cargo = shutil.which("cargo")
+    if cargo is None:
+        raise RuntimeError("cargo unavailable and --agent-bin was not provided")
+    return [
+        cargo,
+        "run",
+        "-p",
+        "arb-agent",
+        "--",
+        "validate-observability-provider-boundary",
         "--workspace",
         str(workspace),
     ]
@@ -2455,6 +2497,75 @@ def run_observability_metrics_runtime(
     }
 
 
+def run_observability_provider_boundary(
+    workspace: pathlib.Path | None,
+    agent_bin: pathlib.Path | None,
+) -> dict[str, Any]:
+    provider_workspace = validate_fresh_workspace(
+        workspace,
+        "--observability-provider-boundary-workspace",
+        "--run-observability-provider-boundary",
+    )
+    command = observability_provider_boundary_command(agent_bin, provider_workspace)
+    completed = subprocess.run(
+        command,
+        cwd=ROOT,
+        check=False,
+        encoding="utf-8",
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        timeout=LOCAL_RUNTIME_HELPER_TIMEOUT_SECONDS,
+    )
+    parsed = parse_key_value_output(completed.stdout)
+    return {
+        "command_kind": "agent-bin" if agent_bin is not None else "cargo-run",
+        "returncode": completed.returncode,
+        "workspace": relative_or_absolute(provider_workspace),
+        "stdout_line_count": len(completed.stdout.splitlines()),
+        "audit_records_replayed": parsed.get(
+            "observability-provider-boundary-audit-records-replayed"
+        ),
+        "checkpoint_recovered": parsed.get(
+            "observability-provider-boundary-checkpoint-recovered"
+        ),
+        "status": parsed.get("observability-provider-boundary-status"),
+        "operations_review_ready": parsed.get(
+            "observability-provider-boundary-operations-review-ready"
+        ),
+        "export_dry_run_ready": parsed.get(
+            "observability-provider-boundary-export-dry-run-ready"
+        ),
+        "alert_route_dispatch_ready": parsed.get(
+            "observability-provider-boundary-alert-route-dispatch-ready"
+        ),
+        "endpoint_preflight_ready": parsed.get(
+            "observability-provider-boundary-endpoint-preflight-ready"
+        ),
+        "metrics_runtime_ready": parsed.get(
+            "observability-provider-boundary-metrics-runtime-ready"
+        ),
+        "missing_local_controls": parsed.get(
+            "observability-provider-boundary-missing-local-controls"
+        ),
+        "remaining_provider_evidence_count": parsed.get(
+            "observability-provider-boundary-remaining-provider-evidence-count"
+        ),
+        "provider_validation_performed": parsed.get(
+            "observability-provider-boundary-provider-validation-performed"
+        ),
+        "public_network_exposed": parsed.get("public-network-exposed"),
+        "telemetry_exported": parsed.get("telemetry-exported"),
+        "outbound_alerts_sent": parsed.get("outbound-alerts-sent"),
+        "external_submission_performed": parsed.get("external-submission-performed"),
+        "service_manager_action_performed": parsed.get("service-manager-action-performed"),
+        "sensitive_material_loaded": parsed.get("sensitive-material-loaded"),
+        "live_execution_performed": parsed.get("live-execution-performed"),
+        "production_ready": parsed.get("production-ready"),
+        "observability_provider_boundary_passed": completed.returncode == 0,
+    }
+
+
 def run_runtime_panic_hook(
     workspace: pathlib.Path | None,
     agent_bin: pathlib.Path | None,
@@ -2871,6 +2982,14 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
         )
         if observability_metrics_report["returncode"] != 0:
             raise RuntimeError("validate-observability-metrics-runtime failed")
+    observability_provider_boundary_report = None
+    if args.run_observability_provider_boundary:
+        observability_provider_boundary_report = run_observability_provider_boundary(
+            args.observability_provider_boundary_workspace,
+            args.agent_bin,
+        )
+        if observability_provider_boundary_report["returncode"] != 0:
+            raise RuntimeError("validate-observability-provider-boundary failed")
     panic_hook_report = None
     if args.run_runtime_panic_hook:
         panic_hook_report = run_runtime_panic_hook(
@@ -2941,6 +3060,8 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
         "observability_runtime_requested": args.run_observability_runtime,
         "observability_metrics_runtime": observability_metrics_report,
         "observability_metrics_runtime_requested": args.run_observability_metrics_runtime,
+        "observability_provider_boundary": observability_provider_boundary_report,
+        "observability_provider_boundary_requested": args.run_observability_provider_boundary,
         "runtime_panic_hook": panic_hook_report,
         "runtime_panic_hook_requested": args.run_runtime_panic_hook,
         "dashboard_runtime": dashboard_report,
@@ -3055,6 +3176,10 @@ def print_text_report(report: dict[str, Any]) -> None:
     print(
         "observability runtime requested: "
         f"{str(report['observability_runtime_requested']).lower()}"
+    )
+    print(
+        "observability provider boundary requested: "
+        f"{str(report['observability_provider_boundary_requested']).lower()}"
     )
     print(
         "runtime panic hook requested: "
@@ -3914,6 +4039,77 @@ def print_text_report(report: dict[str, Any]) -> None:
             f"{metrics_runtime.get('live_execution_performed', '')}"
         )
         print(f"production-ready: {metrics_runtime.get('production_ready', '')}")
+    if report["observability_provider_boundary"] is not None:
+        provider_boundary = report["observability_provider_boundary"]
+        print(
+            "observability provider boundary passed: "
+            f"{str(provider_boundary['observability_provider_boundary_passed']).lower()}"
+        )
+        print(f"observability provider boundary workspace: {provider_boundary['workspace']}")
+        print(
+            "observability-provider-boundary-audit-records-replayed: "
+            f"{provider_boundary.get('audit_records_replayed', '')}"
+        )
+        print(
+            "observability-provider-boundary-checkpoint-recovered: "
+            f"{provider_boundary.get('checkpoint_recovered', '')}"
+        )
+        print(
+            "observability-provider-boundary-status: "
+            f"{provider_boundary.get('status', '')}"
+        )
+        print(
+            "observability-provider-boundary-operations-review-ready: "
+            f"{provider_boundary.get('operations_review_ready', '')}"
+        )
+        print(
+            "observability-provider-boundary-export-dry-run-ready: "
+            f"{provider_boundary.get('export_dry_run_ready', '')}"
+        )
+        print(
+            "observability-provider-boundary-alert-route-dispatch-ready: "
+            f"{provider_boundary.get('alert_route_dispatch_ready', '')}"
+        )
+        print(
+            "observability-provider-boundary-endpoint-preflight-ready: "
+            f"{provider_boundary.get('endpoint_preflight_ready', '')}"
+        )
+        print(
+            "observability-provider-boundary-metrics-runtime-ready: "
+            f"{provider_boundary.get('metrics_runtime_ready', '')}"
+        )
+        print(
+            "observability-provider-boundary-missing-local-controls: "
+            f"{provider_boundary.get('missing_local_controls', '')}"
+        )
+        print(
+            "observability-provider-boundary-remaining-provider-evidence-count: "
+            f"{provider_boundary.get('remaining_provider_evidence_count', '')}"
+        )
+        print(
+            "observability-provider-boundary-provider-validation-performed: "
+            f"{provider_boundary.get('provider_validation_performed', '')}"
+        )
+        print(f"public-network-exposed: {provider_boundary.get('public_network_exposed', '')}")
+        print(f"telemetry-exported: {provider_boundary.get('telemetry_exported', '')}")
+        print(f"outbound-alerts-sent: {provider_boundary.get('outbound_alerts_sent', '')}")
+        print(
+            "external-submission-performed: "
+            f"{provider_boundary.get('external_submission_performed', '')}"
+        )
+        print(
+            "service-manager-action-performed: "
+            f"{provider_boundary.get('service_manager_action_performed', '')}"
+        )
+        print(
+            "sensitive-material-loaded: "
+            f"{provider_boundary.get('sensitive_material_loaded', '')}"
+        )
+        print(
+            "live-execution-performed: "
+            f"{provider_boundary.get('live_execution_performed', '')}"
+        )
+        print(f"production-ready: {provider_boundary.get('production_ready', '')}")
     if report["runtime_panic_hook"] is not None:
         panic_hook = report["runtime_panic_hook"]
         print(

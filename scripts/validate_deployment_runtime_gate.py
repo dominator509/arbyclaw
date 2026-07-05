@@ -44,6 +44,7 @@ EXPECTED_COMPONENTS = {
     "retention_preflight": "retention_preflight_requested",
     "observability_runtime": "observability_runtime_requested",
     "observability_metrics_runtime": "observability_metrics_runtime_requested",
+    "observability_provider_boundary": "observability_provider_boundary_requested",
     "runtime_panic_hook": "runtime_panic_hook_requested",
     "dashboard_runtime": "dashboard_runtime_requested",
     "communications_runtime": "communications_runtime_requested",
@@ -554,6 +555,9 @@ def build_command(args: argparse.Namespace, workspace: pathlib.Path) -> list[str
         "--run-observability-metrics-runtime",
         "--observability-metrics-workspace",
         str(workspace / "observability-metrics-runtime"),
+        "--run-observability-provider-boundary",
+        "--observability-provider-boundary-workspace",
+        str(workspace / "observability-provider-boundary"),
         "--run-runtime-panic-hook",
         "--runtime-panic-hook-workspace",
         str(workspace / "runtime-panic-hook"),
@@ -646,6 +650,52 @@ def validate_report(report: dict[str, Any]) -> list[str]:
             errors.append(
                 "observability metrics runtime response_metric_lines was not an integer"
             )
+
+    provider_boundary = report.get("observability_provider_boundary")
+    if not isinstance(provider_boundary, dict):
+        errors.append("observability_provider_boundary report missing or invalid")
+    else:
+        if provider_boundary.get("observability_provider_boundary_passed") is not True:
+            errors.append("observability provider boundary was not marked as passed")
+        for key in (
+            "checkpoint_recovered",
+            "operations_review_ready",
+            "export_dry_run_ready",
+            "alert_route_dispatch_ready",
+            "endpoint_preflight_ready",
+            "metrics_runtime_ready",
+        ):
+            if provider_boundary.get(key) != "true":
+                errors.append(f"observability provider boundary {key} was not true")
+        for key in (
+            "provider_validation_performed",
+            "public_network_exposed",
+            "telemetry_exported",
+            "outbound_alerts_sent",
+            "external_submission_performed",
+            "service_manager_action_performed",
+            "sensitive_material_loaded",
+            "live_execution_performed",
+            "production_ready",
+        ):
+            if provider_boundary.get(key) != "false":
+                errors.append(f"observability provider boundary {key} was not false")
+        if provider_boundary.get("status") != "BlockedPendingProviderValidation":
+            errors.append(
+                "observability provider boundary status was not BlockedPendingProviderValidation"
+            )
+        for key, expected in (
+            ("audit_records_replayed", 1),
+            ("missing_local_controls", 0),
+            ("remaining_provider_evidence_count", 5),
+        ):
+            try:
+                if int(provider_boundary.get(key, "0")) != expected:
+                    errors.append(
+                        f"observability provider boundary {key} was not {expected}"
+                    )
+            except ValueError:
+                errors.append(f"observability provider boundary {key} was not an integer")
 
     runtime_smoke = report.get("runtime_smoke")
     if not isinstance(runtime_smoke, dict):

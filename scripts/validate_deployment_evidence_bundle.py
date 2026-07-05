@@ -26,6 +26,9 @@ BUNDLE_WORKSPACE = BUNDLE_WORKSPACE_ROOT / f"run-{os.getpid()}"
 
 def component_commands(bundle_workspace: pathlib.Path) -> list[tuple[str, list[str], bool]]:
     observability_metrics_workspace = bundle_workspace / "observability-metrics-runtime"
+    observability_provider_boundary_workspace = (
+        bundle_workspace / "observability-provider-boundary"
+    )
     deployment_config_redaction_workspace = bundle_workspace / "deployment-config-redaction"
     deployment_log_redaction_workspace = bundle_workspace / "deployment-log-redaction"
     deployment_runtime_workspace = bundle_workspace / "deployment-runtime-gate"
@@ -58,6 +61,18 @@ def component_commands(bundle_workspace: pathlib.Path) -> list[tuple[str, list[s
             "--run-observability-metrics-runtime",
             "--observability-metrics-workspace",
             str(observability_metrics_workspace),
+            "--json",
+        ],
+        True,
+    ),
+    (
+        "deployment-host-observability-provider-boundary",
+        [
+            sys.executable,
+            "scripts/validate_deployment_host_runtime.py",
+            "--run-observability-provider-boundary",
+            "--observability-provider-boundary-workspace",
+            str(observability_provider_boundary_workspace),
             "--json",
         ],
         True,
