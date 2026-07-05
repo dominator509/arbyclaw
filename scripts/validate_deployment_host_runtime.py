@@ -17,6 +17,10 @@ metrics runtime CLI output into the same report without daemon hosting,
 telemetry export, alert delivery, public exposure, or deployment mutation. When `--run-graceful-shutdown`
 is provided, it runs the local graceful-shutdown checkpoint/reopen CLI against a
 fresh workspace without stopping services or mutating deployment state. When
+`--run-deployment-static-hardening` is provided, it runs the static deployment
+hardening/config smoke validator through the same report without installing or
+controlling services, mutating deployment paths, starting listeners, loading
+secrets, or enabling live execution. When
 `--run-backup-restore` is provided, it runs the local runtime backup/restore
 CLI against a fresh workspace without copying production files or mutating
 deployment state. When `--run-backup-restore-load` is provided, it runs the
@@ -92,6 +96,11 @@ def parse_args() -> argparse.Namespace:
         "--run-runtime-config-reload",
         action="store_true",
         help="run arb-agent validate-runtime-config-reload against --runtime-config-reload-workspace",
+    )
+    parser.add_argument(
+        "--run-deployment-static-hardening",
+        action="store_true",
+        help="run static deployment hardening/config smoke validation",
     )
     parser.add_argument(
         "--run-sqlite-schema-migration",
@@ -791,6 +800,20 @@ def runtime_config_reload_command(
         "--workspace",
         str(workspace),
     ]
+
+
+def deployment_static_hardening_command(agent_bin: pathlib.Path | None) -> list[str]:
+    command = [
+        sys.executable,
+        "scripts/validate_deployment_static_hardening.py",
+        "--run-config-smoke",
+        "--json",
+    ]
+    if agent_bin is not None:
+        if not agent_bin.exists():
+            raise ValueError(f"agent binary does not exist: {relative_or_absolute(agent_bin)}")
+        command.extend(["--agent-bin", str(agent_bin)])
+    return command
 
 
 def sqlite_schema_migration_command(
@@ -1535,6 +1558,69 @@ def run_runtime_config_reload(
         "production_ready": parsed.get("production-ready"),
         "runtime_config_reload_passed": completed.returncode == 0,
     }
+
+
+def run_deployment_static_hardening(agent_bin: pathlib.Path | None) -> dict[str, Any]:
+    command = deployment_static_hardening_command(agent_bin)
+    completed = subprocess.run(
+        command,
+        cwd=ROOT,
+        check=False,
+        encoding="utf-8",
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        timeout=LOCAL_RUNTIME_HELPER_TIMEOUT_SECONDS,
+    )
+    report: dict[str, Any] = {}
+    if completed.returncode == 0:
+        try:
+            parsed = json.loads(completed.stdout)
+        except json.JSONDecodeError as error:
+            raise RuntimeError(f"deployment static hardening did not emit valid JSON: {error}") from error
+        config = parsed.get("config", {})
+        config_smoke = parsed.get("config_smoke", {})
+        report = {
+            "schema": parsed.get("schema"),
+            "passed": parsed.get("passed"),
+            "config_smoke_requested": parsed.get("config_smoke_requested"),
+            "config_observe_or_paper_mode": config.get("observe_or_paper_mode")
+            if isinstance(config, dict)
+            else None,
+            "config_live_execution_disabled": config.get("live_execution_disabled")
+            if isinstance(config, dict)
+            else None,
+            "config_secret_like_assignment": config.get("secret_like_assignment")
+            if isinstance(config, dict)
+            else None,
+            "config_smoke_passed": config_smoke.get("passed")
+            if isinstance(config_smoke, dict)
+            else None,
+            "config_smoke_config_loaded": config_smoke.get("config_loaded")
+            if isinstance(config_smoke, dict)
+            else None,
+            "config_smoke_observe_or_paper_mode": config_smoke.get("observe_or_paper_mode")
+            if isinstance(config_smoke, dict)
+            else None,
+            "config_smoke_live_execution_disabled": config_smoke.get("live_execution_disabled")
+            if isinstance(config_smoke, dict)
+            else None,
+            "config_smoke_secret_like_output": config_smoke.get("secret_like_output")
+            if isinstance(config_smoke, dict)
+            else None,
+            "service_actions_performed": parsed.get("service_actions_performed"),
+            "network_listeners_started": parsed.get("network_listeners_started"),
+            "external_calls_performed": parsed.get("external_calls_performed"),
+            "secrets_loaded": parsed.get("secrets_loaded"),
+            "live_execution_enabled": parsed.get("live_execution_enabled"),
+            "production_readiness_claimed": parsed.get("production_readiness_claimed"),
+        }
+    return {
+        "command_kind": "agent-bin" if agent_bin is not None else "cargo-run",
+        "returncode": completed.returncode,
+        "stdout_line_count": len(completed.stdout.splitlines()),
+        "deployment_static_hardening_passed": completed.returncode == 0,
+    } | report
 
 
 def run_sqlite_schema_migration(
@@ -2629,6 +2715,13 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
         )
         if runtime_config_reload_report["returncode"] != 0:
             raise RuntimeError("validate-runtime-config-reload failed")
+    deployment_static_hardening_report = None
+    if args.run_deployment_static_hardening:
+        deployment_static_hardening_report = run_deployment_static_hardening(
+            args.agent_bin,
+        )
+        if deployment_static_hardening_report["returncode"] != 0:
+            raise RuntimeError("validate-deployment-static-hardening failed")
     sqlite_schema_migration_report = None
     if args.run_sqlite_schema_migration:
         sqlite_schema_migration_report = run_sqlite_schema_migration(
@@ -2793,6 +2886,8 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
         "audit_durability_requested": args.run_audit_durability,
         "runtime_config_reload": runtime_config_reload_report,
         "runtime_config_reload_requested": args.run_runtime_config_reload,
+        "deployment_static_hardening": deployment_static_hardening_report,
+        "deployment_static_hardening_requested": args.run_deployment_static_hardening,
         "sqlite_schema_migration": sqlite_schema_migration_report,
         "sqlite_schema_migration_requested": args.run_sqlite_schema_migration,
         "deployment_config_redaction": deployment_config_redaction_report,
@@ -2844,7 +2939,7 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
             "operator-controlled service start/shutdown/restart evidence",
             "deployment-host audit and SQLite recovery evidence under service lifecycle",
             "deployment-host SQLite schema migration execution evidence beyond local fixture validation",
-            "deployment-host config loading under service lifecycle beyond local fixture validation",
+            "deployment-host config loading under service lifecycle beyond local static/config-smoke validation",
             "deployment-host log/audit redaction under service lifecycle beyond local sanitized fixture validation",
             "physical disk-full fail-closed evidence",
             "deployment-host retention/rotation execution evidence",
@@ -2875,6 +2970,10 @@ def print_text_report(report: dict[str, Any]) -> None:
     print(
         "runtime config reload requested: "
         f"{str(report['runtime_config_reload_requested']).lower()}"
+    )
+    print(
+        "deployment static hardening requested: "
+        f"{str(report['deployment_static_hardening_requested']).lower()}"
     )
     print(
         "sqlite schema migration requested: "

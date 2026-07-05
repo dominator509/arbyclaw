@@ -27,6 +27,7 @@ EXPECTED_COMPONENTS = {
     "audit_durability": "audit_durability_requested",
     "audit_retention_execution": "audit_retention_execution_requested",
     "runtime_config_reload": "runtime_config_reload_requested",
+    "deployment_static_hardening": "deployment_static_hardening_requested",
     "sqlite_schema_migration": "sqlite_schema_migration_requested",
     "deployment_config_redaction": "deployment_config_redaction_requested",
     "deployment_log_redaction": "deployment_log_redaction_requested",
@@ -403,6 +404,7 @@ DANGEROUS_TRUE_KEYS = {
     "live_execution_enabled",
     "live_execution_performed",
     "live_network_used",
+    "network_listeners_started",
     "out_of_workspace_path_touched",
     "outbound_alerts_sent",
     "outbound_network_delivery_attempted",
@@ -496,6 +498,7 @@ def build_command(args: argparse.Namespace, workspace: pathlib.Path) -> list[str
         "--run-runtime-config-reload",
         "--runtime-config-reload-workspace",
         str(workspace / "runtime-config-reload"),
+        "--run-deployment-static-hardening",
         "--run-sqlite-schema-migration",
         "--sqlite-schema-migration-workspace",
         str(workspace / "sqlite-schema-migration"),
@@ -725,6 +728,38 @@ def validate_report(report: dict[str, Any]) -> list[str]:
     if config_reload.get("runtime_config_reload_passed") is not True:
         errors.append("runtime config reload did not pass")
 
+    deployment_static_hardening = report.get("deployment_static_hardening")
+    if not isinstance(deployment_static_hardening, dict):
+        errors.append("deployment_static_hardening report missing or invalid")
+        return errors
+    expected_static_hardening_values = {
+        "schema": "arbyclaw.deployment_static_hardening.v1",
+        "passed": True,
+        "config_smoke_requested": True,
+        "config_observe_or_paper_mode": True,
+        "config_live_execution_disabled": True,
+        "config_secret_like_assignment": False,
+        "config_smoke_passed": True,
+        "config_smoke_config_loaded": True,
+        "config_smoke_observe_or_paper_mode": True,
+        "config_smoke_live_execution_disabled": True,
+        "config_smoke_secret_like_output": False,
+        "service_actions_performed": False,
+        "network_listeners_started": False,
+        "external_calls_performed": False,
+        "secrets_loaded": False,
+        "live_execution_enabled": False,
+        "production_readiness_claimed": False,
+    }
+    for key, expected in expected_static_hardening_values.items():
+        if deployment_static_hardening.get(key) != expected:
+            errors.append(
+                f"deployment static hardening expected {key}={expected!r} "
+                f"but saw {deployment_static_hardening.get(key)!r}"
+            )
+    if deployment_static_hardening.get("deployment_static_hardening_passed") is not True:
+        errors.append("deployment static hardening did not pass")
+
     sqlite_schema_migration = report.get("sqlite_schema_migration")
     if not isinstance(sqlite_schema_migration, dict):
         errors.append("sqlite_schema_migration report missing or invalid")
@@ -922,6 +957,7 @@ def main() -> int:
         "deployment_host_report_schema": nested_report["schema"],
         "runtime_smoke_production_preflight_enforced": True,
         "runtime_config_reload_enforced": True,
+        "deployment_static_hardening_enforced": True,
         "sqlite_schema_migration_enforced": True,
         "deployment_config_redaction_enforced": True,
         "deployment_log_redaction_enforced": True,
@@ -948,6 +984,7 @@ def main() -> int:
         print("secrets-loaded: false")
         print("production-readiness-claimed: false")
         print("runtime-config-reload-enforced: true")
+        print("deployment-static-hardening-enforced: true")
         print("sqlite-schema-migration-enforced: true")
         print("deployment-config-redaction-enforced: true")
         print("deployment-log-redaction-enforced: true")
