@@ -26,9 +26,8 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 ## Remaining Blockers
 
-- GitHub Actions must run on `main` to prove the fresh-runner path.
 - Production image publishing, service installation, deployment-host lifecycle execution, and production readiness remain external.
 
 ## Completion Note
 
-The CI job now prepares the Dockerized Trivy scanner image needed by the strict handoff aggregate without changing runtime behavior or relaxing production blockers.
+The CI job now prepares the Dockerized Trivy scanner image needed by the strict handoff aggregate without changing runtime behavior or relaxing production blockers. GitHub Actions run `28741475080` passed on `main` for commit `0330ad02c6263bd3b11e51b2d9b1bcac6b3c63d2`.
