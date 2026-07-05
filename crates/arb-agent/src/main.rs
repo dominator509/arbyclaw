@@ -166,8 +166,8 @@ use arb_core::{
     MarketDataReconnectPlanInput, MarketDataReconnectPlanReport, MarketDataReconnectPlanStatus,
     MarketDataRequest, MarketPair, MetricKind, MetricLabel, MetricSample, NormalizedQuote,
     NotificationChannelProfile, NotificationChannelSafetyState, NotificationDispatchRecord,
-    NotificationDispatchStatus, NotificationPublisher, NotificationSeverity,
-    ObservabilityAccessContext, ObservabilityAlertRouteDispatchRequest,
+    NotificationDispatchStatus, NotificationPublishRequest, NotificationPublisher,
+    NotificationSeverity, ObservabilityAccessContext, ObservabilityAlertRouteDispatchRequest,
     ObservabilityAlertRouteDispatchStatus, ObservabilityBoundaryConfig,
     ObservabilityCollectionRequest, ObservabilityCollector, ObservabilityEndpointPreflight,
     ObservabilityLogRetentionExecutionRequest, ObservabilityLoopbackBindValidationRequest,
@@ -276,9 +276,11 @@ use arb_core::{
     TESTING_LAST_VALIDATION_CORPUS_REPORT_KEY, TESTING_LAST_VALIDATION_RUN_CHECKPOINT_KEY,
 };
 use std::{
+    collections::BTreeSet,
     env,
     error::Error,
     fmt, fs,
+    io::Write,
     panic::{self, AssertUnwindSafe},
     path::{Path, PathBuf},
     process::{Command, ExitCode},
@@ -554,6 +556,7 @@ fn is_local_workspace_validation_command(command: &str) -> bool {
             | "validate-runtime-panic-hook"
             | "validate-dashboard-runtime"
             | "validate-communications-runtime"
+            | "validate-communications-outbox"
     )
 }
 
@@ -720,6 +723,7 @@ fn run_local_workspace_validation_command(
         "validate-runtime-panic-hook" => run_runtime_panic_hook_validation(&options),
         "validate-dashboard-runtime" => run_dashboard_runtime_validation(&options),
         "validate-communications-runtime" => run_communications_runtime_validation(&options),
+        "validate-communications-outbox" => run_communications_outbox_validation(&options),
         _ => Err(ConfigError::ReadFailed {
             path: command.to_owned(),
             reason: "unknown local validation command".to_owned(),
@@ -956,6 +960,7 @@ fn print_usage() {
     println!("       arb-agent validate-runtime-blocked-state-preflight --workspace <fresh-dir>");
     println!("       arb-agent validate-runtime-blocked-audit-preflight --workspace <fresh-dir>");
     println!("       arb-agent validate-communications-runtime --workspace <fresh-dir>");
+    println!("       arb-agent validate-communications-outbox --workspace <fresh-dir>");
     println!("       arb-agent validate-dashboard-runtime --workspace <fresh-dir>");
     println!("       arb-agent validate-observability-runtime --workspace <fresh-dir>");
     println!("       arb-agent validate-runtime-panic-hook --workspace <fresh-dir>");
@@ -11818,6 +11823,230 @@ fn run_communications_runtime_validation(
     Ok(())
 }
 
+#[allow(clippy::too_many_lines)]
+fn run_communications_outbox_validation(
+    options: &LocalValidationRunOptions,
+) -> Result<(), AgentCliError> {
+    prepare_fresh_workspace(&options.workspace_dir)?;
+    let audit_path = options
+        .workspace_dir
+        .join("communications-outbox.audit.jsonl");
+    let state_path = options.workspace_dir.join("communications-outbox.sqlite3");
+    let outbox_path = options
+        .workspace_dir
+        .join("communications-outbox.local.jsonl");
+    let now_unix_ms = current_unix_ms()?;
+    let mut journal = AppendOnlyAuditJournal::open(&audit_path)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let mut store = SqliteWalStateStore::open(&state_path)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let mut seen_dispatches = BTreeSet::new();
+    let publisher = DeterministicNotificationBoundary::new();
+
+    let ready_dispatch = publisher
+        .publish(&local_communications_outbox_publish_request(
+            "ready",
+            Vec::new(),
+            now_unix_ms.saturating_add(1),
+        ))
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let ready_written = append_local_communications_outbox_record(
+        &outbox_path,
+        &mut seen_dispatches,
+        &ready_dispatch,
+    )?;
+    let duplicate_rejected = append_local_communications_outbox_record(
+        &outbox_path,
+        &mut seen_dispatches,
+        &ready_dispatch,
+    )
+    .is_err();
+    let ready_audit = append_notification_dispatch_audit(
+        &mut journal,
+        &ready_dispatch,
+        now_unix_ms.saturating_add(2),
+    )
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+
+    let rate_limited_dispatch = publisher
+        .publish(&local_communications_outbox_publish_request(
+            "rate-limited",
+            vec![NotificationChannelSafetyState {
+                channel_id: "cli".to_owned(),
+                messages_sent_in_window: 1,
+                max_messages_per_window: 1,
+                window_started_at_unix_ms: now_unix_ms,
+                window_ends_at_unix_ms: now_unix_ms.saturating_add(60_000),
+                outage_active: false,
+                outage_reason: String::new(),
+            }],
+            now_unix_ms.saturating_add(3),
+        ))
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let rate_limited_audit = append_notification_dispatch_audit(
+        &mut journal,
+        &rate_limited_dispatch,
+        now_unix_ms.saturating_add(4),
+    )
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+
+    let outage_dispatch = publisher
+        .publish(&local_communications_outbox_publish_request(
+            "outage",
+            vec![NotificationChannelSafetyState {
+                channel_id: "cli".to_owned(),
+                messages_sent_in_window: 0,
+                max_messages_per_window: 1,
+                window_started_at_unix_ms: now_unix_ms,
+                window_ends_at_unix_ms: now_unix_ms.saturating_add(60_000),
+                outage_active: true,
+                outage_reason: "local channel unavailable".to_owned(),
+            }],
+            now_unix_ms.saturating_add(5),
+        ))
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let outage_audit = append_notification_dispatch_audit(
+        &mut journal,
+        &outage_dispatch,
+        now_unix_ms.saturating_add(6),
+    )
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let checkpoint = persist_notification_dispatch_checkpoint(
+        &mut store,
+        &ready_dispatch,
+        now_unix_ms.saturating_add(7),
+    )
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    drop(store);
+    drop(journal);
+
+    let outbox_text = fs::read_to_string(&outbox_path).map_err(|error| {
+        AgentCliError::Validation(format!(
+            "failed to read local communications outbox: {error}"
+        ))
+    })?;
+    let outbox_record_count = outbox_text.lines().count();
+    let outbox_secret_material_absent = !outbox_text.to_ascii_lowercase().contains("secret");
+    let reopened_journal = AppendOnlyAuditJournal::open(&audit_path)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let audit_records_replayed = reopened_journal.next_sequence().saturating_sub(1);
+    let reopened_store = SqliteWalStateStore::open(&state_path)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    reopened_store
+        .integrity_check()
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let checkpoint_recovered = reopened_store
+        .get_checkpoint(COMMUNICATIONS_LAST_NOTIFICATION_DISPATCH_CHECKPOINT_KEY)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?
+        .is_some();
+
+    let rate_limit_blocked =
+        rate_limited_dispatch.status == NotificationDispatchStatus::BlockedRateLimited;
+    let outage_blocked = outage_dispatch.status == NotificationDispatchStatus::BlockedChannelOutage;
+    let outbound_network_used = ready_dispatch.outbound_network_used
+        || rate_limited_dispatch.outbound_network_used
+        || outage_dispatch.outbound_network_used;
+    let audit_sequence_count = [
+        ready_audit.sequence,
+        rate_limited_audit.sequence,
+        outage_audit.sequence,
+    ]
+    .len();
+
+    println!("communications-outbox: validation passed");
+    println!("communications-outbox-recorded-count: {outbox_record_count}");
+    println!("communications-outbox-ready-written: {ready_written}");
+    println!("communications-outbox-duplicate-rejected: {duplicate_rejected}");
+    println!("communications-outbox-rate-limit-blocked: {rate_limit_blocked}");
+    println!("communications-outbox-outage-blocked: {outage_blocked}");
+    println!("communications-outbox-audit-records-replayed: {audit_records_replayed}");
+    println!("communications-outbox-checkpoint-recovered: {checkpoint_recovered}");
+    println!("communications-outbox-secret-material-absent: {outbox_secret_material_absent}");
+    println!("communications-outbox-outbound-network-used: {outbound_network_used}");
+    println!("communications-outbox-delivery-performed: false");
+    println!("external-submission-performed: false");
+    println!("live-execution-performed: false");
+    println!("signing-or-broadcast-performed: false");
+    println!("production-ready: false");
+
+    if outbox_record_count != 1
+        || !ready_written
+        || !duplicate_rejected
+        || !rate_limit_blocked
+        || !outage_blocked
+        || audit_records_replayed != u64::try_from(audit_sequence_count).unwrap_or(u64::MAX)
+        || !checkpoint_recovered
+        || !outbox_secret_material_absent
+        || outbound_network_used
+        || checkpoint.key != COMMUNICATIONS_LAST_NOTIFICATION_DISPATCH_CHECKPOINT_KEY
+    {
+        return Err(AgentCliError::Validation(
+            "communications outbox validation failed local-only invariants".to_owned(),
+        ));
+    }
+
+    Ok(())
+}
+
+fn local_communications_outbox_publish_request(
+    suffix: &str,
+    channel_safety: Vec<NotificationChannelSafetyState>,
+    now_unix_ms: u64,
+) -> NotificationPublishRequest {
+    NotificationPublishRequest {
+        id: format!("local-communications-outbox-request-{suffix}"),
+        notification: OperatorNotification {
+            id: format!("local-communications-outbox-notification-{suffix}"),
+            severity: NotificationSeverity::Info,
+            title: "Local communications outbox validation".to_owned(),
+            body: "Local outbox record stayed inside the validation workspace".to_owned(),
+            channels: vec!["cli".to_owned()],
+            created_at_unix_ms: now_unix_ms,
+        },
+        config: CommunicationBoundaryConfig {
+            notification_channels: vec![NotificationChannelProfile::from_identifier("cli")],
+            ..CommunicationBoundaryConfig::default()
+        },
+        channel_safety,
+        now_unix_ms,
+    }
+}
+
+fn append_local_communications_outbox_record(
+    outbox_path: &Path,
+    seen_dispatches: &mut BTreeSet<String>,
+    dispatch: &NotificationDispatchRecord,
+) -> Result<bool, AgentCliError> {
+    if !seen_dispatches.insert(dispatch.id.clone()) {
+        return Err(AgentCliError::Validation(format!(
+            "duplicate local outbox dispatch rejected: {}",
+            dispatch.id
+        )));
+    }
+    let mut file = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(outbox_path)
+        .map_err(|error| {
+            AgentCliError::Validation(format!(
+                "failed to open local communications outbox: {error}"
+            ))
+        })?;
+    writeln!(
+        file,
+        "dispatch_id={} status={:?} channels={} outbound_network_used=false redacted=true",
+        dispatch.id,
+        dispatch.status,
+        dispatch.channels.len()
+    )
+    .map_err(|error| {
+        AgentCliError::Validation(format!(
+            "failed to write local communications outbox: {error}"
+        ))
+    })?;
+    Ok(true)
+}
+
 struct CommunicationsRuntimeRecords {
     route: RoutedOperatorCommand,
     remote_review: RemoteCommandSecurityReviewReport,
@@ -16904,16 +17133,16 @@ mod tests {
         parse_local_validation_run_options, parse_runtime_smoke_options,
         recovery_disposition_label, run_agentic_handoff_audit_validation,
         run_audit_durability_validation, run_audit_retention_execution_validation,
-        run_communications_runtime_validation, run_config_migration_validation,
-        run_connector_lifecycle_audit_validation, run_dashboard_runtime_validation,
-        run_deployment_config_redaction_validation, run_deployment_log_redaction_validation,
-        run_destination_boundary_audit_validation, run_execution_adapter_audit_validation,
-        run_execution_planner_audit_validation, run_fee_boundary_audit_validation,
-        run_fee_schedule_reconciliation_validation, run_fee_schedule_verification_validation,
-        run_local_fuzz_corpus_runner, run_local_paper_backtest_corpus_runner,
-        run_local_property_check_runner, run_local_validation_corpus_runner,
-        run_local_validation_runner, run_market_data_boundary_audit_validation,
-        run_market_data_history_persistence_validation,
+        run_communications_outbox_validation, run_communications_runtime_validation,
+        run_config_migration_validation, run_connector_lifecycle_audit_validation,
+        run_dashboard_runtime_validation, run_deployment_config_redaction_validation,
+        run_deployment_log_redaction_validation, run_destination_boundary_audit_validation,
+        run_execution_adapter_audit_validation, run_execution_planner_audit_validation,
+        run_fee_boundary_audit_validation, run_fee_schedule_reconciliation_validation,
+        run_fee_schedule_verification_validation, run_local_fuzz_corpus_runner,
+        run_local_paper_backtest_corpus_runner, run_local_property_check_runner,
+        run_local_validation_corpus_runner, run_local_validation_runner,
+        run_market_data_boundary_audit_validation, run_market_data_history_persistence_validation,
         run_market_data_provider_preflight_validation,
         run_market_data_quality_assessment_validation, run_market_data_reconnect_plan_validation,
         run_observability_runtime_validation, run_opportunity_historical_fixture_validation,
@@ -17702,6 +17931,20 @@ mod tests {
 
         assert!(workspace.join("communications-audit.jsonl").exists());
         assert!(workspace.join("communications-state.sqlite3").exists());
+        cleanup_workspace(&workspace);
+    }
+
+    #[test]
+    fn communications_outbox_validation_persists_and_reopens_local_records_only() {
+        let workspace = temp_workspace_path("communications-outbox-runner");
+        run_communications_outbox_validation(&LocalValidationRunOptions {
+            workspace_dir: workspace.clone(),
+        })
+        .expect("local communications outbox validation should pass");
+
+        assert!(workspace.join("communications-outbox.local.jsonl").exists());
+        assert!(workspace.join("communications-outbox.audit.jsonl").exists());
+        assert!(workspace.join("communications-outbox.sqlite3").exists());
         cleanup_workspace(&workspace);
     }
 
