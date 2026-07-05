@@ -105,48 +105,48 @@ use arb_core::{
     validate_opportunity_candidate_trace_restart_recovery,
     validate_opportunity_planner_handoff_with_trace, validate_paid_market_data_provider_evaluation,
     validate_remote_command_envelope, validate_rollback_execution_transcript,
-    validate_service_manager_lifecycle_rehearsal, validate_service_manager_lifecycle_transcript,
-    validate_strategy_profile_replay_corpus, validate_strategy_profitability_tuning, AgentConfig,
-    AgenticHandoffPackager, AgenticHandoffReviewRecord, AgenticHandoffReviewRequest,
-    AgenticHandoffReviewStatus, AppendOnlyAuditJournal, ApprovedDestinationEntry,
-    AuditDeploymentDiskFullTranscript, AuditDeploymentDiskFullTranscriptStatus,
-    AuditDeploymentRetentionTranscript, AuditDeploymentRetentionTranscriptStatus, AuditEvent,
-    AuditEventKind, AuditJournalFileMetadata, AuditRecord, AuditRetentionExecutionRequest,
-    AuditRetentionPolicy, AuditValue, BacktestDatasetDefinition, BacktestScenarioDefinition,
-    BuildIdentity, CexBalanceSnapshotTranscript, CexBalanceSnapshotTranscriptFormat,
-    CexCredentialPermission, CexCredentialScopeReviewInput, CexCredentialScopeReviewStatus,
-    CexExchangeMarketDataFormat, CexMarketDataRequestKind, CexMarketDataRequestPlan,
-    CexMockMarketDataTranscript, CexOrderLifecycleRecord, CexOrderLifecycleTranscript,
-    CexOrderLifecycleTranscriptFormat, CexOrderRequest, CexOrderSide, CexOrderType,
-    CexOrderValidationRecord, CexRateLimitObservation, CexRateLimitScope, CexRateLimitStatus,
-    CexTimeInForce, ChannelAdapterValidationReport, ChannelAdapterValidationRequest,
-    ChannelAdapterValidationStatus, ChannelSessionValidationReport, ChannelSessionValidationStatus,
-    CommunicationBoundaryConfig, ComponentHealthStatus, ConfigError, ConfigMigrationStatus,
-    DashboardAccessContext, DashboardAccessSource, DashboardBoundaryConfig,
-    DashboardHostedRequestMethod, DashboardHostedRequestPreflight,
-    DashboardHostedRequestValidation, DashboardHostedRequestValidationStatus,
-    DashboardHostedRuntimeReadinessReviewRequest, DashboardHostedRuntimeReadinessReviewStatus,
-    DashboardHostedSecurityPolicy, DashboardHostedSecurityReviewStatus,
-    DashboardHostedSessionValidationStatus, DashboardPanel, DashboardPanelItem, DashboardPanelKind,
-    DashboardRenderRequest, DashboardRenderer, DashboardSeverity, DashboardSnapshot,
-    DeploymentFailureCaptureTranscript, DeploymentFailureCaptureTranscriptStatus,
-    DeploymentResponseDrillRehearsalRequest, DeploymentResponseDrillRehearsalStatus,
-    DestinationAllowlist, DestinationApprovalSource, DestinationOwnershipReviewReport,
-    DestinationOwnershipReviewStatus, DestinationPolicy, DeterministicAgenticHandoffPackager,
-    DeterministicDashboardRenderer, DeterministicExecutionAdapterBoundary,
-    DeterministicExecutionPlanner, DeterministicNotificationBoundary,
-    DeterministicObservabilityCollector, DeterministicOperatorCommandRouter,
-    DeterministicOpportunityEngine, DeterministicValidationHarness, DexProtocolRiskReviewRequest,
-    DexProtocolRiskReviewStatus, DexRequestPlan, DexRequestPlanKind, DexResponseTranscript,
-    DexRouteKind, DexSimulationStatus, DexSwapLifecycleRecord, DexSwapMode, DexSwapQuoteRequest,
-    DexSwapQuoteResponse, DexSwapValidationRecord, ExecutionAdapter, ExecutionAdapterConfig,
-    ExecutionAdapterRequest, ExecutionAdapterRunStatus, ExecutionIntent, ExecutionIntentKind,
-    ExecutionPlanStatus, ExecutionPlanner, ExecutionPlannerConfig, ExecutionPlannerRequest,
-    ExecutionScope, ExpectedValidationOutcome, FeeAdjustedEdge, FeeEstimate, FeeModelError,
-    FeeProvider, FeeSchedule, FeeScheduleReconciliationReviewRequest,
-    FeeScheduleReconciliationReviewStatus, FeeScheduleVerificationInput,
-    FeeScheduleVerificationReport, FeeScheduleVerificationStatus, FixtureKind,
-    FuzzCorpusDefinition, FuzzSeedRecord, FuzzTargetKind, HealthStatus,
+    validate_runtime_config_reload, validate_service_manager_lifecycle_rehearsal,
+    validate_service_manager_lifecycle_transcript, validate_strategy_profile_replay_corpus,
+    validate_strategy_profitability_tuning, AgentConfig, AgenticHandoffPackager,
+    AgenticHandoffReviewRecord, AgenticHandoffReviewRequest, AgenticHandoffReviewStatus,
+    AppendOnlyAuditJournal, ApprovedDestinationEntry, AuditDeploymentDiskFullTranscript,
+    AuditDeploymentDiskFullTranscriptStatus, AuditDeploymentRetentionTranscript,
+    AuditDeploymentRetentionTranscriptStatus, AuditEvent, AuditEventKind, AuditJournalFileMetadata,
+    AuditRecord, AuditRetentionExecutionRequest, AuditRetentionPolicy, AuditValue,
+    BacktestDatasetDefinition, BacktestScenarioDefinition, BuildIdentity,
+    CexBalanceSnapshotTranscript, CexBalanceSnapshotTranscriptFormat, CexCredentialPermission,
+    CexCredentialScopeReviewInput, CexCredentialScopeReviewStatus, CexExchangeMarketDataFormat,
+    CexMarketDataRequestKind, CexMarketDataRequestPlan, CexMockMarketDataTranscript,
+    CexOrderLifecycleRecord, CexOrderLifecycleTranscript, CexOrderLifecycleTranscriptFormat,
+    CexOrderRequest, CexOrderSide, CexOrderType, CexOrderValidationRecord, CexRateLimitObservation,
+    CexRateLimitScope, CexRateLimitStatus, CexTimeInForce, ChannelAdapterValidationReport,
+    ChannelAdapterValidationRequest, ChannelAdapterValidationStatus,
+    ChannelSessionValidationReport, ChannelSessionValidationStatus, CommunicationBoundaryConfig,
+    ComponentHealthStatus, ConfigError, ConfigMigrationStatus, DashboardAccessContext,
+    DashboardAccessSource, DashboardBoundaryConfig, DashboardHostedRequestMethod,
+    DashboardHostedRequestPreflight, DashboardHostedRequestValidation,
+    DashboardHostedRequestValidationStatus, DashboardHostedRuntimeReadinessReviewRequest,
+    DashboardHostedRuntimeReadinessReviewStatus, DashboardHostedSecurityPolicy,
+    DashboardHostedSecurityReviewStatus, DashboardHostedSessionValidationStatus, DashboardPanel,
+    DashboardPanelItem, DashboardPanelKind, DashboardRenderRequest, DashboardRenderer,
+    DashboardSeverity, DashboardSnapshot, DeploymentFailureCaptureTranscript,
+    DeploymentFailureCaptureTranscriptStatus, DeploymentResponseDrillRehearsalRequest,
+    DeploymentResponseDrillRehearsalStatus, DestinationAllowlist, DestinationApprovalSource,
+    DestinationOwnershipReviewReport, DestinationOwnershipReviewStatus, DestinationPolicy,
+    DeterministicAgenticHandoffPackager, DeterministicDashboardRenderer,
+    DeterministicExecutionAdapterBoundary, DeterministicExecutionPlanner,
+    DeterministicNotificationBoundary, DeterministicObservabilityCollector,
+    DeterministicOperatorCommandRouter, DeterministicOpportunityEngine,
+    DeterministicValidationHarness, DexProtocolRiskReviewRequest, DexProtocolRiskReviewStatus,
+    DexRequestPlan, DexRequestPlanKind, DexResponseTranscript, DexRouteKind, DexSimulationStatus,
+    DexSwapLifecycleRecord, DexSwapMode, DexSwapQuoteRequest, DexSwapQuoteResponse,
+    DexSwapValidationRecord, ExecutionAdapter, ExecutionAdapterConfig, ExecutionAdapterRequest,
+    ExecutionAdapterRunStatus, ExecutionIntent, ExecutionIntentKind, ExecutionPlanStatus,
+    ExecutionPlanner, ExecutionPlannerConfig, ExecutionPlannerRequest, ExecutionScope,
+    ExpectedValidationOutcome, FeeAdjustedEdge, FeeEstimate, FeeModelError, FeeProvider,
+    FeeSchedule, FeeScheduleReconciliationReviewRequest, FeeScheduleReconciliationReviewStatus,
+    FeeScheduleVerificationInput, FeeScheduleVerificationReport, FeeScheduleVerificationStatus,
+    FixtureKind, FuzzCorpusDefinition, FuzzSeedRecord, FuzzTargetKind, HealthStatus,
     HistoricalMarketDataPersistenceInput, HistoricalMarketDataPersistenceReport,
     HistoricalMarketDataPersistenceStatus, IncidentResponseExecutionTranscript,
     IncidentResponseExecutionTranscriptStatus, LiquidityRole, LocalFuzzCorpusReplayRequest,
@@ -188,13 +188,13 @@ use arb_core::{
     RemoteCommandEnvelopeValidationStatus, RemoteCommandSecurityReviewReport,
     RemoteCommandSecurityReviewRequest, RemoteCommandSecurityReviewStatus,
     RollbackExecutionTranscript, RollbackExecutionTranscriptStatus, RoutedOperatorCommand, Runbook,
-    RunbookStep, RuntimeDeploymentAuditSqliteTranscript,
-    RuntimeDeploymentAuditSqliteTranscriptStatus, RuntimeDeploymentBackupRestoreTranscript,
-    RuntimeDeploymentBackupRestoreTranscriptStatus, RuntimeDeploymentGracefulShutdownTranscript,
-    RuntimeDeploymentGracefulShutdownTranscriptStatus, RuntimeDeploymentPermissionTranscript,
-    RuntimeDeploymentPermissionTranscriptStatus, RuntimeDeploymentSmokeLoadIteration,
-    RuntimeDeploymentSmokeLoadValidationReport, RuntimeDeploymentSmokeValidationRequest,
-    RuntimeDeploymentSqliteSchemaMigrationTranscript,
+    RunbookStep, RuntimeConfigReloadStatus, RuntimeConfigReloadValidationRequest,
+    RuntimeDeploymentAuditSqliteTranscript, RuntimeDeploymentAuditSqliteTranscriptStatus,
+    RuntimeDeploymentBackupRestoreTranscript, RuntimeDeploymentBackupRestoreTranscriptStatus,
+    RuntimeDeploymentGracefulShutdownTranscript, RuntimeDeploymentGracefulShutdownTranscriptStatus,
+    RuntimeDeploymentPermissionTranscript, RuntimeDeploymentPermissionTranscriptStatus,
+    RuntimeDeploymentSmokeLoadIteration, RuntimeDeploymentSmokeLoadValidationReport,
+    RuntimeDeploymentSmokeValidationRequest, RuntimeDeploymentSqliteSchemaMigrationTranscript,
     RuntimeDeploymentSqliteSchemaMigrationTranscriptStatus, RuntimeFailureCaptureRequest,
     RuntimeFailureKind, RuntimeGracefulShutdownRequest, RuntimeLifecycleStatus,
     RuntimePanicHookInstallationRequest, RuntimeRestartRecoveryDisposition,
@@ -536,6 +536,7 @@ fn is_local_workspace_validation_command(command: &str) -> bool {
             | "validate-connector-lifecycle-audit"
             | "validate-audit-retention-execution"
             | "validate-audit-durability"
+            | "validate-runtime-config-reload"
             | "validate-runtime-graceful-shutdown"
             | "validate-runtime-backup-restore"
             | "validate-runtime-backup-restore-load"
@@ -684,6 +685,7 @@ fn run_local_workspace_validation_command(
         "validate-connector-lifecycle-audit" => run_connector_lifecycle_audit_validation(&options),
         "validate-audit-retention-execution" => run_audit_retention_execution_validation(&options),
         "validate-audit-durability" => run_audit_durability_validation(&options),
+        "validate-runtime-config-reload" => run_runtime_config_reload_validation(&options),
         "validate-runtime-graceful-shutdown" => run_runtime_graceful_shutdown_validation(&options),
         "validate-runtime-backup-restore" => run_runtime_backup_restore_validation(&options),
         "validate-runtime-backup-restore-load" => {
@@ -929,6 +931,7 @@ fn print_usage() {
     println!("       arb-agent validate-deployment-permission-transcript");
     println!("       arb-agent validate-deployment-retention-transcript");
     println!("       arb-agent validate-rollback-execution-transcript");
+    println!("       arb-agent validate-runtime-config-reload --workspace <fresh-dir>");
     println!("       arb-agent validate-runtime-graceful-shutdown --workspace <fresh-dir>");
     println!("       arb-agent validate-runtime-backup-restore --workspace <fresh-dir>");
     println!("       arb-agent validate-runtime-backup-restore-load --workspace <fresh-dir>");
@@ -12428,6 +12431,173 @@ fn print_communications_platform_ingress_report(report: &PlatformCommandIngressR
 }
 
 #[allow(clippy::too_many_lines)]
+fn run_runtime_config_reload_validation(
+    options: &LocalValidationRunOptions,
+) -> Result<(), AgentCliError> {
+    prepare_fresh_workspace(&options.workspace_dir)?;
+    let initial_path = options.workspace_dir.join("runtime-config-initial.toml");
+    let reloaded_path = options.workspace_dir.join("runtime-config-reloaded.toml");
+    fs::write(&initial_path, local_runtime_config_reload_toml(false)).map_err(|error| {
+        AgentCliError::Validation(format!(
+            "failed to write initial runtime config {}: {error}",
+            initial_path.display()
+        ))
+    })?;
+    fs::write(&reloaded_path, local_runtime_config_reload_toml(true)).map_err(|error| {
+        AgentCliError::Validation(format!(
+            "failed to write reloaded runtime config {}: {error}",
+            reloaded_path.display()
+        ))
+    })?;
+
+    let initial_config = load_config_file(&initial_path)?;
+    let reloaded_config = load_config_file(&reloaded_path)?;
+    let report = validate_runtime_config_reload(RuntimeConfigReloadValidationRequest {
+        reload_id: "local-runtime-config-reload".to_owned(),
+        initial_config,
+        reloaded_config,
+        service_manager_action_performed: false,
+        secret_material_loaded: false,
+        external_submission_performed: false,
+        live_execution_performed: false,
+        production_ready_claimed: false,
+    })
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+
+    println!("runtime-config-reload: validation passed");
+    println!(
+        "runtime-config-reload-status: {}",
+        runtime_config_reload_status_label(report.status)
+    );
+    println!("initial-mode-safe: {}", report.initial_mode_safe);
+    println!("reloaded-mode-safe: {}", report.reloaded_mode_safe);
+    println!("reload-change-detected: {}", report.reload_change_detected);
+    println!("cex-allowlist-changed: {}", report.cex_allowlist_changed);
+    println!(
+        "asset-allowlist-changed: {}",
+        report.asset_allowlist_changed
+    );
+    println!(
+        "initial-cex-venue-count: {}",
+        report.initial_cex_venue_count
+    );
+    println!(
+        "reloaded-cex-venue-count: {}",
+        report.reloaded_cex_venue_count
+    );
+    println!("initial-asset-count: {}", report.initial_asset_count);
+    println!("reloaded-asset-count: {}", report.reloaded_asset_count);
+    println!(
+        "service-manager-action-performed: {}",
+        report.service_manager_action_performed
+    );
+    println!("secret-material-loaded: {}", report.secret_material_loaded);
+    println!(
+        "external-submission-performed: {}",
+        report.external_submission_performed
+    );
+    println!(
+        "live-execution-performed: {}",
+        report.live_execution_performed
+    );
+    println!("production-ready: {}", report.production_ready);
+
+    if report.status != RuntimeConfigReloadStatus::ReadyForLocalReview
+        || !report.initial_mode_safe
+        || !report.reloaded_mode_safe
+        || !report.reload_change_detected
+        || !report.cex_allowlist_changed
+        || !report.asset_allowlist_changed
+        || report.service_manager_action_performed
+        || report.secret_material_loaded
+        || report.external_submission_performed
+        || report.live_execution_performed
+        || report.production_ready
+    {
+        return Err(AgentCliError::Validation(
+            "runtime config reload validation failed".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
+const fn local_runtime_config_reload_toml(reloaded: bool) -> &'static str {
+    if reloaded {
+        LOCAL_RUNTIME_RELOADED_CONFIG_TOML
+    } else {
+        LOCAL_RUNTIME_INITIAL_CONFIG_TOML
+    }
+}
+
+const LOCAL_RUNTIME_INITIAL_CONFIG_TOML: &str = r#"
+[runtime]
+mode = "observe"
+live_execution_enabled = false
+allow_withdrawals = false
+kill_switch_enabled = true
+
+[risk]
+max_single_trade_quote = 10.0
+max_daily_loss_quote = 2.0
+max_open_exposure_quote = 20.0
+slippage_bps = 50
+gas_fee_cap_quote = 1.0
+
+[venues]
+cex_allowlist = ["coinbase", "kraken"]
+dex_allowlist = []
+chain_allowlist = []
+asset_allowlist = ["BTC", "ETH", "USDC"]
+
+[secrets]
+backend = "disabled"
+exchange_credentials = { source = "disabled" }
+wallet_signer = { source = "disabled" }
+
+[communication]
+cli_enabled = true
+notify_channels = []
+
+[audit]
+enabled = true
+redact_secrets = true
+"#;
+
+const LOCAL_RUNTIME_RELOADED_CONFIG_TOML: &str = r#"
+[runtime]
+mode = "observe"
+live_execution_enabled = false
+allow_withdrawals = false
+kill_switch_enabled = true
+
+[risk]
+max_single_trade_quote = 10.0
+max_daily_loss_quote = 2.0
+max_open_exposure_quote = 20.0
+slippage_bps = 50
+gas_fee_cap_quote = 1.0
+
+[venues]
+cex_allowlist = ["coinbase", "kraken", "binance"]
+dex_allowlist = []
+chain_allowlist = []
+asset_allowlist = ["BTC", "ETH", "USDC", "SOL"]
+
+[secrets]
+backend = "disabled"
+exchange_credentials = { source = "disabled" }
+wallet_signer = { source = "disabled" }
+
+[communication]
+cli_enabled = true
+notify_channels = []
+
+[audit]
+enabled = true
+redact_secrets = true
+"#;
+
+#[allow(clippy::too_many_lines)]
 fn run_runtime_smoke_validation(options: &RuntimeSmokeOptions) -> Result<(), AgentCliError> {
     let config = load_config_file(&options.config_path)?;
     if config.runtime.mode.permits_live_execution() {
@@ -16251,6 +16421,13 @@ const fn recovery_disposition_label(
     }
 }
 
+const fn runtime_config_reload_status_label(status: RuntimeConfigReloadStatus) -> &'static str {
+    match status {
+        RuntimeConfigReloadStatus::ReadyForLocalReview => "ready-for-local-review",
+        RuntimeConfigReloadStatus::Blocked => "blocked",
+    }
+}
+
 const fn opportunity_replay_status_label(status: OpportunityReplayStatus) -> &'static str {
     match status {
         OpportunityReplayStatus::Passed => "passed",
@@ -16422,13 +16599,14 @@ mod tests {
         run_paid_market_data_provider_evaluation_validation, run_policy_decision_audit_validation,
         run_runtime_backup_restore_load_validation, run_runtime_backup_restore_validation,
         run_runtime_blocked_audit_preflight_validation,
-        run_runtime_blocked_state_preflight_validation, run_runtime_graceful_shutdown_validation,
-        run_runtime_incomplete_recovery_validation, run_runtime_panic_hook_validation,
-        run_runtime_permission_denial_validation, run_runtime_restart_recovery_validation,
-        run_secret_backup_restore_validation, run_secret_boundary_audit_validation,
-        run_signer_boundary_audit_validation, run_strategy_constrained_planner_validation,
-        run_strategy_profitability_tuning_validation, run_strategy_replay_corpus_validation,
-        run_withdrawal_policy_validation, runtime_recovery_disposition_status,
+        run_runtime_blocked_state_preflight_validation, run_runtime_config_reload_validation,
+        run_runtime_graceful_shutdown_validation, run_runtime_incomplete_recovery_validation,
+        run_runtime_panic_hook_validation, run_runtime_permission_denial_validation,
+        run_runtime_restart_recovery_validation, run_secret_backup_restore_validation,
+        run_secret_boundary_audit_validation, run_signer_boundary_audit_validation,
+        run_strategy_constrained_planner_validation, run_strategy_profitability_tuning_validation,
+        run_strategy_replay_corpus_validation, run_withdrawal_policy_validation,
+        runtime_config_reload_status_label, runtime_recovery_disposition_status,
         runtime_supervised_restart_audit_path, runtime_supervised_restart_state_path,
         strategy_profile_replay_status_label, strategy_profitability_tuning_status_label,
         validation_corpus_status_label, validation_run_status_label,
@@ -16437,9 +16615,9 @@ mod tests {
         LocalFuzzCorpusReplayStatus, LocalValidationCorpusStatus, LocalValidationRunOptions,
         MarketDataProviderPreflightStatus, MarketDataQualityAssessmentStatus,
         MarketDataReconnectPlanStatus, OpportunityPlannerHandoffStatus, OpportunityReplayStatus,
-        PaidMarketDataProviderEvaluationStatus, RuntimeRestartRecoveryDisposition,
-        StrategyProfileReplayValidationStatus, StrategyProfitabilityTuningValidationStatus,
-        ValidationRunStatus,
+        PaidMarketDataProviderEvaluationStatus, RuntimeConfigReloadStatus,
+        RuntimeRestartRecoveryDisposition, StrategyProfileReplayValidationStatus,
+        StrategyProfitabilityTuningValidationStatus, ValidationRunStatus,
     };
     use std::{
         env, fs,
@@ -16456,6 +16634,18 @@ mod tests {
         assert_eq!(
             recovery_disposition_label(RuntimeRestartRecoveryDisposition::NeedsOperatorReview),
             "needs-operator-review"
+        );
+    }
+
+    #[test]
+    fn runtime_config_reload_status_labels_are_operator_facing() {
+        assert_eq!(
+            runtime_config_reload_status_label(RuntimeConfigReloadStatus::ReadyForLocalReview),
+            "ready-for-local-review"
+        );
+        assert_eq!(
+            runtime_config_reload_status_label(RuntimeConfigReloadStatus::Blocked),
+            "blocked"
         );
     }
 
@@ -16805,6 +16995,19 @@ mod tests {
     fn opportunity_provider_ingestion_validation_runs_local_traits_only() {
         run_opportunity_provider_ingestion_validation()
             .expect("local opportunity provider ingestion should pass");
+    }
+
+    #[test]
+    fn runtime_config_reload_validation_runs_local_files_only() {
+        let workspace = temp_workspace_path("runtime-config-reload");
+        let options = LocalValidationRunOptions {
+            workspace_dir: workspace.clone(),
+        };
+        run_runtime_config_reload_validation(&options)
+            .expect("local runtime config reload should pass");
+        assert!(workspace.join("runtime-config-initial.toml").exists());
+        assert!(workspace.join("runtime-config-reloaded.toml").exists());
+        cleanup_workspace(&workspace);
     }
 
     #[test]

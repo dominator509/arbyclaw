@@ -82,6 +82,11 @@ def parse_args() -> argparse.Namespace:
         help="run arb-agent validate-audit-durability against --audit-durability-workspace",
     )
     parser.add_argument(
+        "--run-runtime-config-reload",
+        action="store_true",
+        help="run arb-agent validate-runtime-config-reload against --runtime-config-reload-workspace",
+    )
+    parser.add_argument(
         "--run-graceful-shutdown",
         action="store_true",
         help="run arb-agent validate-runtime-graceful-shutdown against --graceful-shutdown-workspace",
@@ -182,6 +187,11 @@ def parse_args() -> argparse.Namespace:
         "--audit-durability-workspace",
         type=pathlib.Path,
         help="fresh non-secret workspace for validate-audit-durability",
+    )
+    parser.add_argument(
+        "--runtime-config-reload-workspace",
+        type=pathlib.Path,
+        help="fresh non-secret workspace for validate-runtime-config-reload",
     )
     parser.add_argument(
         "--graceful-shutdown-workspace",
@@ -703,6 +713,34 @@ def audit_retention_execution_command(
         "arb-agent",
         "--",
         "validate-audit-retention-execution",
+        "--workspace",
+        str(workspace),
+    ]
+
+
+def runtime_config_reload_command(
+    agent_bin: pathlib.Path | None, workspace: pathlib.Path
+) -> list[str]:
+    if agent_bin is not None:
+        if not agent_bin.exists():
+            raise ValueError(f"agent binary does not exist: {relative_or_absolute(agent_bin)}")
+        return [
+            str(agent_bin),
+            "validate-runtime-config-reload",
+            "--workspace",
+            str(workspace),
+        ]
+
+    cargo = shutil.which("cargo")
+    if cargo is None:
+        raise RuntimeError("cargo unavailable and --agent-bin was not provided")
+    return [
+        cargo,
+        "run",
+        "-p",
+        "arb-agent",
+        "--",
+        "validate-runtime-config-reload",
         "--workspace",
         str(workspace),
     ]
@@ -1296,6 +1334,47 @@ def run_audit_durability(
         "unresolved_blockers": parsed.get("audit-durability-unresolved-blockers"),
         "production_ready": parsed.get("production-ready"),
         "audit_durability_passed": completed.returncode == 0,
+    }
+
+
+def run_runtime_config_reload(
+    workspace: pathlib.Path | None,
+    agent_bin: pathlib.Path | None,
+) -> dict[str, Any]:
+    reload_workspace = validate_fresh_workspace(
+        workspace,
+        "--runtime-config-reload-workspace",
+        "--run-runtime-config-reload",
+    )
+    command = runtime_config_reload_command(agent_bin, reload_workspace)
+    completed = subprocess.run(
+        command,
+        cwd=ROOT,
+        check=False,
+        encoding="utf-8",
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        timeout=LOCAL_RUNTIME_HELPER_TIMEOUT_SECONDS,
+    )
+    parsed = parse_key_value_output(completed.stdout)
+    return {
+        "command_kind": "agent-bin" if agent_bin is not None else "cargo-run",
+        "returncode": completed.returncode,
+        "workspace": relative_or_absolute(reload_workspace),
+        "stdout_line_count": len(completed.stdout.splitlines()),
+        "status": parsed.get("runtime-config-reload-status"),
+        "initial_mode_safe": parsed.get("initial-mode-safe"),
+        "reloaded_mode_safe": parsed.get("reloaded-mode-safe"),
+        "reload_change_detected": parsed.get("reload-change-detected"),
+        "cex_allowlist_changed": parsed.get("cex-allowlist-changed"),
+        "asset_allowlist_changed": parsed.get("asset-allowlist-changed"),
+        "service_manager_action_performed": parsed.get("service-manager-action-performed"),
+        "secret_material_loaded": parsed.get("secret-material-loaded"),
+        "external_submission_performed": parsed.get("external-submission-performed"),
+        "live_execution_performed": parsed.get("live-execution-performed"),
+        "production_ready": parsed.get("production-ready"),
+        "runtime_config_reload_passed": completed.returncode == 0,
     }
 
 
@@ -2195,6 +2274,14 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
         )
         if audit_durability_report["returncode"] != 0:
             raise RuntimeError("validate-audit-durability failed")
+    runtime_config_reload_report = None
+    if args.run_runtime_config_reload:
+        runtime_config_reload_report = run_runtime_config_reload(
+            args.runtime_config_reload_workspace,
+            args.agent_bin,
+        )
+        if runtime_config_reload_report["returncode"] != 0:
+            raise RuntimeError("validate-runtime-config-reload failed")
     graceful_shutdown_report = None
     if args.run_graceful_shutdown:
         graceful_shutdown_report = run_graceful_shutdown(
@@ -2325,6 +2412,8 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
         "audit_retention_execution_requested": args.run_audit_retention_execution,
         "audit_durability": audit_durability_report,
         "audit_durability_requested": args.run_audit_durability,
+        "runtime_config_reload": runtime_config_reload_report,
+        "runtime_config_reload_requested": args.run_runtime_config_reload,
         "graceful_shutdown": graceful_shutdown_report,
         "graceful_shutdown_requested": args.run_graceful_shutdown,
         "backup_restore": backup_restore_report,
@@ -2393,6 +2482,10 @@ def print_text_report(report: dict[str, Any]) -> None:
     print(
         "audit durability requested: "
         f"{str(report['audit_durability_requested']).lower()}"
+    )
+    print(
+        "runtime config reload requested: "
+        f"{str(report['runtime_config_reload_requested']).lower()}"
     )
     print(
         "graceful shutdown requested: "

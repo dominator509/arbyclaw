@@ -207,10 +207,11 @@ pub use audit::{
 };
 
 pub use config::{
-    load_config_file, migrate_config_toml_to_current, AgentConfig, AuditConfig,
-    CommunicationConfig, ConfigError, ConfigMigrationReport, ConfigMigrationStatus,
-    ConfigViolation, RiskLimitsConfig, RuntimeConfig, SecretBackend, SecretsConfig,
-    VenueAllowlistsConfig, CONFIG_SCHEMA_VERSION, LIVE_ACKNOWLEDGEMENT,
+    load_config_file, migrate_config_toml_to_current, validate_runtime_config_reload, AgentConfig,
+    AuditConfig, CommunicationConfig, ConfigError, ConfigMigrationReport, ConfigMigrationStatus,
+    ConfigViolation, RiskLimitsConfig, RuntimeConfig, RuntimeConfigReloadStatus,
+    RuntimeConfigReloadValidationReport, RuntimeConfigReloadValidationRequest, SecretBackend,
+    SecretsConfig, VenueAllowlistsConfig, CONFIG_SCHEMA_VERSION, LIVE_ACKNOWLEDGEMENT,
 };
 pub use secrets::{
     append_secret_backup_restore_review_audit, append_secret_rotation_plan_audit,

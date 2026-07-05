@@ -26,6 +26,7 @@ EXPECTED_COMPONENTS = {
     "runtime_smoke": "runtime_smoke_requested",
     "audit_durability": "audit_durability_requested",
     "audit_retention_execution": "audit_retention_execution_requested",
+    "runtime_config_reload": "runtime_config_reload_requested",
     "graceful_shutdown": "graceful_shutdown_requested",
     "backup_restore": "backup_restore_requested",
     "backup_restore_load": "backup_restore_load_requested",
@@ -488,6 +489,9 @@ def build_command(args: argparse.Namespace, workspace: pathlib.Path) -> list[str
         "--run-audit-durability",
         "--audit-durability-workspace",
         str(workspace / "audit-durability"),
+        "--run-runtime-config-reload",
+        "--runtime-config-reload-workspace",
+        str(workspace / "runtime-config-reload"),
         "--run-audit-retention-execution",
         "--retention-workspace",
         str(workspace / "audit-retention-execution"),
@@ -632,6 +636,31 @@ def validate_report(report: dict[str, Any]) -> list[str]:
         if production_preflight.get(key) != "false":
             errors.append(f"runtime production preflight {key} was not false")
 
+    config_reload = report.get("runtime_config_reload")
+    if not isinstance(config_reload, dict):
+        errors.append("runtime_config_reload report missing or invalid")
+        return errors
+    expected_reload_values = {
+        "status": "ready-for-local-review",
+        "initial_mode_safe": "true",
+        "reloaded_mode_safe": "true",
+        "reload_change_detected": "true",
+        "cex_allowlist_changed": "true",
+        "asset_allowlist_changed": "true",
+        "service_manager_action_performed": "false",
+        "secret_material_loaded": "false",
+        "external_submission_performed": "false",
+        "live_execution_performed": "false",
+        "production_ready": "false",
+    }
+    for key, expected in expected_reload_values.items():
+        if config_reload.get(key) != expected:
+            errors.append(
+                f"runtime config reload expected {key}={expected!r} but saw {config_reload.get(key)!r}"
+            )
+    if config_reload.get("runtime_config_reload_passed") is not True:
+        errors.append("runtime config reload did not pass")
+
     return errors
 
 
@@ -749,6 +778,7 @@ def main() -> int:
         "production_readiness_claimed": False,
         "deployment_host_report_schema": nested_report["schema"],
         "runtime_smoke_production_preflight_enforced": True,
+        "runtime_config_reload_enforced": True,
         "runtime_load_profile_review_enforced": True,
         "transcript_component_names": [
             component["name"] for component in TRANSCRIPT_COMPONENTS
@@ -771,6 +801,7 @@ def main() -> int:
         print("live-execution-enabled: false")
         print("secrets-loaded: false")
         print("production-readiness-claimed: false")
+        print("runtime-config-reload-enforced: true")
         print("runtime-load-profile-review-enforced: true")
     return 0
 

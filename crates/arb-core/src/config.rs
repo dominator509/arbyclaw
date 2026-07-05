@@ -197,6 +197,82 @@ pub enum ConfigMigrationStatus {
     Migrated,
 }
 
+/// Local runtime config reload validation status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum RuntimeConfigReloadStatus {
+    /// Reload was validated for local review.
+    ReadyForLocalReview,
+    /// Reload is unsafe or incomplete.
+    Blocked,
+}
+
+/// Local, non-secret runtime config reload validation request.
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RuntimeConfigReloadValidationRequest {
+    /// Stable non-secret reload validation id.
+    pub reload_id: String,
+    /// Initially loaded config.
+    pub initial_config: AgentConfig,
+    /// Reloaded config.
+    pub reloaded_config: AgentConfig,
+    /// Whether the validator performed service-manager actions. Must remain false.
+    pub service_manager_action_performed: bool,
+    /// Whether the validator loaded secret material. Must remain false.
+    pub secret_material_loaded: bool,
+    /// Whether the validator submitted to an external adapter. Must remain false.
+    pub external_submission_performed: bool,
+    /// Whether live execution was performed. Must remain false.
+    pub live_execution_performed: bool,
+    /// Whether this validation claims production readiness. Must remain false.
+    pub production_ready_claimed: bool,
+}
+
+/// Local, non-secret runtime config reload validation report.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RuntimeConfigReloadValidationReport {
+    /// Stable non-secret reload validation id.
+    pub reload_id: String,
+    /// Reload validation status.
+    pub status: RuntimeConfigReloadStatus,
+    /// Runtime mode before reload.
+    pub initial_mode: RuntimeMode,
+    /// Runtime mode after reload.
+    pub reloaded_mode: RuntimeMode,
+    /// Whether the initial config is non-live.
+    pub initial_mode_safe: bool,
+    /// Whether the reloaded config is non-live.
+    pub reloaded_mode_safe: bool,
+    /// Whether at least one local config field changed.
+    pub reload_change_detected: bool,
+    /// Whether the CEX allowlist changed.
+    pub cex_allowlist_changed: bool,
+    /// Whether the asset allowlist changed.
+    pub asset_allowlist_changed: bool,
+    /// Initial CEX allowlist count.
+    pub initial_cex_venue_count: usize,
+    /// Reloaded CEX allowlist count.
+    pub reloaded_cex_venue_count: usize,
+    /// Initial asset allowlist count.
+    pub initial_asset_count: usize,
+    /// Reloaded asset allowlist count.
+    pub reloaded_asset_count: usize,
+    /// Whether the validator performed service-manager actions. Always false here.
+    pub service_manager_action_performed: bool,
+    /// Whether the validator loaded secret material. Always false here.
+    pub secret_material_loaded: bool,
+    /// Whether the validator submitted to an external adapter. Always false here.
+    pub external_submission_performed: bool,
+    /// Whether live execution was performed. Always false here.
+    pub live_execution_performed: bool,
+    /// Whether this validation approves production readiness. Always false here.
+    pub production_ready: bool,
+    /// Sanitized local violation codes.
+    pub violation_codes: Vec<String>,
+}
+
 /// Local config migration report.
 ///
 /// This records schema compatibility actions only. It does not read secret
@@ -397,6 +473,85 @@ pub struct AuditConfig {
     pub enabled: bool,
     /// Whether audit output must redact secrets.
     pub redact_secrets: Option<bool>,
+}
+
+/// Validate a local runtime config reload without supervising services.
+pub fn validate_runtime_config_reload(
+    request: RuntimeConfigReloadValidationRequest,
+) -> Result<RuntimeConfigReloadValidationReport, ConfigError> {
+    request.initial_config.validate()?;
+    request.reloaded_config.validate()?;
+
+    let mut violation_codes = Vec::new();
+    if request.reload_id.trim().is_empty() {
+        violation_codes.push("RUNTIME_CONFIG_RELOAD_ID_REQUIRED".to_owned());
+    }
+    let initial_mode_safe = !request.initial_config.runtime.mode.permits_live_execution();
+    let reloaded_mode_safe = !request
+        .reloaded_config
+        .runtime
+        .mode
+        .permits_live_execution();
+    let cex_allowlist_changed =
+        request.initial_config.venues.cex_allowlist != request.reloaded_config.venues.cex_allowlist;
+    let asset_allowlist_changed = request.initial_config.venues.asset_allowlist
+        != request.reloaded_config.venues.asset_allowlist;
+    let reload_change_detected = request.initial_config.runtime.mode
+        != request.reloaded_config.runtime.mode
+        || cex_allowlist_changed
+        || asset_allowlist_changed
+        || request.initial_config.risk != request.reloaded_config.risk;
+
+    if !initial_mode_safe {
+        violation_codes.push("RUNTIME_CONFIG_RELOAD_INITIAL_MODE_LIVE".to_owned());
+    }
+    if !reloaded_mode_safe {
+        violation_codes.push("RUNTIME_CONFIG_RELOAD_RELOADED_MODE_LIVE".to_owned());
+    }
+    if !reload_change_detected {
+        violation_codes.push("RUNTIME_CONFIG_RELOAD_NO_CHANGE_DETECTED".to_owned());
+    }
+    if request.service_manager_action_performed {
+        violation_codes.push("RUNTIME_CONFIG_RELOAD_SERVICE_MANAGER_ACTION".to_owned());
+    }
+    if request.secret_material_loaded {
+        violation_codes.push("RUNTIME_CONFIG_RELOAD_SECRET_MATERIAL_LOADED".to_owned());
+    }
+    if request.external_submission_performed {
+        violation_codes.push("RUNTIME_CONFIG_RELOAD_EXTERNAL_SUBMISSION".to_owned());
+    }
+    if request.live_execution_performed {
+        violation_codes.push("RUNTIME_CONFIG_RELOAD_LIVE_EXECUTION".to_owned());
+    }
+    if request.production_ready_claimed {
+        violation_codes.push("RUNTIME_CONFIG_RELOAD_PRODUCTION_READY_CLAIMED".to_owned());
+    }
+
+    Ok(RuntimeConfigReloadValidationReport {
+        reload_id: request.reload_id,
+        status: if violation_codes.is_empty() {
+            RuntimeConfigReloadStatus::ReadyForLocalReview
+        } else {
+            RuntimeConfigReloadStatus::Blocked
+        },
+        initial_mode: request.initial_config.runtime.mode,
+        reloaded_mode: request.reloaded_config.runtime.mode,
+        initial_mode_safe,
+        reloaded_mode_safe,
+        reload_change_detected,
+        cex_allowlist_changed,
+        asset_allowlist_changed,
+        initial_cex_venue_count: request.initial_config.venues.cex_allowlist.len(),
+        reloaded_cex_venue_count: request.reloaded_config.venues.cex_allowlist.len(),
+        initial_asset_count: request.initial_config.venues.asset_allowlist.len(),
+        reloaded_asset_count: request.reloaded_config.venues.asset_allowlist.len(),
+        service_manager_action_performed: request.service_manager_action_performed,
+        secret_material_loaded: request.secret_material_loaded,
+        external_submission_performed: request.external_submission_performed,
+        live_execution_performed: request.live_execution_performed,
+        production_ready: false,
+        violation_codes,
+    })
 }
 
 fn migrate_markets_to_venues(markets: toml::Value) -> Result<toml::Value, ConfigError> {
@@ -632,7 +787,8 @@ impl std::error::Error for ConfigError {}
 #[cfg(test)]
 mod tests {
     use super::{
-        migrate_config_toml_to_current, AgentConfig, ConfigError, ConfigMigrationStatus,
+        migrate_config_toml_to_current, validate_runtime_config_reload, AgentConfig, ConfigError,
+        ConfigMigrationStatus, RuntimeConfigReloadStatus, RuntimeConfigReloadValidationRequest,
         LIVE_ACKNOWLEDGEMENT,
     };
 
@@ -688,6 +844,75 @@ redact_secrets = true
         assert!(!report.secret_material_loaded);
         assert!(!report.production_ready);
         assert!(report.migrated_toml.contains("[runtime]"));
+    }
+
+    #[test]
+    fn runtime_config_reload_accepts_local_safe_config_change() {
+        let report = validate_runtime_config_reload(runtime_reload_request(false, true))
+            .expect("local config reload should validate");
+
+        assert_eq!(
+            report.status,
+            RuntimeConfigReloadStatus::ReadyForLocalReview
+        );
+        assert!(report.initial_mode_safe);
+        assert!(report.reloaded_mode_safe);
+        assert!(report.reload_change_detected);
+        assert!(report.cex_allowlist_changed);
+        assert!(report.asset_allowlist_changed);
+        assert_eq!(report.initial_cex_venue_count, 2);
+        assert_eq!(report.reloaded_cex_venue_count, 3);
+        assert_eq!(report.initial_asset_count, 3);
+        assert_eq!(report.reloaded_asset_count, 4);
+        assert!(!report.service_manager_action_performed);
+        assert!(!report.secret_material_loaded);
+        assert!(!report.external_submission_performed);
+        assert!(!report.live_execution_performed);
+        assert!(!report.production_ready);
+        assert!(report.violation_codes.is_empty());
+    }
+
+    #[test]
+    fn runtime_config_reload_blocks_unchanged_config() {
+        let report = validate_runtime_config_reload(runtime_reload_request(false, false))
+            .expect("unchanged local config reload should produce blocked report");
+
+        assert_eq!(report.status, RuntimeConfigReloadStatus::Blocked);
+        assert!(!report.reload_change_detected);
+        assert!(report
+            .violation_codes
+            .iter()
+            .any(|code| code == "RUNTIME_CONFIG_RELOAD_NO_CHANGE_DETECTED"));
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn runtime_config_reload_fails_closed_on_side_effect_claims() {
+        let report = validate_runtime_config_reload(runtime_reload_request(true, true))
+            .expect("side-effect local config reload should produce blocked report");
+
+        assert_eq!(report.status, RuntimeConfigReloadStatus::Blocked);
+        assert!(report.service_manager_action_performed);
+        assert!(report.secret_material_loaded);
+        assert!(report.external_submission_performed);
+        assert!(report.live_execution_performed);
+        assert!(!report.production_ready);
+        assert!(report
+            .violation_codes
+            .iter()
+            .any(|code| code == "RUNTIME_CONFIG_RELOAD_SERVICE_MANAGER_ACTION"));
+        assert!(report
+            .violation_codes
+            .iter()
+            .any(|code| code == "RUNTIME_CONFIG_RELOAD_SECRET_MATERIAL_LOADED"));
+        assert!(report
+            .violation_codes
+            .iter()
+            .any(|code| code == "RUNTIME_CONFIG_RELOAD_LIVE_EXECUTION"));
+        assert!(report
+            .violation_codes
+            .iter()
+            .any(|code| code == "RUNTIME_CONFIG_RELOAD_PRODUCTION_READY_CLAIMED"));
     }
 
     #[test]
@@ -901,5 +1126,39 @@ redact_secrets = true
         let config =
             AgentConfig::from_toml_str(&text).expect("live gate should pass with references only");
         assert!(config.runtime.mode.permits_live_execution());
+    }
+
+    fn runtime_reload_request(
+        side_effect_claimed: bool,
+        include_reload_change: bool,
+    ) -> RuntimeConfigReloadValidationRequest {
+        let initial_config =
+            AgentConfig::from_toml_str(OBSERVE_CONFIG).expect("initial config should parse");
+        let reloaded_text = if include_reload_change {
+            OBSERVE_CONFIG
+                .replace(
+                    "cex_allowlist = [\"coinbase\", \"kraken\"]",
+                    "cex_allowlist = [\"coinbase\", \"kraken\", \"binance\"]",
+                )
+                .replace(
+                    "asset_allowlist = [\"BTC\", \"ETH\", \"USDC\"]",
+                    "asset_allowlist = [\"BTC\", \"ETH\", \"USDC\", \"SOL\"]",
+                )
+        } else {
+            OBSERVE_CONFIG.to_owned()
+        };
+        let reloaded_config =
+            AgentConfig::from_toml_str(&reloaded_text).expect("reloaded config should parse");
+
+        RuntimeConfigReloadValidationRequest {
+            reload_id: "local-runtime-config-reload".to_owned(),
+            initial_config,
+            reloaded_config,
+            service_manager_action_performed: side_effect_claimed,
+            secret_material_loaded: side_effect_claimed,
+            external_submission_performed: side_effect_claimed,
+            live_execution_performed: side_effect_claimed,
+            production_ready_claimed: side_effect_claimed,
+        }
     }
 }
