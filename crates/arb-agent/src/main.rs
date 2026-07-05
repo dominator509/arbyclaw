@@ -8,7 +8,8 @@ use arb_core::{
     append_dashboard_hosted_request_validation_audit,
     append_dashboard_hosted_security_review_audit, append_dashboard_hosted_session_lifecycle_audit,
     append_dashboard_hosted_session_validation_audit,
-    append_dashboard_loopback_runtime_probe_audit, append_dashboard_render_audit,
+    append_dashboard_loopback_runtime_probe_audit,
+    append_dashboard_persistent_local_host_readiness_audit, append_dashboard_render_audit,
     append_destination_allowlist_audit, append_destination_ownership_review_audit,
     append_dex_swap_lifecycle_audit, append_execution_adapter_recovery_plan_audit,
     append_execution_adapter_run_audit, append_execution_plan_draft_audit,
@@ -49,13 +50,14 @@ use arb_core::{
     persist_dashboard_hosted_security_review_checkpoint,
     persist_dashboard_hosted_session_lifecycle_checkpoint,
     persist_dashboard_hosted_session_validation_checkpoint,
-    persist_dashboard_loopback_runtime_probe_checkpoint, persist_dashboard_render_checkpoint,
-    persist_destination_allowlist_checkpoint, persist_destination_ownership_review_checkpoint,
-    persist_dex_swap_lifecycle_checkpoint, persist_execution_adapter_recovery_plan_checkpoint,
-    persist_execution_adapter_run_checkpoint, persist_execution_plan_draft_checkpoint,
-    persist_fee_schedule_verification_checkpoint, persist_fuzz_corpus_replay_report_checkpoint,
-    persist_historical_market_data_checkpoint, persist_local_tracing_subscriber_checkpoint,
-    persist_market_data_provider_preflight_checkpoint,
+    persist_dashboard_loopback_runtime_probe_checkpoint,
+    persist_dashboard_persistent_local_host_readiness_checkpoint,
+    persist_dashboard_render_checkpoint, persist_destination_allowlist_checkpoint,
+    persist_destination_ownership_review_checkpoint, persist_dex_swap_lifecycle_checkpoint,
+    persist_execution_adapter_recovery_plan_checkpoint, persist_execution_adapter_run_checkpoint,
+    persist_execution_plan_draft_checkpoint, persist_fee_schedule_verification_checkpoint,
+    persist_fuzz_corpus_replay_report_checkpoint, persist_historical_market_data_checkpoint,
+    persist_local_tracing_subscriber_checkpoint, persist_market_data_provider_preflight_checkpoint,
     persist_market_data_reconnect_plan_checkpoint, persist_notification_dispatch_checkpoint,
     persist_observability_alert_route_dispatch_checkpoint,
     persist_observability_endpoint_preflight_checkpoint,
@@ -90,17 +92,17 @@ use arb_core::{
     render_observability_export_dry_run, review_cex_live_adapter_boundary,
     review_communication_delivery_provider_boundary,
     review_communication_provider_submission_preflight, review_dashboard_hosted_runtime_readiness,
-    review_dashboard_hosted_security, review_dex_live_adapter_boundary,
-    review_fee_live_provider_boundary, review_fee_schedule_reconciliation,
-    review_local_secret_backup_restore, review_local_validation_coverage,
-    review_market_data_bad_data_rejection, review_market_data_live_provider_boundary,
-    review_market_data_provider_latency, review_market_data_provider_reconciliation,
-    review_observability_operations, review_observability_provider_boundary,
-    review_observability_provider_submission_preflight, review_platform_adapter_controls,
-    review_platform_command_ingress, review_remote_command_security,
-    review_signer_runtime_isolation, review_signer_secret_scope, run_local_fuzz_corpus_replay,
-    run_local_graceful_shutdown_checkpoint, run_local_runtime_lifecycle,
-    run_local_validation_corpus, run_local_validation_property_checks,
+    review_dashboard_hosted_security, review_dashboard_persistent_local_host_readiness,
+    review_dex_live_adapter_boundary, review_fee_live_provider_boundary,
+    review_fee_schedule_reconciliation, review_local_secret_backup_restore,
+    review_local_validation_coverage, review_market_data_bad_data_rejection,
+    review_market_data_live_provider_boundary, review_market_data_provider_latency,
+    review_market_data_provider_reconciliation, review_observability_operations,
+    review_observability_provider_boundary, review_observability_provider_submission_preflight,
+    review_platform_adapter_controls, review_platform_command_ingress,
+    review_remote_command_security, review_signer_runtime_isolation, review_signer_secret_scope,
+    run_local_fuzz_corpus_replay, run_local_graceful_shutdown_checkpoint,
+    run_local_runtime_lifecycle, run_local_validation_corpus, run_local_validation_property_checks,
     validate_audit_journal_durability, validate_cex_credential_scope_review,
     validate_cex_rate_limit, validate_channel_adapter, validate_channel_session,
     validate_dashboard_hosted_request, validate_dashboard_hosted_session,
@@ -151,7 +153,8 @@ use arb_core::{
     DashboardHostedSessionLifecycleValidation, DashboardHostedSessionLifecycleValidationReport,
     DashboardHostedSessionLifecycleValidationStatus, DashboardHostedSessionValidationStatus,
     DashboardLoopbackRuntimeProbe, DashboardLoopbackRuntimeProbeStatus, DashboardPanel,
-    DashboardPanelItem, DashboardPanelKind, DashboardRenderRequest, DashboardRenderer,
+    DashboardPanelItem, DashboardPanelKind, DashboardPersistentLocalHostReadinessRequest,
+    DashboardPersistentLocalHostReadinessStatus, DashboardRenderRequest, DashboardRenderer,
     DashboardSeverity, DashboardSnapshot, DeploymentFailureCaptureTranscript,
     DeploymentFailureCaptureTranscriptStatus, DeploymentResponseDrillRehearsalRequest,
     DeploymentResponseDrillRehearsalStatus, DestinationAllowlist, DestinationApprovalSource,
@@ -278,10 +281,12 @@ use arb_core::{
     DASHBOARD_LAST_HOSTED_SECURITY_REVIEW_CHECKPOINT_KEY,
     DASHBOARD_LAST_HOSTED_SESSION_LIFECYCLE_CHECKPOINT_KEY,
     DASHBOARD_LAST_HOSTED_SESSION_VALIDATION_CHECKPOINT_KEY,
-    DASHBOARD_LAST_LOOPBACK_RUNTIME_PROBE_CHECKPOINT_KEY, DASHBOARD_LAST_RENDER_CHECKPOINT_KEY,
-    DEFAULT_MARKET_DATA_FRESHNESS_MS, DESTINATION_ALLOWLIST_CHECKPOINT_KEY,
-    DESTINATION_ALLOWLIST_VERSION, DESTINATION_OWNERSHIP_REVIEW_CHECKPOINT_KEY,
-    DEX_CONNECTOR_FRAMEWORK_VERSION, DEX_LAST_SWAP_LIFECYCLE_CHECKPOINT_KEY,
+    DASHBOARD_LAST_LOOPBACK_RUNTIME_PROBE_CHECKPOINT_KEY,
+    DASHBOARD_LAST_PERSISTENT_LOCAL_HOST_REVIEW_CHECKPOINT_KEY,
+    DASHBOARD_LAST_RENDER_CHECKPOINT_KEY, DEFAULT_MARKET_DATA_FRESHNESS_MS,
+    DESTINATION_ALLOWLIST_CHECKPOINT_KEY, DESTINATION_ALLOWLIST_VERSION,
+    DESTINATION_OWNERSHIP_REVIEW_CHECKPOINT_KEY, DEX_CONNECTOR_FRAMEWORK_VERSION,
+    DEX_LAST_SWAP_LIFECYCLE_CHECKPOINT_KEY,
     DEX_LAST_WEB3_BROADCAST_ADAPTER_CONTROL_REVIEW_CHECKPOINT_KEY,
     DEX_LAST_WEB3_BROADCAST_READINESS_CHECKPOINT_KEY,
     DEX_LAST_WEB3_NONCE_RESERVATION_CHECKPOINT_KEY, DEX_LAST_WEB3_PRE_SIGN_SAFETY_CHECKPOINT_KEY,
@@ -602,6 +607,7 @@ fn is_local_workspace_validation_command(command: &str) -> bool {
             | "validate-dashboard-runtime"
             | "validate-dashboard-session-lifecycle"
             | "validate-dashboard-loopback-runtime"
+            | "validate-dashboard-persistent-local-host"
             | "validate-communications-runtime"
             | "validate-communications-delivery-provider-boundary"
             | "validate-communications-provider-submission-preflight"
@@ -785,6 +791,9 @@ fn run_local_workspace_validation_command(
         }
         "validate-dashboard-loopback-runtime" => {
             run_dashboard_loopback_runtime_validation(&options)
+        }
+        "validate-dashboard-persistent-local-host" => {
+            run_dashboard_persistent_local_host_validation(&options)
         }
         "validate-communications-runtime" => run_communications_runtime_validation(&options),
         "validate-communications-delivery-provider-boundary" => {
@@ -1042,6 +1051,7 @@ fn print_usage() {
     println!("       arb-agent validate-dashboard-runtime --workspace <fresh-dir>");
     println!("       arb-agent validate-dashboard-session-lifecycle --workspace <fresh-dir>");
     println!("       arb-agent validate-dashboard-loopback-runtime --workspace <fresh-dir>");
+    println!("       arb-agent validate-dashboard-persistent-local-host --workspace <fresh-dir>");
     println!("       arb-agent validate-observability-runtime --workspace <fresh-dir>");
     println!("       arb-agent validate-observability-metrics-runtime --workspace <fresh-dir>");
     println!("       arb-agent validate-observability-provider-boundary --workspace <fresh-dir>");
@@ -17258,6 +17268,352 @@ fn run_dashboard_loopback_runtime_validation(
     println!("external-submission-performed: false");
     println!("live-execution-performed: false");
     println!("production-ready: false");
+    Ok(())
+}
+
+#[allow(clippy::too_many_lines)]
+fn run_dashboard_persistent_local_host_validation(
+    options: &LocalValidationRunOptions,
+) -> Result<(), AgentCliError> {
+    prepare_fresh_workspace(&options.workspace_dir)?;
+    let audit_path = options
+        .workspace_dir
+        .join("dashboard-persistent-local-host.audit.jsonl");
+    let state_path = options
+        .workspace_dir
+        .join("dashboard-persistent-local-host.sqlite3");
+    let now_unix_ms = current_unix_ms()?;
+    let renderer = DeterministicDashboardRenderer;
+    let render_record = renderer
+        .render(DashboardRenderRequest {
+            config: DashboardBoundaryConfig::default(),
+            snapshot: local_dashboard_runtime_snapshot(now_unix_ms),
+            access: DashboardAccessContext::local_render(Some(
+                "local-dashboard-persistent-host-cli".to_owned(),
+            )),
+            requested_panels: Vec::new(),
+            operator_label: Some("local-dashboard-persistent-host-cli".to_owned()),
+            rendered_at_ms: now_unix_ms.saturating_add(1),
+        })
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let security_review = review_dashboard_hosted_security(&DashboardHostedSecurityPolicy {
+        review_id: "local-dashboard-persistent-host-security".to_owned(),
+        authentication_required: true,
+        authorization_required: true,
+        csrf_protection_required: true,
+        csrf_token_rotation_required: true,
+        secure_headers_required: true,
+        clickjacking_protection_required: true,
+        rate_limit_required: true,
+        max_requests_per_minute: 60,
+        loopback_only_required: true,
+        audit_state_preflight_required: true,
+        session_revocation_required: true,
+        operator_role_review_required: true,
+        read_only_controls_required: true,
+        public_exposure_requested: false,
+        server_start_requested: false,
+        live_controls_requested: false,
+    })
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let request_preflight = preflight_dashboard_hosted_request(&DashboardHostedRequestPreflight {
+        preflight_id: "local-dashboard-persistent-host-request".to_owned(),
+        bind_host: "127.0.0.1".to_owned(),
+        access_source: DashboardAccessSource::BrowserSession,
+        method: DashboardHostedRequestMethod::Get,
+        authenticated: true,
+        authorized: true,
+        csrf_token_present: false,
+        csrf_token_valid: true,
+        content_security_policy_present: true,
+        frame_protection_present: true,
+        content_type_options_present: true,
+        referrer_policy_present: true,
+        requests_in_current_window: 1,
+        max_requests_per_minute: 60,
+        public_exposure_requested: false,
+        server_start_requested: false,
+        live_controls_requested: false,
+    })
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let accepted_request = validate_dashboard_hosted_request(DashboardHostedRequestValidation {
+        validation_id: "local-dashboard-persistent-host-accepted".to_owned(),
+        render_record: render_record.clone(),
+        bind_host: "127.0.0.1".to_owned(),
+        requested_port: 0,
+        method: DashboardHostedRequestMethod::Get,
+        request_path: "/".to_owned(),
+        authenticated: true,
+        authorized: true,
+        csrf_token_present: false,
+        csrf_token_valid: true,
+        secure_headers_required: true,
+        requests_in_current_window: 1,
+        max_requests_per_minute: 60,
+        public_exposure_requested: false,
+        live_controls_requested: false,
+    })
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let unauthenticated_request =
+        validate_dashboard_hosted_request(DashboardHostedRequestValidation {
+            validation_id: "local-dashboard-persistent-host-unauthenticated".to_owned(),
+            render_record: render_record.clone(),
+            bind_host: "127.0.0.1".to_owned(),
+            requested_port: 0,
+            method: DashboardHostedRequestMethod::Get,
+            request_path: "/".to_owned(),
+            authenticated: false,
+            authorized: false,
+            csrf_token_present: false,
+            csrf_token_valid: true,
+            secure_headers_required: true,
+            requests_in_current_window: 1,
+            max_requests_per_minute: 60,
+            public_exposure_requested: false,
+            live_controls_requested: false,
+        })
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let csrf_rejected_request =
+        validate_dashboard_hosted_request(DashboardHostedRequestValidation {
+            validation_id: "local-dashboard-persistent-host-csrf-rejected".to_owned(),
+            render_record: render_record.clone(),
+            bind_host: "127.0.0.1".to_owned(),
+            requested_port: 0,
+            method: DashboardHostedRequestMethod::Post,
+            request_path: "/".to_owned(),
+            authenticated: true,
+            authorized: true,
+            csrf_token_present: true,
+            csrf_token_valid: false,
+            secure_headers_required: true,
+            requests_in_current_window: 1,
+            max_requests_per_minute: 60,
+            public_exposure_requested: false,
+            live_controls_requested: false,
+        })
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let rate_limited_request =
+        validate_dashboard_hosted_request(DashboardHostedRequestValidation {
+            validation_id: "local-dashboard-persistent-host-rate-limited".to_owned(),
+            render_record: render_record.clone(),
+            bind_host: "127.0.0.1".to_owned(),
+            requested_port: 0,
+            method: DashboardHostedRequestMethod::Get,
+            request_path: "/".to_owned(),
+            authenticated: true,
+            authorized: true,
+            csrf_token_present: false,
+            csrf_token_valid: true,
+            secure_headers_required: true,
+            requests_in_current_window: 61,
+            max_requests_per_minute: 60,
+            public_exposure_requested: false,
+            live_controls_requested: false,
+        })
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let session_validation = validate_dashboard_hosted_session(
+        "local-dashboard-persistent-host-session",
+        &[
+            accepted_request,
+            unauthenticated_request,
+            csrf_rejected_request,
+            rate_limited_request,
+        ],
+    )
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let runtime_readiness =
+        review_dashboard_hosted_runtime_readiness(DashboardHostedRuntimeReadinessReviewRequest {
+            review_id: "local-dashboard-persistent-host-runtime-readiness".to_owned(),
+            security_review,
+            request_preflight,
+            session_validation,
+            remaining_external_evidence: vec![
+                "daemon supervision validation".to_owned(),
+                "browser credential/session integration validation".to_owned(),
+                "external dashboard security review".to_owned(),
+                "deployment-host public exposure denial evidence".to_owned(),
+            ],
+            persistent_server_start_requested: false,
+            public_network_exposure_requested: false,
+            live_controls_requested: false,
+            production_ready_claimed: false,
+        })
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let session_lifecycle = validate_dashboard_hosted_session_lifecycle(
+        &local_dashboard_session_lifecycle_request(now_unix_ms.saturating_add(2)),
+    )
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let loopback_runtime =
+        validate_dashboard_loopback_runtime_probe(DashboardLoopbackRuntimeProbe {
+            probe_id: "local-dashboard-persistent-host-loopback-runtime".to_owned(),
+            render_record,
+            bind_host: "127.0.0.1".to_owned(),
+            requested_port: 0,
+            request_count: 3,
+            public_exposure_requested: false,
+            live_controls_requested: false,
+        })
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let review = review_dashboard_persistent_local_host_readiness(
+        DashboardPersistentLocalHostReadinessRequest {
+            review_id: "local-dashboard-persistent-host-readiness".to_owned(),
+            runtime_readiness,
+            session_lifecycle,
+            loopback_runtime,
+            persistent_host_config_present: true,
+            loopback_only: true,
+            authentication_required: true,
+            authorization_required: true,
+            csrf_required: true,
+            read_only_controls_required: true,
+            rate_limit_required: true,
+            audit_state_preflight_required: true,
+            persistent_server_start_requested: false,
+            public_network_exposure_requested: false,
+            live_controls_requested: false,
+            production_ready_claimed: false,
+            remaining_external_evidence: vec![
+                "daemon supervision validation".to_owned(),
+                "browser credential/session integration validation".to_owned(),
+                "external dashboard security review".to_owned(),
+                "deployment-host public exposure denial evidence".to_owned(),
+            ],
+        },
+    )
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+
+    let mut journal = AppendOnlyAuditJournal::open(&audit_path)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let mut store = SqliteWalStateStore::open(&state_path)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let audit_record = append_dashboard_persistent_local_host_readiness_audit(
+        &mut journal,
+        &review,
+        now_unix_ms.saturating_add(3),
+    )
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let checkpoint = persist_dashboard_persistent_local_host_readiness_checkpoint(
+        &mut store,
+        &review,
+        now_unix_ms.saturating_add(4),
+    )
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    drop(store);
+    drop(journal);
+
+    let reopened_journal = AppendOnlyAuditJournal::open(&audit_path)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let replayed_records = reopened_journal.next_sequence().saturating_sub(1);
+    let reopened_store = SqliteWalStateStore::open(&state_path)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    reopened_store
+        .integrity_check()
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let recovered_checkpoint = reopened_store
+        .get_checkpoint(DASHBOARD_LAST_PERSISTENT_LOCAL_HOST_REVIEW_CHECKPOINT_KEY)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?
+        .is_some();
+
+    if audit_record.sequence != 1
+        || replayed_records != 1
+        || checkpoint.key != DASHBOARD_LAST_PERSISTENT_LOCAL_HOST_REVIEW_CHECKPOINT_KEY
+        || !recovered_checkpoint
+        || review.status != DashboardPersistentLocalHostReadinessStatus::ReadyForLocalReview
+        || !review.runtime_readiness_ready
+        || !review.session_lifecycle_ready
+        || !review.loopback_runtime_ready
+        || !review.persistent_host_config_present
+        || !review.loopback_only
+        || !review.authentication_required
+        || !review.authorization_required
+        || !review.csrf_required
+        || !review.read_only_controls_required
+        || !review.rate_limit_required
+        || !review.audit_state_preflight_required
+        || !review.remaining_external_evidence_recorded
+        || review.remaining_external_evidence_count != 4
+        || review.missing_control_count != 0
+        || review.persistent_server_started
+        || review.public_network_exposed
+        || review.live_controls_enabled
+        || review.production_ready
+    {
+        return Err(AgentCliError::Validation(
+            "dashboard persistent local host validation failed".to_owned(),
+        ));
+    }
+
+    println!("dashboard-persistent-local-host: validation passed");
+    println!(
+        "dashboard-persistent-local-host-workspace: {}",
+        options.workspace_dir.display()
+    );
+    println!(
+        "dashboard-persistent-local-host-checkpoint-key: {DASHBOARD_LAST_PERSISTENT_LOCAL_HOST_REVIEW_CHECKPOINT_KEY}"
+    );
+    println!("dashboard-persistent-local-host-audit-records-replayed: {replayed_records}");
+    println!("dashboard-persistent-local-host-checkpoint-recovered: true");
+    println!(
+        "dashboard-persistent-local-host-runtime-readiness-ready: {}",
+        review.runtime_readiness_ready
+    );
+    println!(
+        "dashboard-persistent-local-host-session-lifecycle-ready: {}",
+        review.session_lifecycle_ready
+    );
+    println!(
+        "dashboard-persistent-local-host-loopback-runtime-ready: {}",
+        review.loopback_runtime_ready
+    );
+    println!(
+        "dashboard-persistent-local-host-config-present: {}",
+        review.persistent_host_config_present
+    );
+    println!(
+        "dashboard-persistent-local-host-loopback-only: {}",
+        review.loopback_only
+    );
+    println!(
+        "dashboard-persistent-local-host-authentication-required: {}",
+        review.authentication_required
+    );
+    println!(
+        "dashboard-persistent-local-host-authorization-required: {}",
+        review.authorization_required
+    );
+    println!(
+        "dashboard-persistent-local-host-csrf-required: {}",
+        review.csrf_required
+    );
+    println!(
+        "dashboard-persistent-local-host-read-only-controls-required: {}",
+        review.read_only_controls_required
+    );
+    println!(
+        "dashboard-persistent-local-host-rate-limit-required: {}",
+        review.rate_limit_required
+    );
+    println!(
+        "dashboard-persistent-local-host-audit-state-preflight-required: {}",
+        review.audit_state_preflight_required
+    );
+    println!(
+        "dashboard-persistent-local-host-remaining-external-evidence-count: {}",
+        review.remaining_external_evidence_count
+    );
+    println!(
+        "dashboard-persistent-local-host-missing-control-count: {}",
+        review.missing_control_count
+    );
+    println!(
+        "persistent-dashboard-server-started: {}",
+        review.persistent_server_started
+    );
+    println!("public-network-exposed: {}", review.public_network_exposed);
+    println!("live-controls-enabled: {}", review.live_controls_enabled);
+    println!("external-submission-performed: false");
+    println!("live-execution-performed: false");
+    println!("production-ready: {}", review.production_ready);
     Ok(())
 }
 

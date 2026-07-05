@@ -51,9 +51,17 @@ pub const DASHBOARD_LAST_HOSTED_SESSION_LIFECYCLE_CHECKPOINT_KEY: &str =
 pub const DASHBOARD_LAST_LOOPBACK_RUNTIME_PROBE_CHECKPOINT_KEY: &str =
     "dashboard:last-loopback-runtime-probe";
 
+/// State-store key for the latest local persistent-dashboard host readiness review.
+pub const DASHBOARD_LAST_PERSISTENT_LOCAL_HOST_REVIEW_CHECKPOINT_KEY: &str =
+    "dashboard:last-persistent-local-host-review";
+
 /// Stable local hosted-dashboard runtime readiness review version.
 pub const DASHBOARD_HOSTED_RUNTIME_READINESS_REVIEW_VERSION: &str =
     "local-hosted-dashboard-runtime-readiness-review-v1";
+
+/// Stable local persistent-dashboard host readiness review version.
+pub const DASHBOARD_PERSISTENT_LOCAL_HOST_REVIEW_VERSION: &str =
+    "local-persistent-dashboard-host-readiness-review-v1";
 
 /// Conservative dashboard boundary settings.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -832,6 +840,111 @@ pub struct DashboardHostedRuntimeReadinessReviewReport {
     pub violation_codes: Vec<String>,
 }
 
+/// Local persistent-dashboard host readiness review request.
+///
+/// This composes existing local security, session, and loopback runtime checks
+/// for a future persistent host. It records readiness for local review only; it
+/// does not start a long-running server, expose a public binding, issue browser
+/// credentials, enable live controls, or claim production readiness.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DashboardPersistentLocalHostReadinessRequest {
+    /// Stable non-secret review identifier.
+    pub review_id: String,
+    /// Existing hosted runtime readiness review.
+    pub runtime_readiness: DashboardHostedRuntimeReadinessReviewReport,
+    /// Existing hosted session lifecycle validation.
+    pub session_lifecycle: DashboardHostedSessionLifecycleValidationReport,
+    /// Existing bounded loopback runtime probe.
+    pub loopback_runtime: DashboardLoopbackRuntimeProbeReport,
+    /// Whether a future persistent host config was represented locally.
+    pub persistent_host_config_present: bool,
+    /// Whether the future host config remains loopback-only.
+    pub loopback_only: bool,
+    /// Whether the future host config requires authentication.
+    pub authentication_required: bool,
+    /// Whether the future host config requires authorization.
+    pub authorization_required: bool,
+    /// Whether the future host config requires CSRF protection.
+    pub csrf_required: bool,
+    /// Whether the future host config requires read-only controls.
+    pub read_only_controls_required: bool,
+    /// Whether the future host config requires request rate limiting.
+    pub rate_limit_required: bool,
+    /// Whether the future host config requires audit/state preflight.
+    pub audit_state_preflight_required: bool,
+    /// Whether this local review started a persistent server. Must remain false.
+    pub persistent_server_start_requested: bool,
+    /// Whether this local review requested public exposure. Must remain false.
+    pub public_network_exposure_requested: bool,
+    /// Whether this local review requested live dashboard controls. Must remain false.
+    pub live_controls_requested: bool,
+    /// Whether this local review claims production readiness. Must remain false.
+    pub production_ready_claimed: bool,
+    /// Remaining non-secret external/deployment evidence references.
+    pub remaining_external_evidence: Vec<String>,
+}
+
+/// Local persistent-dashboard host readiness review status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum DashboardPersistentLocalHostReadinessStatus {
+    /// Existing local prerequisites are coherent for local review only.
+    ReadyForLocalReview,
+    /// Required local controls are missing or unsafe side effects were requested.
+    Blocked,
+}
+
+/// Local persistent-dashboard host readiness review report.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DashboardPersistentLocalHostReadinessReport {
+    /// Stable review schema version.
+    pub review_version: String,
+    /// Stable non-secret review identifier.
+    pub review_id: String,
+    /// Review status.
+    pub status: DashboardPersistentLocalHostReadinessStatus,
+    /// Whether the hosted runtime readiness review is ready locally.
+    pub runtime_readiness_ready: bool,
+    /// Whether hosted session lifecycle controls are ready locally.
+    pub session_lifecycle_ready: bool,
+    /// Whether bounded loopback runtime serving is ready locally.
+    pub loopback_runtime_ready: bool,
+    /// Whether a future persistent-host config was represented locally.
+    pub persistent_host_config_present: bool,
+    /// Whether the future persistent host is constrained to loopback.
+    pub loopback_only: bool,
+    /// Whether authentication is required.
+    pub authentication_required: bool,
+    /// Whether authorization is required.
+    pub authorization_required: bool,
+    /// Whether CSRF protection is required.
+    pub csrf_required: bool,
+    /// Whether read-only controls are required.
+    pub read_only_controls_required: bool,
+    /// Whether request rate limiting is required.
+    pub rate_limit_required: bool,
+    /// Whether audit/state preflight is required.
+    pub audit_state_preflight_required: bool,
+    /// Whether remaining external/deployment evidence is recorded.
+    pub remaining_external_evidence_recorded: bool,
+    /// Count of remaining external/deployment evidence references.
+    pub remaining_external_evidence_count: usize,
+    /// Count of local missing controls across component reports.
+    pub missing_control_count: u32,
+    /// Whether a persistent dashboard server was started.
+    pub persistent_server_started: bool,
+    /// Whether public network exposure occurred.
+    pub public_network_exposed: bool,
+    /// Whether live controls were enabled.
+    pub live_controls_enabled: bool,
+    /// Whether production readiness was claimed.
+    pub production_ready: bool,
+    /// Stable non-secret violation codes.
+    pub violation_codes: Vec<String>,
+}
+
 impl DashboardHostedRequestValidation {
     /// Validate local one-shot hosted dashboard request validation input.
     pub fn validate(&self) -> Result<(), DashboardError> {
@@ -1353,6 +1466,135 @@ impl DashboardHostedRuntimeReadinessReviewReport {
                     self.production_ready,
                     "DASHBOARD_HOSTED_RUNTIME_PRODUCTION_READY_CLAIMED",
                     "local hosted dashboard readiness review must not claim production readiness",
+                ),
+            ] {
+                if unsafe_flag {
+                    violations.push(DashboardViolation::new(code, message));
+                }
+            }
+        }
+        finish_validation(violations)
+    }
+}
+
+impl DashboardPersistentLocalHostReadinessRequest {
+    /// Validate the local persistent-host readiness request before composing evidence.
+    pub fn validate(&self) -> Result<(), DashboardError> {
+        let mut violations = Vec::new();
+        validate_id(
+            "dashboard persistent local host review",
+            &self.review_id,
+            &mut violations,
+        );
+        self.runtime_readiness.validate()?;
+        self.session_lifecycle.validate()?;
+        self.loopback_runtime.validate()?;
+        finish_validation(violations)
+    }
+}
+
+impl DashboardPersistentLocalHostReadinessReport {
+    /// Validate derived local persistent-host readiness invariants.
+    pub fn validate(&self) -> Result<(), DashboardError> {
+        let mut violations = Vec::new();
+        if self.review_version != DASHBOARD_PERSISTENT_LOCAL_HOST_REVIEW_VERSION {
+            violations.push(DashboardViolation::new(
+                "DASHBOARD_PERSISTENT_LOCAL_HOST_REVIEW_VERSION_MISMATCH",
+                "persistent local dashboard host readiness review version mismatch",
+            ));
+        }
+        validate_id(
+            "dashboard persistent local host review",
+            &self.review_id,
+            &mut violations,
+        );
+        if self.status == DashboardPersistentLocalHostReadinessStatus::ReadyForLocalReview {
+            for (missing, code, message) in [
+                (
+                    !self.runtime_readiness_ready,
+                    "DASHBOARD_PERSISTENT_LOCAL_HOST_RUNTIME_NOT_READY",
+                    "hosted runtime readiness review is not ready",
+                ),
+                (
+                    !self.session_lifecycle_ready,
+                    "DASHBOARD_PERSISTENT_LOCAL_HOST_SESSION_NOT_READY",
+                    "hosted session lifecycle validation is not ready",
+                ),
+                (
+                    !self.loopback_runtime_ready,
+                    "DASHBOARD_PERSISTENT_LOCAL_HOST_LOOPBACK_RUNTIME_NOT_READY",
+                    "bounded loopback runtime validation is not ready",
+                ),
+                (
+                    !self.persistent_host_config_present,
+                    "DASHBOARD_PERSISTENT_LOCAL_HOST_CONFIG_MISSING",
+                    "persistent local host config reference is missing",
+                ),
+                (
+                    !self.loopback_only,
+                    "DASHBOARD_PERSISTENT_LOCAL_HOST_LOOPBACK_REQUIRED",
+                    "persistent local host must remain loopback-only",
+                ),
+                (
+                    !self.authentication_required,
+                    "DASHBOARD_PERSISTENT_LOCAL_HOST_AUTHENTICATION_REQUIRED",
+                    "persistent local host must require authentication",
+                ),
+                (
+                    !self.authorization_required,
+                    "DASHBOARD_PERSISTENT_LOCAL_HOST_AUTHORIZATION_REQUIRED",
+                    "persistent local host must require authorization",
+                ),
+                (
+                    !self.csrf_required,
+                    "DASHBOARD_PERSISTENT_LOCAL_HOST_CSRF_REQUIRED",
+                    "persistent local host must require CSRF protection",
+                ),
+                (
+                    !self.read_only_controls_required,
+                    "DASHBOARD_PERSISTENT_LOCAL_HOST_READ_ONLY_REQUIRED",
+                    "persistent local host must require read-only controls",
+                ),
+                (
+                    !self.rate_limit_required,
+                    "DASHBOARD_PERSISTENT_LOCAL_HOST_RATE_LIMIT_REQUIRED",
+                    "persistent local host must require rate limiting",
+                ),
+                (
+                    !self.audit_state_preflight_required,
+                    "DASHBOARD_PERSISTENT_LOCAL_HOST_AUDIT_STATE_PREFLIGHT_REQUIRED",
+                    "persistent local host must require audit/state preflight",
+                ),
+                (
+                    !self.remaining_external_evidence_recorded,
+                    "DASHBOARD_PERSISTENT_LOCAL_HOST_REMAINING_EVIDENCE_MISSING",
+                    "remaining persistent-host evidence must be recorded",
+                ),
+            ] {
+                if missing {
+                    violations.push(DashboardViolation::new(code, message));
+                }
+            }
+            for (unsafe_flag, code, message) in [
+                (
+                    self.persistent_server_started,
+                    "DASHBOARD_PERSISTENT_LOCAL_HOST_SERVER_STARTED",
+                    "local persistent-host readiness review must not start a persistent server",
+                ),
+                (
+                    self.public_network_exposed,
+                    "DASHBOARD_PERSISTENT_LOCAL_HOST_PUBLIC_NETWORK_EXPOSED",
+                    "local persistent-host readiness review must not expose public network bindings",
+                ),
+                (
+                    self.live_controls_enabled,
+                    "DASHBOARD_PERSISTENT_LOCAL_HOST_LIVE_CONTROLS_ENABLED",
+                    "local persistent-host readiness review must not enable live controls",
+                ),
+                (
+                    self.production_ready,
+                    "DASHBOARD_PERSISTENT_LOCAL_HOST_PRODUCTION_READY_CLAIMED",
+                    "local persistent-host readiness review must not claim production readiness",
                 ),
             ] {
                 if unsafe_flag {
@@ -2272,6 +2514,167 @@ pub fn review_dashboard_hosted_runtime_readiness(
         rate_limit_rejection_validated,
         loopback_serving_validated,
         secure_headers_validated,
+        remaining_external_evidence_recorded,
+        remaining_external_evidence_count,
+        missing_control_count,
+        persistent_server_started,
+        public_network_exposed,
+        live_controls_enabled,
+        production_ready,
+        violation_codes,
+    };
+    report.validate()?;
+    Ok(report)
+}
+
+/// Compose local persistent-dashboard host readiness evidence without starting
+/// a long-running server, exposing public bindings, enabling live controls, or
+/// claiming production readiness.
+pub fn review_dashboard_persistent_local_host_readiness(
+    request: DashboardPersistentLocalHostReadinessRequest,
+) -> Result<DashboardPersistentLocalHostReadinessReport, DashboardError> {
+    request.validate()?;
+
+    let runtime_readiness_ready = request.runtime_readiness.status
+        == DashboardHostedRuntimeReadinessReviewStatus::ReadyForLocalReview;
+    let session_lifecycle_ready = request.session_lifecycle.status
+        == DashboardHostedSessionLifecycleValidationStatus::ReadyForLocalReview;
+    let loopback_runtime_ready =
+        request.loopback_runtime.status == DashboardLoopbackRuntimeProbeStatus::ReadyForLocalReview;
+    let remaining_external_evidence_count = request.remaining_external_evidence.len();
+    let remaining_external_evidence_recorded = remaining_external_evidence_count > 0;
+    let missing_control_count = if runtime_readiness_ready {
+        0
+    } else {
+        request.runtime_readiness.missing_control_count
+    }
+    .saturating_add(if session_lifecycle_ready {
+        0
+    } else {
+        request.session_lifecycle.missing_control_count
+    })
+    .saturating_add(if loopback_runtime_ready {
+        0
+    } else {
+        request.loopback_runtime.missing_control_count
+    });
+    let persistent_server_started = request.persistent_server_start_requested
+        || request.runtime_readiness.persistent_server_started
+        || request.session_lifecycle.persistent_server_started;
+    let public_network_exposed = request.public_network_exposure_requested
+        || request.runtime_readiness.public_network_exposed
+        || request.session_lifecycle.public_network_exposed
+        || request.loopback_runtime.public_network_exposed;
+    let live_controls_enabled = request.live_controls_requested
+        || request.runtime_readiness.live_controls_enabled
+        || request.session_lifecycle.live_controls_enabled
+        || request.loopback_runtime.live_controls_enabled;
+    let production_ready = request.production_ready_claimed
+        || request.runtime_readiness.production_ready
+        || request.session_lifecycle.production_ready
+        || request.loopback_runtime.production_ready;
+
+    let mut violation_codes = Vec::new();
+    push_dashboard_code_if(
+        &mut violation_codes,
+        !runtime_readiness_ready,
+        "DASHBOARD_PERSISTENT_LOCAL_HOST_RUNTIME_NOT_READY",
+    );
+    push_dashboard_code_if(
+        &mut violation_codes,
+        !session_lifecycle_ready,
+        "DASHBOARD_PERSISTENT_LOCAL_HOST_SESSION_NOT_READY",
+    );
+    push_dashboard_code_if(
+        &mut violation_codes,
+        !loopback_runtime_ready,
+        "DASHBOARD_PERSISTENT_LOCAL_HOST_LOOPBACK_RUNTIME_NOT_READY",
+    );
+    push_dashboard_code_if(
+        &mut violation_codes,
+        !request.persistent_host_config_present,
+        "DASHBOARD_PERSISTENT_LOCAL_HOST_CONFIG_MISSING",
+    );
+    push_dashboard_code_if(
+        &mut violation_codes,
+        !request.loopback_only,
+        "DASHBOARD_PERSISTENT_LOCAL_HOST_LOOPBACK_REQUIRED",
+    );
+    push_dashboard_code_if(
+        &mut violation_codes,
+        !request.authentication_required,
+        "DASHBOARD_PERSISTENT_LOCAL_HOST_AUTHENTICATION_REQUIRED",
+    );
+    push_dashboard_code_if(
+        &mut violation_codes,
+        !request.authorization_required,
+        "DASHBOARD_PERSISTENT_LOCAL_HOST_AUTHORIZATION_REQUIRED",
+    );
+    push_dashboard_code_if(
+        &mut violation_codes,
+        !request.csrf_required,
+        "DASHBOARD_PERSISTENT_LOCAL_HOST_CSRF_REQUIRED",
+    );
+    push_dashboard_code_if(
+        &mut violation_codes,
+        !request.read_only_controls_required,
+        "DASHBOARD_PERSISTENT_LOCAL_HOST_READ_ONLY_REQUIRED",
+    );
+    push_dashboard_code_if(
+        &mut violation_codes,
+        !request.rate_limit_required,
+        "DASHBOARD_PERSISTENT_LOCAL_HOST_RATE_LIMIT_REQUIRED",
+    );
+    push_dashboard_code_if(
+        &mut violation_codes,
+        !request.audit_state_preflight_required,
+        "DASHBOARD_PERSISTENT_LOCAL_HOST_AUDIT_STATE_PREFLIGHT_REQUIRED",
+    );
+    push_dashboard_code_if(
+        &mut violation_codes,
+        !remaining_external_evidence_recorded,
+        "DASHBOARD_PERSISTENT_LOCAL_HOST_REMAINING_EVIDENCE_MISSING",
+    );
+    push_dashboard_code_if(
+        &mut violation_codes,
+        persistent_server_started,
+        "DASHBOARD_PERSISTENT_LOCAL_HOST_SERVER_STARTED",
+    );
+    push_dashboard_code_if(
+        &mut violation_codes,
+        public_network_exposed,
+        "DASHBOARD_PERSISTENT_LOCAL_HOST_PUBLIC_NETWORK_EXPOSED",
+    );
+    push_dashboard_code_if(
+        &mut violation_codes,
+        live_controls_enabled,
+        "DASHBOARD_PERSISTENT_LOCAL_HOST_LIVE_CONTROLS_ENABLED",
+    );
+    push_dashboard_code_if(
+        &mut violation_codes,
+        production_ready,
+        "DASHBOARD_PERSISTENT_LOCAL_HOST_PRODUCTION_READY_CLAIMED",
+    );
+
+    let report = DashboardPersistentLocalHostReadinessReport {
+        review_version: DASHBOARD_PERSISTENT_LOCAL_HOST_REVIEW_VERSION.to_owned(),
+        review_id: request.review_id,
+        status: if violation_codes.is_empty() {
+            DashboardPersistentLocalHostReadinessStatus::ReadyForLocalReview
+        } else {
+            DashboardPersistentLocalHostReadinessStatus::Blocked
+        },
+        runtime_readiness_ready,
+        session_lifecycle_ready,
+        loopback_runtime_ready,
+        persistent_host_config_present: request.persistent_host_config_present,
+        loopback_only: request.loopback_only,
+        authentication_required: request.authentication_required,
+        authorization_required: request.authorization_required,
+        csrf_required: request.csrf_required,
+        read_only_controls_required: request.read_only_controls_required,
+        rate_limit_required: request.rate_limit_required,
+        audit_state_preflight_required: request.audit_state_preflight_required,
         remaining_external_evidence_recorded,
         remaining_external_evidence_count,
         missing_control_count,
@@ -3768,6 +4171,126 @@ pub fn append_dashboard_loopback_runtime_probe_audit(
     journal.append_event(event).map_err(DashboardError::from)
 }
 
+/// Persist the latest local persistent-dashboard host readiness review.
+///
+/// This stores sanitized local review metadata only. It does not store browser
+/// credentials, session material, CSRF token material, secrets, or readiness claims.
+pub fn persist_dashboard_persistent_local_host_readiness_checkpoint(
+    store: &mut impl StateStore,
+    report: &DashboardPersistentLocalHostReadinessReport,
+    updated_at_unix_ms: u64,
+) -> Result<StateCheckpoint, DashboardError> {
+    report.validate()?;
+    let checkpoint = StateCheckpoint {
+        key: DASHBOARD_LAST_PERSISTENT_LOCAL_HOST_REVIEW_CHECKPOINT_KEY.to_owned(),
+        subsystem: DASHBOARD_STATE_SUBSYSTEM.to_owned(),
+        value: serde_json::to_string(report).map_err(|error| DashboardError::StateStoreFailed {
+            reason: format!(
+                "failed to serialize dashboard persistent local host checkpoint: {error}"
+            ),
+        })?,
+        updated_at_unix_ms,
+    };
+    store
+        .put_checkpoint(checkpoint.clone())
+        .map_err(DashboardError::from)?;
+    Ok(checkpoint)
+}
+
+/// Append one local persistent-dashboard host readiness review to audit.
+///
+/// This records non-secret local readiness outcomes only. It does not expose
+/// public networks, retain browser/session/token material, start a persistent
+/// server, enable live controls, or claim production readiness.
+pub fn append_dashboard_persistent_local_host_readiness_audit(
+    journal: &mut AppendOnlyAuditJournal,
+    report: &DashboardPersistentLocalHostReadinessReport,
+    occurred_at_unix_ms: u64,
+) -> Result<AuditRecord, DashboardError> {
+    report.validate()?;
+    let mut event = AuditEvent::new(
+        format!(
+            "dashboard-persistent-local-host-readiness-{}",
+            report.review_id
+        ),
+        AuditEventKind::RuntimeLifecycle,
+        DASHBOARD_STATE_SUBSYSTEM,
+        "dashboard-persistent-local-host-readiness",
+        "dashboard persistent local host readiness review recorded",
+    );
+    event.occurred_at_unix_ms = occurred_at_unix_ms;
+    event = event
+        .with_metadata(
+            "review_version",
+            AuditValue::Text(DASHBOARD_PERSISTENT_LOCAL_HOST_REVIEW_VERSION.to_owned()),
+        )
+        .with_metadata("review_id", AuditValue::Text(report.review_id.clone()))
+        .with_metadata("status", AuditValue::Text(format!("{:?}", report.status)))
+        .with_metadata(
+            "runtime_readiness_ready",
+            AuditValue::Bool(report.runtime_readiness_ready),
+        )
+        .with_metadata(
+            "session_lifecycle_ready",
+            AuditValue::Bool(report.session_lifecycle_ready),
+        )
+        .with_metadata(
+            "loopback_runtime_ready",
+            AuditValue::Bool(report.loopback_runtime_ready),
+        )
+        .with_metadata(
+            "persistent_host_config_present",
+            AuditValue::Bool(report.persistent_host_config_present),
+        )
+        .with_metadata("loopback_only", AuditValue::Bool(report.loopback_only))
+        .with_metadata(
+            "authentication_required",
+            AuditValue::Bool(report.authentication_required),
+        )
+        .with_metadata(
+            "authorization_required",
+            AuditValue::Bool(report.authorization_required),
+        )
+        .with_metadata("csrf_required", AuditValue::Bool(report.csrf_required))
+        .with_metadata(
+            "read_only_controls_required",
+            AuditValue::Bool(report.read_only_controls_required),
+        )
+        .with_metadata(
+            "rate_limit_required",
+            AuditValue::Bool(report.rate_limit_required),
+        )
+        .with_metadata(
+            "audit_state_preflight_required",
+            AuditValue::Bool(report.audit_state_preflight_required),
+        )
+        .with_metadata(
+            "remaining_external_evidence_count",
+            AuditValue::Text(report.remaining_external_evidence_count.to_string()),
+        )
+        .with_metadata(
+            "missing_control_count",
+            AuditValue::Text(report.missing_control_count.to_string()),
+        )
+        .with_metadata(
+            "persistent_server_started",
+            AuditValue::Bool(report.persistent_server_started),
+        )
+        .with_metadata(
+            "public_network_exposed",
+            AuditValue::Bool(report.public_network_exposed),
+        )
+        .with_metadata(
+            "live_controls_enabled",
+            AuditValue::Bool(report.live_controls_enabled),
+        )
+        .with_metadata(
+            "production_ready",
+            AuditValue::Bool(report.production_ready),
+        );
+    journal.append_event(event).map_err(DashboardError::from)
+}
+
 /// One deterministic dashboard validation violation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DashboardViolation {
@@ -4027,35 +4550,43 @@ mod tests {
         append_dashboard_hosted_security_review_audit,
         append_dashboard_hosted_session_lifecycle_audit,
         append_dashboard_hosted_session_validation_audit,
-        append_dashboard_loopback_runtime_probe_audit, append_dashboard_render_audit,
+        append_dashboard_loopback_runtime_probe_audit,
+        append_dashboard_persistent_local_host_readiness_audit, append_dashboard_render_audit,
         is_sha256_hex, persist_dashboard_hosted_request_preflight_checkpoint,
         persist_dashboard_hosted_request_validation_checkpoint,
         persist_dashboard_hosted_security_review_checkpoint,
         persist_dashboard_hosted_session_lifecycle_checkpoint,
         persist_dashboard_hosted_session_validation_checkpoint,
-        persist_dashboard_loopback_runtime_probe_checkpoint, persist_dashboard_render_checkpoint,
-        preflight_dashboard_hosted_request, review_dashboard_hosted_runtime_readiness,
-        review_dashboard_hosted_security, sha256_hex, validate_dashboard_hosted_request,
-        validate_dashboard_hosted_session, validate_dashboard_hosted_session_lifecycle,
-        validate_dashboard_loopback_runtime_probe, DashboardAccessAuthorizationStatus,
-        DashboardAccessContext, DashboardAccessSource, DashboardBoundaryConfig, DashboardError,
-        DashboardHostedRequestMethod, DashboardHostedRequestPreflight,
-        DashboardHostedRequestPreflightStatus, DashboardHostedRequestValidation,
-        DashboardHostedRequestValidationReport, DashboardHostedRequestValidationStatus,
-        DashboardHostedRuntimeReadinessReviewRequest, DashboardHostedRuntimeReadinessReviewStatus,
-        DashboardHostedSecurityPolicy, DashboardHostedSecurityReviewStatus,
-        DashboardHostedSessionLifecycleValidation, DashboardHostedSessionLifecycleValidationReport,
+        persist_dashboard_loopback_runtime_probe_checkpoint,
+        persist_dashboard_persistent_local_host_readiness_checkpoint,
+        persist_dashboard_render_checkpoint, preflight_dashboard_hosted_request,
+        review_dashboard_hosted_runtime_readiness, review_dashboard_hosted_security,
+        review_dashboard_persistent_local_host_readiness, sha256_hex,
+        validate_dashboard_hosted_request, validate_dashboard_hosted_session,
+        validate_dashboard_hosted_session_lifecycle, validate_dashboard_loopback_runtime_probe,
+        DashboardAccessAuthorizationStatus, DashboardAccessContext, DashboardAccessSource,
+        DashboardBoundaryConfig, DashboardError, DashboardHostedRequestMethod,
+        DashboardHostedRequestPreflight, DashboardHostedRequestPreflightStatus,
+        DashboardHostedRequestValidation, DashboardHostedRequestValidationReport,
+        DashboardHostedRequestValidationStatus, DashboardHostedRuntimeReadinessReviewRequest,
+        DashboardHostedRuntimeReadinessReviewStatus, DashboardHostedSecurityPolicy,
+        DashboardHostedSecurityReviewStatus, DashboardHostedSessionLifecycleValidation,
+        DashboardHostedSessionLifecycleValidationReport,
         DashboardHostedSessionLifecycleValidationStatus, DashboardHostedSessionValidationReport,
         DashboardHostedSessionValidationStatus, DashboardLoopbackRuntimeProbe,
         DashboardLoopbackRuntimeProbeReport, DashboardLoopbackRuntimeProbeStatus, DashboardPanel,
-        DashboardPanelItem, DashboardPanelKind, DashboardRenderRecord, DashboardRenderRequest,
-        DashboardRenderer, DashboardServerBinding, DashboardSeverity, DashboardSnapshot,
-        DeterministicDashboardRenderer, DASHBOARD_LAST_HOSTED_REQUEST_PREFLIGHT_CHECKPOINT_KEY,
+        DashboardPanelItem, DashboardPanelKind, DashboardPersistentLocalHostReadinessReport,
+        DashboardPersistentLocalHostReadinessRequest, DashboardPersistentLocalHostReadinessStatus,
+        DashboardRenderRecord, DashboardRenderRequest, DashboardRenderer, DashboardServerBinding,
+        DashboardSeverity, DashboardSnapshot, DeterministicDashboardRenderer,
+        DASHBOARD_LAST_HOSTED_REQUEST_PREFLIGHT_CHECKPOINT_KEY,
         DASHBOARD_LAST_HOSTED_REQUEST_VALIDATION_CHECKPOINT_KEY,
         DASHBOARD_LAST_HOSTED_SECURITY_REVIEW_CHECKPOINT_KEY,
         DASHBOARD_LAST_HOSTED_SESSION_LIFECYCLE_CHECKPOINT_KEY,
         DASHBOARD_LAST_HOSTED_SESSION_VALIDATION_CHECKPOINT_KEY,
-        DASHBOARD_LAST_LOOPBACK_RUNTIME_PROBE_CHECKPOINT_KEY, DASHBOARD_LAST_RENDER_CHECKPOINT_KEY,
+        DASHBOARD_LAST_LOOPBACK_RUNTIME_PROBE_CHECKPOINT_KEY,
+        DASHBOARD_LAST_PERSISTENT_LOCAL_HOST_REVIEW_CHECKPOINT_KEY,
+        DASHBOARD_LAST_RENDER_CHECKPOINT_KEY,
     };
     use crate::{AppendOnlyAuditJournal, RuntimeMode, SqliteWalStateStore, StateStore};
     use std::{env, fs, path::PathBuf, process};
@@ -5270,6 +5801,175 @@ mod tests {
                 report.violation_codes.iter().any(|code| code == expected),
                 "missing expected violation code {expected}"
             );
+        }
+    }
+
+    #[test]
+    fn persistent_dashboard_local_host_readiness_accepts_local_prerequisites() {
+        let report = review_dashboard_persistent_local_host_readiness(
+            persistent_local_host_readiness_request(false, true),
+        )
+        .expect("persistent local host readiness should compose local prerequisites");
+
+        assert_eq!(
+            report.status,
+            DashboardPersistentLocalHostReadinessStatus::ReadyForLocalReview
+        );
+        assert!(report.runtime_readiness_ready);
+        assert!(report.session_lifecycle_ready);
+        assert!(report.loopback_runtime_ready);
+        assert!(report.persistent_host_config_present);
+        assert!(report.loopback_only);
+        assert!(report.authentication_required);
+        assert!(report.authorization_required);
+        assert!(report.csrf_required);
+        assert!(report.read_only_controls_required);
+        assert!(report.rate_limit_required);
+        assert!(report.audit_state_preflight_required);
+        assert!(report.remaining_external_evidence_recorded);
+        assert_eq!(report.remaining_external_evidence_count, 4);
+        assert_eq!(report.missing_control_count, 0);
+        assert!(!report.persistent_server_started);
+        assert!(!report.public_network_exposed);
+        assert!(!report.live_controls_enabled);
+        assert!(!report.production_ready);
+        assert!(report.violation_codes.is_empty());
+    }
+
+    #[test]
+    fn persistent_dashboard_local_host_readiness_blocks_side_effect_claims() {
+        let report = review_dashboard_persistent_local_host_readiness(
+            persistent_local_host_readiness_request(true, true),
+        )
+        .expect("side-effect claims should produce blocked persistent-host review");
+
+        assert_eq!(
+            report.status,
+            DashboardPersistentLocalHostReadinessStatus::Blocked
+        );
+        assert!(report.persistent_server_started);
+        assert!(report.public_network_exposed);
+        assert!(report.live_controls_enabled);
+        assert!(report.production_ready);
+        for expected in [
+            "DASHBOARD_PERSISTENT_LOCAL_HOST_SERVER_STARTED",
+            "DASHBOARD_PERSISTENT_LOCAL_HOST_PUBLIC_NETWORK_EXPOSED",
+            "DASHBOARD_PERSISTENT_LOCAL_HOST_LIVE_CONTROLS_ENABLED",
+            "DASHBOARD_PERSISTENT_LOCAL_HOST_PRODUCTION_READY_CLAIMED",
+        ] {
+            assert!(
+                report.violation_codes.iter().any(|code| code == expected),
+                "missing expected violation code {expected}"
+            );
+        }
+    }
+
+    #[test]
+    fn persistent_dashboard_local_host_readiness_audit_and_state_reopen_locally() {
+        let audit_path = temp_audit_path("dashboard-persistent-local-host-readiness");
+        let state_path = temp_state_path("dashboard-persistent-local-host-readiness");
+        let report = review_dashboard_persistent_local_host_readiness(
+            persistent_local_host_readiness_request(false, true),
+        )
+        .expect("persistent local host readiness should compose local prerequisites");
+        let mut journal = AppendOnlyAuditJournal::open(&audit_path).expect("journal opens");
+        let mut store = SqliteWalStateStore::open(&state_path).expect("sqlite opens");
+
+        let audit_record = append_dashboard_persistent_local_host_readiness_audit(
+            &mut journal,
+            &report,
+            1_700_000_000_851,
+        )
+        .expect("persistent local host readiness audit writes");
+        let checkpoint = persist_dashboard_persistent_local_host_readiness_checkpoint(
+            &mut store,
+            &report,
+            1_700_000_000_852,
+        )
+        .expect("persistent local host readiness checkpoint writes");
+        assert_eq!(audit_record.sequence, 1);
+        assert_eq!(
+            checkpoint.key,
+            DASHBOARD_LAST_PERSISTENT_LOCAL_HOST_REVIEW_CHECKPOINT_KEY
+        );
+        drop(store);
+        drop(journal);
+
+        let replayed = AppendOnlyAuditJournal::open(&audit_path).expect("journal replays");
+        assert_eq!(replayed.next_sequence(), 2);
+        let reopened = SqliteWalStateStore::open(&state_path).expect("sqlite reopens");
+        let recovered = reopened
+            .get_checkpoint(DASHBOARD_LAST_PERSISTENT_LOCAL_HOST_REVIEW_CHECKPOINT_KEY)
+            .expect("checkpoint lookup succeeds")
+            .expect("persistent local host readiness checkpoint exists");
+        assert_eq!(recovered.value, checkpoint.value);
+        let recovered_report: DashboardPersistentLocalHostReadinessReport =
+            serde_json::from_str(&recovered.value).expect("checkpoint report parses");
+        assert_eq!(
+            recovered_report.status,
+            DashboardPersistentLocalHostReadinessStatus::ReadyForLocalReview
+        );
+        assert!(recovered_report.runtime_readiness_ready);
+        assert!(recovered_report.session_lifecycle_ready);
+        assert!(recovered_report.loopback_runtime_ready);
+        assert!(!recovered_report.persistent_server_started);
+        assert!(!recovered_report.public_network_exposed);
+        assert!(!recovered_report.live_controls_enabled);
+        assert!(!recovered_report.production_ready);
+
+        let _ = fs::remove_file(audit_path);
+        cleanup_state_files(&state_path);
+    }
+
+    fn persistent_local_host_readiness_request(
+        side_effect_claimed: bool,
+        include_remaining_external_evidence: bool,
+    ) -> DashboardPersistentLocalHostReadinessRequest {
+        let runtime_readiness = review_dashboard_hosted_runtime_readiness(
+            hosted_runtime_readiness_request(false, true),
+        )
+        .expect("hosted runtime readiness builds");
+        let session_lifecycle =
+            validate_dashboard_hosted_session_lifecycle(&ready_hosted_session_lifecycle_request())
+                .expect("hosted session lifecycle builds");
+        let loopback_runtime =
+            validate_dashboard_loopback_runtime_probe(DashboardLoopbackRuntimeProbe {
+                probe_id: "dashboard-persistent-local-host-loopback-runtime".to_owned(),
+                render_record: render_record(),
+                bind_host: "127.0.0.1".to_owned(),
+                requested_port: 0,
+                request_count: 3,
+                public_exposure_requested: false,
+                live_controls_requested: false,
+            })
+            .expect("loopback runtime probe builds");
+        DashboardPersistentLocalHostReadinessRequest {
+            review_id: "dashboard-persistent-local-host-readiness".to_owned(),
+            runtime_readiness,
+            session_lifecycle,
+            loopback_runtime,
+            persistent_host_config_present: true,
+            loopback_only: true,
+            authentication_required: true,
+            authorization_required: true,
+            csrf_required: true,
+            read_only_controls_required: true,
+            rate_limit_required: true,
+            audit_state_preflight_required: true,
+            persistent_server_start_requested: side_effect_claimed,
+            public_network_exposure_requested: side_effect_claimed,
+            live_controls_requested: side_effect_claimed,
+            production_ready_claimed: side_effect_claimed,
+            remaining_external_evidence: if include_remaining_external_evidence {
+                vec![
+                    "daemon supervision validation".to_owned(),
+                    "browser credential/session integration validation".to_owned(),
+                    "external dashboard security review".to_owned(),
+                    "deployment-host public exposure denial evidence".to_owned(),
+                ]
+            } else {
+                Vec::new()
+            },
         }
     }
 

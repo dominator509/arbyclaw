@@ -419,6 +419,45 @@ def validate_dashboard_loopback_runtime_cli(parsed: dict[str, str]) -> list[str]
     return errors
 
 
+def validate_dashboard_persistent_local_host_cli(parsed: dict[str, str]) -> list[str]:
+    errors: list[str] = []
+    for key in (
+        "dashboard-persistent-local-host-checkpoint-recovered",
+        "dashboard-persistent-local-host-runtime-readiness-ready",
+        "dashboard-persistent-local-host-session-lifecycle-ready",
+        "dashboard-persistent-local-host-loopback-runtime-ready",
+        "dashboard-persistent-local-host-config-present",
+        "dashboard-persistent-local-host-loopback-only",
+        "dashboard-persistent-local-host-authentication-required",
+        "dashboard-persistent-local-host-authorization-required",
+        "dashboard-persistent-local-host-csrf-required",
+        "dashboard-persistent-local-host-read-only-controls-required",
+        "dashboard-persistent-local-host-rate-limit-required",
+        "dashboard-persistent-local-host-audit-state-preflight-required",
+    ):
+        if parsed.get(key) != "true":
+            errors.append(f"dashboard persistent local host cli expected {key}=true")
+    for key in (
+        "persistent-dashboard-server-started",
+        "public-network-exposed",
+        "live-controls-enabled",
+        "external-submission-performed",
+        "live-execution-performed",
+        "production-ready",
+    ):
+        if parsed.get(key) != "false":
+            errors.append(f"dashboard persistent local host cli expected {key}=false")
+    if parsed.get("dashboard-persistent-local-host") != "validation passed":
+        errors.append("dashboard persistent local host cli did not report validation passed")
+    if parse_positive_int(parsed.get("dashboard-persistent-local-host-audit-records-replayed")) != 1:
+        errors.append("dashboard persistent local host cli expected one replayed audit record")
+    if parse_positive_int(parsed.get("dashboard-persistent-local-host-remaining-external-evidence-count")) != 4:
+        errors.append("dashboard persistent local host cli expected four remaining evidence references")
+    if parse_positive_int(parsed.get("dashboard-persistent-local-host-missing-control-count")) != 0:
+        errors.append("dashboard persistent local host cli expected zero missing controls")
+    return errors
+
+
 def validate_observability_cli(parsed: dict[str, str]) -> list[str]:
     errors: list[str] = []
     for key in (
@@ -988,6 +1027,19 @@ def main() -> int:
                 ],
             ),
             run_text_command(
+                "dashboard_persistent_local_host_cli",
+                [
+                    "cargo",
+                    "run",
+                    "-p",
+                    "arb-agent",
+                    "--",
+                    "validate-dashboard-persistent-local-host",
+                    "--workspace",
+                    str(workspace_root / "dashboard-persistent-local-host"),
+                ],
+            ),
+            run_text_command(
                 "observability_runtime_cli",
                 [
                     "cargo",
@@ -1099,6 +1151,7 @@ def main() -> int:
         "dashboard_runtime_cli": lambda component: validate_dashboard_cli(component["parsed"]),
         "dashboard_session_lifecycle_cli": lambda component: validate_dashboard_session_lifecycle_cli(component["parsed"]),
         "dashboard_loopback_runtime_cli": lambda component: validate_dashboard_loopback_runtime_cli(component["parsed"]),
+        "dashboard_persistent_local_host_cli": lambda component: validate_dashboard_persistent_local_host_cli(component["parsed"]),
         "observability_runtime_cli": lambda component: validate_observability_cli(component["parsed"]),
         "observability_metrics_runtime_cli": lambda component: validate_observability_metrics_runtime_cli(component["parsed"]),
         "observability_provider_boundary_cli": lambda component: validate_observability_provider_boundary_cli(component["parsed"]),

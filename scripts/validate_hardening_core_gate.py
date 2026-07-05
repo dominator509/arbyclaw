@@ -259,8 +259,8 @@ def validate_components(components: list[dict[str, Any]]) -> tuple[list[str], bo
     assert operator_surface is not None
     if operator_surface.get("all_components_passed") is not True:
         errors.append("operator surface gate did not pass every component")
-    if operator_surface.get("component_count") != 15:
-        errors.append("operator surface gate did not report exactly 15 components")
+    if operator_surface.get("component_count") != 16:
+        errors.append("operator surface gate did not report exactly 16 components")
     if operator_surface.get("unsafe_side_effect_flags_detected") is not False:
         errors.append("operator surface gate detected unsafe side-effect flags")
     for field in (
