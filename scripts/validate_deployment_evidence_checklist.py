@@ -59,6 +59,7 @@ REQUIRED_BUNDLE_COMPONENTS = (
     "deployment-host-runtime-plan",
     "deployment-host-observability-metrics-runtime",
     "deployment-host-observability-provider-boundary",
+    "deployment-host-communications-delivery-provider",
     "deployment-host-static-hardening-config-smoke",
     "deployment-host-config-redaction",
     "deployment-host-log-redaction",

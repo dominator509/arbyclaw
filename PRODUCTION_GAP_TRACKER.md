@@ -2,7 +2,15 @@
 
 ## Executive Status Summary
 
-Current status override: the project is in Phase 109 deployment observability provider boundary gate status for ChatGPT Project Mode. The local operator-surface aggregate has 13 components, and deployment-host runtime, deployment-runtime, deployment evidence bundle, and deployment evidence checklist gates now require the local observability provider-boundary wrapper. This is local/CI validation evidence only and does not approve live funds, production deployment, real outbound communications, persistent dashboard hosting, real observability/exporter/alert runtime, real provider calls, signing, broadcasts, secrets, service-manager execution, or autonomous execution.
+Current status override: the project is in Phase 110 deployment communications delivery-provider gate status for ChatGPT Project Mode. The local operator-surface aggregate has 13 components, and deployment-host runtime, deployment-runtime, deployment evidence bundle, and deployment evidence checklist gates now require the local communications delivery-provider wrapper. This is local/CI validation evidence only and does not approve live funds, production deployment, real outbound communications, persistent dashboard hosting, real observability/exporter/alert runtime, real provider calls, real message delivery, platform-token loading, signing, broadcasts, secrets, service-manager execution, or autonomous execution.
+
+Latest Phase 110 local update:
+- Added `--run-communications-delivery-provider-boundary` and `--communications-delivery-provider-workspace` to `scripts/validate_deployment_host_runtime.py`.
+- Added deployment-host wrapper parsing for `arb-agent validate-communications-delivery-provider-boundary --workspace <fresh-dir>`.
+- Added `deployment-host-communications-delivery-provider` to `scripts/validate_deployment_evidence_bundle.py`.
+- Required that bundle component in `scripts/validate_deployment_evidence_checklist.py`.
+- Added the delivery-provider wrapper to `scripts/validate_deployment_runtime_gate.py` with exact `BlockedPendingProviderDeliveryValidation`, audit replay, checkpoint recovery, local prerequisite readiness, remaining-provider-evidence count, and no-side-effect assertions.
+- This strengthens GAP-0060, GAP-0068, and GAP-0076 deployment-facing local evidence only. It does not create messaging provider calls, platform-token loading, message delivery, service-manager execution, external AppSec review, or production readiness.
 
 Latest Phase 109 local update:
 - Added `--run-observability-provider-boundary` and `--observability-provider-boundary-workspace` to `scripts/validate_deployment_host_runtime.py`.

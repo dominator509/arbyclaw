@@ -46,7 +46,10 @@ services, exporters, public endpoints, or alerts.
 When `--run-deployment-log-redaction` is provided, it runs a local sanitized
 deployment log/audit redaction CLI against a fresh workspace without touching
 deployment logs, service managers, secrets, external systems, or live
-execution.
+execution. When `--run-communications-delivery-provider-boundary` is provided,
+it composes the local delivery-provider boundary CLI output into the same report
+without provider calls, message delivery, token loading, outbound network use,
+service-manager actions, or deployment mutation.
 """
 
 from __future__ import annotations
@@ -207,6 +210,11 @@ def parse_args() -> argparse.Namespace:
         help="run arb-agent validate-communications-runtime against --communications-workspace",
     )
     parser.add_argument(
+        "--run-communications-delivery-provider-boundary",
+        action="store_true",
+        help="run arb-agent validate-communications-delivery-provider-boundary against --communications-delivery-provider-workspace",
+    )
+    parser.add_argument(
         "--runtime-smoke-iterations",
         type=int,
         default=1,
@@ -327,6 +335,11 @@ def parse_args() -> argparse.Namespace:
         "--communications-workspace",
         type=pathlib.Path,
         help="fresh non-secret workspace for validate-communications-runtime",
+    )
+    parser.add_argument(
+        "--communications-delivery-provider-workspace",
+        type=pathlib.Path,
+        help="fresh non-secret workspace for validate-communications-delivery-provider-boundary",
     )
     parser.add_argument(
         "--filesystem-audit-path",
@@ -1378,6 +1391,34 @@ def communications_runtime_command(
         "arb-agent",
         "--",
         "validate-communications-runtime",
+        "--workspace",
+        str(workspace),
+    ]
+
+
+def communications_delivery_provider_command(
+    agent_bin: pathlib.Path | None, workspace: pathlib.Path
+) -> list[str]:
+    if agent_bin is not None:
+        if not agent_bin.exists():
+            raise ValueError(f"agent binary does not exist: {relative_or_absolute(agent_bin)}")
+        return [
+            str(agent_bin),
+            "validate-communications-delivery-provider-boundary",
+            "--workspace",
+            str(workspace),
+        ]
+
+    cargo = shutil.which("cargo")
+    if cargo is None:
+        raise RuntimeError("cargo unavailable and --agent-bin was not provided")
+    return [
+        cargo,
+        "run",
+        "-p",
+        "arb-agent",
+        "--",
+        "validate-communications-delivery-provider-boundary",
         "--workspace",
         str(workspace),
     ]
@@ -2811,6 +2852,72 @@ def run_communications_runtime(
     }
 
 
+def run_communications_delivery_provider(
+    workspace: pathlib.Path | None,
+    agent_bin: pathlib.Path | None,
+) -> dict[str, Any]:
+    delivery_workspace = validate_fresh_workspace(
+        workspace,
+        "--communications-delivery-provider-workspace",
+        "--run-communications-delivery-provider-boundary",
+    )
+    command = communications_delivery_provider_command(agent_bin, delivery_workspace)
+    completed = subprocess.run(
+        command,
+        cwd=ROOT,
+        check=False,
+        encoding="utf-8",
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        timeout=LOCAL_RUNTIME_HELPER_TIMEOUT_SECONDS,
+    )
+    parsed = parse_key_value_output(completed.stdout)
+    return {
+        "command_kind": "agent-bin" if agent_bin is not None else "cargo-run",
+        "returncode": completed.returncode,
+        "workspace": relative_or_absolute(delivery_workspace),
+        "stdout_line_count": len(completed.stdout.splitlines()),
+        "status": parsed.get("communications-delivery-provider-boundary-status"),
+        "channel_session_ready": parsed.get(
+            "communications-delivery-provider-channel-session-ready"
+        ),
+        "platform_adapter_ready": parsed.get(
+            "communications-delivery-provider-platform-adapter-ready"
+        ),
+        "delivery_evidence_available": parsed.get(
+            "communications-delivery-provider-delivery-evidence-available"
+        ),
+        "rate_limit_evidence_available": parsed.get(
+            "communications-delivery-provider-rate-limit-evidence-available"
+        ),
+        "outage_evidence_available": parsed.get(
+            "communications-delivery-provider-outage-evidence-available"
+        ),
+        "platform_identity_evidence_available": parsed.get(
+            "communications-delivery-provider-platform-identity-evidence-available"
+        ),
+        "remaining_external_evidence_count": parsed.get(
+            "communications-delivery-provider-remaining-external-evidence-count"
+        ),
+        "blocker_count": parsed.get("communications-delivery-provider-blocker-count"),
+        "audit_records_replayed": parsed.get(
+            "communications-delivery-provider-audit-records-replayed"
+        ),
+        "checkpoints_recovered": parsed.get(
+            "communications-delivery-provider-checkpoints-recovered"
+        ),
+        "outbound_network_used": parsed.get("outbound-network-used"),
+        "message_delivered": parsed.get("message-delivered"),
+        "provider_call_performed": parsed.get("provider-call-performed"),
+        "token_secret_material_loaded": parsed.get("token-secret-material-loaded"),
+        "live_execution_performed": parsed.get("live-execution-performed"),
+        "signing_or_broadcast_performed": parsed.get("signing-or-broadcast-performed"),
+        "production_ready": parsed.get("production-ready"),
+        "communications_delivery_provider_passed": completed.returncode == 0,
+    }
+
+
 def build_report(args: argparse.Namespace) -> dict[str, Any]:
     systemd_report = run_systemd_lifecycle(args.systemd_mode, args.unit)
     runtime_report = None
@@ -3014,6 +3121,14 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
         )
         if communications_report["returncode"] != 0:
             raise RuntimeError("validate-communications-runtime failed")
+    communications_delivery_report = None
+    if args.run_communications_delivery_provider_boundary:
+        communications_delivery_report = run_communications_delivery_provider(
+            args.communications_delivery_provider_workspace,
+            args.agent_bin,
+        )
+        if communications_delivery_report["returncode"] != 0:
+            raise RuntimeError("validate-communications-delivery-provider-boundary failed")
 
     return {
         "schema": "arbyclaw.deployment_host_runtime_validation.v1",
@@ -3068,6 +3183,8 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
         "dashboard_runtime_requested": args.run_dashboard_runtime,
         "communications_runtime": communications_report,
         "communications_runtime_requested": args.run_communications_runtime,
+        "communications_delivery_provider": communications_delivery_report,
+        "communications_delivery_provider_requested": args.run_communications_delivery_provider_boundary,
         "bounded_timeouts": {
             "systemd_lifecycle_seconds": SYSTEMD_LIFECYCLE_TIMEOUT_SECONDS,
             "local_runtime_helper_seconds": LOCAL_RUNTIME_HELPER_TIMEOUT_SECONDS,
@@ -3192,6 +3309,10 @@ def print_text_report(report: dict[str, Any]) -> None:
     print(
         "communications runtime requested: "
         f"{str(report['communications_runtime_requested']).lower()}"
+    )
+    print(
+        "communications delivery provider requested: "
+        f"{str(report['communications_delivery_provider_requested']).lower()}"
     )
     if report["runtime_smoke"] is not None:
         smoke = report["runtime_smoke"]
@@ -4301,6 +4422,70 @@ def print_text_report(report: dict[str, Any]) -> None:
             f"{communications.get('signing_or_broadcast_performed', '')}"
         )
         print(f"production-ready: {communications.get('production_ready', '')}")
+    if report["communications_delivery_provider"] is not None:
+        delivery = report["communications_delivery_provider"]
+        print(
+            "communications delivery provider passed: "
+            f"{str(delivery['communications_delivery_provider_passed']).lower()}"
+        )
+        print(f"communications delivery provider workspace: {delivery['workspace']}")
+        print(
+            "communications-delivery-provider-boundary-status: "
+            f"{delivery.get('status', '')}"
+        )
+        print(
+            "communications-delivery-provider-channel-session-ready: "
+            f"{delivery.get('channel_session_ready', '')}"
+        )
+        print(
+            "communications-delivery-provider-platform-adapter-ready: "
+            f"{delivery.get('platform_adapter_ready', '')}"
+        )
+        print(
+            "communications-delivery-provider-delivery-evidence-available: "
+            f"{delivery.get('delivery_evidence_available', '')}"
+        )
+        print(
+            "communications-delivery-provider-rate-limit-evidence-available: "
+            f"{delivery.get('rate_limit_evidence_available', '')}"
+        )
+        print(
+            "communications-delivery-provider-outage-evidence-available: "
+            f"{delivery.get('outage_evidence_available', '')}"
+        )
+        print(
+            "communications-delivery-provider-platform-identity-evidence-available: "
+            f"{delivery.get('platform_identity_evidence_available', '')}"
+        )
+        print(
+            "communications-delivery-provider-remaining-external-evidence-count: "
+            f"{delivery.get('remaining_external_evidence_count', '')}"
+        )
+        print(
+            "communications-delivery-provider-blocker-count: "
+            f"{delivery.get('blocker_count', '')}"
+        )
+        print(
+            "communications-delivery-provider-audit-records-replayed: "
+            f"{delivery.get('audit_records_replayed', '')}"
+        )
+        print(
+            "communications-delivery-provider-checkpoints-recovered: "
+            f"{delivery.get('checkpoints_recovered', '')}"
+        )
+        print(f"outbound-network-used: {delivery.get('outbound_network_used', '')}")
+        print(f"message-delivered: {delivery.get('message_delivered', '')}")
+        print(f"provider-call-performed: {delivery.get('provider_call_performed', '')}")
+        print(
+            "token-secret-material-loaded: "
+            f"{delivery.get('token_secret_material_loaded', '')}"
+        )
+        print(f"live-execution-performed: {delivery.get('live_execution_performed', '')}")
+        print(
+            "signing-or-broadcast-performed: "
+            f"{delivery.get('signing_or_broadcast_performed', '')}"
+        )
+        print(f"production-ready: {delivery.get('production_ready', '')}")
     print(f"service actions performed: {str(report['service_actions_performed']).lower()}")
     print(f"secrets loaded: {str(report['secrets_loaded']).lower()}")
     print(f"external calls performed: {str(report['external_calls_performed']).lower()}")

@@ -48,6 +48,7 @@ EXPECTED_COMPONENTS = {
     "runtime_panic_hook": "runtime_panic_hook_requested",
     "dashboard_runtime": "dashboard_runtime_requested",
     "communications_runtime": "communications_runtime_requested",
+    "communications_delivery_provider": "communications_delivery_provider_requested",
 }
 
 TRANSCRIPT_COMPONENTS = [
@@ -567,6 +568,9 @@ def build_command(args: argparse.Namespace, workspace: pathlib.Path) -> list[str
         "--run-communications-runtime",
         "--communications-workspace",
         str(workspace / "communications-runtime"),
+        "--run-communications-delivery-provider-boundary",
+        "--communications-delivery-provider-workspace",
+        str(workspace / "communications-delivery-provider"),
         "--json",
     ]
     if args.agent_bin is not None:
@@ -696,6 +700,51 @@ def validate_report(report: dict[str, Any]) -> list[str]:
                     )
             except ValueError:
                 errors.append(f"observability provider boundary {key} was not an integer")
+
+    delivery_provider = report.get("communications_delivery_provider")
+    if not isinstance(delivery_provider, dict):
+        errors.append("communications_delivery_provider report missing or invalid")
+    else:
+        if delivery_provider.get("communications_delivery_provider_passed") is not True:
+            errors.append("communications delivery provider was not marked as passed")
+        for key in (
+            "channel_session_ready",
+            "platform_adapter_ready",
+        ):
+            if delivery_provider.get(key) != "true":
+                errors.append(f"communications delivery provider {key} was not true")
+        for key in (
+            "delivery_evidence_available",
+            "rate_limit_evidence_available",
+            "outage_evidence_available",
+            "platform_identity_evidence_available",
+            "outbound_network_used",
+            "message_delivered",
+            "provider_call_performed",
+            "token_secret_material_loaded",
+            "live_execution_performed",
+            "signing_or_broadcast_performed",
+            "production_ready",
+        ):
+            if delivery_provider.get(key) != "false":
+                errors.append(f"communications delivery provider {key} was not false")
+        if delivery_provider.get("status") != "blocked-pending-provider-delivery-validation":
+            errors.append(
+                "communications delivery provider status was not blocked-pending-provider-delivery-validation"
+            )
+        for key, expected in (
+            ("remaining_external_evidence_count", 4),
+            ("blocker_count", 4),
+            ("audit_records_replayed", 8),
+            ("checkpoints_recovered", 8),
+        ):
+            try:
+                if int(delivery_provider.get(key, "0")) != expected:
+                    errors.append(
+                        f"communications delivery provider {key} was not {expected}"
+                    )
+            except ValueError:
+                errors.append(f"communications delivery provider {key} was not an integer")
 
     runtime_smoke = report.get("runtime_smoke")
     if not isinstance(runtime_smoke, dict):
