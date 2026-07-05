@@ -20,6 +20,7 @@ use arb_core::{
     append_observability_log_retention_execution_audit,
     append_observability_loopback_bind_validation_audit,
     append_observability_metrics_endpoint_validation_audit,
+    append_observability_metrics_runtime_probe_audit,
     append_observability_metrics_scrape_preflight_audit,
     append_observability_operations_review_audit, append_observability_record_audit,
     append_platform_adapter_review_audit, append_platform_command_ingress_audit,
@@ -60,6 +61,7 @@ use arb_core::{
     persist_observability_log_retention_execution_checkpoint,
     persist_observability_loopback_bind_validation_checkpoint,
     persist_observability_metrics_endpoint_validation_checkpoint,
+    persist_observability_metrics_runtime_probe_checkpoint,
     persist_observability_metrics_scrape_preflight_checkpoint,
     persist_observability_operations_review_checkpoint, persist_observability_record_checkpoint,
     persist_platform_adapter_review_checkpoint, persist_platform_command_ingress_checkpoint,
@@ -105,6 +107,7 @@ use arb_core::{
     validate_local_runtime_restart_recovery_with_trace_recovery, validate_local_tracing_subscriber,
     validate_market_data_provider_preflight, validate_market_data_reconnect_plan,
     validate_observability_loopback_bind, validate_observability_metrics_endpoint,
+    validate_observability_metrics_runtime_probe,
     validate_opportunity_candidate_trace_restart_recovery,
     validate_opportunity_planner_handoff_with_trace, validate_paid_market_data_provider_evaluation,
     validate_remote_command_envelope, validate_rollback_execution_transcript,
@@ -175,7 +178,8 @@ use arb_core::{
     ObservabilityAlertRouteDispatchStatus, ObservabilityBoundaryConfig,
     ObservabilityCollectionRequest, ObservabilityCollector, ObservabilityEndpointPreflight,
     ObservabilityLogRetentionExecutionRequest, ObservabilityLoopbackBindValidationRequest,
-    ObservabilityMetricsEndpointValidationRequest, ObservabilityMetricsScrapePreflightRequest,
+    ObservabilityMetricsEndpointValidationRequest, ObservabilityMetricsRuntimeProbe,
+    ObservabilityMetricsRuntimeProbeStatus, ObservabilityMetricsScrapePreflightRequest,
     ObservabilityOperationsPolicy, ObservabilityOperationsReviewStatus, ObservabilitySeverity,
     ObservabilitySnapshot, OperatorCommandRouter, OperatorCommandRoutingRequest,
     OperatorCommandSource, OperatorNotification, OpportunityCandidate, OpportunityLeg,
@@ -267,16 +271,17 @@ use arb_core::{
     MARKET_DATA_LAST_HISTORICAL_PERSISTENCE_CHECKPOINT_KEY,
     MARKET_DATA_LAST_PROVIDER_PREFLIGHT_CHECKPOINT_KEY,
     MARKET_DATA_LAST_RECONNECT_PLAN_CHECKPOINT_KEY, OBSERVABILITY_LAST_FAILURE_CHECKPOINT_KEY,
-    OBSERVABILITY_RUNBOOK_VERSION, OPPORTUNITY_ENGINE_VERSION, PACKAGING_DEPLOYMENT_VERSION,
-    PAPER_AUDIT_INTEGRATION_VERSION, PAPER_BALANCE_LEDGER_VERSION, PAPER_CONNECTOR_VERSION,
-    PAPER_REALISM_VALIDATION_VERSION, PAPER_REALISTIC_FILL_MODEL_VERSION,
-    POLICY_LAST_DECISION_CHECKPOINT_KEY, RUNTIME_BACKUP_RESTORE_VALIDATION_VERSION,
-    RUNTIME_DEPLOYMENT_SMOKE_VALIDATION_VERSION, RUNTIME_GRACEFUL_SHUTDOWN_CHECKPOINT_KEY,
-    RUNTIME_GRACEFUL_SHUTDOWN_VERSION, RUNTIME_LIFECYCLE_VERSION,
-    RUNTIME_RESTART_RECOVERY_VALIDATION_VERSION, SECRET_LAST_BACKUP_RESTORE_REVIEW_CHECKPOINT_KEY,
-    SECRET_LAST_ROTATION_PLAN_CHECKPOINT_KEY, SIGNER_LAST_AUTHORIZATION_ENVELOPE_CHECKPOINT_KEY,
-    SIGNER_LAST_REQUEST_CHECKPOINT_KEY, SIGNER_LAST_SECRET_SCOPE_REVIEW_CHECKPOINT_KEY,
-    SQLITE_WAL_DURABILITY_VERSION, SQLITE_WAL_STATE_SCHEMA_VERSION, TESTING_BACKTESTING_VERSION,
+    OBSERVABILITY_LAST_METRICS_RUNTIME_PROBE_CHECKPOINT_KEY, OBSERVABILITY_RUNBOOK_VERSION,
+    OPPORTUNITY_ENGINE_VERSION, PACKAGING_DEPLOYMENT_VERSION, PAPER_AUDIT_INTEGRATION_VERSION,
+    PAPER_BALANCE_LEDGER_VERSION, PAPER_CONNECTOR_VERSION, PAPER_REALISM_VALIDATION_VERSION,
+    PAPER_REALISTIC_FILL_MODEL_VERSION, POLICY_LAST_DECISION_CHECKPOINT_KEY,
+    RUNTIME_BACKUP_RESTORE_VALIDATION_VERSION, RUNTIME_DEPLOYMENT_SMOKE_VALIDATION_VERSION,
+    RUNTIME_GRACEFUL_SHUTDOWN_CHECKPOINT_KEY, RUNTIME_GRACEFUL_SHUTDOWN_VERSION,
+    RUNTIME_LIFECYCLE_VERSION, RUNTIME_RESTART_RECOVERY_VALIDATION_VERSION,
+    SECRET_LAST_BACKUP_RESTORE_REVIEW_CHECKPOINT_KEY, SECRET_LAST_ROTATION_PLAN_CHECKPOINT_KEY,
+    SIGNER_LAST_AUTHORIZATION_ENVELOPE_CHECKPOINT_KEY, SIGNER_LAST_REQUEST_CHECKPOINT_KEY,
+    SIGNER_LAST_SECRET_SCOPE_REVIEW_CHECKPOINT_KEY, SQLITE_WAL_DURABILITY_VERSION,
+    SQLITE_WAL_STATE_SCHEMA_VERSION, TESTING_BACKTESTING_VERSION,
     TESTING_LAST_FUZZ_CORPUS_REPLAY_REPORT_KEY, TESTING_LAST_PROPERTY_CHECK_REPORT_KEY,
     TESTING_LAST_VALIDATION_CORPUS_REPORT_KEY, TESTING_LAST_VALIDATION_RUN_CHECKPOINT_KEY,
 };
@@ -558,6 +563,7 @@ fn is_local_workspace_validation_command(command: &str) -> bool {
             | "validate-runtime-blocked-state-preflight"
             | "validate-runtime-blocked-audit-preflight"
             | "validate-observability-runtime"
+            | "validate-observability-metrics-runtime"
             | "validate-runtime-panic-hook"
             | "validate-dashboard-runtime"
             | "validate-dashboard-loopback-runtime"
@@ -726,6 +732,9 @@ fn run_local_workspace_validation_command(
             run_runtime_blocked_audit_preflight_validation(&options)
         }
         "validate-observability-runtime" => run_observability_runtime_validation(&options),
+        "validate-observability-metrics-runtime" => {
+            run_observability_metrics_runtime_validation(&options)
+        }
         "validate-runtime-panic-hook" => run_runtime_panic_hook_validation(&options),
         "validate-dashboard-runtime" => run_dashboard_runtime_validation(&options),
         "validate-dashboard-loopback-runtime" => {
@@ -973,6 +982,7 @@ fn print_usage() {
     println!("       arb-agent validate-dashboard-runtime --workspace <fresh-dir>");
     println!("       arb-agent validate-dashboard-loopback-runtime --workspace <fresh-dir>");
     println!("       arb-agent validate-observability-runtime --workspace <fresh-dir>");
+    println!("       arb-agent validate-observability-metrics-runtime --workspace <fresh-dir>");
     println!("       arb-agent validate-runtime-panic-hook --workspace <fresh-dir>");
     println!(
         "       arb-agent validate-runtime-smoke --config <path> --workspace <fresh-dir> [--iterations <n>]"
@@ -16711,6 +16721,189 @@ fn run_observability_runtime_validation(
     println!(
         "network-request-served: {}",
         endpoint_validation.network_request_served
+    );
+    println!("public-network-exposed: false");
+    println!("telemetry-exported: false");
+    println!("outbound-alerts-sent: false");
+    println!("external-submission-performed: false");
+    println!("live-execution-performed: false");
+    println!("production-ready: false");
+    Ok(())
+}
+
+#[allow(clippy::too_many_lines)]
+fn run_observability_metrics_runtime_validation(
+    options: &LocalValidationRunOptions,
+) -> Result<(), AgentCliError> {
+    prepare_fresh_workspace(&options.workspace_dir)?;
+    let audit_path = options
+        .workspace_dir
+        .join("observability-metrics-runtime.audit.jsonl");
+    let state_path = options
+        .workspace_dir
+        .join("observability-metrics-runtime.sqlite3");
+    let now_unix_ms = current_unix_ms()?;
+    let mut journal = AppendOnlyAuditJournal::open(&audit_path)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let mut store = SqliteWalStateStore::open(&state_path)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let collector = DeterministicObservabilityCollector;
+    let record = collector
+        .collect(ObservabilityCollectionRequest {
+            config: ObservabilityBoundaryConfig::default(),
+            snapshot: local_observability_runtime_snapshot(now_unix_ms),
+            access: ObservabilityAccessContext::local_collection(Some(
+                "local-observability-metrics-runtime-cli".to_owned(),
+            )),
+            operator_label: Some("local-observability-metrics-runtime-cli".to_owned()),
+            collected_at_ms: now_unix_ms.saturating_add(1),
+        })
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let operations_review = review_observability_operations(&ObservabilityOperationsPolicy {
+        review_id: "local-observability-metrics-runtime-review".to_owned(),
+        log_retention_required: true,
+        retention_days: 30,
+        redaction_required: true,
+        alert_routing_required: true,
+        alert_route_count: 1,
+        incident_runbook_required: true,
+        incident_runbook_count: 1,
+        loopback_or_authenticated_endpoint_required: true,
+        audit_state_preflight_required: true,
+        exporter_kill_switch_required: true,
+        alert_authorization_required: true,
+        rate_limit_backpressure_required: true,
+        retry_backoff_required: true,
+        no_secret_telemetry_required: true,
+        metrics_endpoint_requested: false,
+        outbound_alert_delivery_requested: false,
+        telemetry_export_requested: false,
+    })
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let export_report =
+        render_observability_export_dry_run(arb_core::ObservabilityExportDryRunRequest {
+            record,
+            operations_review,
+            alert_route_references: vec!["local-alert-route-1".to_owned()],
+            rendered_at_ms: now_unix_ms.saturating_add(2),
+        })
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let probe = validate_observability_metrics_runtime_probe(ObservabilityMetricsRuntimeProbe {
+        probe_id: "local-observability-metrics-runtime-probe".to_owned(),
+        export_report,
+        bind_host: "127.0.0.1".to_owned(),
+        requested_port: 0,
+        scrape_count: 3,
+        public_network_exposure_requested: false,
+        telemetry_export_requested: false,
+        outbound_alert_delivery_requested: false,
+    })
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let audit_record = append_observability_metrics_runtime_probe_audit(
+        &mut journal,
+        &probe,
+        now_unix_ms.saturating_add(3),
+    )
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let checkpoint = persist_observability_metrics_runtime_probe_checkpoint(
+        &mut store,
+        &probe,
+        now_unix_ms.saturating_add(4),
+    )
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    drop(store);
+    drop(journal);
+
+    let reopened_journal = AppendOnlyAuditJournal::open(&audit_path)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let replayed_records = reopened_journal.next_sequence().saturating_sub(1);
+    let reopened_store = SqliteWalStateStore::open(&state_path)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    reopened_store
+        .integrity_check()
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let recovered_checkpoint = reopened_store
+        .get_checkpoint(&checkpoint.key)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+
+    if audit_record.sequence != 1
+        || replayed_records != 1
+        || checkpoint.key != OBSERVABILITY_LAST_METRICS_RUNTIME_PROBE_CHECKPOINT_KEY
+        || recovered_checkpoint.is_none()
+        || probe.status != ObservabilityMetricsRuntimeProbeStatus::ReadyForLocalReview
+        || !probe.loopback_bind_validated
+        || probe.expected_scrape_count != 3
+        || probe.served_scrape_count != 3
+        || !probe.all_scrapes_returned_ok
+        || probe.response_metric_line_count == 0
+        || !probe.response_metric_lines_consistent
+        || probe.missing_control_count != 0
+        || !probe.local_metrics_runtime_started
+        || !probe.local_metrics_runtime_shutdown
+        || probe.public_network_exposed
+        || probe.telemetry_exported
+        || probe.outbound_alerts_sent
+        || probe.production_ready
+    {
+        return Err(AgentCliError::Validation(
+            "observability metrics runtime validation failed".to_owned(),
+        ));
+    }
+
+    println!("observability-metrics-runtime: validation passed");
+    println!(
+        "observability-metrics-runtime-workspace: {}",
+        options.workspace_dir.display()
+    );
+    println!("observability-metrics-runtime-version: {OBSERVABILITY_RUNBOOK_VERSION}");
+    println!(
+        "observability-metrics-runtime-checkpoint-key: {OBSERVABILITY_LAST_METRICS_RUNTIME_PROBE_CHECKPOINT_KEY}"
+    );
+    println!("observability-metrics-runtime-audit-records-replayed: {replayed_records}");
+    println!("observability-metrics-runtime-checkpoint-recovered: true");
+    println!(
+        "observability-metrics-runtime-loopback-bind-validated: {}",
+        probe.loopback_bind_validated
+    );
+    println!(
+        "observability-metrics-runtime-expected-scrapes: {}",
+        probe.expected_scrape_count
+    );
+    println!(
+        "observability-metrics-runtime-served-scrapes: {}",
+        probe.served_scrape_count
+    );
+    println!(
+        "observability-metrics-runtime-all-scrapes-returned-ok: {}",
+        probe.all_scrapes_returned_ok
+    );
+    println!(
+        "observability-metrics-runtime-response-lines-consistent: {}",
+        probe.response_metric_lines_consistent
+    );
+    println!(
+        "observability-metrics-runtime-response-metric-lines: {}",
+        probe.response_metric_line_count
+    );
+    println!(
+        "observability-metrics-runtime-started: {}",
+        probe.local_metrics_runtime_started
+    );
+    println!(
+        "observability-metrics-runtime-shutdown: {}",
+        probe.local_metrics_runtime_shutdown
+    );
+    println!(
+        "observability-metrics-runtime-public-network-exposed: {}",
+        probe.public_network_exposed
+    );
+    println!(
+        "observability-metrics-runtime-telemetry-exported: {}",
+        probe.telemetry_exported
+    );
+    println!(
+        "observability-metrics-runtime-outbound-alerts-sent: {}",
+        probe.outbound_alerts_sent
     );
     println!("public-network-exposed: false");
     println!("telemetry-exported: false");

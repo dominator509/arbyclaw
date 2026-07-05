@@ -59,6 +59,10 @@ pub const OBSERVABILITY_LAST_METRICS_SCRAPE_PREFLIGHT_CHECKPOINT_KEY: &str =
 pub const OBSERVABILITY_LAST_METRICS_ENDPOINT_VALIDATION_CHECKPOINT_KEY: &str =
     "observability:last-metrics-endpoint-validation";
 
+/// State-store key for the latest bounded local metrics runtime probe.
+pub const OBSERVABILITY_LAST_METRICS_RUNTIME_PROBE_CHECKPOINT_KEY: &str =
+    "observability:last-metrics-runtime-probe";
+
 /// State-store key for the latest local tracing subscriber validation.
 pub const OBSERVABILITY_LAST_TRACING_SUBSCRIBER_CHECKPOINT_KEY: &str =
     "observability:last-tracing-subscriber";
@@ -714,6 +718,91 @@ pub struct ObservabilityMetricsEndpointValidationReport {
     pub local_metrics_endpoint_started: bool,
     /// Whether exactly one local socket request was served.
     pub network_request_served: bool,
+    /// Whether public network exposure occurred. Always false for ready reports.
+    pub public_network_exposed: bool,
+    /// Whether telemetry was exported. Always false.
+    pub telemetry_exported: bool,
+    /// Whether outbound alerts were sent. Always false.
+    pub outbound_alerts_sent: bool,
+    /// Whether this report approves production readiness. Always false.
+    pub production_ready: bool,
+    /// Sanitized local validation warnings.
+    pub warnings: Vec<String>,
+}
+
+/// Bounded local metrics runtime probe request.
+///
+/// This serves multiple authenticated local `GET /metrics` scrapes on one
+/// loopback listener, then shuts the listener down. It does not expose public
+/// interfaces, export telemetry, ship logs, send alerts, or approve production
+/// readiness.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ObservabilityMetricsRuntimeProbe {
+    /// Stable local metrics runtime probe id.
+    pub probe_id: String,
+    /// Local export dry-run whose rendered metric lines are served.
+    pub export_report: ObservabilityExportDryRunReport,
+    /// Loopback host to bind.
+    pub bind_host: String,
+    /// Requested port. Use 0 for an ephemeral local port.
+    pub requested_port: u16,
+    /// Number of authenticated scrape requests to serve before shutdown.
+    pub scrape_count: u32,
+    /// Whether public network exposure was requested. Must remain false.
+    pub public_network_exposure_requested: bool,
+    /// Whether telemetry export was requested. Must remain false.
+    pub telemetry_export_requested: bool,
+    /// Whether outbound alert delivery was requested. Must remain false.
+    pub outbound_alert_delivery_requested: bool,
+}
+
+/// Local bounded metrics runtime probe status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ObservabilityMetricsRuntimeProbeStatus {
+    /// Local bounded metrics runtime probe succeeded.
+    ReadyForLocalReview,
+    /// Runtime probe was blocked by missing controls or unsafe flags.
+    Blocked,
+}
+
+/// Local bounded metrics runtime probe report.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ObservabilityMetricsRuntimeProbeReport {
+    /// Boundary version that produced this report.
+    pub observability_runbook_version: String,
+    /// Stable local metrics runtime probe id.
+    pub probe_id: String,
+    /// Probe status.
+    pub status: ObservabilityMetricsRuntimeProbeStatus,
+    /// Source snapshot id from the rendered export dry-run.
+    pub snapshot_id: String,
+    /// Loopback host that was bound.
+    pub bind_host: String,
+    /// Requested port.
+    pub requested_port: u16,
+    /// Actual local port assigned by the operating system.
+    pub bound_port: Option<u16>,
+    /// Whether the bind host was loopback-only.
+    pub loopback_bind_validated: bool,
+    /// Number of scrape requests expected.
+    pub expected_scrape_count: u32,
+    /// Number of scrape requests served.
+    pub served_scrape_count: u32,
+    /// Whether every scrape returned HTTP 200.
+    pub all_scrapes_returned_ok: bool,
+    /// Number of metric lines returned per scrape.
+    pub response_metric_line_count: u64,
+    /// Whether all served metric lines matched the rendered export report.
+    pub response_metric_lines_consistent: bool,
+    /// Number of missing or unsafe control findings.
+    pub missing_control_count: u32,
+    /// Whether the bounded local metrics runtime started.
+    pub local_metrics_runtime_started: bool,
+    /// Whether the bounded local metrics runtime shut down.
+    pub local_metrics_runtime_shutdown: bool,
     /// Whether public network exposure occurred. Always false for ready reports.
     pub public_network_exposed: bool,
     /// Whether telemetry was exported. Always false.
@@ -2703,6 +2792,132 @@ impl ObservabilityMetricsEndpointValidationReport {
     }
 }
 
+impl ObservabilityMetricsRuntimeProbe {
+    /// Validate bounded local metrics runtime probe input invariants.
+    pub fn validate(&self) -> Result<(), ObservabilityError> {
+        self.export_report.validate()?;
+        let mut violations = Vec::new();
+        validate_id(
+            "observability metrics runtime probe",
+            &self.probe_id,
+            &mut violations,
+        );
+        validate_name(
+            "observability metrics runtime bind host",
+            &self.bind_host,
+            &mut violations,
+        );
+        if !is_loopback_host(&self.bind_host) {
+            violations.push(ObservabilityViolation::new(
+                "OBSERVABILITY_METRICS_RUNTIME_BIND_NOT_LOOPBACK",
+                "observability metrics runtime probe requires numeric loopback binding",
+            ));
+        }
+        if self.scrape_count == 0 {
+            violations.push(ObservabilityViolation::new(
+                "OBSERVABILITY_METRICS_RUNTIME_SCRAPE_COUNT_ZERO",
+                "observability metrics runtime probe requires at least one scrape",
+            ));
+        }
+        if self.public_network_exposure_requested
+            || self.telemetry_export_requested
+            || self.outbound_alert_delivery_requested
+        {
+            violations.push(ObservabilityViolation::new(
+                "OBSERVABILITY_METRICS_RUNTIME_SIDE_EFFECT_REQUESTED",
+                "observability metrics runtime probe must not request public exposure, telemetry export, or outbound alert delivery",
+            ));
+        }
+        finish_validation(violations)
+    }
+}
+
+impl ObservabilityMetricsRuntimeProbeReport {
+    /// Validate bounded local metrics runtime probe report invariants.
+    pub fn validate(&self) -> Result<(), ObservabilityError> {
+        let mut violations = Vec::new();
+        validate_id(
+            "observability metrics runtime probe",
+            &self.probe_id,
+            &mut violations,
+        );
+        validate_id("observability snapshot", &self.snapshot_id, &mut violations);
+        validate_name(
+            "observability metrics runtime bind host",
+            &self.bind_host,
+            &mut violations,
+        );
+        if self.observability_runbook_version != OBSERVABILITY_RUNBOOK_VERSION {
+            violations.push(ObservabilityViolation::new_owned(
+                "OBSERVABILITY_VERSION_MISMATCH",
+                format!(
+                    "observability_runbook_version must be {OBSERVABILITY_RUNBOOK_VERSION}, got {}",
+                    self.observability_runbook_version
+                ),
+            ));
+        }
+        if !is_loopback_host(&self.bind_host) || !self.loopback_bind_validated {
+            violations.push(ObservabilityViolation::new(
+                "OBSERVABILITY_METRICS_RUNTIME_BIND_NOT_VALIDATED",
+                "observability metrics runtime report requires validated numeric loopback binding",
+            ));
+        }
+        if self.public_network_exposed
+            || self.telemetry_exported
+            || self.outbound_alerts_sent
+            || self.production_ready
+        {
+            violations.push(ObservabilityViolation::new(
+                "OBSERVABILITY_METRICS_RUNTIME_FORBIDDEN_SIDE_EFFECT",
+                "observability metrics runtime report must not expose public networks, export telemetry, send alerts, or approve production readiness",
+            ));
+        }
+        match self.status {
+            ObservabilityMetricsRuntimeProbeStatus::ReadyForLocalReview => {
+                if self.expected_scrape_count == 0
+                    || self.served_scrape_count != self.expected_scrape_count
+                    || !self.all_scrapes_returned_ok
+                    || self.response_metric_line_count == 0
+                    || !self.response_metric_lines_consistent
+                    || self.missing_control_count != 0
+                    || !self.local_metrics_runtime_started
+                    || !self.local_metrics_runtime_shutdown
+                    || self.bound_port.is_none()
+                {
+                    violations.push(ObservabilityViolation::new(
+                        "OBSERVABILITY_METRICS_RUNTIME_READY_MISMATCH",
+                        "ready observability metrics runtime reports require all expected local scrapes to return 200 with consistent metric lines and clean shutdown",
+                    ));
+                }
+            }
+            ObservabilityMetricsRuntimeProbeStatus::Blocked => {
+                if self.expected_scrape_count > 0
+                    && self.served_scrape_count == self.expected_scrape_count
+                    && self.all_scrapes_returned_ok
+                    && self.response_metric_line_count > 0
+                    && self.response_metric_lines_consistent
+                    && self.missing_control_count == 0
+                    && self.local_metrics_runtime_started
+                    && self.local_metrics_runtime_shutdown
+                {
+                    violations.push(ObservabilityViolation::new(
+                        "OBSERVABILITY_METRICS_RUNTIME_BLOCKED_MISMATCH",
+                        "blocked observability metrics runtime reports must have at least one missing control or failed scrape",
+                    ));
+                }
+            }
+        }
+        for warning in &self.warnings {
+            validate_name(
+                "observability metrics runtime warning",
+                warning,
+                &mut violations,
+            );
+        }
+        finish_validation(violations)
+    }
+}
+
 impl ObservabilityEndpointPreflight {
     /// Validate local endpoint/exporter preflight input invariants.
     pub fn validate(&self) -> Result<(), ObservabilityError> {
@@ -3421,6 +3636,109 @@ pub fn validate_observability_metrics_endpoint(
     )
 }
 
+/// Validate a bounded local authenticated metrics runtime over loopback.
+///
+/// This opens one short-lived local listener, serves multiple authenticated
+/// `GET /metrics` responses from already-rendered metric lines, then closes the
+/// listener. It does not expose public interfaces, export telemetry, ship logs,
+/// send alerts, submit adapters, execute live actions, or approve production
+/// readiness.
+pub fn validate_observability_metrics_runtime_probe(
+    probe: ObservabilityMetricsRuntimeProbe,
+) -> Result<ObservabilityMetricsRuntimeProbeReport, ObservabilityError> {
+    probe.validate()?;
+    let mut missing_control_count = 0_u32;
+    let mut warnings = Vec::new();
+    let bind_host = probe.bind_host.trim().to_owned();
+    let loopback_ip = parse_loopback_ip(&bind_host);
+    let loopback_bind_validated = loopback_ip.is_some();
+    if !loopback_bind_validated {
+        missing_control_count = missing_control_count.saturating_add(1);
+        warnings.push("metrics runtime bind host is not numeric loopback".to_owned());
+    }
+
+    let mut bound_port = None;
+    let mut served_scrape_count = 0_u32;
+    let mut all_scrapes_returned_ok = false;
+    let mut response_metric_lines_consistent = false;
+    let mut local_metrics_runtime_started = false;
+    let mut local_metrics_runtime_shutdown = false;
+    let response_metric_line_count =
+        u64::try_from(probe.export_report.prometheus_metric_lines.len()).map_err(|_| {
+            ObservabilityError::StateStoreFailed {
+                reason: "metrics runtime line count overflowed".to_owned(),
+            }
+        })?;
+    if response_metric_line_count == 0 {
+        missing_control_count = missing_control_count.saturating_add(1);
+        warnings.push("metrics runtime has no rendered metric lines".to_owned());
+    }
+
+    if missing_control_count == 0 {
+        if let Some(ip) = loopback_ip {
+            match serve_bounded_local_metrics_runtime(
+                ip,
+                probe.requested_port,
+                &probe.export_report.prometheus_metric_lines,
+                probe.scrape_count,
+            ) {
+                Ok(exchange) => {
+                    bound_port = Some(exchange.bound_port);
+                    served_scrape_count = exchange.served_scrape_count;
+                    all_scrapes_returned_ok = exchange.all_scrapes_returned_ok;
+                    response_metric_lines_consistent = exchange.response_metric_lines_consistent;
+                    local_metrics_runtime_started = true;
+                    local_metrics_runtime_shutdown = exchange.local_metrics_runtime_shutdown;
+                    if served_scrape_count != probe.scrape_count
+                        || !all_scrapes_returned_ok
+                        || !response_metric_lines_consistent
+                        || !local_metrics_runtime_shutdown
+                    {
+                        missing_control_count = missing_control_count.saturating_add(1);
+                        warnings.push(
+                            "metrics runtime did not serve all expected scrapes cleanly".to_owned(),
+                        );
+                    }
+                }
+                Err(error) => {
+                    missing_control_count = missing_control_count.saturating_add(1);
+                    warnings.push(format!("metrics runtime local scrape failed: {error}"));
+                }
+            }
+        }
+    }
+
+    let report = ObservabilityMetricsRuntimeProbeReport {
+        observability_runbook_version: OBSERVABILITY_RUNBOOK_VERSION.to_owned(),
+        probe_id: probe.probe_id,
+        status: if missing_control_count == 0 {
+            ObservabilityMetricsRuntimeProbeStatus::ReadyForLocalReview
+        } else {
+            ObservabilityMetricsRuntimeProbeStatus::Blocked
+        },
+        snapshot_id: probe.export_report.snapshot_id,
+        bind_host,
+        requested_port: probe.requested_port,
+        bound_port,
+        loopback_bind_validated,
+        expected_scrape_count: probe.scrape_count,
+        served_scrape_count,
+        all_scrapes_returned_ok,
+        response_metric_line_count,
+        response_metric_lines_consistent,
+        missing_control_count,
+        local_metrics_runtime_started,
+        local_metrics_runtime_shutdown,
+        public_network_exposed: false,
+        telemetry_exported: false,
+        outbound_alerts_sent: false,
+        production_ready: false,
+        warnings,
+    };
+    report.validate()?;
+    Ok(report)
+}
+
 #[allow(clippy::too_many_arguments)]
 fn build_observability_metrics_endpoint_report(
     request: ObservabilityMetricsEndpointValidationRequest,
@@ -3480,6 +3798,14 @@ struct LocalMetricsEndpointExchange {
     local_http_status_code: u16,
     response_metric_lines: Vec<String>,
     network_request_served: bool,
+}
+
+struct LocalMetricsRuntimeExchange {
+    bound_port: u16,
+    served_scrape_count: u32,
+    all_scrapes_returned_ok: bool,
+    response_metric_lines_consistent: bool,
+    local_metrics_runtime_shutdown: bool,
 }
 
 fn serve_one_local_metrics_request(
@@ -3543,6 +3869,77 @@ fn serve_one_local_metrics_request(
     })
 }
 
+fn serve_bounded_local_metrics_runtime(
+    ip: IpAddr,
+    requested_port: u16,
+    metric_lines: &[String],
+    scrape_count: u32,
+) -> Result<LocalMetricsRuntimeExchange, String> {
+    if scrape_count == 0 {
+        return Err("scrape count must be positive".to_owned());
+    }
+    let listener = TcpListener::bind((ip, requested_port))
+        .map_err(|error| format!("bind failed: {}", error.kind()))?;
+    listener
+        .set_nonblocking(false)
+        .map_err(|error| format!("listener mode failed: {}", error.kind()))?;
+    let bound_port = listener
+        .local_addr()
+        .map_err(|error| format!("local address failed: {}", error.kind()))?
+        .port();
+    let response_body = format!("{}\n", metric_lines.join("\n"));
+    let expected_metric_lines = metric_lines.to_vec();
+    let server_handle =
+        thread::spawn(move || serve_metrics_connections(listener, response_body, scrape_count));
+    let mut served_scrape_count = 0_u32;
+    let mut all_scrapes_returned_ok = true;
+    let mut response_metric_lines_consistent = true;
+    for _ in 0..scrape_count {
+        let mut stream = TcpStream::connect((ip, bound_port))
+            .map_err(|error| format!("client connect failed: {}", error.kind()))?;
+        let timeout = Some(Duration::from_secs(2));
+        stream
+            .set_read_timeout(timeout)
+            .map_err(|error| format!("client read timeout failed: {}", error.kind()))?;
+        stream
+            .set_write_timeout(timeout)
+            .map_err(|error| format!("client write timeout failed: {}", error.kind()))?;
+        let request = format!(
+            "GET /metrics HTTP/1.1\r\nHost: {ip}:{bound_port}\r\nAuthorization: Bearer local-reference\r\nConnection: close\r\n\r\n"
+        );
+        stream
+            .write_all(request.as_bytes())
+            .map_err(|error| format!("client write failed: {}", error.kind()))?;
+        let mut response = String::new();
+        stream
+            .read_to_string(&mut response)
+            .map_err(|error| format!("client read failed: {}", error.kind()))?;
+        served_scrape_count = served_scrape_count.saturating_add(1);
+        all_scrapes_returned_ok &= parse_http_status_code(&response) == Some(200);
+        let response_metric_lines = response
+            .split("\r\n\r\n")
+            .nth(1)
+            .unwrap_or_default()
+            .lines()
+            .map(str::to_owned)
+            .filter(|line| !line.trim().is_empty())
+            .collect::<Vec<_>>();
+        response_metric_lines_consistent &= response_metric_lines == expected_metric_lines;
+    }
+    let server_served_count = server_handle
+        .join()
+        .map_err(|_| "server thread panicked".to_owned())?
+        .map_err(|error| format!("server failed: {error}"))?;
+    Ok(LocalMetricsRuntimeExchange {
+        bound_port,
+        served_scrape_count,
+        all_scrapes_returned_ok,
+        response_metric_lines_consistent,
+        local_metrics_runtime_shutdown: server_served_count == scrape_count
+            && served_scrape_count == scrape_count,
+    })
+}
+
 fn serve_metrics_connection(listener: TcpListener, response_body: String) -> Result<bool, String> {
     let (mut stream, _) = listener
         .accept()
@@ -3574,6 +3971,47 @@ fn serve_metrics_connection(listener: TcpListener, response_body: String) -> Res
         .write_all(response.as_bytes())
         .map_err(|error| format!("server write failed: {}", error.kind()))?;
     Ok(true)
+}
+
+fn serve_metrics_connections(
+    listener: TcpListener,
+    response_body: String,
+    scrape_count: u32,
+) -> Result<u32, String> {
+    let mut served = 0_u32;
+    for _ in 0..scrape_count {
+        let (mut stream, _) = listener
+            .accept()
+            .map_err(|error| format!("accept failed: {}", error.kind()))?;
+        let timeout = Some(Duration::from_secs(2));
+        stream
+            .set_read_timeout(timeout)
+            .map_err(|error| format!("server read timeout failed: {}", error.kind()))?;
+        stream
+            .set_write_timeout(timeout)
+            .map_err(|error| format!("server write timeout failed: {}", error.kind()))?;
+        let mut buffer = [0_u8; 1024];
+        let bytes_read = stream
+            .read(&mut buffer)
+            .map_err(|error| format!("server read failed: {}", error.kind()))?;
+        let request = String::from_utf8_lossy(&buffer[..bytes_read]);
+        let authorized = request.starts_with("GET /metrics ")
+            && request.contains("\r\nAuthorization: Bearer local-reference\r\n");
+        let (status, body) = if authorized {
+            ("200 OK", response_body.as_str())
+        } else {
+            ("403 Forbidden", "")
+        };
+        let response = format!(
+            "HTTP/1.1 {status}\r\nContent-Type: text/plain; version=0.0.4\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        );
+        stream
+            .write_all(response.as_bytes())
+            .map_err(|error| format!("server write failed: {}", error.kind()))?;
+        served = served.saturating_add(1);
+    }
+    Ok(served)
 }
 
 fn parse_http_status_code(response: &str) -> Option<u16> {
@@ -5314,6 +5752,104 @@ pub fn append_observability_metrics_endpoint_validation_audit(
         .with_metadata(
             "network_request_served",
             AuditValue::Bool(report.network_request_served),
+        )
+        .with_metadata(
+            "public_network_exposed",
+            AuditValue::Bool(report.public_network_exposed),
+        )
+        .with_metadata(
+            "telemetry_exported",
+            AuditValue::Bool(report.telemetry_exported),
+        )
+        .with_metadata(
+            "outbound_alerts_sent",
+            AuditValue::Bool(report.outbound_alerts_sent),
+        )
+        .with_metadata(
+            "production_ready",
+            AuditValue::Bool(report.production_ready),
+        );
+    journal
+        .append_event(event)
+        .map_err(ObservabilityError::from)
+}
+
+/// Persist the latest bounded local metrics runtime probe through the typed state boundary.
+pub fn persist_observability_metrics_runtime_probe_checkpoint(
+    store: &mut impl StateStore,
+    report: &ObservabilityMetricsRuntimeProbeReport,
+    updated_at_unix_ms: u64,
+) -> Result<StateCheckpoint, ObservabilityError> {
+    report.validate()?;
+    let checkpoint = StateCheckpoint {
+        key: OBSERVABILITY_LAST_METRICS_RUNTIME_PROBE_CHECKPOINT_KEY.to_owned(),
+        subsystem: OBSERVABILITY_STATE_SUBSYSTEM.to_owned(),
+        value: serde_json::to_string(report).map_err(|error| {
+            ObservabilityError::StateStoreFailed {
+                reason: format!(
+                    "failed to serialize observability metrics runtime probe checkpoint: {error}"
+                ),
+            }
+        })?,
+        updated_at_unix_ms,
+    };
+    store
+        .put_checkpoint(checkpoint.clone())
+        .map_err(ObservabilityError::from)?;
+    Ok(checkpoint)
+}
+
+/// Append one bounded local metrics runtime probe to the append-only audit journal.
+pub fn append_observability_metrics_runtime_probe_audit(
+    journal: &mut AppendOnlyAuditJournal,
+    report: &ObservabilityMetricsRuntimeProbeReport,
+    occurred_at_unix_ms: u64,
+) -> Result<AuditRecord, ObservabilityError> {
+    report.validate()?;
+    let mut event = AuditEvent::new(
+        format!("observability-metrics-runtime-probe-{}", report.probe_id),
+        AuditEventKind::RuntimeLifecycle,
+        OBSERVABILITY_STATE_SUBSYSTEM,
+        "observability-metrics-runtime-probe",
+        "observability metrics runtime probe recorded",
+    );
+    event.occurred_at_unix_ms = occurred_at_unix_ms;
+    event = event
+        .with_metadata(
+            "observability_runbook_version",
+            AuditValue::Text(OBSERVABILITY_RUNBOOK_VERSION.to_owned()),
+        )
+        .with_metadata("probe_id", AuditValue::Text(report.probe_id.clone()))
+        .with_metadata("snapshot_id", AuditValue::Text(report.snapshot_id.clone()))
+        .with_metadata("status", AuditValue::Text(format!("{:?}", report.status)))
+        .with_metadata("bind_host", AuditValue::Text(report.bind_host.clone()))
+        .with_metadata(
+            "expected_scrape_count",
+            AuditValue::Text(report.expected_scrape_count.to_string()),
+        )
+        .with_metadata(
+            "served_scrape_count",
+            AuditValue::Text(report.served_scrape_count.to_string()),
+        )
+        .with_metadata(
+            "all_scrapes_returned_ok",
+            AuditValue::Bool(report.all_scrapes_returned_ok),
+        )
+        .with_metadata(
+            "response_metric_line_count",
+            AuditValue::Text(report.response_metric_line_count.to_string()),
+        )
+        .with_metadata(
+            "response_metric_lines_consistent",
+            AuditValue::Bool(report.response_metric_lines_consistent),
+        )
+        .with_metadata(
+            "local_metrics_runtime_started",
+            AuditValue::Bool(report.local_metrics_runtime_started),
+        )
+        .with_metadata(
+            "local_metrics_runtime_shutdown",
+            AuditValue::Bool(report.local_metrics_runtime_shutdown),
         )
         .with_metadata(
             "public_network_exposed",
