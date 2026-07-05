@@ -166,6 +166,39 @@ def validate_communications_cli(parsed: dict[str, str]) -> list[str]:
     return errors
 
 
+def validate_communications_outbox_cli(parsed: dict[str, str]) -> list[str]:
+    errors: list[str] = []
+    exact_true = (
+        "communications-outbox-ready-written",
+        "communications-outbox-duplicate-rejected",
+        "communications-outbox-rate-limit-blocked",
+        "communications-outbox-outage-blocked",
+        "communications-outbox-checkpoint-recovered",
+        "communications-outbox-secret-material-absent",
+    )
+    exact_false = (
+        "communications-outbox-outbound-network-used",
+        "communications-outbox-delivery-performed",
+        "external-submission-performed",
+        "live-execution-performed",
+        "signing-or-broadcast-performed",
+        "production-ready",
+    )
+    for key in exact_true:
+        if parsed.get(key) != "true":
+            errors.append(f"communications outbox cli expected {key}=true")
+    for key in exact_false:
+        if parsed.get(key) != "false":
+            errors.append(f"communications outbox cli expected {key}=false")
+    if parsed.get("communications-outbox") != "validation passed":
+        errors.append("communications outbox cli did not report validation passed")
+    if parse_positive_int(parsed.get("communications-outbox-recorded-count")) != 1:
+        errors.append("communications outbox cli expected exactly one recorded outbox line")
+    if parse_positive_int(parsed.get("communications-outbox-audit-records-replayed")) != 3:
+        errors.append("communications outbox cli expected three replayed audit records")
+    return errors
+
+
 def validate_dashboard_cli(parsed: dict[str, str]) -> list[str]:
     errors: list[str] = []
     for key in (
@@ -586,6 +619,19 @@ def main() -> int:
                 ],
             ),
             run_text_command(
+                "communications_outbox_cli",
+                [
+                    "cargo",
+                    "run",
+                    "-p",
+                    "arb-agent",
+                    "--",
+                    "validate-communications-outbox",
+                    "--workspace",
+                    str(workspace_root / "communications-outbox"),
+                ],
+            ),
+            run_text_command(
                 "dashboard_runtime_cli",
                 [
                     "cargo",
@@ -665,6 +711,7 @@ def main() -> int:
 
     validators = {
         "communications_runtime_cli": lambda component: validate_communications_cli(component["parsed"]),
+        "communications_outbox_cli": lambda component: validate_communications_outbox_cli(component["parsed"]),
         "dashboard_runtime_cli": lambda component: validate_dashboard_cli(component["parsed"]),
         "observability_runtime_cli": lambda component: validate_observability_cli(component["parsed"]),
         "communications_runtime_wrapper": lambda component: validate_communications_wrapper(component["json_report"] or {}),
