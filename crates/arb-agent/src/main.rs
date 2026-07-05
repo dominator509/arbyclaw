@@ -17493,10 +17493,10 @@ mod tests {
         run_market_data_history_persistence_validation,
         run_market_data_provider_preflight_validation,
         run_market_data_quality_assessment_validation, run_market_data_reconnect_plan_validation,
-        run_observability_runtime_validation, run_opportunity_historical_fixture_validation,
-        run_opportunity_planner_handoff_validation, run_opportunity_provider_ingestion_validation,
-        run_opportunity_quote_load_validation, run_opportunity_replay_validation,
-        run_opportunity_trace_recovery_validation,
+        run_observability_metrics_runtime_validation, run_observability_runtime_validation,
+        run_opportunity_historical_fixture_validation, run_opportunity_planner_handoff_validation,
+        run_opportunity_provider_ingestion_validation, run_opportunity_quote_load_validation,
+        run_opportunity_replay_validation, run_opportunity_trace_recovery_validation,
         run_paid_market_data_provider_evaluation_validation, run_policy_decision_audit_validation,
         run_runtime_backup_restore_load_validation, run_runtime_backup_restore_validation,
         run_runtime_blocked_audit_preflight_validation,
@@ -18240,6 +18240,23 @@ mod tests {
 
         assert!(workspace.join("observability-audit.jsonl").exists());
         assert!(workspace.join("observability-state.sqlite3").exists());
+        cleanup_workspace(&workspace);
+    }
+
+    #[test]
+    fn observability_metrics_runtime_validation_persists_and_reopens_local_records_only() {
+        let workspace = temp_workspace_path("observability-metrics-runtime-runner");
+        run_observability_metrics_runtime_validation(&LocalValidationRunOptions {
+            workspace_dir: workspace.clone(),
+        })
+        .expect("local observability metrics runtime validation should pass");
+
+        assert!(workspace
+            .join("observability-metrics-runtime.audit.jsonl")
+            .exists());
+        assert!(workspace
+            .join("observability-metrics-runtime.sqlite3")
+            .exists());
         cleanup_workspace(&workspace);
     }
 

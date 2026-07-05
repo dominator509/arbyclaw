@@ -344,6 +344,44 @@ def validate_observability_cli(parsed: dict[str, str]) -> list[str]:
     return errors
 
 
+def validate_observability_metrics_runtime_cli(parsed: dict[str, str]) -> list[str]:
+    errors: list[str] = []
+    for key in (
+        "observability-metrics-runtime-checkpoint-recovered",
+        "observability-metrics-runtime-loopback-bind-validated",
+        "observability-metrics-runtime-all-scrapes-returned-ok",
+        "observability-metrics-runtime-response-lines-consistent",
+        "observability-metrics-runtime-started",
+        "observability-metrics-runtime-shutdown",
+    ):
+        if parsed.get(key) != "true":
+            errors.append(f"observability metrics runtime cli expected {key}=true")
+    for key in (
+        "observability-metrics-runtime-public-network-exposed",
+        "observability-metrics-runtime-telemetry-exported",
+        "observability-metrics-runtime-outbound-alerts-sent",
+        "public-network-exposed",
+        "telemetry-exported",
+        "outbound-alerts-sent",
+        "external-submission-performed",
+        "live-execution-performed",
+        "production-ready",
+    ):
+        if parsed.get(key) != "false":
+            errors.append(f"observability metrics runtime cli expected {key}=false")
+    if parsed.get("observability-metrics-runtime") != "validation passed":
+        errors.append("observability metrics runtime cli did not report validation passed")
+    if parse_positive_int(parsed.get("observability-metrics-runtime-audit-records-replayed")) != 1:
+        errors.append("observability metrics runtime cli expected one replayed audit record")
+    if parse_positive_int(parsed.get("observability-metrics-runtime-expected-scrapes")) != 3:
+        errors.append("observability metrics runtime cli expected three scrapes")
+    if parse_positive_int(parsed.get("observability-metrics-runtime-served-scrapes")) != 3:
+        errors.append("observability metrics runtime cli expected three served scrapes")
+    if (parse_positive_int(parsed.get("observability-metrics-runtime-response-metric-lines")) or 0) <= 0:
+        errors.append("observability metrics runtime cli expected positive response metric lines")
+    return errors
+
+
 def validate_wrapper_common(report: dict[str, Any], key: str) -> tuple[list[str], dict[str, Any]]:
     errors: list[str] = []
     nested = report.get(key)
@@ -705,6 +743,19 @@ def main() -> int:
                     str(workspace_root / "observability-runtime"),
                 ],
             ),
+            run_text_command(
+                "observability_metrics_runtime_cli",
+                [
+                    "cargo",
+                    "run",
+                    "-p",
+                    "arb-agent",
+                    "--",
+                    "validate-observability-metrics-runtime",
+                    "--workspace",
+                    str(workspace_root / "observability-metrics-runtime"),
+                ],
+            ),
             run_json_command(
                 "communications_runtime_wrapper",
                 [
@@ -763,6 +814,7 @@ def main() -> int:
         "dashboard_runtime_cli": lambda component: validate_dashboard_cli(component["parsed"]),
         "dashboard_loopback_runtime_cli": lambda component: validate_dashboard_loopback_runtime_cli(component["parsed"]),
         "observability_runtime_cli": lambda component: validate_observability_cli(component["parsed"]),
+        "observability_metrics_runtime_cli": lambda component: validate_observability_metrics_runtime_cli(component["parsed"]),
         "communications_runtime_wrapper": lambda component: validate_communications_wrapper(component["json_report"] or {}),
         "dashboard_runtime_wrapper": lambda component: validate_dashboard_wrapper(component["json_report"] or {}),
         "observability_runtime_wrapper": lambda component: validate_observability_wrapper(component["json_report"] or {}),

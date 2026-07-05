@@ -6318,6 +6318,7 @@ mod tests {
         append_observability_log_retention_execution_audit,
         append_observability_loopback_bind_validation_audit,
         append_observability_metrics_endpoint_validation_audit,
+        append_observability_metrics_runtime_probe_audit,
         append_observability_metrics_scrape_preflight_audit,
         append_observability_operations_review_audit, append_observability_record_audit,
         append_runtime_failure_capture_audit, capture_local_panic_with_scoped_hook,
@@ -6329,6 +6330,7 @@ mod tests {
         persist_observability_log_retention_execution_checkpoint,
         persist_observability_loopback_bind_validation_checkpoint,
         persist_observability_metrics_endpoint_validation_checkpoint,
+        persist_observability_metrics_runtime_probe_checkpoint,
         persist_observability_metrics_scrape_preflight_checkpoint,
         persist_observability_operations_review_checkpoint,
         persist_observability_record_checkpoint, persist_runtime_failure_capture_checkpoint,
@@ -6336,30 +6338,34 @@ mod tests {
         record_observability_alert_route_dispatch, render_observability_export_dry_run,
         review_observability_operations, validate_local_tracing_subscriber,
         validate_observability_loopback_bind, validate_observability_metrics_endpoint,
-        ComponentHealthStatus, DeterministicObservabilityCollector, HealthStatus,
-        LocalTracingSubscriberValidationRequest, LocalTracingSubscriberValidationStatus,
-        MetricKind, MetricLabel, MetricSample, ObservabilityAccessAuthorizationStatus,
-        ObservabilityAccessContext, ObservabilityAccessSource,
-        ObservabilityAlertRouteDispatchRequest, ObservabilityAlertRouteDispatchStatus,
-        ObservabilityBoundaryConfig, ObservabilityCollectionRequest, ObservabilityCollector,
-        ObservabilityEndpointBinding, ObservabilityEndpointPreflight,
-        ObservabilityEndpointPreflightStatus, ObservabilityError, ObservabilityExportDryRunReport,
-        ObservabilityExportDryRunRequest, ObservabilityLogRetentionExecutionRequest,
-        ObservabilityLoopbackBindValidationReport, ObservabilityLoopbackBindValidationRequest,
-        ObservabilityLoopbackBindValidationStatus, ObservabilityMetricsEndpointValidationReport,
+        validate_observability_metrics_runtime_probe, ComponentHealthStatus,
+        DeterministicObservabilityCollector, HealthStatus, LocalTracingSubscriberValidationRequest,
+        LocalTracingSubscriberValidationStatus, MetricKind, MetricLabel, MetricSample,
+        ObservabilityAccessAuthorizationStatus, ObservabilityAccessContext,
+        ObservabilityAccessSource, ObservabilityAlertRouteDispatchRequest,
+        ObservabilityAlertRouteDispatchStatus, ObservabilityBoundaryConfig,
+        ObservabilityCollectionRequest, ObservabilityCollector, ObservabilityEndpointBinding,
+        ObservabilityEndpointPreflight, ObservabilityEndpointPreflightStatus, ObservabilityError,
+        ObservabilityExportDryRunReport, ObservabilityExportDryRunRequest,
+        ObservabilityLogRetentionExecutionRequest, ObservabilityLoopbackBindValidationReport,
+        ObservabilityLoopbackBindValidationRequest, ObservabilityLoopbackBindValidationStatus,
+        ObservabilityMetricsEndpointValidationReport,
         ObservabilityMetricsEndpointValidationRequest,
-        ObservabilityMetricsEndpointValidationStatus, ObservabilityMetricsScrapePreflightReport,
-        ObservabilityMetricsScrapePreflightRequest, ObservabilityMetricsScrapePreflightStatus,
-        ObservabilityOperationsPolicy, ObservabilityOperationsReviewStatus, ObservabilitySeverity,
-        ObservabilitySnapshot, Runbook, RunbookStep, RuntimeFailureCaptureRequest,
-        RuntimeFailureKind, RuntimePanicHookInstallationRequest, StructuredLogEvent,
-        StructuredLogField, OBSERVABILITY_LAST_ALERT_ROUTE_DISPATCH_CHECKPOINT_KEY,
+        ObservabilityMetricsEndpointValidationStatus, ObservabilityMetricsRuntimeProbe,
+        ObservabilityMetricsRuntimeProbeReport, ObservabilityMetricsRuntimeProbeStatus,
+        ObservabilityMetricsScrapePreflightReport, ObservabilityMetricsScrapePreflightRequest,
+        ObservabilityMetricsScrapePreflightStatus, ObservabilityOperationsPolicy,
+        ObservabilityOperationsReviewStatus, ObservabilitySeverity, ObservabilitySnapshot, Runbook,
+        RunbookStep, RuntimeFailureCaptureRequest, RuntimeFailureKind,
+        RuntimePanicHookInstallationRequest, StructuredLogEvent, StructuredLogField,
+        OBSERVABILITY_LAST_ALERT_ROUTE_DISPATCH_CHECKPOINT_KEY,
         OBSERVABILITY_LAST_ENDPOINT_PREFLIGHT_CHECKPOINT_KEY,
         OBSERVABILITY_LAST_EXPORT_DRY_RUN_CHECKPOINT_KEY,
         OBSERVABILITY_LAST_FAILURE_CHECKPOINT_KEY,
         OBSERVABILITY_LAST_LOG_RETENTION_EXECUTION_CHECKPOINT_KEY,
         OBSERVABILITY_LAST_LOOPBACK_BIND_VALIDATION_CHECKPOINT_KEY,
         OBSERVABILITY_LAST_METRICS_ENDPOINT_VALIDATION_CHECKPOINT_KEY,
+        OBSERVABILITY_LAST_METRICS_RUNTIME_PROBE_CHECKPOINT_KEY,
         OBSERVABILITY_LAST_METRICS_SCRAPE_PREFLIGHT_CHECKPOINT_KEY,
         OBSERVABILITY_LAST_OPERATIONS_REVIEW_CHECKPOINT_KEY,
         OBSERVABILITY_LAST_RECORD_CHECKPOINT_KEY,
@@ -7554,6 +7560,87 @@ mod tests {
         assert!(recovered_report.local_metrics_endpoint_started);
         assert!(recovered_report.network_request_served);
         assert!(!recovered_report.response_metric_lines.is_empty());
+        assert!(!recovered_report.public_network_exposed);
+        assert!(!recovered_report.telemetry_exported);
+        assert!(!recovered_report.outbound_alerts_sent);
+        assert!(!recovered_report.production_ready);
+
+        let _ = fs::remove_file(audit_path);
+        cleanup_state_files(&state_path);
+    }
+
+    #[test]
+    fn observability_metrics_runtime_probe_audit_and_state_reopen_locally() {
+        let audit_path = temp_audit_path("observability-metrics-runtime-probe");
+        let state_path = temp_state_path("observability-metrics-runtime-probe");
+        let report =
+            validate_observability_metrics_runtime_probe(ObservabilityMetricsRuntimeProbe {
+                probe_id: "metrics-runtime-probe-audit-state".to_owned(),
+                export_report: ready_export_dry_run_report("metrics-runtime-probe-audit-state"),
+                bind_host: "127.0.0.1".to_owned(),
+                requested_port: 0,
+                scrape_count: 3,
+                public_network_exposure_requested: false,
+                telemetry_export_requested: false,
+                outbound_alert_delivery_requested: false,
+            })
+            .expect("bounded local metrics runtime probe should pass");
+        let mut journal = AppendOnlyAuditJournal::open(&audit_path).expect("journal opens");
+        let mut store = SqliteWalStateStore::open(&state_path).expect("sqlite opens");
+
+        let audit_record = append_observability_metrics_runtime_probe_audit(
+            &mut journal,
+            &report,
+            1_700_000_000_641,
+        )
+        .expect("metrics runtime probe audit writes");
+        let checkpoint = persist_observability_metrics_runtime_probe_checkpoint(
+            &mut store,
+            &report,
+            1_700_000_000_642,
+        )
+        .expect("metrics runtime probe checkpoint writes");
+        assert_eq!(audit_record.sequence, 1);
+        assert_eq!(
+            checkpoint.key,
+            OBSERVABILITY_LAST_METRICS_RUNTIME_PROBE_CHECKPOINT_KEY
+        );
+        assert_eq!(
+            report.status,
+            ObservabilityMetricsRuntimeProbeStatus::ReadyForLocalReview
+        );
+        assert!(report.loopback_bind_validated);
+        assert_eq!(report.expected_scrape_count, 3);
+        assert_eq!(report.served_scrape_count, 3);
+        assert!(report.all_scrapes_returned_ok);
+        assert!(report.response_metric_line_count > 0);
+        assert!(report.response_metric_lines_consistent);
+        assert_eq!(report.missing_control_count, 0);
+        assert!(report.local_metrics_runtime_started);
+        assert!(report.local_metrics_runtime_shutdown);
+        assert!(!report.public_network_exposed);
+        assert!(!report.telemetry_exported);
+        assert!(!report.outbound_alerts_sent);
+        assert!(!report.production_ready);
+        drop(store);
+        drop(journal);
+
+        let replayed = AppendOnlyAuditJournal::open(&audit_path).expect("journal replays");
+        assert_eq!(replayed.next_sequence(), 2);
+        let reopened = SqliteWalStateStore::open(&state_path).expect("sqlite reopens");
+        let recovered = reopened
+            .get_checkpoint(OBSERVABILITY_LAST_METRICS_RUNTIME_PROBE_CHECKPOINT_KEY)
+            .expect("checkpoint lookup succeeds")
+            .expect("metrics runtime probe checkpoint exists");
+        assert_eq!(recovered.value, checkpoint.value);
+        let recovered_report: ObservabilityMetricsRuntimeProbeReport =
+            serde_json::from_str(&recovered.value).expect("metrics runtime checkpoint parses");
+        assert_eq!(
+            recovered_report.status,
+            ObservabilityMetricsRuntimeProbeStatus::ReadyForLocalReview
+        );
+        assert_eq!(recovered_report.served_scrape_count, 3);
+        assert!(recovered_report.local_metrics_runtime_shutdown);
         assert!(!recovered_report.public_network_exposed);
         assert!(!recovered_report.telemetry_exported);
         assert!(!recovered_report.outbound_alerts_sent);
