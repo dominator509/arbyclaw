@@ -51,6 +51,7 @@ EXPECTED_COMPONENTS = {
     "dashboard_session_lifecycle": "dashboard_session_lifecycle_requested",
     "dashboard_loopback_runtime": "dashboard_loopback_runtime_requested",
     "communications_runtime": "communications_runtime_requested",
+    "communications_outbox": "communications_outbox_requested",
     "communications_delivery_provider": "communications_delivery_provider_requested",
     "communications_provider_submission": "communications_provider_submission_requested",
 }
@@ -581,6 +582,9 @@ def build_command(args: argparse.Namespace, workspace: pathlib.Path) -> list[str
         "--run-communications-runtime",
         "--communications-workspace",
         str(workspace / "communications-runtime"),
+        "--run-communications-outbox",
+        "--communications-outbox-workspace",
+        str(workspace / "communications-outbox"),
         "--run-communications-delivery-provider-boundary",
         "--communications-delivery-provider-workspace",
         str(workspace / "communications-delivery-provider"),
@@ -754,6 +758,42 @@ def validate_report(report: dict[str, Any]) -> list[str]:
                     )
             except ValueError:
                 errors.append(f"dashboard session lifecycle {key} was not an integer")
+
+    communications_outbox = report.get("communications_outbox")
+    if not isinstance(communications_outbox, dict):
+        errors.append("communications_outbox report missing or invalid")
+    else:
+        if communications_outbox.get("communications_outbox_passed") is not True:
+            errors.append("communications outbox was not marked as passed")
+        for key in (
+            "ready_written",
+            "duplicate_rejected",
+            "rate_limit_blocked",
+            "outage_blocked",
+            "checkpoint_recovered",
+            "secret_material_absent",
+        ):
+            if communications_outbox.get(key) != "true":
+                errors.append(f"communications outbox {key} was not true")
+        for key in (
+            "outbound_network_used",
+            "delivery_performed",
+            "external_submission_performed",
+            "live_execution_performed",
+            "signing_or_broadcast_performed",
+            "production_ready",
+        ):
+            if communications_outbox.get(key) != "false":
+                errors.append(f"communications outbox {key} was not false")
+        for key, expected in (
+            ("recorded_count", 1),
+            ("audit_records_replayed", 3),
+        ):
+            try:
+                if int(communications_outbox.get(key, "0")) != expected:
+                    errors.append(f"communications outbox {key} was not {expected}")
+            except ValueError:
+                errors.append(f"communications outbox {key} was not an integer")
 
     provider_boundary = report.get("observability_provider_boundary")
     if not isinstance(provider_boundary, dict):

@@ -38,6 +38,7 @@ def component_commands(bundle_workspace: pathlib.Path) -> list[tuple[str, list[s
     communications_delivery_provider_workspace = (
         bundle_workspace / "communications-delivery-provider"
     )
+    communications_outbox_workspace = bundle_workspace / "communications-outbox"
     communications_provider_submission_workspace = (
         bundle_workspace / "communications-provider-submission"
     )
@@ -145,6 +146,18 @@ def component_commands(bundle_workspace: pathlib.Path) -> list[tuple[str, list[s
             "--run-communications-delivery-provider-boundary",
             "--communications-delivery-provider-workspace",
             str(communications_delivery_provider_workspace),
+            "--json",
+        ],
+        True,
+    ),
+    (
+        "deployment-host-communications-outbox",
+        [
+            sys.executable,
+            "scripts/validate_deployment_host_runtime.py",
+            "--run-communications-outbox",
+            "--communications-outbox-workspace",
+            str(communications_outbox_workspace),
             "--json",
         ],
         True,

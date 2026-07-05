@@ -233,6 +233,11 @@ def parse_args() -> argparse.Namespace:
         help="run arb-agent validate-communications-runtime against --communications-workspace",
     )
     parser.add_argument(
+        "--run-communications-outbox",
+        action="store_true",
+        help="run arb-agent validate-communications-outbox against --communications-outbox-workspace",
+    )
+    parser.add_argument(
         "--run-communications-delivery-provider-boundary",
         action="store_true",
         help="run arb-agent validate-communications-delivery-provider-boundary against --communications-delivery-provider-workspace",
@@ -378,6 +383,11 @@ def parse_args() -> argparse.Namespace:
         "--communications-workspace",
         type=pathlib.Path,
         help="fresh non-secret workspace for validate-communications-runtime",
+    )
+    parser.add_argument(
+        "--communications-outbox-workspace",
+        type=pathlib.Path,
+        help="fresh non-secret workspace for validate-communications-outbox",
     )
     parser.add_argument(
         "--communications-delivery-provider-workspace",
@@ -1523,6 +1533,34 @@ def communications_runtime_command(
         "arb-agent",
         "--",
         "validate-communications-runtime",
+        "--workspace",
+        str(workspace),
+    ]
+
+
+def communications_outbox_command(
+    agent_bin: pathlib.Path | None, workspace: pathlib.Path
+) -> list[str]:
+    if agent_bin is not None:
+        if not agent_bin.exists():
+            raise ValueError(f"agent binary does not exist: {relative_or_absolute(agent_bin)}")
+        return [
+            str(agent_bin),
+            "validate-communications-outbox",
+            "--workspace",
+            str(workspace),
+        ]
+
+    cargo = shutil.which("cargo")
+    if cargo is None:
+        raise RuntimeError("cargo unavailable and --agent-bin was not provided")
+    return [
+        cargo,
+        "run",
+        "-p",
+        "arb-agent",
+        "--",
+        "validate-communications-outbox",
         "--workspace",
         str(workspace),
     ]
@@ -3219,6 +3257,56 @@ def run_communications_runtime(
     }
 
 
+def run_communications_outbox(
+    workspace: pathlib.Path | None,
+    agent_bin: pathlib.Path | None,
+) -> dict[str, Any]:
+    communications_workspace = validate_fresh_workspace(
+        workspace,
+        "--communications-outbox-workspace",
+        "--run-communications-outbox",
+    )
+    command = communications_outbox_command(agent_bin, communications_workspace)
+    completed = subprocess.run(
+        command,
+        cwd=ROOT,
+        check=False,
+        encoding="utf-8",
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        timeout=LOCAL_RUNTIME_HELPER_TIMEOUT_SECONDS,
+    )
+    parsed = parse_key_value_output(completed.stdout)
+    return {
+        "command_kind": "agent-bin" if agent_bin is not None else "cargo-run",
+        "returncode": completed.returncode,
+        "workspace": relative_or_absolute(communications_workspace),
+        "stdout_line_count": len(completed.stdout.splitlines()),
+        "recorded_count": parsed.get("communications-outbox-recorded-count"),
+        "ready_written": parsed.get("communications-outbox-ready-written"),
+        "duplicate_rejected": parsed.get("communications-outbox-duplicate-rejected"),
+        "rate_limit_blocked": parsed.get("communications-outbox-rate-limit-blocked"),
+        "outage_blocked": parsed.get("communications-outbox-outage-blocked"),
+        "audit_records_replayed": parsed.get(
+            "communications-outbox-audit-records-replayed"
+        ),
+        "checkpoint_recovered": parsed.get("communications-outbox-checkpoint-recovered"),
+        "secret_material_absent": parsed.get(
+            "communications-outbox-secret-material-absent"
+        ),
+        "outbound_network_used": parsed.get("communications-outbox-outbound-network-used"),
+        "delivery_performed": parsed.get("communications-outbox-delivery-performed"),
+        "external_submission_performed": parsed.get("external-submission-performed"),
+        "live_execution_performed": parsed.get("live-execution-performed"),
+        "signing_or_broadcast_performed": parsed.get(
+            "signing-or-broadcast-performed"
+        ),
+        "production_ready": parsed.get("production-ready"),
+        "communications_outbox_passed": completed.returncode == 0,
+    }
+
+
 def run_communications_delivery_provider(
     workspace: pathlib.Path | None,
     agent_bin: pathlib.Path | None,
@@ -3585,6 +3673,14 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
         )
         if communications_report["returncode"] != 0:
             raise RuntimeError("validate-communications-runtime failed")
+    communications_outbox_report = None
+    if args.run_communications_outbox:
+        communications_outbox_report = run_communications_outbox(
+            args.communications_outbox_workspace,
+            args.agent_bin,
+        )
+        if communications_outbox_report["returncode"] != 0:
+            raise RuntimeError("validate-communications-outbox failed")
     communications_delivery_report = None
     if args.run_communications_delivery_provider_boundary:
         communications_delivery_report = run_communications_delivery_provider(
@@ -3661,6 +3757,8 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
         "dashboard_loopback_runtime_requested": args.run_dashboard_loopback_runtime,
         "communications_runtime": communications_report,
         "communications_runtime_requested": args.run_communications_runtime,
+        "communications_outbox": communications_outbox_report,
+        "communications_outbox_requested": args.run_communications_outbox,
         "communications_delivery_provider": communications_delivery_report,
         "communications_delivery_provider_requested": args.run_communications_delivery_provider_boundary,
         "communications_provider_submission": communications_provider_submission_report,
@@ -3797,6 +3895,10 @@ def print_text_report(report: dict[str, Any]) -> None:
     print(
         "communications runtime requested: "
         f"{str(report['communications_runtime_requested']).lower()}"
+    )
+    print(
+        "communications outbox requested: "
+        f"{str(report['communications_outbox_requested']).lower()}"
     )
     print(
         "communications delivery provider requested: "
@@ -5110,6 +5212,63 @@ def print_text_report(report: dict[str, Any]) -> None:
             f"{communications.get('signing_or_broadcast_performed', '')}"
         )
         print(f"production-ready: {communications.get('production_ready', '')}")
+    if report["communications_outbox"] is not None:
+        outbox = report["communications_outbox"]
+        print(
+            "communications outbox passed: "
+            f"{str(outbox['communications_outbox_passed']).lower()}"
+        )
+        print(f"communications outbox workspace: {outbox['workspace']}")
+        print(
+            "communications-outbox-recorded-count: "
+            f"{outbox.get('recorded_count', '')}"
+        )
+        print(
+            "communications-outbox-ready-written: "
+            f"{outbox.get('ready_written', '')}"
+        )
+        print(
+            "communications-outbox-duplicate-rejected: "
+            f"{outbox.get('duplicate_rejected', '')}"
+        )
+        print(
+            "communications-outbox-rate-limit-blocked: "
+            f"{outbox.get('rate_limit_blocked', '')}"
+        )
+        print(
+            "communications-outbox-outage-blocked: "
+            f"{outbox.get('outage_blocked', '')}"
+        )
+        print(
+            "communications-outbox-audit-records-replayed: "
+            f"{outbox.get('audit_records_replayed', '')}"
+        )
+        print(
+            "communications-outbox-checkpoint-recovered: "
+            f"{outbox.get('checkpoint_recovered', '')}"
+        )
+        print(
+            "communications-outbox-secret-material-absent: "
+            f"{outbox.get('secret_material_absent', '')}"
+        )
+        print(
+            "communications-outbox-outbound-network-used: "
+            f"{outbox.get('outbound_network_used', '')}"
+        )
+        print(
+            "communications-outbox-delivery-performed: "
+            f"{outbox.get('delivery_performed', '')}"
+        )
+        print(
+            "external-submission-performed: "
+            f"{outbox.get('external_submission_performed', '')}"
+        )
+        print(f"live-execution-performed: {outbox.get('live_execution_performed', '')}")
+        print(
+            "signing-or-broadcast-performed: "
+            f"{outbox.get('signing_or_broadcast_performed', '')}"
+        )
+        print(f"production-ready: {outbox.get('production_ready', '')}")
     if report["communications_delivery_provider"] is not None:
         delivery = report["communications_delivery_provider"]
         print(
