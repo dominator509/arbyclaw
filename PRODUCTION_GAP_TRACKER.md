@@ -6,6 +6,12 @@ The project is in Phase 105 Web3 connector aggregate coverage gate status for Ch
 
 ## Latest Local Validation Attempt
 
+2026-07-05 ArbyClaw communications delivery-provider boundary gate:
+
+- Added `CommunicationDeliveryProviderBoundaryRequest`, `CommunicationDeliveryProviderBoundaryReport`, and `review_communication_delivery_provider_boundary()` to account for local communications runtime prerequisites plus missing real provider delivery, rate-limit, outage/backoff, and production platform identity evidence without loading tokens, calling providers, delivering messages, enabling remote commands, or claiming production readiness.
+- Added `arb-agent validate-communications-delivery-provider-boundary --workspace <fresh-dir>` and wired `communications_delivery_provider_boundary_cli` into `scripts/validate_operator_surface_gate.py`, raising the local operator-surface aggregate to 11 components.
+- This strengthens GAP-0060 and GAP-0076 local communications/operator-surface evidence only. It does not create real messaging adapters, load platform tokens, authenticate real platform identities, send outbound messages, perform service-manager actions, call external systems, enable live execution, or close production readiness.
+
 2026-07-05 ArbyClaw Web3 connector aggregate coverage gate:
 
 - Required existing local `arb-agent validate-web3-provider-nonce-reconciliation` and `arb-agent validate-web3-sandbox-live-discrepancy-calibration` CLIs in `scripts/validate_connector_scenario_gate.py`.

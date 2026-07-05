@@ -199,6 +199,49 @@ def validate_communications_outbox_cli(parsed: dict[str, str]) -> list[str]:
     return errors
 
 
+def validate_communications_delivery_provider_boundary_cli(
+    parsed: dict[str, str],
+) -> list[str]:
+    errors: list[str] = []
+    for key in (
+        "communications-delivery-provider-channel-session-ready",
+        "communications-delivery-provider-platform-adapter-ready",
+    ):
+        if parsed.get(key) != "true":
+            errors.append(f"communications delivery-provider cli expected {key}=true")
+    for key in (
+        "communications-delivery-provider-delivery-evidence-available",
+        "communications-delivery-provider-rate-limit-evidence-available",
+        "communications-delivery-provider-outage-evidence-available",
+        "communications-delivery-provider-platform-identity-evidence-available",
+        "outbound-network-used",
+        "message-delivered",
+        "provider-call-performed",
+        "token-secret-material-loaded",
+        "live-execution-performed",
+        "signing-or-broadcast-performed",
+        "production-ready",
+    ):
+        if parsed.get(key) != "false":
+            errors.append(f"communications delivery-provider cli expected {key}=false")
+    if parsed.get("communications-delivery-provider-boundary") != "validation passed":
+        errors.append("communications delivery-provider cli did not report validation passed")
+    if (
+        parsed.get("communications-delivery-provider-boundary-status")
+        != "blocked-pending-provider-delivery-validation"
+    ):
+        errors.append("communications delivery-provider cli expected blocked pending provider delivery validation")
+    if parse_positive_int(parsed.get("communications-delivery-provider-remaining-external-evidence-count")) != 4:
+        errors.append("communications delivery-provider cli expected four remaining evidence refs")
+    if parse_positive_int(parsed.get("communications-delivery-provider-blocker-count")) != 4:
+        errors.append("communications delivery-provider cli expected four blockers")
+    if parse_positive_int(parsed.get("communications-delivery-provider-audit-records-replayed")) != 8:
+        errors.append("communications delivery-provider cli expected eight replayed audit records")
+    if parse_positive_int(parsed.get("communications-delivery-provider-checkpoints-recovered")) != 8:
+        errors.append("communications delivery-provider cli expected eight recovered checkpoints")
+    return errors
+
+
 def validate_dashboard_cli(parsed: dict[str, str]) -> list[str]:
     errors: list[str] = []
     for key in (
@@ -705,6 +748,19 @@ def main() -> int:
                 ],
             ),
             run_text_command(
+                "communications_delivery_provider_boundary_cli",
+                [
+                    "cargo",
+                    "run",
+                    "-p",
+                    "arb-agent",
+                    "--",
+                    "validate-communications-delivery-provider-boundary",
+                    "--workspace",
+                    str(workspace_root / "communications-delivery-provider-boundary"),
+                ],
+            ),
+            run_text_command(
                 "dashboard_runtime_cli",
                 [
                     "cargo",
@@ -811,6 +867,7 @@ def main() -> int:
     validators = {
         "communications_runtime_cli": lambda component: validate_communications_cli(component["parsed"]),
         "communications_outbox_cli": lambda component: validate_communications_outbox_cli(component["parsed"]),
+        "communications_delivery_provider_boundary_cli": lambda component: validate_communications_delivery_provider_boundary_cli(component["parsed"]),
         "dashboard_runtime_cli": lambda component: validate_dashboard_cli(component["parsed"]),
         "dashboard_loopback_runtime_cli": lambda component: validate_dashboard_loopback_runtime_cli(component["parsed"]),
         "observability_runtime_cli": lambda component: validate_observability_cli(component["parsed"]),

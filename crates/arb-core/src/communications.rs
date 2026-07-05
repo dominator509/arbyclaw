@@ -1034,6 +1034,105 @@ pub struct PlatformAdapterReviewReport {
     pub reviewed_at_unix_ms: u64,
 }
 
+/// Local communications delivery-provider boundary request.
+///
+/// This composes local channel/session/platform adapter prerequisites and keeps
+/// real provider delivery evidence explicit. It does not load tokens, call
+/// platform APIs, deliver messages, enable remote commands, or approve
+/// production readiness.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct CommunicationDeliveryProviderBoundaryRequest {
+    /// Stable local review id.
+    pub review_id: String,
+    /// Local channel-session validation prerequisite.
+    pub channel_session: ChannelSessionValidationReport,
+    /// Local platform-adapter review prerequisite.
+    pub platform_adapter: PlatformAdapterReviewReport,
+    /// Whether authenticated real provider delivery evidence is available.
+    pub provider_delivery_evidence_available: bool,
+    /// Whether provider-side rate-limit reconciliation evidence is available.
+    pub provider_rate_limit_evidence_available: bool,
+    /// Whether real provider outage/backoff evidence is available.
+    pub provider_outage_evidence_available: bool,
+    /// Whether production platform identity/authorization evidence is available.
+    pub platform_identity_evidence_available: bool,
+    /// Minimum remaining external evidence references required.
+    pub min_remaining_external_evidence: usize,
+    /// Non-secret descriptions of remaining external delivery evidence.
+    pub remaining_external_evidence: Vec<String>,
+    /// Whether outbound network was used. Must remain false.
+    pub outbound_network_used: bool,
+    /// Whether a real message was delivered. Must remain false.
+    pub message_delivered: bool,
+    /// Whether a provider API call was performed. Must remain false.
+    pub provider_call_performed: bool,
+    /// Whether token or secret material was loaded. Must remain false.
+    pub token_secret_material_loaded: bool,
+    /// Whether live execution occurred. Must remain false.
+    pub live_execution_performed: bool,
+    /// Whether signing or broadcast occurred. Must remain false.
+    pub signing_or_broadcast_performed: bool,
+    /// Whether this review claims production readiness. Must remain false.
+    pub production_ready_claimed: bool,
+}
+
+/// Local communications delivery-provider boundary status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum CommunicationDeliveryProviderBoundaryStatus {
+    /// Local prerequisites exist but real provider delivery validation is missing.
+    BlockedPendingProviderDeliveryValidation,
+    /// The boundary is unsafe or internally incomplete.
+    Blocked,
+}
+
+/// Non-secret local communications delivery-provider boundary report.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct CommunicationDeliveryProviderBoundaryReport {
+    /// Communications/CLI boundary version.
+    pub communications_version: String,
+    /// Stable local review id.
+    pub review_id: String,
+    /// Review status.
+    pub status: CommunicationDeliveryProviderBoundaryStatus,
+    /// Whether the local channel-session prerequisite is ready.
+    pub channel_session_ready: bool,
+    /// Whether the local platform-adapter prerequisite is ready.
+    pub platform_adapter_ready: bool,
+    /// Whether authenticated real provider delivery evidence is available.
+    pub provider_delivery_evidence_available: bool,
+    /// Whether provider-side rate-limit reconciliation evidence is available.
+    pub provider_rate_limit_evidence_available: bool,
+    /// Whether real provider outage/backoff evidence is available.
+    pub provider_outage_evidence_available: bool,
+    /// Whether production platform identity/authorization evidence is available.
+    pub platform_identity_evidence_available: bool,
+    /// Whether remaining external evidence references were recorded.
+    pub remaining_external_evidence_recorded: bool,
+    /// Count of remaining external evidence references.
+    pub remaining_external_evidence_count: usize,
+    /// Whether outbound network was used. Always false here.
+    pub outbound_network_used: bool,
+    /// Whether a real message was delivered. Always false here.
+    pub message_delivered: bool,
+    /// Whether a provider API call was performed. Always false here.
+    pub provider_call_performed: bool,
+    /// Whether token or secret material was loaded. Always false here.
+    pub token_secret_material_loaded: bool,
+    /// Whether live execution occurred. Always false here.
+    pub live_execution_performed: bool,
+    /// Whether signing or broadcast occurred. Always false here.
+    pub signing_or_broadcast_performed: bool,
+    /// Whether this report approves production readiness. Always false here.
+    pub production_ready: bool,
+    /// Sanitized blocker descriptions.
+    pub blockers: Vec<String>,
+    /// Sanitized validation codes.
+    pub violation_codes: Vec<String>,
+}
+
 impl RemoteCommandSecurityReviewRequest {
     /// Validate local remote command security review input.
     pub fn validate(&self) -> Result<(), CommunicationError> {
@@ -1811,6 +1910,97 @@ impl PlatformAdapterReviewReport {
     }
 }
 
+impl CommunicationDeliveryProviderBoundaryRequest {
+    /// Validate local communications delivery-provider boundary input.
+    pub fn validate(&self) -> Result<(), CommunicationError> {
+        self.channel_session.validate()?;
+        self.platform_adapter.validate()?;
+        let mut violations = Vec::new();
+        validate_id(
+            "communications delivery provider boundary",
+            &self.review_id,
+            &mut violations,
+        );
+        if self.min_remaining_external_evidence == 0 {
+            violations.push(CommunicationViolation::new(
+                "COMMUNICATION_DELIVERY_PROVIDER_EXTERNAL_EVIDENCE_FLOOR_ZERO",
+                "communications delivery provider boundary requires remaining external evidence",
+            ));
+        }
+        if self
+            .remaining_external_evidence
+            .iter()
+            .any(|item| item.trim().is_empty())
+        {
+            violations.push(CommunicationViolation::new(
+                "COMMUNICATION_DELIVERY_PROVIDER_EXTERNAL_EVIDENCE_BLANK",
+                "communications delivery provider boundary evidence references must be non-empty",
+            ));
+        }
+        finish_validation(violations)
+    }
+}
+
+impl CommunicationDeliveryProviderBoundaryReport {
+    /// Validate local communications delivery-provider boundary invariants.
+    pub fn validate(&self) -> Result<(), CommunicationError> {
+        let mut violations = Vec::new();
+        validate_id(
+            "communications delivery provider boundary",
+            &self.review_id,
+            &mut violations,
+        );
+        if self.communications_version != COMMUNICATIONS_CLI_VERSION {
+            violations.push(CommunicationViolation::new_owned(
+                "COMMUNICATION_VERSION_MISMATCH",
+                format!(
+                    "communications_version must be {COMMUNICATIONS_CLI_VERSION}, got {}",
+                    self.communications_version
+                ),
+            ));
+        }
+        let no_side_effects = !self.outbound_network_used
+            && !self.message_delivered
+            && !self.provider_call_performed
+            && !self.token_secret_material_loaded
+            && !self.live_execution_performed
+            && !self.signing_or_broadcast_performed
+            && !self.production_ready;
+        let provider_evidence_missing = !self.provider_delivery_evidence_available
+            && !self.provider_rate_limit_evidence_available
+            && !self.provider_outage_evidence_available
+            && !self.platform_identity_evidence_available;
+        let should_be_pending = self.channel_session_ready
+            && self.platform_adapter_ready
+            && provider_evidence_missing
+            && self.remaining_external_evidence_recorded
+            && no_side_effects;
+        if should_be_pending
+            && self.status
+                != CommunicationDeliveryProviderBoundaryStatus::BlockedPendingProviderDeliveryValidation
+        {
+            violations.push(CommunicationViolation::new(
+                "COMMUNICATION_DELIVERY_PROVIDER_STATUS_SHOULD_BE_PENDING",
+                "ready local communications prerequisites with missing provider evidence must remain blocked pending provider delivery validation",
+            ));
+        }
+        if !should_be_pending && self.status != CommunicationDeliveryProviderBoundaryStatus::Blocked
+        {
+            violations.push(CommunicationViolation::new(
+                "COMMUNICATION_DELIVERY_PROVIDER_STATUS_SHOULD_BLOCK",
+                "unsafe or incomplete communications delivery-provider evidence must be blocked",
+            ));
+        }
+        if self.blockers.is_empty() {
+            violations.push(CommunicationViolation::new(
+                "COMMUNICATION_DELIVERY_PROVIDER_BLOCKERS_EMPTY",
+                "communications delivery-provider boundary must record unresolved blockers",
+            ));
+        }
+        finish_validation(violations)
+    }
+}
+
 /// Review future remote operator command controls without enabling remote commands.
 pub fn review_remote_command_security(
     request: &RemoteCommandSecurityReviewRequest,
@@ -2267,6 +2457,182 @@ pub fn review_platform_adapter_controls(
         signing_or_broadcast_performed: request.signing_or_broadcast_performed,
         production_ready: false,
         reviewed_at_unix_ms: request.reviewed_at_unix_ms,
+    };
+    report.validate()?;
+    Ok(report)
+}
+
+/// Review local communications delivery-provider prerequisites without delivery.
+pub fn review_communication_delivery_provider_boundary(
+    request: &CommunicationDeliveryProviderBoundaryRequest,
+) -> Result<CommunicationDeliveryProviderBoundaryReport, CommunicationError> {
+    request.validate()?;
+    let channel_session_ready = request.channel_session.status
+        == ChannelSessionValidationStatus::ReadyForLocalReview
+        && request.channel_session.accepted_validation_count > 0
+        && request.channel_session.rejected_provider_unavailable_count > 0
+        && !request.channel_session.outbound_delivery_requested
+        && !request.channel_session.outbound_network_used
+        && !request.channel_session.message_delivered
+        && !request.channel_session.live_execution_performed
+        && !request.channel_session.signing_or_broadcast_performed
+        && !request.channel_session.production_ready;
+    let platform_adapter_ready = request.platform_adapter.status
+        == PlatformAdapterReviewStatus::ReadyForLocalReview
+        && request.platform_adapter.envelope_ready
+        && request.platform_adapter.token_reference_present
+        && !request.platform_adapter.token_secret_material_present
+        && request.platform_adapter.platform_identity_verified
+        && request.platform_adapter.platform_identity_authorized
+        && request.platform_adapter.channel_permission_granted
+        && request.platform_adapter.command_injection_blocked
+        && request.platform_adapter.require_delivery_kill_switch
+        && request.platform_adapter.require_audit_state_preflight
+        && request.platform_adapter.require_delivery_idempotency
+        && request.platform_adapter.require_rate_limit_controls
+        && request.platform_adapter.require_outage_backoff_controls
+        && request.platform_adapter.require_payload_redaction
+        && !request.platform_adapter.token_revoked
+        && !request.platform_adapter.provider_rate_limited
+        && !request.platform_adapter.provider_outage_observed
+        && !request.platform_adapter.outbound_delivery_requested
+        && !request.platform_adapter.outbound_network_used
+        && !request.platform_adapter.message_delivered
+        && !request.platform_adapter.remote_commands_enabled
+        && !request.platform_adapter.live_execution_performed
+        && !request.platform_adapter.signing_or_broadcast_performed
+        && !request.platform_adapter.production_ready;
+    let remaining_external_evidence_recorded =
+        request.remaining_external_evidence.len() >= request.min_remaining_external_evidence;
+    let outbound_network_used = request.outbound_network_used
+        || request.channel_session.outbound_network_used
+        || request.platform_adapter.outbound_network_used;
+    let message_delivered = request.message_delivered
+        || request.channel_session.message_delivered
+        || request.platform_adapter.message_delivered;
+    let token_secret_material_loaded = request.token_secret_material_loaded
+        || request.platform_adapter.token_secret_material_present;
+    let live_execution_performed = request.live_execution_performed
+        || request.channel_session.live_execution_performed
+        || request.platform_adapter.live_execution_performed;
+    let signing_or_broadcast_performed = request.signing_or_broadcast_performed
+        || request.channel_session.signing_or_broadcast_performed
+        || request.platform_adapter.signing_or_broadcast_performed;
+    let production_ready_claimed = request.production_ready_claimed
+        || request.channel_session.production_ready
+        || request.platform_adapter.production_ready;
+
+    let mut blockers = Vec::new();
+    if !request.provider_delivery_evidence_available {
+        blockers.push("authenticated provider delivery evidence missing".to_owned());
+    }
+    if !request.provider_rate_limit_evidence_available {
+        blockers.push("provider-side rate-limit reconciliation evidence missing".to_owned());
+    }
+    if !request.provider_outage_evidence_available {
+        blockers.push("provider outage/backoff evidence missing".to_owned());
+    }
+    if !request.platform_identity_evidence_available {
+        blockers.push("production platform identity authorization evidence missing".to_owned());
+    }
+    if !remaining_external_evidence_recorded {
+        blockers
+            .push("remaining external communications evidence references below floor".to_owned());
+    }
+
+    let mut violation_codes = Vec::new();
+    push_code(
+        &mut violation_codes,
+        !channel_session_ready,
+        "COMMUNICATION_DELIVERY_PROVIDER_CHANNEL_SESSION_NOT_READY",
+    );
+    push_code(
+        &mut violation_codes,
+        !platform_adapter_ready,
+        "COMMUNICATION_DELIVERY_PROVIDER_PLATFORM_ADAPTER_NOT_READY",
+    );
+    push_code(
+        &mut violation_codes,
+        !remaining_external_evidence_recorded,
+        "COMMUNICATION_DELIVERY_PROVIDER_EXTERNAL_EVIDENCE_MISSING",
+    );
+    push_code(
+        &mut violation_codes,
+        outbound_network_used,
+        "COMMUNICATION_DELIVERY_PROVIDER_OUTBOUND_NETWORK_USED",
+    );
+    push_code(
+        &mut violation_codes,
+        message_delivered,
+        "COMMUNICATION_DELIVERY_PROVIDER_MESSAGE_DELIVERED",
+    );
+    push_code(
+        &mut violation_codes,
+        request.provider_call_performed,
+        "COMMUNICATION_DELIVERY_PROVIDER_CALL_PERFORMED",
+    );
+    push_code(
+        &mut violation_codes,
+        token_secret_material_loaded,
+        "COMMUNICATION_DELIVERY_PROVIDER_TOKEN_SECRET_LOADED",
+    );
+    push_code(
+        &mut violation_codes,
+        live_execution_performed,
+        "COMMUNICATION_DELIVERY_PROVIDER_LIVE_EXECUTION",
+    );
+    push_code(
+        &mut violation_codes,
+        signing_or_broadcast_performed,
+        "COMMUNICATION_DELIVERY_PROVIDER_SIGNING_OR_BROADCAST",
+    );
+    push_code(
+        &mut violation_codes,
+        production_ready_claimed,
+        "COMMUNICATION_DELIVERY_PROVIDER_PRODUCTION_READY_CLAIMED",
+    );
+
+    let provider_evidence_missing = !request.provider_delivery_evidence_available
+        && !request.provider_rate_limit_evidence_available
+        && !request.provider_outage_evidence_available
+        && !request.platform_identity_evidence_available;
+    let safe_pending_provider_validation = channel_session_ready
+        && platform_adapter_ready
+        && provider_evidence_missing
+        && remaining_external_evidence_recorded
+        && !outbound_network_used
+        && !message_delivered
+        && !request.provider_call_performed
+        && !token_secret_material_loaded
+        && !live_execution_performed
+        && !signing_or_broadcast_performed
+        && !production_ready_claimed;
+
+    let report = CommunicationDeliveryProviderBoundaryReport {
+        communications_version: COMMUNICATIONS_CLI_VERSION.to_owned(),
+        review_id: request.review_id.clone(),
+        status: if safe_pending_provider_validation {
+            CommunicationDeliveryProviderBoundaryStatus::BlockedPendingProviderDeliveryValidation
+        } else {
+            CommunicationDeliveryProviderBoundaryStatus::Blocked
+        },
+        channel_session_ready,
+        platform_adapter_ready,
+        provider_delivery_evidence_available: request.provider_delivery_evidence_available,
+        provider_rate_limit_evidence_available: request.provider_rate_limit_evidence_available,
+        provider_outage_evidence_available: request.provider_outage_evidence_available,
+        platform_identity_evidence_available: request.platform_identity_evidence_available,
+        remaining_external_evidence_recorded,
+        remaining_external_evidence_count: request.remaining_external_evidence.len(),
+        outbound_network_used,
+        message_delivered,
+        provider_call_performed: request.provider_call_performed,
+        token_secret_material_loaded,
+        live_execution_performed,
+        signing_or_broadcast_performed,
+        production_ready: false,
+        blockers,
+        violation_codes,
     };
     report.validate()?;
     Ok(report)
@@ -4106,6 +4472,12 @@ fn validate_id(label: &str, value: &str, violations: &mut Vec<CommunicationViola
     }
 }
 
+fn push_code(codes: &mut Vec<String>, condition: bool, code: &'static str) {
+    if condition {
+        codes.push(code.to_owned());
+    }
+}
+
 fn contains_secret_like_text(value: &str) -> bool {
     let lower = value.to_ascii_lowercase();
     let secret_terms = [
@@ -4326,12 +4698,14 @@ mod tests {
         persist_platform_adapter_review_checkpoint, persist_platform_command_ingress_checkpoint,
         persist_remote_command_envelope_validation_checkpoint,
         persist_remote_command_security_review_checkpoint,
-        persist_routed_operator_command_checkpoint, review_platform_adapter_controls,
+        persist_routed_operator_command_checkpoint,
+        review_communication_delivery_provider_boundary, review_platform_adapter_controls,
         review_platform_command_ingress, review_remote_command_security, validate_channel_adapter,
         validate_channel_session, validate_remote_command_envelope, ChannelAdapterValidationReport,
         ChannelAdapterValidationRequest, ChannelAdapterValidationStatus,
         ChannelSessionValidationReport, ChannelSessionValidationStatus,
-        CommunicationBoundaryConfig, DeterministicNotificationBoundary,
+        CommunicationBoundaryConfig, CommunicationDeliveryProviderBoundaryRequest,
+        CommunicationDeliveryProviderBoundaryStatus, DeterministicNotificationBoundary,
         DeterministicOperatorCommandRouter, NotificationChannelDispatchStatus,
         NotificationChannelProfile, NotificationChannelSafetyState, NotificationDispatchRecord,
         NotificationDispatchStatus, NotificationPublishRequest, NotificationPublisher,
@@ -4515,6 +4889,65 @@ mod tests {
             live_execution_performed: false,
             signing_or_broadcast_performed: false,
             reviewed_at_unix_ms: 1_700_000_000_260,
+        }
+    }
+
+    fn ready_channel_session_report() -> ChannelSessionValidationReport {
+        let accepted = validate_channel_adapter(&ready_channel_adapter_request())
+            .expect("ready channel adapter validation should pass locally");
+        let mut unauthenticated_request = ready_channel_adapter_request();
+        unauthenticated_request.validation_id = "delivery-provider-session-unauth".to_owned();
+        unauthenticated_request.channel_authenticated = false;
+        unauthenticated_request.platform_identity_authorized = false;
+        let unauthenticated = validate_channel_adapter(&unauthenticated_request)
+            .expect("unauthenticated channel adapter should be blocked locally");
+        let mut replay_request = ready_channel_adapter_request();
+        replay_request.validation_id = "delivery-provider-session-replay".to_owned();
+        replay_request.replay_nonce_reused = true;
+        let replay = validate_channel_adapter(&replay_request)
+            .expect("replayed channel adapter should be blocked locally");
+        let mut provider_unavailable_request = ready_channel_adapter_request();
+        provider_unavailable_request.validation_id =
+            "delivery-provider-session-unavailable".to_owned();
+        provider_unavailable_request.provider_rate_limited = true;
+        provider_unavailable_request.provider_outage_observed = true;
+        let provider_unavailable = validate_channel_adapter(&provider_unavailable_request)
+            .expect("provider unavailable channel adapter should be blocked locally");
+
+        validate_channel_session(
+            "delivery-provider-channel-session",
+            &[accepted, unauthenticated, replay, provider_unavailable],
+        )
+        .expect("channel session should summarize local controls")
+    }
+
+    fn ready_communication_delivery_provider_boundary_request(
+    ) -> CommunicationDeliveryProviderBoundaryRequest {
+        CommunicationDeliveryProviderBoundaryRequest {
+            review_id: "communications-delivery-provider-boundary".to_owned(),
+            channel_session: ready_channel_session_report(),
+            platform_adapter: review_platform_adapter_controls(
+                &ready_platform_adapter_review_request(),
+            )
+            .expect("ready platform adapter review should pass locally"),
+            provider_delivery_evidence_available: false,
+            provider_rate_limit_evidence_available: false,
+            provider_outage_evidence_available: false,
+            platform_identity_evidence_available: false,
+            min_remaining_external_evidence: 4,
+            remaining_external_evidence: vec![
+                "authenticated real provider delivery evidence".to_owned(),
+                "provider-side rate-limit reconciliation evidence".to_owned(),
+                "provider outage/backoff evidence".to_owned(),
+                "production platform identity authorization evidence".to_owned(),
+            ],
+            outbound_network_used: false,
+            message_delivered: false,
+            provider_call_performed: false,
+            token_secret_material_loaded: false,
+            live_execution_performed: false,
+            signing_or_broadcast_performed: false,
+            production_ready_claimed: false,
         }
     }
 
@@ -5361,6 +5794,78 @@ mod tests {
         assert!(!report.live_execution_performed);
         assert!(!report.signing_or_broadcast_performed);
         assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn communication_delivery_provider_boundary_blocks_pending_real_provider_evidence() {
+        let report = review_communication_delivery_provider_boundary(
+            &ready_communication_delivery_provider_boundary_request(),
+        )
+        .expect("local delivery-provider boundary should produce a blocked report");
+
+        assert_eq!(
+            report.status,
+            CommunicationDeliveryProviderBoundaryStatus::BlockedPendingProviderDeliveryValidation
+        );
+        assert!(report.channel_session_ready);
+        assert!(report.platform_adapter_ready);
+        assert!(!report.provider_delivery_evidence_available);
+        assert!(!report.provider_rate_limit_evidence_available);
+        assert!(!report.provider_outage_evidence_available);
+        assert!(!report.platform_identity_evidence_available);
+        assert!(report.remaining_external_evidence_recorded);
+        assert_eq!(report.remaining_external_evidence_count, 4);
+        assert_eq!(report.blockers.len(), 4);
+        assert!(report.violation_codes.is_empty());
+        assert!(!report.outbound_network_used);
+        assert!(!report.message_delivered);
+        assert!(!report.provider_call_performed);
+        assert!(!report.token_secret_material_loaded);
+        assert!(!report.live_execution_performed);
+        assert!(!report.signing_or_broadcast_performed);
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn communication_delivery_provider_boundary_fails_closed_on_side_effects() {
+        let mut request = ready_communication_delivery_provider_boundary_request();
+        request.review_id = "communications-delivery-provider-side-effect".to_owned();
+        request.outbound_network_used = true;
+        request.message_delivered = true;
+        request.provider_call_performed = true;
+        request.token_secret_material_loaded = true;
+        request.live_execution_performed = true;
+        request.signing_or_broadcast_performed = true;
+        request.production_ready_claimed = true;
+
+        let report = review_communication_delivery_provider_boundary(&request)
+            .expect("side-effect report should be blocked without throwing away evidence");
+
+        assert_eq!(
+            report.status,
+            CommunicationDeliveryProviderBoundaryStatus::Blocked
+        );
+        assert!(report.outbound_network_used);
+        assert!(report.message_delivered);
+        assert!(report.provider_call_performed);
+        assert!(report.token_secret_material_loaded);
+        assert!(report.live_execution_performed);
+        assert!(report.signing_or_broadcast_performed);
+        assert!(!report.production_ready);
+        for expected in [
+            "COMMUNICATION_DELIVERY_PROVIDER_OUTBOUND_NETWORK_USED",
+            "COMMUNICATION_DELIVERY_PROVIDER_MESSAGE_DELIVERED",
+            "COMMUNICATION_DELIVERY_PROVIDER_CALL_PERFORMED",
+            "COMMUNICATION_DELIVERY_PROVIDER_TOKEN_SECRET_LOADED",
+            "COMMUNICATION_DELIVERY_PROVIDER_LIVE_EXECUTION",
+            "COMMUNICATION_DELIVERY_PROVIDER_SIGNING_OR_BROADCAST",
+            "COMMUNICATION_DELIVERY_PROVIDER_PRODUCTION_READY_CLAIMED",
+        ] {
+            assert!(
+                report.violation_codes.iter().any(|code| code == expected),
+                "missing expected violation code {expected}"
+            );
+        }
     }
 
     #[test]
