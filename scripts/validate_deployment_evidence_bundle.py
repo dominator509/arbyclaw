@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import pathlib
 import shutil
 import subprocess
@@ -20,10 +21,14 @@ from typing import Any
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 COMPONENT_TIMEOUT_SECONDS = 300
-BUNDLE_WORKSPACE = ROOT / "target/deployment-evidence-bundle"
+BUNDLE_WORKSPACE_ROOT = ROOT / "target/deployment-evidence-bundle"
+BUNDLE_WORKSPACE = BUNDLE_WORKSPACE_ROOT / f"run-{os.getpid()}"
 
-COMPONENT_COMMANDS = [
-    (
+def component_commands(bundle_workspace: pathlib.Path) -> list[tuple[str, list[str], bool]]:
+    observability_metrics_workspace = bundle_workspace / "observability-metrics-runtime"
+    deployment_runtime_workspace = bundle_workspace / "deployment-runtime-gate"
+    return [
+        (
         "structure",
         [sys.executable, "scripts/validate_structure.py"],
         False,
@@ -50,7 +55,17 @@ COMPONENT_COMMANDS = [
             "scripts/validate_deployment_host_runtime.py",
             "--run-observability-metrics-runtime",
             "--observability-metrics-workspace",
-            "target/deployment-evidence-bundle/observability-metrics-runtime",
+            str(observability_metrics_workspace),
+            "--json",
+        ],
+        True,
+    ),
+    (
+        "deployment-host-static-hardening-config-smoke",
+        [
+            sys.executable,
+            "scripts/validate_deployment_host_runtime.py",
+            "--run-deployment-static-hardening",
             "--json",
         ],
         True,
@@ -71,7 +86,13 @@ COMPONENT_COMMANDS = [
     ),
     (
         "deployment-runtime-gate",
-        [sys.executable, "scripts/validate_deployment_runtime_gate.py", "--json"],
+        [
+            sys.executable,
+            "scripts/validate_deployment_runtime_gate.py",
+            "--workspace-base",
+            str(deployment_runtime_workspace),
+            "--json",
+        ],
         True,
     ),
     (
@@ -195,7 +216,7 @@ COMPONENT_COMMANDS = [
         ],
         False,
     ),
-]
+    ]
 
 BOOLEAN_SAFETY_FIELDS = (
     "service_actions_performed",
@@ -219,7 +240,7 @@ def fail(message: str) -> int:
     return 1
 
 
-def prepare_bundle_workspace() -> None:
+def prepare_bundle_workspace() -> pathlib.Path:
     resolved = BUNDLE_WORKSPACE.resolve()
     target_root = (ROOT / "target").resolve()
     try:
@@ -229,6 +250,7 @@ def prepare_bundle_workspace() -> None:
     if resolved.exists():
         shutil.rmtree(resolved)
     resolved.mkdir(parents=True)
+    return resolved
 
 
 def run_component(name: str, command: list[str], expects_json: bool) -> dict[str, Any]:
@@ -277,10 +299,10 @@ def summarize_json_report(report: dict[str, Any]) -> dict[str, Any]:
 
 
 def build_report() -> dict[str, Any]:
-    prepare_bundle_workspace()
+    bundle_workspace = prepare_bundle_workspace()
     components = [
         run_component(name, command, expects_json)
-        for name, command, expects_json in COMPONENT_COMMANDS
+        for name, command, expects_json in component_commands(bundle_workspace)
     ]
     failed = [component["name"] for component in components if not component["passed"]]
     unsafe_flags: list[str] = []
