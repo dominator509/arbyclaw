@@ -4,12 +4,12 @@
 This gate composes the existing local packaging/deployment aggregate gate, the
 execution-path aggregate gate, the operator-surface aggregate gate, the
 opportunity-scenario aggregate gate, the connector-scenario aggregate gate, the
-locked dependency license-policy validator, and the local secret/policy
-boundary plus secret backup/restore, withdrawal-policy, signer-boundary, and
-destination-boundary validators. It preserves local-only/non-secret behavior:
-no live trading, no exchange/RPC calls, no service-manager actions, no
-credential loading, no signing, publishing, withdrawals, transfers, or
-production-readiness claims.
+deployment evidence checklist gate, the locked dependency license-policy
+validator, and the local secret/policy boundary plus secret backup/restore,
+withdrawal-policy, signer-boundary, and destination-boundary validators. It
+preserves local-only/non-secret behavior: no live trading, no exchange/RPC
+calls, no service-manager actions, no credential loading, no signing,
+publishing, withdrawals, transfers, or production-readiness claims.
 """
 
 from __future__ import annotations
@@ -59,6 +59,10 @@ def command_set(workspace_root: pathlib.Path, args: argparse.Namespace) -> list[
         (
             "connector_scenario_gate",
             [sys.executable, "scripts/validate_connector_scenario_gate.py", "--json"],
+        ),
+        (
+            "deployment_evidence_checklist",
+            [sys.executable, "scripts/validate_deployment_evidence_checklist.py", "--json"],
         ),
         (
             "dependency_license_policy",
@@ -333,6 +337,36 @@ def validate_components(components: list[dict[str, Any]]) -> tuple[list[str], bo
             errors.append(f"connector scenario gate did not enforce {field}")
     if connector_scenario.get("audit_records_replayed", 0) <= 0:
         errors.append("connector scenario gate did not report audit replay coverage")
+
+    deployment_checklist = component_by_name["deployment_evidence_checklist"]["json_report"]
+    assert deployment_checklist is not None
+    bundle_index = deployment_checklist.get("bundle_index")
+    if not isinstance(bundle_index, dict):
+        errors.append("deployment evidence checklist did not report a bundle index")
+        bundle_index = {}
+    if bundle_index.get("all_components_passed") is not True:
+        errors.append("deployment evidence checklist bundle did not pass every component")
+    if bundle_index.get("component_count") != 34:
+        errors.append("deployment evidence checklist did not report exactly 34 bundle components")
+    if bundle_index.get("missing_required_component_names") != []:
+        errors.append("deployment evidence checklist reported missing required bundle components")
+    if deployment_checklist.get("all_external_evidence_referenced") is not False:
+        errors.append("deployment evidence checklist unexpectedly reported all external evidence referenced")
+    remaining_missing = deployment_checklist.get("remaining_missing_categories")
+    if not isinstance(remaining_missing, list) or len(remaining_missing) != 11:
+        errors.append("deployment evidence checklist did not preserve 11 missing external evidence categories")
+    for field in (
+        "production_readiness_claimed",
+        "service_actions_performed",
+        "files_changed",
+        "secrets_loaded",
+        "external_calls_performed",
+        "alerts_sent",
+        "live_execution_enabled",
+        "artifact_contents_embedded",
+    ):
+        if deployment_checklist.get(field) is not False:
+            errors.append(f"deployment evidence checklist reported unsafe field {field}")
 
     dependency_license = component_by_name["dependency_license_policy"]["json_report"]
     assert dependency_license is not None
