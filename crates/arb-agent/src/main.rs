@@ -13704,6 +13704,12 @@ fn run_runtime_smoke_validation(options: &RuntimeSmokeOptions) -> Result<(), Age
             deployment_host_permission_evidence_available: false,
             physical_disk_full_evidence_available: false,
             retention_execution_evidence_available: false,
+            deployment_host_backup_restore_evidence_available: false,
+            deployment_host_graceful_shutdown_evidence_available: false,
+            deployment_host_audit_sqlite_recovery_evidence_available: false,
+            deployment_host_sqlite_schema_migration_evidence_available: false,
+            deployment_host_daemon_failure_capture_evidence_available: false,
+            deployment_host_concurrent_lifecycle_evidence_available: false,
             rollback_drill_evidence_available: false,
             incident_response_evidence_available: false,
             observability_runtime_evidence_available: false,
@@ -13809,6 +13815,34 @@ fn run_runtime_smoke_validation(options: &RuntimeSmokeOptions) -> Result<(), Age
     println!(
         "production-runtime-preflight-disk-full-evidence-available: {}",
         production_preflight.physical_disk_full_evidence_available
+    );
+    println!(
+        "production-runtime-preflight-retention-execution-evidence-available: {}",
+        production_preflight.retention_execution_evidence_available
+    );
+    println!(
+        "production-runtime-preflight-backup-restore-evidence-available: {}",
+        production_preflight.deployment_host_backup_restore_evidence_available
+    );
+    println!(
+        "production-runtime-preflight-graceful-shutdown-evidence-available: {}",
+        production_preflight.deployment_host_graceful_shutdown_evidence_available
+    );
+    println!(
+        "production-runtime-preflight-audit-sqlite-recovery-evidence-available: {}",
+        production_preflight.deployment_host_audit_sqlite_recovery_evidence_available
+    );
+    println!(
+        "production-runtime-preflight-sqlite-schema-migration-evidence-available: {}",
+        production_preflight.deployment_host_sqlite_schema_migration_evidence_available
+    );
+    println!(
+        "production-runtime-preflight-daemon-failure-capture-evidence-available: {}",
+        production_preflight.deployment_host_daemon_failure_capture_evidence_available
+    );
+    println!(
+        "production-runtime-preflight-concurrent-lifecycle-evidence-available: {}",
+        production_preflight.deployment_host_concurrent_lifecycle_evidence_available
     );
     println!(
         "production-runtime-preflight-production-ready: {}",

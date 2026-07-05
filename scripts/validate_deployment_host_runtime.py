@@ -620,6 +620,27 @@ def production_runtime_preflight_report(parsed: dict[str, str]) -> dict[str, Any
         "disk_full_evidence_available": parsed.get(
             "production-runtime-preflight-disk-full-evidence-available"
         ),
+        "retention_execution_evidence_available": parsed.get(
+            "production-runtime-preflight-retention-execution-evidence-available"
+        ),
+        "backup_restore_evidence_available": parsed.get(
+            "production-runtime-preflight-backup-restore-evidence-available"
+        ),
+        "graceful_shutdown_evidence_available": parsed.get(
+            "production-runtime-preflight-graceful-shutdown-evidence-available"
+        ),
+        "audit_sqlite_recovery_evidence_available": parsed.get(
+            "production-runtime-preflight-audit-sqlite-recovery-evidence-available"
+        ),
+        "sqlite_schema_migration_evidence_available": parsed.get(
+            "production-runtime-preflight-sqlite-schema-migration-evidence-available"
+        ),
+        "daemon_failure_capture_evidence_available": parsed.get(
+            "production-runtime-preflight-daemon-failure-capture-evidence-available"
+        ),
+        "concurrent_lifecycle_evidence_available": parsed.get(
+            "production-runtime-preflight-concurrent-lifecycle-evidence-available"
+        ),
         "production_ready": parsed.get("production-runtime-preflight-production-ready"),
     }
 

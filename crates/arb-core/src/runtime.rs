@@ -974,6 +974,18 @@ pub struct RuntimeProductionPreflightRequest {
     pub physical_disk_full_evidence_available: bool,
     /// Whether deployment-host retention/rotation execution evidence is available.
     pub retention_execution_evidence_available: bool,
+    /// Whether deployment-host backup/restore execution evidence is available.
+    pub deployment_host_backup_restore_evidence_available: bool,
+    /// Whether deployment-host graceful-shutdown execution evidence is available.
+    pub deployment_host_graceful_shutdown_evidence_available: bool,
+    /// Whether deployment-host audit/SQLite recovery execution evidence is available.
+    pub deployment_host_audit_sqlite_recovery_evidence_available: bool,
+    /// Whether deployment-host SQLite schema migration execution evidence is available.
+    pub deployment_host_sqlite_schema_migration_evidence_available: bool,
+    /// Whether deployment-host daemon failure-capture execution evidence is available.
+    pub deployment_host_daemon_failure_capture_evidence_available: bool,
+    /// Whether deployment-host concurrent lifecycle execution evidence is available.
+    pub deployment_host_concurrent_lifecycle_evidence_available: bool,
     /// Whether executed rollback-drill evidence is available.
     pub rollback_drill_evidence_available: bool,
     /// Whether executed incident-response drill evidence is available.
@@ -1016,6 +1028,18 @@ pub struct RuntimeProductionPreflightReport {
     pub physical_disk_full_evidence_available: bool,
     /// Whether deployment-host retention/rotation execution evidence is available.
     pub retention_execution_evidence_available: bool,
+    /// Whether deployment-host backup/restore execution evidence is available.
+    pub deployment_host_backup_restore_evidence_available: bool,
+    /// Whether deployment-host graceful-shutdown execution evidence is available.
+    pub deployment_host_graceful_shutdown_evidence_available: bool,
+    /// Whether deployment-host audit/SQLite recovery execution evidence is available.
+    pub deployment_host_audit_sqlite_recovery_evidence_available: bool,
+    /// Whether deployment-host SQLite schema migration execution evidence is available.
+    pub deployment_host_sqlite_schema_migration_evidence_available: bool,
+    /// Whether deployment-host daemon failure-capture execution evidence is available.
+    pub deployment_host_daemon_failure_capture_evidence_available: bool,
+    /// Whether deployment-host concurrent lifecycle execution evidence is available.
+    pub deployment_host_concurrent_lifecycle_evidence_available: bool,
     /// Whether executed rollback-drill evidence is available.
     pub rollback_drill_evidence_available: bool,
     /// Whether executed incident-response drill evidence is available.
@@ -4647,6 +4671,18 @@ pub fn preflight_production_runtime_validation(
             .deployment_host_permission_evidence_available,
         physical_disk_full_evidence_available: request.physical_disk_full_evidence_available,
         retention_execution_evidence_available: request.retention_execution_evidence_available,
+        deployment_host_backup_restore_evidence_available: request
+            .deployment_host_backup_restore_evidence_available,
+        deployment_host_graceful_shutdown_evidence_available: request
+            .deployment_host_graceful_shutdown_evidence_available,
+        deployment_host_audit_sqlite_recovery_evidence_available: request
+            .deployment_host_audit_sqlite_recovery_evidence_available,
+        deployment_host_sqlite_schema_migration_evidence_available: request
+            .deployment_host_sqlite_schema_migration_evidence_available,
+        deployment_host_daemon_failure_capture_evidence_available: request
+            .deployment_host_daemon_failure_capture_evidence_available,
+        deployment_host_concurrent_lifecycle_evidence_available: request
+            .deployment_host_concurrent_lifecycle_evidence_available,
         rollback_drill_evidence_available: request.rollback_drill_evidence_available,
         incident_response_evidence_available: request.incident_response_evidence_available,
         observability_runtime_evidence_available: request.observability_runtime_evidence_available,
@@ -5750,6 +5786,29 @@ fn runtime_production_preflight_unresolved_blockers(
         blockers.push(
             "deployment-host audit retention/rotation execution evidence is missing".to_owned(),
         );
+    }
+    if !request.deployment_host_backup_restore_evidence_available {
+        blockers.push("deployment-host backup/restore execution evidence is missing".to_owned());
+    }
+    if !request.deployment_host_graceful_shutdown_evidence_available {
+        blockers.push("deployment-host graceful-shutdown execution evidence is missing".to_owned());
+    }
+    if !request.deployment_host_audit_sqlite_recovery_evidence_available {
+        blockers.push("deployment-host audit/SQLite recovery evidence is missing".to_owned());
+    }
+    if !request.deployment_host_sqlite_schema_migration_evidence_available {
+        blockers.push(
+            "deployment-host SQLite schema migration execution evidence is missing".to_owned(),
+        );
+    }
+    if !request.deployment_host_daemon_failure_capture_evidence_available {
+        blockers.push(
+            "deployment-host daemon failure-capture execution evidence is missing".to_owned(),
+        );
+    }
+    if !request.deployment_host_concurrent_lifecycle_evidence_available {
+        blockers
+            .push("deployment-host concurrent lifecycle execution evidence is missing".to_owned());
     }
     if !request.rollback_drill_evidence_available {
         blockers.push("executed rollback-drill evidence is missing".to_owned());
@@ -9245,6 +9304,12 @@ redact_secrets = true
                 deployment_host_permission_evidence_available: false,
                 physical_disk_full_evidence_available: false,
                 retention_execution_evidence_available: false,
+                deployment_host_backup_restore_evidence_available: false,
+                deployment_host_graceful_shutdown_evidence_available: false,
+                deployment_host_audit_sqlite_recovery_evidence_available: false,
+                deployment_host_sqlite_schema_migration_evidence_available: false,
+                deployment_host_daemon_failure_capture_evidence_available: false,
+                deployment_host_concurrent_lifecycle_evidence_available: false,
                 rollback_drill_evidence_available: false,
                 incident_response_evidence_available: false,
                 observability_runtime_evidence_available: false,
@@ -9269,6 +9334,18 @@ redact_secrets = true
             .unresolved_blockers
             .iter()
             .any(|blocker| { blocker.contains("physical deployment-host disk-full evidence") }));
+        assert!(report
+            .unresolved_blockers
+            .iter()
+            .any(|blocker| { blocker.contains("backup/restore execution evidence") }));
+        assert!(report
+            .unresolved_blockers
+            .iter()
+            .any(|blocker| { blocker.contains("audit/SQLite recovery evidence") }));
+        assert!(report
+            .unresolved_blockers
+            .iter()
+            .any(|blocker| { blocker.contains("concurrent lifecycle execution evidence") }));
         assert!(!report.service_manager_action_performed);
         assert!(!report.external_submission_performed);
         assert!(!report.live_execution_performed);
@@ -9296,6 +9373,12 @@ redact_secrets = true
                 deployment_host_permission_evidence_available: true,
                 physical_disk_full_evidence_available: true,
                 retention_execution_evidence_available: true,
+                deployment_host_backup_restore_evidence_available: true,
+                deployment_host_graceful_shutdown_evidence_available: true,
+                deployment_host_audit_sqlite_recovery_evidence_available: true,
+                deployment_host_sqlite_schema_migration_evidence_available: true,
+                deployment_host_daemon_failure_capture_evidence_available: true,
+                deployment_host_concurrent_lifecycle_evidence_available: true,
                 rollback_drill_evidence_available: true,
                 incident_response_evidence_available: true,
                 observability_runtime_evidence_available: true,

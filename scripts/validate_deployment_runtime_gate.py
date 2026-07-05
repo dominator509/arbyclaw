@@ -699,7 +699,18 @@ def validate_report(report: dict[str, Any]) -> list[str]:
             errors.append("runtime production preflight unresolved_blockers was not positive")
     except (TypeError, ValueError):
         errors.append("runtime production preflight unresolved_blockers was not an integer")
-    for key in ("service_manager_evidence_available", "disk_full_evidence_available", "production_ready"):
+    for key in (
+        "service_manager_evidence_available",
+        "disk_full_evidence_available",
+        "retention_execution_evidence_available",
+        "backup_restore_evidence_available",
+        "graceful_shutdown_evidence_available",
+        "audit_sqlite_recovery_evidence_available",
+        "sqlite_schema_migration_evidence_available",
+        "daemon_failure_capture_evidence_available",
+        "concurrent_lifecycle_evidence_available",
+        "production_ready",
+    ):
         if production_preflight.get(key) != "false":
             errors.append(f"runtime production preflight {key} was not false")
 
