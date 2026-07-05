@@ -2,12 +2,12 @@
 """Run the strongest current local hardening core aggregate validation bundle.
 
 This gate composes the existing local packaging/deployment aggregate gate, the
-locked dependency license-policy validator, and the local secret/policy
-boundary plus secret backup/restore, withdrawal-policy, signer-boundary, and
-destination-boundary validators. It preserves local-only/non-secret behavior:
-no live trading, no exchange/RPC calls, no service-manager actions, no
-credential loading, no signing, publishing, withdrawals, transfers, or
-production-readiness claims.
+execution-path aggregate gate, the locked dependency license-policy validator,
+and the local secret/policy boundary plus secret backup/restore,
+withdrawal-policy, signer-boundary, and destination-boundary validators. It
+preserves local-only/non-secret behavior: no live trading, no exchange/RPC
+calls, no service-manager actions, no credential loading, no signing,
+publishing, withdrawals, transfers, or production-readiness claims.
 """
 
 from __future__ import annotations
@@ -42,6 +42,10 @@ def command_set(workspace_root: pathlib.Path, args: argparse.Namespace) -> list[
         packaging.append("--require-systemd-analyze")
     return [
         ("packaging_deployment_gate", packaging),
+        (
+            "execution_path_gate",
+            [sys.executable, "scripts/validate_execution_path_gate.py", "--json"],
+        ),
         (
             "dependency_license_policy",
             [sys.executable, "scripts/validate_dependency_license_policy.py", "--json"],
@@ -211,6 +215,27 @@ def validate_components(components: list[dict[str, Any]]) -> tuple[list[str], bo
     bounded_toolchain_external_path_used = (
         packaging.get("bounded_toolchain_external_path_used") is True
     )
+
+    execution_path = component_by_name["execution_path_gate"]["json_report"]
+    assert execution_path is not None
+    if execution_path.get("all_components_passed") is not True:
+        errors.append("execution path gate did not pass every component")
+    if execution_path.get("component_count") != 18:
+        errors.append("execution path gate did not report exactly 18 components")
+    if execution_path.get("unsafe_side_effect_flags_detected") is not False:
+        errors.append("execution path gate detected unsafe side-effect flags")
+    for field in (
+        "external_calls_performed",
+        "external_submission_performed",
+        "signer_material_loaded",
+        "plaintext_decrypted",
+        "signing_performed",
+        "broadcast_performed",
+        "live_execution_performed",
+        "production_ready",
+    ):
+        if execution_path.get(field) is not False:
+            errors.append(f"execution path gate reported unsafe field {field}")
 
     dependency_license = component_by_name["dependency_license_policy"]["json_report"]
     assert dependency_license is not None
