@@ -9,7 +9,7 @@ import sys
 import hashlib
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-LATEST_REQUIRED_PHASE = 121
+LATEST_REQUIRED_PHASE = 122
 
 REQUIRED_FILES = [
     "ARCHITECTURE.md",

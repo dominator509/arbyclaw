@@ -3,10 +3,11 @@
 
 This gate composes the existing local packaging/deployment aggregate gate, the
 locked dependency license-policy validator, and the local secret/policy
-boundary plus secret backup/restore, withdrawal-policy, and signer-boundary
-validators. It preserves local-only/non-secret behavior: no live trading, no
-exchange/RPC calls, no service-manager actions, no credential loading, no
-signing, publishing, withdrawals, or production-readiness claims.
+boundary plus secret backup/restore, withdrawal-policy, signer-boundary, and
+destination-boundary validators. It preserves local-only/non-secret behavior:
+no live trading, no exchange/RPC calls, no service-manager actions, no
+credential loading, no signing, publishing, withdrawals, transfers, or
+production-readiness claims.
 """
 
 from __future__ import annotations
@@ -95,6 +96,19 @@ def command_set(workspace_root: pathlib.Path, args: argparse.Namespace) -> list[
                 "validate-signer-boundary-audit",
                 "--workspace",
                 str(workspace_root / "signer-boundary-audit"),
+            ],
+        ),
+        (
+            "destination_boundary_audit",
+            [
+                "cargo",
+                "run",
+                "-p",
+                "arb-agent",
+                "--",
+                "validate-destination-boundary-audit",
+                "--workspace",
+                str(workspace_root / "destination-boundary-audit"),
             ],
         ),
         (
@@ -315,6 +329,33 @@ def validate_components(components: list[dict[str, Any]]) -> tuple[list[str], bo
     ):
         if signer_boundary.get(key) != "false":
             errors.append(f"signer boundary reported unsafe field {key}")
+
+    destination_boundary = component_by_name["destination_boundary_audit"]["parsed"]
+    if destination_boundary.get("destination-allowlist-version") in {None, ""}:
+        errors.append("destination boundary did not report an allowlist version")
+    for key, expected in (
+        ("destination-enabled-entry-count", "1"),
+        ("destination-referenced-evidence-count", "1"),
+        ("audit-records-replayed", "2"),
+    ):
+        if destination_boundary.get(key) != expected:
+            errors.append(f"destination boundary did not report {key}={expected}")
+    for key in (
+        "destination-allowlist-audit-failed-closed",
+        "destination-ownership-review-audit-failed-closed",
+        "state-failure-failed-closed",
+        "state-checkpoints-recovered",
+    ):
+        if destination_boundary.get(key) != "true":
+            errors.append(f"destination boundary did not report {key}=true")
+    for key in (
+        "chain-ownership-verified",
+        "signer-material-loaded",
+        "challenge-signed",
+        "production-ready",
+    ):
+        if destination_boundary.get(key) != "false":
+            errors.append(f"destination boundary reported unsafe field {key}")
 
     policy_audit = component_by_name["policy_decision_audit"]["parsed"]
     if policy_audit.get("approved-policy-decision") != "true":
