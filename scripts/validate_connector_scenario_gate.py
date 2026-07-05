@@ -102,6 +102,17 @@ def command_set(workspace_root: pathlib.Path) -> list[tuple[str, list[str]]]:
             ],
         ),
         (
+            "market_data_live_provider_boundary",
+            [
+                "cargo",
+                "run",
+                "-p",
+                "arb-agent",
+                "--",
+                "validate-market-data-live-provider-boundary",
+            ],
+        ),
+        (
             "paid_market_data_provider_evaluation",
             [
                 "cargo",
@@ -425,6 +436,44 @@ def validate_components(components: list[dict[str, Any]]) -> list[str]:
         "market_data_bad_data_rejection",
     )
 
+    live_provider = by_name["market_data_live_provider_boundary"]["parsed"]
+    require(
+        live_provider,
+        "market-data-live-provider-boundary",
+        "validation passed",
+        errors,
+        "market_data_live_provider_boundary",
+    )
+    require(
+        live_provider,
+        "market-data-live-provider-boundary-status",
+        "blocked-pending-live-provider-implementation",
+        errors,
+        "market_data_live_provider_boundary",
+    )
+    for key in (
+        "market-data-live-provider-latency-review-ready",
+        "market-data-live-provider-reconciliation-review-ready",
+        "market-data-live-provider-bad-data-review-ready",
+        "market-data-live-provider-rest-request-plan-validated",
+        "market-data-live-provider-websocket-request-plan-validated",
+    ):
+        require(live_provider, key, "true", errors, "market_data_live_provider_boundary")
+    for key in (
+        "market-data-live-provider-session-evidence-available",
+        "market-data-live-provider-backed-latency-evidence-available",
+        "market-data-live-provider-backed-rate-limit-outage-evidence-available",
+        "market-data-live-provider-backed-bad-data-evidence-available",
+    ):
+        require(live_provider, key, "false", errors, "market_data_live_provider_boundary")
+    require(
+        live_provider,
+        "market-data-live-provider-blocker-count",
+        "4",
+        errors,
+        "market_data_live_provider_boundary",
+    )
+
     paid_provider = by_name["paid_market_data_provider_evaluation"]["parsed"]
     require(
         paid_provider,
@@ -746,6 +795,7 @@ def main() -> int:
         "audit_records_replayed": audit_records,
         "fee_schedule_reconciliation_review_enforced": True,
         "market_data_bad_data_rejection_review_enforced": True,
+        "market_data_live_provider_boundary_enforced": True,
         "market_data_provider_latency_review_enforced": True,
         "market_data_provider_reconciliation_review_enforced": True,
         "components": [
@@ -758,7 +808,7 @@ def main() -> int:
         ],
         "remaining_external_evidence": [
             "live REST/WebSocket exchange adapters",
-            "provider-backed market-data and fee validation",
+            "provider-backed market-data session, latency, rate-limit/outage, bad-data, and fee validation",
             "external exchange sandbox/live order lifecycle calibration",
             "live DEX/RPC simulation and router validation without broadcasts",
             "external DEX/RPC nonce and confirmation validation without broadcasts",

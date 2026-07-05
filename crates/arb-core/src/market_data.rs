@@ -50,6 +50,10 @@ pub const MARKET_DATA_PROVIDER_RECONCILIATION_REVIEW_VERSION: &str =
 pub const MARKET_DATA_BAD_DATA_REJECTION_REVIEW_VERSION: &str =
     "market-data-bad-data-rejection-review-v1";
 
+/// Stable version for local live market-data provider boundary review records.
+pub const MARKET_DATA_LIVE_PROVIDER_BOUNDARY_REVIEW_VERSION: &str =
+    "market-data-live-provider-boundary-review-v1";
+
 /// A normalized base/quote market pair.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -992,6 +996,104 @@ pub struct MarketDataBadDataRejectionReviewReport {
     pub credential_loaded: bool,
     /// Whether this report approves production readiness. Always false here.
     pub production_ready: bool,
+    /// Sanitized local violation codes.
+    pub violation_codes: Vec<String>,
+}
+
+/// Caller-supplied local live market-data provider boundary review evidence.
+///
+/// This composes already-local prerequisite reviews for REST/WebSocket provider
+/// readiness. It never opens live sessions, downloads market data, loads
+/// credentials, or approves production use.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MarketDataLiveProviderBoundaryReviewRequest {
+    /// Stable local review id.
+    pub review_id: String,
+    /// Ready local latency/backpressure review.
+    pub latency_review: MarketDataProviderLatencyReviewReport,
+    /// Ready local rate-limit/outage reconciliation review.
+    pub reconciliation_review: MarketDataProviderReconciliationReviewReport,
+    /// Ready local bad-data rejection review.
+    pub bad_data_rejection_review: MarketDataBadDataRejectionReviewReport,
+    /// Whether REST request-plan coverage exists for the provider family.
+    pub rest_request_plan_validated: bool,
+    /// Whether WebSocket request-plan coverage exists for the provider family.
+    pub websocket_request_plan_validated: bool,
+    /// Whether sandbox/live provider session evidence is available.
+    pub provider_session_evidence_available: bool,
+    /// Whether provider-backed latency evidence is available.
+    pub provider_backed_latency_evidence_available: bool,
+    /// Whether provider-backed rate-limit/outage evidence is available.
+    pub provider_backed_rate_limit_outage_evidence_available: bool,
+    /// Whether provider-backed bad-data rejection evidence is available.
+    pub provider_backed_bad_data_evidence_available: bool,
+    /// Remaining external evidence that this local review cannot satisfy.
+    pub remaining_external_evidence: Vec<String>,
+    /// Whether a live network was used. Must remain false here.
+    pub live_network_used: bool,
+    /// Whether a WebSocket connection was opened. Must remain false here.
+    pub websocket_connection_opened: bool,
+    /// Whether provider credentials were loaded. Must remain false here.
+    pub credential_loaded: bool,
+    /// Whether the caller tried to claim production readiness. Must remain false here.
+    pub production_ready_claimed: bool,
+}
+
+/// Local live market-data provider boundary status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum MarketDataLiveProviderBoundaryReviewStatus {
+    /// Local prerequisites are coherent, but live/provider-backed implementation is blocked.
+    BlockedPendingLiveProviderImplementation,
+    /// Evidence is unsafe or internally inconsistent.
+    Blocked,
+}
+
+/// Non-secret local live market-data provider boundary review report.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MarketDataLiveProviderBoundaryReviewReport {
+    /// Stable review schema version.
+    pub version: String,
+    /// Stable local review id.
+    pub review_id: String,
+    /// Overall boundary status.
+    pub status: MarketDataLiveProviderBoundaryReviewStatus,
+    /// Provider represented by the local evidence.
+    pub provider_name: String,
+    /// Whether local latency/backpressure prerequisites are ready.
+    pub latency_review_ready: bool,
+    /// Whether local rate-limit/outage reconciliation prerequisites are ready.
+    pub reconciliation_review_ready: bool,
+    /// Whether local bad-data rejection prerequisites are ready.
+    pub bad_data_rejection_review_ready: bool,
+    /// Whether REST request-plan coverage exists.
+    pub rest_request_plan_validated: bool,
+    /// Whether WebSocket request-plan coverage exists.
+    pub websocket_request_plan_validated: bool,
+    /// Whether sandbox/live provider session evidence is available.
+    pub provider_session_evidence_available: bool,
+    /// Whether provider-backed latency evidence is available.
+    pub provider_backed_latency_evidence_available: bool,
+    /// Whether provider-backed rate-limit/outage evidence is available.
+    pub provider_backed_rate_limit_outage_evidence_available: bool,
+    /// Whether provider-backed bad-data rejection evidence is available.
+    pub provider_backed_bad_data_evidence_available: bool,
+    /// Whether remaining external evidence is still explicitly recorded.
+    pub remaining_external_evidence_recorded: bool,
+    /// Count of remaining external evidence items.
+    pub remaining_external_evidence_count: usize,
+    /// Whether a live network was used. Always false here.
+    pub live_network_used: bool,
+    /// Whether a WebSocket connection was opened. Always false here.
+    pub websocket_connection_opened: bool,
+    /// Whether provider credentials were loaded. Always false here.
+    pub credential_loaded: bool,
+    /// Whether this report approves production readiness. Always false here.
+    pub production_ready: bool,
+    /// Sanitized blocker codes that keep live/provider-backed implementation deferred.
+    pub blocker_codes: Vec<String>,
     /// Sanitized local violation codes.
     pub violation_codes: Vec<String>,
 }
@@ -1945,6 +2047,122 @@ impl MarketDataBadDataRejectionReviewReport {
             violations.push(MarketDataViolation::new(
                 "MARKET_DATA_BAD_DATA_REJECTION_PRODUCTION_READY_FORBIDDEN",
                 "market-data bad-data rejection review must not approve production readiness",
+            ));
+        }
+
+        if violations.is_empty() {
+            Ok(())
+        } else {
+            Err(MarketDataError::ValidationFailed { violations })
+        }
+    }
+}
+
+impl MarketDataLiveProviderBoundaryReviewRequest {
+    /// Validate local live-provider boundary review input shape.
+    pub fn validate(&self) -> Result<(), MarketDataError> {
+        let mut violations = Vec::new();
+        validate_id(
+            "market-data live provider boundary review",
+            &self.review_id,
+            &mut violations,
+        );
+        if let Err(MarketDataError::ValidationFailed {
+            violations: report_violations,
+        }) = self.latency_review.validate()
+        {
+            violations.extend(report_violations);
+        }
+        if let Err(MarketDataError::ValidationFailed {
+            violations: report_violations,
+        }) = self.reconciliation_review.validate()
+        {
+            violations.extend(report_violations);
+        }
+        if let Err(MarketDataError::ValidationFailed {
+            violations: report_violations,
+        }) = self.bad_data_rejection_review.validate()
+        {
+            violations.extend(report_violations);
+        }
+        if self.remaining_external_evidence.is_empty()
+            || self
+                .remaining_external_evidence
+                .iter()
+                .any(|item| item.trim().is_empty())
+        {
+            violations.push(MarketDataViolation::new(
+                "MARKET_DATA_LIVE_PROVIDER_BOUNDARY_EXTERNAL_EVIDENCE_MISSING",
+                "market-data live provider boundary must keep unresolved external evidence explicit",
+            ));
+        }
+
+        if violations.is_empty() {
+            Ok(())
+        } else {
+            Err(MarketDataError::ValidationFailed { violations })
+        }
+    }
+}
+
+impl MarketDataLiveProviderBoundaryReviewReport {
+    /// Validate local live-provider boundary report invariants.
+    pub fn validate(&self) -> Result<(), MarketDataError> {
+        let mut violations = Vec::new();
+        validate_id(
+            "market-data live provider boundary review",
+            &self.review_id,
+            &mut violations,
+        );
+        validate_id("market-data provider", &self.provider_name, &mut violations);
+        if self.version != MARKET_DATA_LIVE_PROVIDER_BOUNDARY_REVIEW_VERSION {
+            violations.push(MarketDataViolation::new(
+                "MARKET_DATA_LIVE_PROVIDER_BOUNDARY_VERSION_MISMATCH",
+                "market-data live provider boundary review version is not recognized",
+            ));
+        }
+        let side_effected =
+            self.live_network_used || self.websocket_connection_opened || self.credential_loaded;
+        let local_prerequisites_ready = self.latency_review_ready
+            && self.reconciliation_review_ready
+            && self.bad_data_rejection_review_ready
+            && self.rest_request_plan_validated
+            && self.websocket_request_plan_validated
+            && self.remaining_external_evidence_recorded
+            && !side_effected
+            && !self.production_ready;
+        let external_evidence_missing = !self.provider_session_evidence_available
+            || !self.provider_backed_latency_evidence_available
+            || !self.provider_backed_rate_limit_outage_evidence_available
+            || !self.provider_backed_bad_data_evidence_available;
+        if local_prerequisites_ready
+            && external_evidence_missing
+            && self.status
+                != MarketDataLiveProviderBoundaryReviewStatus::BlockedPendingLiveProviderImplementation
+        {
+            violations.push(MarketDataViolation::new(
+                "MARKET_DATA_LIVE_PROVIDER_BOUNDARY_STATUS_SHOULD_BLOCK_PENDING_LIVE",
+                "coherent local prerequisites must remain blocked pending live/provider-backed evidence",
+            ));
+        }
+        if (!local_prerequisites_ready || side_effected || self.production_ready)
+            && self.status != MarketDataLiveProviderBoundaryReviewStatus::Blocked
+        {
+            violations.push(MarketDataViolation::new(
+                "MARKET_DATA_LIVE_PROVIDER_BOUNDARY_STATUS_SHOULD_BLOCK",
+                "unsafe or incomplete live-provider boundary evidence must block",
+            ));
+        }
+        if side_effected {
+            violations.push(MarketDataViolation::new(
+                "MARKET_DATA_LIVE_PROVIDER_BOUNDARY_SIDE_EFFECT_FORBIDDEN",
+                "market-data live provider boundary must not use live network, WebSocket, or credentials",
+            ));
+        }
+        if self.production_ready {
+            violations.push(MarketDataViolation::new(
+                "MARKET_DATA_LIVE_PROVIDER_BOUNDARY_PRODUCTION_READY_FORBIDDEN",
+                "market-data live provider boundary must not approve production readiness",
             ));
         }
 
@@ -3218,6 +3436,168 @@ pub fn review_market_data_bad_data_rejection(
     Ok(report)
 }
 
+/// Review local live market-data provider prerequisites without side effects.
+pub fn review_market_data_live_provider_boundary(
+    request: MarketDataLiveProviderBoundaryReviewRequest,
+) -> Result<MarketDataLiveProviderBoundaryReviewReport, MarketDataError> {
+    request.validate()?;
+
+    let latency_review_ready = request.latency_review.status
+        == MarketDataProviderLatencyReviewStatus::ReadyForLocalReview
+        && !request.latency_review.live_network_used
+        && !request.latency_review.websocket_connection_opened
+        && !request.latency_review.credential_loaded
+        && !request.latency_review.production_ready;
+    let reconciliation_review_ready = request.reconciliation_review.status
+        == MarketDataProviderReconciliationReviewStatus::ReadyForLocalReview
+        && !request.reconciliation_review.live_network_used
+        && !request.reconciliation_review.websocket_connection_opened
+        && !request.reconciliation_review.credential_loaded
+        && !request.reconciliation_review.production_ready;
+    let bad_data_rejection_review_ready = request.bad_data_rejection_review.status
+        == MarketDataBadDataRejectionReviewStatus::ReadyForLocalReview
+        && !request.bad_data_rejection_review.live_network_used
+        && !request
+            .bad_data_rejection_review
+            .websocket_connection_opened
+        && !request.bad_data_rejection_review.credential_loaded
+        && !request.bad_data_rejection_review.production_ready;
+    let remaining_external_evidence_recorded = !request.remaining_external_evidence.is_empty();
+    let live_network_used = request.live_network_used
+        || request.latency_review.live_network_used
+        || request.reconciliation_review.live_network_used
+        || request.bad_data_rejection_review.live_network_used;
+    let websocket_connection_opened = request.websocket_connection_opened
+        || request.latency_review.websocket_connection_opened
+        || request.reconciliation_review.websocket_connection_opened
+        || request
+            .bad_data_rejection_review
+            .websocket_connection_opened;
+    let credential_loaded = request.credential_loaded
+        || request.latency_review.credential_loaded
+        || request.reconciliation_review.credential_loaded
+        || request.bad_data_rejection_review.credential_loaded;
+
+    let local_prerequisites_ready = latency_review_ready
+        && reconciliation_review_ready
+        && bad_data_rejection_review_ready
+        && request.rest_request_plan_validated
+        && request.websocket_request_plan_validated
+        && remaining_external_evidence_recorded
+        && !live_network_used
+        && !websocket_connection_opened
+        && !credential_loaded
+        && !request.production_ready_claimed;
+
+    let mut blocker_codes = Vec::new();
+    push_if(
+        &mut blocker_codes,
+        !request.provider_session_evidence_available,
+        "MARKET_DATA_LIVE_PROVIDER_SESSION_EVIDENCE_MISSING",
+    );
+    push_if(
+        &mut blocker_codes,
+        !request.provider_backed_latency_evidence_available,
+        "MARKET_DATA_PROVIDER_BACKED_LATENCY_EVIDENCE_MISSING",
+    );
+    push_if(
+        &mut blocker_codes,
+        !request.provider_backed_rate_limit_outage_evidence_available,
+        "MARKET_DATA_PROVIDER_BACKED_RATE_LIMIT_OUTAGE_EVIDENCE_MISSING",
+    );
+    push_if(
+        &mut blocker_codes,
+        !request.provider_backed_bad_data_evidence_available,
+        "MARKET_DATA_PROVIDER_BACKED_BAD_DATA_EVIDENCE_MISSING",
+    );
+
+    let mut violation_codes = Vec::new();
+    push_if(
+        &mut violation_codes,
+        !latency_review_ready,
+        "MARKET_DATA_LIVE_PROVIDER_LATENCY_REVIEW_NOT_READY",
+    );
+    push_if(
+        &mut violation_codes,
+        !reconciliation_review_ready,
+        "MARKET_DATA_LIVE_PROVIDER_RECONCILIATION_REVIEW_NOT_READY",
+    );
+    push_if(
+        &mut violation_codes,
+        !bad_data_rejection_review_ready,
+        "MARKET_DATA_LIVE_PROVIDER_BAD_DATA_REJECTION_NOT_READY",
+    );
+    push_if(
+        &mut violation_codes,
+        !request.rest_request_plan_validated,
+        "MARKET_DATA_LIVE_PROVIDER_REST_REQUEST_PLAN_MISSING",
+    );
+    push_if(
+        &mut violation_codes,
+        !request.websocket_request_plan_validated,
+        "MARKET_DATA_LIVE_PROVIDER_WEBSOCKET_REQUEST_PLAN_MISSING",
+    );
+    push_if(
+        &mut violation_codes,
+        !remaining_external_evidence_recorded,
+        "MARKET_DATA_LIVE_PROVIDER_EXTERNAL_EVIDENCE_MISSING",
+    );
+    push_if(
+        &mut violation_codes,
+        live_network_used,
+        "MARKET_DATA_LIVE_PROVIDER_LIVE_NETWORK_USED",
+    );
+    push_if(
+        &mut violation_codes,
+        websocket_connection_opened,
+        "MARKET_DATA_LIVE_PROVIDER_WEBSOCKET_OPENED",
+    );
+    push_if(
+        &mut violation_codes,
+        credential_loaded,
+        "MARKET_DATA_LIVE_PROVIDER_CREDENTIAL_LOADED",
+    );
+    push_if(
+        &mut violation_codes,
+        request.production_ready_claimed,
+        "MARKET_DATA_LIVE_PROVIDER_PRODUCTION_READY_CLAIMED",
+    );
+
+    let status = if local_prerequisites_ready && !blocker_codes.is_empty() {
+        MarketDataLiveProviderBoundaryReviewStatus::BlockedPendingLiveProviderImplementation
+    } else {
+        MarketDataLiveProviderBoundaryReviewStatus::Blocked
+    };
+    let report = MarketDataLiveProviderBoundaryReviewReport {
+        version: MARKET_DATA_LIVE_PROVIDER_BOUNDARY_REVIEW_VERSION.to_owned(),
+        review_id: request.review_id,
+        status,
+        provider_name: request.latency_review.provider_name,
+        latency_review_ready,
+        reconciliation_review_ready,
+        bad_data_rejection_review_ready,
+        rest_request_plan_validated: request.rest_request_plan_validated,
+        websocket_request_plan_validated: request.websocket_request_plan_validated,
+        provider_session_evidence_available: request.provider_session_evidence_available,
+        provider_backed_latency_evidence_available: request
+            .provider_backed_latency_evidence_available,
+        provider_backed_rate_limit_outage_evidence_available: request
+            .provider_backed_rate_limit_outage_evidence_available,
+        provider_backed_bad_data_evidence_available: request
+            .provider_backed_bad_data_evidence_available,
+        remaining_external_evidence_recorded,
+        remaining_external_evidence_count: request.remaining_external_evidence.len(),
+        live_network_used,
+        websocket_connection_opened,
+        credential_loaded,
+        production_ready: false,
+        blocker_codes,
+        violation_codes,
+    };
+    report.validate()?;
+    Ok(report)
+}
+
 /// Validate and prepare a local historical market-data persistence batch.
 pub fn validate_historical_market_data_persistence(
     input: HistoricalMarketDataPersistenceInput,
@@ -4167,16 +4547,18 @@ mod tests {
         persist_market_data_quality_assessment_checkpoint,
         persist_market_data_reconnect_plan_checkpoint,
         persist_paid_market_data_provider_evaluation_checkpoint,
-        review_market_data_bad_data_rejection, review_market_data_provider_latency,
-        review_market_data_provider_reconciliation, validate_historical_market_data_persistence,
-        validate_market_data_provider_preflight, validate_market_data_reconnect_plan,
-        validate_paid_market_data_provider_evaluation, FreshnessStatus,
-        HistoricalMarketDataPersistenceInput, HistoricalMarketDataPersistenceReport,
-        HistoricalMarketDataPersistenceStatus, MarketDataBadDataRejectionReviewRequest,
-        MarketDataBadDataRejectionReviewStatus, MarketDataCapabilities,
-        MarketDataProviderHealthObservation, MarketDataProviderLatencyReviewRequest,
-        MarketDataProviderLatencyReviewStatus, MarketDataProviderPreflightReport,
-        MarketDataProviderPreflightStatus, MarketDataProviderReconciliationReviewRequest,
+        review_market_data_bad_data_rejection, review_market_data_live_provider_boundary,
+        review_market_data_provider_latency, review_market_data_provider_reconciliation,
+        validate_historical_market_data_persistence, validate_market_data_provider_preflight,
+        validate_market_data_reconnect_plan, validate_paid_market_data_provider_evaluation,
+        FreshnessStatus, HistoricalMarketDataPersistenceInput,
+        HistoricalMarketDataPersistenceReport, HistoricalMarketDataPersistenceStatus,
+        MarketDataBadDataRejectionReviewRequest, MarketDataBadDataRejectionReviewStatus,
+        MarketDataCapabilities, MarketDataError, MarketDataLiveProviderBoundaryReviewRequest,
+        MarketDataLiveProviderBoundaryReviewStatus, MarketDataProviderHealthObservation,
+        MarketDataProviderLatencyReviewRequest, MarketDataProviderLatencyReviewStatus,
+        MarketDataProviderPreflightReport, MarketDataProviderPreflightStatus,
+        MarketDataProviderReconciliationReviewRequest,
         MarketDataProviderReconciliationReviewStatus, MarketDataQualityAssessmentInput,
         MarketDataQualityAssessmentReport, MarketDataQualityAssessmentStatus,
         MarketDataReconnectPlanInput, MarketDataReconnectPlanReport, MarketDataReconnectPlanStatus,
@@ -5194,6 +5576,52 @@ mod tests {
     }
 
     #[test]
+    fn market_data_live_provider_boundary_blocks_pending_external_provider_evidence() {
+        let report = review_market_data_live_provider_boundary(
+            market_data_live_provider_boundary_review_request(false),
+        )
+        .expect("local live-provider boundary review should validate");
+
+        assert_eq!(
+            report.status,
+            MarketDataLiveProviderBoundaryReviewStatus::BlockedPendingLiveProviderImplementation
+        );
+        assert!(report.latency_review_ready);
+        assert!(report.reconciliation_review_ready);
+        assert!(report.bad_data_rejection_review_ready);
+        assert!(report.rest_request_plan_validated);
+        assert!(report.websocket_request_plan_validated);
+        assert!(!report.provider_session_evidence_available);
+        assert!(!report.provider_backed_latency_evidence_available);
+        assert!(!report.provider_backed_rate_limit_outage_evidence_available);
+        assert!(!report.provider_backed_bad_data_evidence_available);
+        assert_eq!(report.blocker_codes.len(), 4);
+        assert_eq!(report.remaining_external_evidence_count, 4);
+        assert!(report.violation_codes.is_empty());
+        assert!(!report.live_network_used);
+        assert!(!report.websocket_connection_opened);
+        assert!(!report.credential_loaded);
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn market_data_live_provider_boundary_fails_closed_on_side_effect_claims() {
+        let error = review_market_data_live_provider_boundary(
+            market_data_live_provider_boundary_review_request(true),
+        )
+        .expect_err("side-effect flags must fail closed before returning a ready report");
+
+        match error {
+            MarketDataError::ValidationFailed { violations } => {
+                assert!(violations.iter().any(|violation| {
+                    violation.code == "MARKET_DATA_LIVE_PROVIDER_BOUNDARY_SIDE_EFFECT_FORBIDDEN"
+                }));
+            }
+            other => panic!("expected validation failure, got {other:?}"),
+        }
+    }
+
+    #[test]
     fn paid_market_data_provider_evaluation_audit_and_state_reopen_locally() {
         let report =
             validate_paid_market_data_provider_evaluation(PaidMarketDataProviderEvaluationInput {
@@ -5784,6 +6212,46 @@ mod tests {
                 "provider-backed outage reconciliation".to_owned(),
                 "deployment-host market-data resource profiling".to_owned(),
                 "external sandbox/live calibration".to_owned(),
+            ],
+            live_network_used: side_effect_claimed,
+            websocket_connection_opened: side_effect_claimed,
+            credential_loaded: side_effect_claimed,
+            production_ready_claimed: side_effect_claimed,
+        }
+    }
+
+    fn market_data_live_provider_boundary_review_request(
+        side_effect_claimed: bool,
+    ) -> MarketDataLiveProviderBoundaryReviewRequest {
+        let latency_review = review_market_data_provider_latency(
+            market_data_provider_latency_review_request(false, 50, 25, 500),
+        )
+        .expect("latency review should validate");
+        let reconciliation_review = review_market_data_provider_reconciliation(
+            market_data_provider_reconciliation_review_request(false, true),
+        )
+        .expect("provider reconciliation review should validate");
+        let bad_data_rejection_review = review_market_data_bad_data_rejection(
+            market_data_bad_data_rejection_request(false, 3, true),
+        )
+        .expect("bad-data rejection review should validate");
+
+        MarketDataLiveProviderBoundaryReviewRequest {
+            review_id: "local-market-data-live-provider-boundary".to_owned(),
+            latency_review,
+            reconciliation_review,
+            bad_data_rejection_review,
+            rest_request_plan_validated: true,
+            websocket_request_plan_validated: true,
+            provider_session_evidence_available: false,
+            provider_backed_latency_evidence_available: false,
+            provider_backed_rate_limit_outage_evidence_available: false,
+            provider_backed_bad_data_evidence_available: false,
+            remaining_external_evidence: vec![
+                "live REST/WebSocket provider implementation".to_owned(),
+                "provider-backed latency evidence".to_owned(),
+                "provider-backed rate-limit/outage evidence".to_owned(),
+                "provider-backed bad-data rejection evidence".to_owned(),
             ],
             live_network_used: side_effect_claimed,
             websocket_connection_opened: side_effect_claimed,
