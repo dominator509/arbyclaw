@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import json
 import pathlib
+import shutil
 import subprocess
 import sys
 from typing import Any
@@ -19,6 +20,7 @@ from typing import Any
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 COMPONENT_TIMEOUT_SECONDS = 300
+BUNDLE_WORKSPACE = ROOT / "target/deployment-evidence-bundle"
 
 COMPONENT_COMMANDS = [
     (
@@ -39,6 +41,18 @@ COMPONENT_COMMANDS = [
     (
         "deployment-host-runtime-plan",
         [sys.executable, "scripts/validate_deployment_host_runtime.py", "--json"],
+        True,
+    ),
+    (
+        "deployment-host-observability-metrics-runtime",
+        [
+            sys.executable,
+            "scripts/validate_deployment_host_runtime.py",
+            "--run-observability-metrics-runtime",
+            "--observability-metrics-workspace",
+            "target/deployment-evidence-bundle/observability-metrics-runtime",
+            "--json",
+        ],
         True,
     ),
     (
@@ -205,6 +219,18 @@ def fail(message: str) -> int:
     return 1
 
 
+def prepare_bundle_workspace() -> None:
+    resolved = BUNDLE_WORKSPACE.resolve()
+    target_root = (ROOT / "target").resolve()
+    try:
+        resolved.relative_to(target_root)
+    except ValueError as exc:
+        raise RuntimeError("bundle workspace must resolve inside repository target/") from exc
+    if resolved.exists():
+        shutil.rmtree(resolved)
+    resolved.mkdir(parents=True)
+
+
 def run_component(name: str, command: list[str], expects_json: bool) -> dict[str, Any]:
     completed = subprocess.run(
         command,
@@ -251,6 +277,7 @@ def summarize_json_report(report: dict[str, Any]) -> dict[str, Any]:
 
 
 def build_report() -> dict[str, Any]:
+    prepare_bundle_workspace()
     components = [
         run_component(name, command, expects_json)
         for name, command, expects_json in COMPONENT_COMMANDS
