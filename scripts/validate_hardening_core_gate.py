@@ -2,12 +2,13 @@
 """Run the strongest current local hardening core aggregate validation bundle.
 
 This gate composes the existing local packaging/deployment aggregate gate, the
-execution-path aggregate gate, the locked dependency license-policy validator,
-and the local secret/policy boundary plus secret backup/restore,
-withdrawal-policy, signer-boundary, and destination-boundary validators. It
-preserves local-only/non-secret behavior: no live trading, no exchange/RPC
-calls, no service-manager actions, no credential loading, no signing,
-publishing, withdrawals, transfers, or production-readiness claims.
+execution-path aggregate gate, the operator-surface aggregate gate, the locked
+dependency license-policy validator, and the local secret/policy boundary plus
+secret backup/restore, withdrawal-policy, signer-boundary, and
+destination-boundary validators. It preserves local-only/non-secret behavior:
+no live trading, no exchange/RPC calls, no service-manager actions, no
+credential loading, no signing, publishing, withdrawals, transfers, or
+production-readiness claims.
 """
 
 from __future__ import annotations
@@ -45,6 +46,10 @@ def command_set(workspace_root: pathlib.Path, args: argparse.Namespace) -> list[
         (
             "execution_path_gate",
             [sys.executable, "scripts/validate_execution_path_gate.py", "--json"],
+        ),
+        (
+            "operator_surface_gate",
+            [sys.executable, "scripts/validate_operator_surface_gate.py", "--json"],
         ),
         (
             "dependency_license_policy",
@@ -236,6 +241,26 @@ def validate_components(components: list[dict[str, Any]]) -> tuple[list[str], bo
     ):
         if execution_path.get(field) is not False:
             errors.append(f"execution path gate reported unsafe field {field}")
+
+    operator_surface = component_by_name["operator_surface_gate"]["json_report"]
+    assert operator_surface is not None
+    if operator_surface.get("all_components_passed") is not True:
+        errors.append("operator surface gate did not pass every component")
+    if operator_surface.get("component_count") != 15:
+        errors.append("operator surface gate did not report exactly 15 components")
+    if operator_surface.get("unsafe_side_effect_flags_detected") is not False:
+        errors.append("operator surface gate detected unsafe side-effect flags")
+    for field in (
+        "outbound_network_used",
+        "public_network_exposed",
+        "service_actions_performed",
+        "external_submission_performed",
+        "signing_or_broadcast_performed",
+        "live_execution_performed",
+        "production_ready",
+    ):
+        if operator_surface.get(field) is not False:
+            errors.append(f"operator surface gate reported unsafe field {field}")
 
     dependency_license = component_by_name["dependency_license_policy"]["json_report"]
     assert dependency_license is not None
