@@ -54,6 +54,10 @@ BOOLEAN_SAFETY_FIELDS = (
     "artifact_contents_embedded",
 )
 
+REQUIRED_BUNDLE_COMPONENTS = (
+    "deployment-host-observability-metrics-runtime",
+)
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -158,13 +162,29 @@ def build_checklist(bundle: dict[str, Any], references: dict[str, str]) -> dict[
     if not isinstance(components, list):
         components = []
 
+    component_names = [
+        component.get("name")
+        for component in components
+        if isinstance(component, dict) and isinstance(component.get("name"), str)
+    ]
+    missing_required_components = [
+        component for component in REQUIRED_BUNDLE_COMPONENTS if component not in component_names
+    ]
+    if missing_required_components:
+        raise RuntimeError(
+            "deployment evidence bundle missing required components: "
+            + ", ".join(missing_required_components)
+        )
+
     return {
         "schema": SCHEMA,
         "bundle_index": {
             "schema": bundle.get("schema"),
             "component_count": bundle.get("component_count"),
             "all_components_passed": bundle.get("all_components_passed"),
-            "component_names": [component.get("name") for component in components],
+            "component_names": component_names,
+            "required_component_names": list(REQUIRED_BUNDLE_COMPONENTS),
+            "missing_required_component_names": missing_required_components,
         },
         "bounded_timeouts": {
             "bundle_seconds": BUNDLE_TIMEOUT_SECONDS,
@@ -187,6 +207,10 @@ def print_text_report(report: dict[str, Any]) -> None:
     print("deployment evidence checklist validation report")
     print(f"bundle schema: {report['bundle_index']['schema']}")
     print(f"bundle components passed: {str(report['bundle_index']['all_components_passed']).lower()}")
+    required_count = len(report["bundle_index"]["required_component_names"])
+    missing_required_count = len(report["bundle_index"]["missing_required_component_names"])
+    print(f"required bundle components: {required_count}")
+    print(f"missing required bundle components: {missing_required_count}")
     print(f"bundle timeout seconds: {report['bounded_timeouts']['bundle_seconds']}")
     print(f"all external evidence referenced: {str(report['all_external_evidence_referenced']).lower()}")
     print(f"production readiness claimed: {str(report['production_readiness_claimed']).lower()}")
