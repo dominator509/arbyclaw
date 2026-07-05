@@ -539,6 +539,7 @@ fn is_local_workspace_validation_command(command: &str) -> bool {
             | "validate-audit-durability"
             | "validate-sqlite-wal-schema-migration"
             | "validate-deployment-config-redaction"
+            | "validate-deployment-log-redaction"
             | "validate-runtime-config-reload"
             | "validate-runtime-graceful-shutdown"
             | "validate-runtime-backup-restore"
@@ -694,6 +695,7 @@ fn run_local_workspace_validation_command(
         "validate-deployment-config-redaction" => {
             run_deployment_config_redaction_validation(&options)
         }
+        "validate-deployment-log-redaction" => run_deployment_log_redaction_validation(&options),
         "validate-runtime-config-reload" => run_runtime_config_reload_validation(&options),
         "validate-runtime-graceful-shutdown" => run_runtime_graceful_shutdown_validation(&options),
         "validate-runtime-backup-restore" => run_runtime_backup_restore_validation(&options),
@@ -931,6 +933,7 @@ fn print_usage() {
     println!("       arb-agent validate-audit-retention-execution --workspace <fresh-dir>");
     println!("       arb-agent validate-sqlite-wal-schema-migration --workspace <fresh-dir>");
     println!("       arb-agent validate-deployment-config-redaction --workspace <fresh-dir>");
+    println!("       arb-agent validate-deployment-log-redaction --workspace <fresh-dir>");
     println!("       arb-agent validate-deployment-audit-sqlite-transcript");
     println!("       arb-agent validate-deployment-backup-restore-transcript");
     println!("       arb-agent validate-deployment-graceful-shutdown-transcript");
@@ -5375,6 +5378,106 @@ fn run_deployment_config_redaction_validation(
     if !config_loaded || !unsafe_metadata_rejected || !audit_replay_validated {
         return Err(AgentCliError::Validation(
             "deployment config redaction validation did not satisfy local safety invariants"
+                .to_owned(),
+        ));
+    }
+
+    Ok(())
+}
+
+fn run_deployment_log_redaction_validation(
+    options: &LocalValidationRunOptions,
+) -> Result<(), AgentCliError> {
+    prepare_fresh_workspace(&options.workspace_dir)?;
+    let log_path = options
+        .workspace_dir
+        .join("deployment-log-redaction.sanitized.log");
+    let audit_path = options
+        .workspace_dir
+        .join("deployment-log-redaction.audit.jsonl");
+    let sanitized_lines = [
+        "level=INFO component=deployment-runtime message=\"local deployment log redaction validation\"",
+        "level=INFO component=deployment-runtime credential_reference=REDACTED",
+        "level=INFO component=deployment-runtime wallet_reference=REDACTED",
+        "level=INFO component=deployment-runtime external_network_used=false live_execution_performed=false production_ready=false",
+    ];
+    fs::write(&log_path, sanitized_lines.join("\n")).map_err(|error| {
+        AgentCliError::Validation(format!(
+            "failed to write local deployment log redaction fixture: {error}"
+        ))
+    })?;
+    let sanitized_log = fs::read_to_string(&log_path).map_err(|error| {
+        AgentCliError::Validation(format!(
+            "failed to read local deployment log redaction fixture: {error}"
+        ))
+    })?;
+    let log_redaction_applied = sanitized_log.contains("REDACTED");
+    let unsafe_log_material_absent = !sanitized_log
+        .to_ascii_lowercase()
+        .contains("local-fixture-secret-like-value");
+
+    let mut journal = AppendOnlyAuditJournal::open(&audit_path)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let unsafe_event = AuditEvent::new(
+        "deployment-log-redaction-unsafe",
+        AuditEventKind::RuntimeLifecycle,
+        "deployment",
+        "local-validator",
+        "local deployment log redaction rejection probe",
+    )
+    .with_metadata(
+        "private_key",
+        AuditValue::Text("local-fixture-secret-like-value".to_owned()),
+    );
+    let unsafe_metadata_rejected = journal.append_event(unsafe_event).is_err();
+
+    let redacted_event = AuditEvent::new(
+        "deployment-log-redaction-redacted",
+        AuditEventKind::RuntimeLifecycle,
+        "deployment",
+        "local-validator",
+        "local deployment log redaction accepted probe",
+    )
+    .with_metadata("private_key", AuditValue::Redacted)
+    .with_metadata("credential_reference", AuditValue::Redacted)
+    .with_metadata("wallet_reference", AuditValue::Redacted)
+    .with_metadata(
+        "log_redaction_applied",
+        AuditValue::Bool(log_redaction_applied),
+    )
+    .with_metadata("external_network_used", AuditValue::Bool(false))
+    .with_metadata("live_execution_performed", AuditValue::Bool(false))
+    .with_metadata("production_ready", AuditValue::Bool(false));
+    let record = journal
+        .append_event(redacted_event)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    drop(journal);
+
+    let reopened = AppendOnlyAuditJournal::open(&audit_path)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let audit_replay_validated =
+        reopened.next_sequence() == 2 && reopened.previous_hash() == record.record_hash;
+
+    println!("deployment-log-redaction: validation passed");
+    println!("sanitized-log-written: true");
+    println!("log-redaction-applied: {log_redaction_applied}");
+    println!("unsafe-log-material-absent: {unsafe_log_material_absent}");
+    println!("unsafe-metadata-rejected: {unsafe_metadata_rejected}");
+    println!("redacted-event-appended: true");
+    println!("audit-replay-validated: {audit_replay_validated}");
+    println!("secret-material-recorded: false");
+    println!("external-network-used: false");
+    println!("service-manager-action-performed: false");
+    println!("live-execution-performed: false");
+    println!("production-ready: false");
+
+    if !log_redaction_applied
+        || !unsafe_log_material_absent
+        || !unsafe_metadata_rejected
+        || !audit_replay_validated
+    {
+        return Err(AgentCliError::Validation(
+            "deployment log redaction validation did not satisfy local safety invariants"
                 .to_owned(),
         ));
     }
@@ -16803,13 +16906,14 @@ mod tests {
         run_audit_durability_validation, run_audit_retention_execution_validation,
         run_communications_runtime_validation, run_config_migration_validation,
         run_connector_lifecycle_audit_validation, run_dashboard_runtime_validation,
-        run_deployment_config_redaction_validation, run_destination_boundary_audit_validation,
-        run_execution_adapter_audit_validation, run_execution_planner_audit_validation,
-        run_fee_boundary_audit_validation, run_fee_schedule_reconciliation_validation,
-        run_fee_schedule_verification_validation, run_local_fuzz_corpus_runner,
-        run_local_paper_backtest_corpus_runner, run_local_property_check_runner,
-        run_local_validation_corpus_runner, run_local_validation_runner,
-        run_market_data_boundary_audit_validation, run_market_data_history_persistence_validation,
+        run_deployment_config_redaction_validation, run_deployment_log_redaction_validation,
+        run_destination_boundary_audit_validation, run_execution_adapter_audit_validation,
+        run_execution_planner_audit_validation, run_fee_boundary_audit_validation,
+        run_fee_schedule_reconciliation_validation, run_fee_schedule_verification_validation,
+        run_local_fuzz_corpus_runner, run_local_paper_backtest_corpus_runner,
+        run_local_property_check_runner, run_local_validation_corpus_runner,
+        run_local_validation_runner, run_market_data_boundary_audit_validation,
+        run_market_data_history_persistence_validation,
         run_market_data_provider_preflight_validation,
         run_market_data_quality_assessment_validation, run_market_data_reconnect_plan_validation,
         run_observability_runtime_validation, run_opportunity_historical_fixture_validation,
@@ -17274,6 +17378,22 @@ mod tests {
         assert!(workspace.join("deployment-config-redaction.toml").exists());
         assert!(workspace
             .join("deployment-config-redaction.audit.jsonl")
+            .exists());
+        cleanup_workspace(&workspace);
+    }
+
+    #[test]
+    fn deployment_log_redaction_validation_runs_local_files_only() {
+        let workspace = temp_workspace_path("deployment-log-redaction");
+        run_deployment_log_redaction_validation(&LocalValidationRunOptions {
+            workspace_dir: workspace.clone(),
+        })
+        .expect("local deployment log redaction should pass");
+        assert!(workspace
+            .join("deployment-log-redaction.sanitized.log")
+            .exists());
+        assert!(workspace
+            .join("deployment-log-redaction.audit.jsonl")
             .exists());
         cleanup_workspace(&workspace);
     }

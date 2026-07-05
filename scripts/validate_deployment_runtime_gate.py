@@ -29,6 +29,7 @@ EXPECTED_COMPONENTS = {
     "runtime_config_reload": "runtime_config_reload_requested",
     "sqlite_schema_migration": "sqlite_schema_migration_requested",
     "deployment_config_redaction": "deployment_config_redaction_requested",
+    "deployment_log_redaction": "deployment_log_redaction_requested",
     "graceful_shutdown": "graceful_shutdown_requested",
     "backup_restore": "backup_restore_requested",
     "backup_restore_load": "backup_restore_load_requested",
@@ -500,6 +501,9 @@ def build_command(args: argparse.Namespace, workspace: pathlib.Path) -> list[str
         "--run-deployment-config-redaction",
         "--deployment-config-redaction-workspace",
         str(workspace / "deployment-config-redaction"),
+        "--run-deployment-log-redaction",
+        "--deployment-log-redaction-workspace",
+        str(workspace / "deployment-log-redaction"),
         "--run-audit-retention-execution",
         "--retention-workspace",
         str(workspace / "audit-retention-execution"),
@@ -722,6 +726,32 @@ def validate_report(report: dict[str, Any]) -> list[str]:
     if deployment_config_redaction.get("deployment_config_redaction_passed") is not True:
         errors.append("deployment config redaction did not pass")
 
+    deployment_log_redaction = report.get("deployment_log_redaction")
+    if not isinstance(deployment_log_redaction, dict):
+        errors.append("deployment_log_redaction report missing or invalid")
+        return errors
+    expected_log_redaction_values = {
+        "sanitized_log_written": "true",
+        "log_redaction_applied": "true",
+        "unsafe_log_material_absent": "true",
+        "unsafe_metadata_rejected": "true",
+        "redacted_event_appended": "true",
+        "audit_replay_validated": "true",
+        "secret_material_recorded": "false",
+        "external_network_used": "false",
+        "service_manager_action_performed": "false",
+        "live_execution_performed": "false",
+        "production_ready": "false",
+    }
+    for key, expected in expected_log_redaction_values.items():
+        if deployment_log_redaction.get(key) != expected:
+            errors.append(
+                f"deployment log redaction expected {key}={expected!r} "
+                f"but saw {deployment_log_redaction.get(key)!r}"
+            )
+    if deployment_log_redaction.get("deployment_log_redaction_passed") is not True:
+        errors.append("deployment log redaction did not pass")
+
     return errors
 
 
@@ -842,6 +872,7 @@ def main() -> int:
         "runtime_config_reload_enforced": True,
         "sqlite_schema_migration_enforced": True,
         "deployment_config_redaction_enforced": True,
+        "deployment_log_redaction_enforced": True,
         "runtime_load_profile_review_enforced": True,
         "transcript_component_names": [
             component["name"] for component in TRANSCRIPT_COMPONENTS
@@ -867,6 +898,7 @@ def main() -> int:
         print("runtime-config-reload-enforced: true")
         print("sqlite-schema-migration-enforced: true")
         print("deployment-config-redaction-enforced: true")
+        print("deployment-log-redaction-enforced: true")
         print("runtime-load-profile-review-enforced: true")
     return 0
 

@@ -32,6 +32,10 @@ permission-denial fail-closed CLI against a fresh workspace without mutating
 deployment state. When `--run-runtime-panic-hook` is provided, it runs the
 local runtime panic-hook capture CLI against a fresh workspace without starting
 services, exporters, public endpoints, or alerts.
+When `--run-deployment-log-redaction` is provided, it runs a local sanitized
+deployment log/audit redaction CLI against a fresh workspace without touching
+deployment logs, service managers, secrets, external systems, or live
+execution.
 """
 
 from __future__ import annotations
@@ -95,6 +99,11 @@ def parse_args() -> argparse.Namespace:
         "--run-deployment-config-redaction",
         action="store_true",
         help="run arb-agent validate-deployment-config-redaction against --deployment-config-redaction-workspace",
+    )
+    parser.add_argument(
+        "--run-deployment-log-redaction",
+        action="store_true",
+        help="run arb-agent validate-deployment-log-redaction against --deployment-log-redaction-workspace",
     )
     parser.add_argument(
         "--run-graceful-shutdown",
@@ -212,6 +221,11 @@ def parse_args() -> argparse.Namespace:
         "--deployment-config-redaction-workspace",
         type=pathlib.Path,
         help="fresh non-secret workspace for validate-deployment-config-redaction",
+    )
+    parser.add_argument(
+        "--deployment-log-redaction-workspace",
+        type=pathlib.Path,
+        help="fresh non-secret workspace for validate-deployment-log-redaction",
     )
     parser.add_argument(
         "--graceful-shutdown-workspace",
@@ -817,6 +831,34 @@ def deployment_config_redaction_command(
         "arb-agent",
         "--",
         "validate-deployment-config-redaction",
+        "--workspace",
+        str(workspace),
+    ]
+
+
+def deployment_log_redaction_command(
+    agent_bin: pathlib.Path | None, workspace: pathlib.Path
+) -> list[str]:
+    if agent_bin is not None:
+        if not agent_bin.exists():
+            raise ValueError(f"agent binary does not exist: {relative_or_absolute(agent_bin)}")
+        return [
+            str(agent_bin),
+            "validate-deployment-log-redaction",
+            "--workspace",
+            str(workspace),
+        ]
+
+    cargo = shutil.which("cargo")
+    if cargo is None:
+        raise RuntimeError("cargo unavailable and --agent-bin was not provided")
+    return [
+        cargo,
+        "run",
+        "-p",
+        "arb-agent",
+        "--",
+        "validate-deployment-log-redaction",
         "--workspace",
         str(workspace),
     ]
@@ -1534,6 +1576,47 @@ def run_deployment_config_redaction(
         "live_execution_performed": parsed.get("live-execution-performed"),
         "production_ready": parsed.get("production-ready"),
         "deployment_config_redaction_passed": completed.returncode == 0,
+    }
+
+
+def run_deployment_log_redaction(
+    workspace: pathlib.Path | None,
+    agent_bin: pathlib.Path | None,
+) -> dict[str, Any]:
+    redaction_workspace = validate_fresh_workspace(
+        workspace,
+        "--deployment-log-redaction-workspace",
+        "--run-deployment-log-redaction",
+    )
+    command = deployment_log_redaction_command(agent_bin, redaction_workspace)
+    completed = subprocess.run(
+        command,
+        cwd=ROOT,
+        check=False,
+        encoding="utf-8",
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        timeout=LOCAL_RUNTIME_HELPER_TIMEOUT_SECONDS,
+    )
+    parsed = parse_key_value_output(completed.stdout)
+    return {
+        "command_kind": "agent-bin" if agent_bin is not None else "cargo-run",
+        "returncode": completed.returncode,
+        "workspace": relative_or_absolute(redaction_workspace),
+        "stdout_line_count": len(completed.stdout.splitlines()),
+        "sanitized_log_written": parsed.get("sanitized-log-written"),
+        "log_redaction_applied": parsed.get("log-redaction-applied"),
+        "unsafe_log_material_absent": parsed.get("unsafe-log-material-absent"),
+        "unsafe_metadata_rejected": parsed.get("unsafe-metadata-rejected"),
+        "redacted_event_appended": parsed.get("redacted-event-appended"),
+        "audit_replay_validated": parsed.get("audit-replay-validated"),
+        "secret_material_recorded": parsed.get("secret-material-recorded"),
+        "external_network_used": parsed.get("external-network-used"),
+        "service_manager_action_performed": parsed.get("service-manager-action-performed"),
+        "live_execution_performed": parsed.get("live-execution-performed"),
+        "production_ready": parsed.get("production-ready"),
+        "deployment_log_redaction_passed": completed.returncode == 0,
     }
 
 
@@ -2457,6 +2540,14 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
         )
         if deployment_config_redaction_report["returncode"] != 0:
             raise RuntimeError("validate-deployment-config-redaction failed")
+    deployment_log_redaction_report = None
+    if args.run_deployment_log_redaction:
+        deployment_log_redaction_report = run_deployment_log_redaction(
+            args.deployment_log_redaction_workspace,
+            args.agent_bin,
+        )
+        if deployment_log_redaction_report["returncode"] != 0:
+            raise RuntimeError("validate-deployment-log-redaction failed")
     graceful_shutdown_report = None
     if args.run_graceful_shutdown:
         graceful_shutdown_report = run_graceful_shutdown(
@@ -2593,6 +2684,8 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
         "sqlite_schema_migration_requested": args.run_sqlite_schema_migration,
         "deployment_config_redaction": deployment_config_redaction_report,
         "deployment_config_redaction_requested": args.run_deployment_config_redaction,
+        "deployment_log_redaction": deployment_log_redaction_report,
+        "deployment_log_redaction_requested": args.run_deployment_log_redaction,
         "graceful_shutdown": graceful_shutdown_report,
         "graceful_shutdown_requested": args.run_graceful_shutdown,
         "backup_restore": backup_restore_report,
@@ -2636,7 +2729,8 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
             "operator-controlled service start/shutdown/restart evidence",
             "deployment-host audit and SQLite recovery evidence under service lifecycle",
             "deployment-host SQLite schema migration execution evidence beyond local fixture validation",
-            "deployment-host config loading and log/audit redaction evidence beyond local fixture validation",
+            "deployment-host config loading under service lifecycle beyond local fixture validation",
+            "deployment-host log/audit redaction under service lifecycle beyond local sanitized fixture validation",
             "physical disk-full fail-closed evidence",
             "deployment-host retention/rotation execution evidence",
             "rollback drill evidence",
@@ -2674,6 +2768,10 @@ def print_text_report(report: dict[str, Any]) -> None:
     print(
         "deployment config redaction requested: "
         f"{str(report['deployment_config_redaction_requested']).lower()}"
+    )
+    print(
+        "deployment log redaction requested: "
+        f"{str(report['deployment_log_redaction_requested']).lower()}"
     )
     print(
         "graceful shutdown requested: "
