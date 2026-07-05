@@ -464,6 +464,51 @@ def validate_observability_metrics_runtime_cli(parsed: dict[str, str]) -> list[s
     return errors
 
 
+def validate_observability_provider_boundary_cli(parsed: dict[str, str]) -> list[str]:
+    errors: list[str] = []
+    for key in (
+        "observability-provider-boundary-checkpoint-recovered",
+        "observability-provider-boundary-operations-review-ready",
+        "observability-provider-boundary-export-dry-run-ready",
+        "observability-provider-boundary-alert-route-dispatch-ready",
+        "observability-provider-boundary-endpoint-preflight-ready",
+        "observability-provider-boundary-metrics-runtime-ready",
+    ):
+        if parsed.get(key) != "true":
+            errors.append(f"observability provider boundary cli expected {key}=true")
+    for key in (
+        "observability-provider-boundary-provider-validation-performed",
+        "public-network-exposed",
+        "telemetry-exported",
+        "outbound-alerts-sent",
+        "external-submission-performed",
+        "service-manager-action-performed",
+        "sensitive-material-loaded",
+        "live-execution-performed",
+        "production-ready",
+    ):
+        if parsed.get(key) != "false":
+            errors.append(f"observability provider boundary cli expected {key}=false")
+    if parsed.get("observability-provider-boundary") != "validation passed":
+        errors.append("observability provider boundary cli did not report validation passed")
+    if (
+        parsed.get("observability-provider-boundary-status")
+        != "BlockedPendingProviderValidation"
+    ):
+        errors.append(
+            "observability provider boundary cli expected BlockedPendingProviderValidation status"
+        )
+    if parse_positive_int(parsed.get("observability-provider-boundary-audit-records-replayed")) != 1:
+        errors.append("observability provider boundary cli expected one replayed audit record")
+    if parse_positive_int(parsed.get("observability-provider-boundary-missing-local-controls")) != 0:
+        errors.append("observability provider boundary cli expected zero missing local controls")
+    if parse_positive_int(parsed.get("observability-provider-boundary-remaining-provider-evidence-count")) != 5:
+        errors.append(
+            "observability provider boundary cli expected five remaining provider evidence categories"
+        )
+    return errors
+
+
 def validate_wrapper_common(report: dict[str, Any], key: str) -> tuple[list[str], dict[str, Any]]:
     errors: list[str] = []
     nested = report.get(key)
@@ -864,6 +909,19 @@ def main() -> int:
                     str(workspace_root / "observability-metrics-runtime"),
                 ],
             ),
+            run_text_command(
+                "observability_provider_boundary_cli",
+                [
+                    "cargo",
+                    "run",
+                    "-p",
+                    "arb-agent",
+                    "--",
+                    "validate-observability-provider-boundary",
+                    "--workspace",
+                    str(workspace_root / "observability-provider-boundary"),
+                ],
+            ),
             run_json_command(
                 "communications_runtime_wrapper",
                 [
@@ -925,6 +983,7 @@ def main() -> int:
         "dashboard_loopback_runtime_cli": lambda component: validate_dashboard_loopback_runtime_cli(component["parsed"]),
         "observability_runtime_cli": lambda component: validate_observability_cli(component["parsed"]),
         "observability_metrics_runtime_cli": lambda component: validate_observability_metrics_runtime_cli(component["parsed"]),
+        "observability_provider_boundary_cli": lambda component: validate_observability_provider_boundary_cli(component["parsed"]),
         "communications_runtime_wrapper": lambda component: validate_communications_wrapper(component["json_report"] or {}),
         "dashboard_runtime_wrapper": lambda component: validate_dashboard_wrapper(component["json_report"] or {}),
         "observability_runtime_wrapper": lambda component: validate_observability_wrapper(component["json_report"] or {}),

@@ -22,7 +22,8 @@ use arb_core::{
     append_observability_metrics_endpoint_validation_audit,
     append_observability_metrics_runtime_probe_audit,
     append_observability_metrics_scrape_preflight_audit,
-    append_observability_operations_review_audit, append_observability_record_audit,
+    append_observability_operations_review_audit,
+    append_observability_provider_boundary_review_audit, append_observability_record_audit,
     append_platform_adapter_review_audit, append_platform_command_ingress_audit,
     append_policy_decision_audit, append_property_check_report_audit,
     append_remote_command_envelope_validation_audit, append_remote_command_security_review_audit,
@@ -64,9 +65,11 @@ use arb_core::{
     persist_observability_metrics_endpoint_validation_checkpoint,
     persist_observability_metrics_runtime_probe_checkpoint,
     persist_observability_metrics_scrape_preflight_checkpoint,
-    persist_observability_operations_review_checkpoint, persist_observability_record_checkpoint,
-    persist_platform_adapter_review_checkpoint, persist_platform_command_ingress_checkpoint,
-    persist_policy_decision_checkpoint, persist_property_check_report_checkpoint,
+    persist_observability_operations_review_checkpoint,
+    persist_observability_provider_boundary_review_checkpoint,
+    persist_observability_record_checkpoint, persist_platform_adapter_review_checkpoint,
+    persist_platform_command_ingress_checkpoint, persist_policy_decision_checkpoint,
+    persist_property_check_report_checkpoint,
     persist_remote_command_envelope_validation_checkpoint,
     persist_remote_command_security_review_checkpoint, persist_routed_operator_command_checkpoint,
     persist_runtime_failure_capture_checkpoint, persist_secret_backup_restore_review_checkpoint,
@@ -91,11 +94,11 @@ use arb_core::{
     review_local_secret_backup_restore, review_local_validation_coverage,
     review_market_data_bad_data_rejection, review_market_data_live_provider_boundary,
     review_market_data_provider_latency, review_market_data_provider_reconciliation,
-    review_observability_operations, review_platform_adapter_controls,
-    review_platform_command_ingress, review_remote_command_security,
-    review_signer_runtime_isolation, review_signer_secret_scope, run_local_fuzz_corpus_replay,
-    run_local_graceful_shutdown_checkpoint, run_local_runtime_lifecycle,
-    run_local_validation_corpus, run_local_validation_property_checks,
+    review_observability_operations, review_observability_provider_boundary,
+    review_platform_adapter_controls, review_platform_command_ingress,
+    review_remote_command_security, review_signer_runtime_isolation, review_signer_secret_scope,
+    run_local_fuzz_corpus_replay, run_local_graceful_shutdown_checkpoint,
+    run_local_runtime_lifecycle, run_local_validation_corpus, run_local_validation_property_checks,
     validate_audit_journal_durability, validate_cex_credential_scope_review,
     validate_cex_rate_limit, validate_channel_adapter, validate_channel_session,
     validate_dashboard_hosted_request, validate_dashboard_hosted_session,
@@ -193,24 +196,26 @@ use arb_core::{
     ObservabilityLogRetentionExecutionRequest, ObservabilityLoopbackBindValidationRequest,
     ObservabilityMetricsEndpointValidationRequest, ObservabilityMetricsRuntimeProbe,
     ObservabilityMetricsRuntimeProbeStatus, ObservabilityMetricsScrapePreflightRequest,
-    ObservabilityOperationsPolicy, ObservabilityOperationsReviewStatus, ObservabilitySeverity,
-    ObservabilitySnapshot, OperatorCommandRouter, OperatorCommandRoutingRequest,
-    OperatorCommandSource, OperatorNotification, OpportunityCandidate, OpportunityLeg,
-    OpportunityLegSide, OpportunityPlannerHandoffStatus, OpportunityProviderIngestionRequest,
-    OpportunityQuoteIngestionLoadRequest, OpportunityReplayLoadIteration,
-    OpportunityReplayLoadReport, OpportunityReplayStatus, OpportunityRouteKind, OpportunityScore,
-    OrderBookSnapshot, PaidMarketDataProviderEvaluationInput,
-    PaidMarketDataProviderEvaluationReport, PaidMarketDataProviderEvaluationStatus,
-    PaperAssetBalance, PaperBacktestCorpus, PaperBacktestRunReport, PaperBacktestScenario,
-    PaperBacktestStep, PaperExecutionAdapter, PaperFillModelConfig, PaperFillSide,
-    PaperFillSimulationRequest, PlatformAdapterReviewReport, PlatformAdapterReviewRequest,
-    PlatformAdapterReviewStatus, PlatformCommandIngressReport, PlatformCommandIngressRequest,
-    PlatformCommandIngressStatus, PolicyApproval, PolicyDecisionRecord, PolicyEngine, PriceLevel,
-    RemoteCommandEnvelopeValidationReport, RemoteCommandEnvelopeValidationRequest,
-    RemoteCommandEnvelopeValidationStatus, RemoteCommandSecurityReviewReport,
-    RemoteCommandSecurityReviewRequest, RemoteCommandSecurityReviewStatus,
-    RollbackExecutionTranscript, RollbackExecutionTranscriptStatus, RoutedOperatorCommand, Runbook,
-    RunbookStep, RuntimeConfigReloadStatus, RuntimeConfigReloadValidationRequest,
+    ObservabilityOperationsPolicy, ObservabilityOperationsReviewStatus,
+    ObservabilityProviderBoundaryReviewRequest, ObservabilityProviderBoundaryReviewStatus,
+    ObservabilitySeverity, ObservabilitySnapshot, OperatorCommandRouter,
+    OperatorCommandRoutingRequest, OperatorCommandSource, OperatorNotification,
+    OpportunityCandidate, OpportunityLeg, OpportunityLegSide, OpportunityPlannerHandoffStatus,
+    OpportunityProviderIngestionRequest, OpportunityQuoteIngestionLoadRequest,
+    OpportunityReplayLoadIteration, OpportunityReplayLoadReport, OpportunityReplayStatus,
+    OpportunityRouteKind, OpportunityScore, OrderBookSnapshot,
+    PaidMarketDataProviderEvaluationInput, PaidMarketDataProviderEvaluationReport,
+    PaidMarketDataProviderEvaluationStatus, PaperAssetBalance, PaperBacktestCorpus,
+    PaperBacktestRunReport, PaperBacktestScenario, PaperBacktestStep, PaperExecutionAdapter,
+    PaperFillModelConfig, PaperFillSide, PaperFillSimulationRequest, PlatformAdapterReviewReport,
+    PlatformAdapterReviewRequest, PlatformAdapterReviewStatus, PlatformCommandIngressReport,
+    PlatformCommandIngressRequest, PlatformCommandIngressStatus, PolicyApproval,
+    PolicyDecisionRecord, PolicyEngine, PriceLevel, RemoteCommandEnvelopeValidationReport,
+    RemoteCommandEnvelopeValidationRequest, RemoteCommandEnvelopeValidationStatus,
+    RemoteCommandSecurityReviewReport, RemoteCommandSecurityReviewRequest,
+    RemoteCommandSecurityReviewStatus, RollbackExecutionTranscript,
+    RollbackExecutionTranscriptStatus, RoutedOperatorCommand, Runbook, RunbookStep,
+    RuntimeConfigReloadStatus, RuntimeConfigReloadValidationRequest,
     RuntimeDeploymentAuditSqliteTranscript, RuntimeDeploymentAuditSqliteTranscriptStatus,
     RuntimeDeploymentBackupRestoreTranscript, RuntimeDeploymentBackupRestoreTranscriptStatus,
     RuntimeDeploymentGracefulShutdownTranscript, RuntimeDeploymentGracefulShutdownTranscriptStatus,
@@ -285,7 +290,8 @@ use arb_core::{
     MARKET_DATA_LAST_HISTORICAL_PERSISTENCE_CHECKPOINT_KEY,
     MARKET_DATA_LAST_PROVIDER_PREFLIGHT_CHECKPOINT_KEY,
     MARKET_DATA_LAST_RECONNECT_PLAN_CHECKPOINT_KEY, OBSERVABILITY_LAST_FAILURE_CHECKPOINT_KEY,
-    OBSERVABILITY_LAST_METRICS_RUNTIME_PROBE_CHECKPOINT_KEY, OBSERVABILITY_RUNBOOK_VERSION,
+    OBSERVABILITY_LAST_METRICS_RUNTIME_PROBE_CHECKPOINT_KEY,
+    OBSERVABILITY_LAST_PROVIDER_BOUNDARY_REVIEW_CHECKPOINT_KEY, OBSERVABILITY_RUNBOOK_VERSION,
     OPPORTUNITY_ENGINE_VERSION, PACKAGING_DEPLOYMENT_VERSION, PAPER_AUDIT_INTEGRATION_VERSION,
     PAPER_BALANCE_LEDGER_VERSION, PAPER_CONNECTOR_VERSION, PAPER_REALISM_VALIDATION_VERSION,
     PAPER_REALISTIC_FILL_MODEL_VERSION, POLICY_LAST_DECISION_CHECKPOINT_KEY,
@@ -584,6 +590,7 @@ fn is_local_workspace_validation_command(command: &str) -> bool {
             | "validate-runtime-blocked-audit-preflight"
             | "validate-observability-runtime"
             | "validate-observability-metrics-runtime"
+            | "validate-observability-provider-boundary"
             | "validate-runtime-panic-hook"
             | "validate-dashboard-runtime"
             | "validate-dashboard-session-lifecycle"
@@ -756,6 +763,9 @@ fn run_local_workspace_validation_command(
         "validate-observability-runtime" => run_observability_runtime_validation(&options),
         "validate-observability-metrics-runtime" => {
             run_observability_metrics_runtime_validation(&options)
+        }
+        "validate-observability-provider-boundary" => {
+            run_observability_provider_boundary_validation(&options)
         }
         "validate-runtime-panic-hook" => run_runtime_panic_hook_validation(&options),
         "validate-dashboard-runtime" => run_dashboard_runtime_validation(&options),
@@ -1020,6 +1030,7 @@ fn print_usage() {
     println!("       arb-agent validate-dashboard-loopback-runtime --workspace <fresh-dir>");
     println!("       arb-agent validate-observability-runtime --workspace <fresh-dir>");
     println!("       arb-agent validate-observability-metrics-runtime --workspace <fresh-dir>");
+    println!("       arb-agent validate-observability-provider-boundary --workspace <fresh-dir>");
     println!("       arb-agent validate-runtime-panic-hook --workspace <fresh-dir>");
     println!(
         "       arb-agent validate-runtime-smoke --config <path> --workspace <fresh-dir> [--iterations <n>]"
@@ -17977,6 +17988,260 @@ fn run_observability_metrics_runtime_validation(
     Ok(())
 }
 
+#[allow(clippy::too_many_lines)]
+fn run_observability_provider_boundary_validation(
+    options: &LocalValidationRunOptions,
+) -> Result<(), AgentCliError> {
+    prepare_fresh_workspace(&options.workspace_dir)?;
+    let audit_path = options
+        .workspace_dir
+        .join("observability-provider-boundary.audit.jsonl");
+    let state_path = options
+        .workspace_dir
+        .join("observability-provider-boundary.sqlite3");
+    let now_unix_ms = current_unix_ms()?;
+    let mut journal = AppendOnlyAuditJournal::open(&audit_path)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let mut store = SqliteWalStateStore::open(&state_path)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+
+    let collector = DeterministicObservabilityCollector;
+    let record = collector
+        .collect(ObservabilityCollectionRequest {
+            config: ObservabilityBoundaryConfig::default(),
+            snapshot: local_observability_runtime_snapshot(now_unix_ms),
+            access: ObservabilityAccessContext::local_collection(Some(
+                "local-observability-provider-boundary-cli".to_owned(),
+            )),
+            operator_label: Some("local-observability-provider-boundary-cli".to_owned()),
+            collected_at_ms: now_unix_ms.saturating_add(1),
+        })
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let operations_review = review_observability_operations(&ObservabilityOperationsPolicy {
+        review_id: "local-observability-provider-boundary-review".to_owned(),
+        log_retention_required: true,
+        retention_days: 30,
+        redaction_required: true,
+        alert_routing_required: true,
+        alert_route_count: 1,
+        incident_runbook_required: true,
+        incident_runbook_count: 1,
+        loopback_or_authenticated_endpoint_required: true,
+        audit_state_preflight_required: true,
+        exporter_kill_switch_required: true,
+        alert_authorization_required: true,
+        rate_limit_backpressure_required: true,
+        retry_backoff_required: true,
+        no_secret_telemetry_required: true,
+        metrics_endpoint_requested: false,
+        outbound_alert_delivery_requested: false,
+        telemetry_export_requested: false,
+    })
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let export_report =
+        render_observability_export_dry_run(arb_core::ObservabilityExportDryRunRequest {
+            record,
+            operations_review: operations_review.clone(),
+            alert_route_references: vec!["local-alert-route-1".to_owned()],
+            rendered_at_ms: now_unix_ms.saturating_add(2),
+        })
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let alert_dispatch = DeterministicNotificationBoundary::new()
+        .publish(&arb_core::NotificationPublishRequest {
+            id: "local-observability-provider-boundary-alert".to_owned(),
+            notification: OperatorNotification {
+                id: "local-observability-provider-boundary-alert".to_owned(),
+                severity: NotificationSeverity::Warning,
+                title: "Local observability provider boundary validation".to_owned(),
+                body: "Provider boundary review reached the local communications boundary"
+                    .to_owned(),
+                channels: vec!["cli".to_owned()],
+                created_at_unix_ms: now_unix_ms.saturating_add(3),
+            },
+            config: communications_runtime_config(),
+            channel_safety: vec![communications_channel_safety("cli", now_unix_ms)],
+            now_unix_ms: now_unix_ms.saturating_add(4),
+        })
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let alert_route_dispatch =
+        record_observability_alert_route_dispatch(ObservabilityAlertRouteDispatchRequest {
+            dispatch_review_id: "local-observability-provider-boundary-alert-route".to_owned(),
+            export_report: export_report.clone(),
+            alert_route_reference: "local-alert-route-1".to_owned(),
+            notification_dispatch: alert_dispatch,
+            local_dispatch_required: true,
+            outbound_alert_delivery_requested: false,
+            reviewed_at_ms: now_unix_ms.saturating_add(5),
+        })
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let endpoint_preflight = preflight_observability_endpoint(&ObservabilityEndpointPreflight {
+        preflight_id: "local-observability-provider-boundary-endpoint".to_owned(),
+        bind_host: "127.0.0.1".to_owned(),
+        bind_port: 9_090,
+        loopback_only_required: true,
+        authentication_required: true,
+        authorization_required: true,
+        transport_protection_required: true,
+        redaction_required: true,
+        alert_routes_configured: true,
+        alert_route_count: 1,
+        exporter_backpressure_required: true,
+        metrics_endpoint_start_requested: false,
+        public_network_exposure_requested: false,
+        telemetry_export_requested: false,
+        outbound_alert_delivery_requested: false,
+    })
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let metrics_runtime_probe =
+        validate_observability_metrics_runtime_probe(ObservabilityMetricsRuntimeProbe {
+            probe_id: "local-observability-provider-boundary-metrics-runtime".to_owned(),
+            export_report: export_report.clone(),
+            bind_host: "127.0.0.1".to_owned(),
+            requested_port: 0,
+            scrape_count: 2,
+            public_network_exposure_requested: false,
+            telemetry_export_requested: false,
+            outbound_alert_delivery_requested: false,
+        })
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let report =
+        review_observability_provider_boundary(ObservabilityProviderBoundaryReviewRequest {
+            boundary_review_id: "local-observability-provider-boundary".to_owned(),
+            operations_review,
+            export_report,
+            alert_route_dispatch,
+            endpoint_preflight,
+            metrics_runtime_probe,
+            provider_validation_performed: false,
+            exporter_session_evidence_present: false,
+            log_shipping_evidence_present: false,
+            alert_delivery_evidence_present: false,
+            deployment_host_runtime_evidence_present: false,
+            production_metrics_auth_evidence_present: false,
+            telemetry_export_requested: false,
+            outbound_alert_delivery_requested: false,
+            external_submission_requested: false,
+            public_network_exposure_requested: false,
+            service_manager_action_requested: false,
+            sensitive_material_loaded: false,
+            live_execution_requested: false,
+            production_ready_claim_requested: false,
+            reviewed_at_ms: now_unix_ms.saturating_add(6),
+        })
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let audit_record = append_observability_provider_boundary_review_audit(
+        &mut journal,
+        &report,
+        now_unix_ms.saturating_add(7),
+    )
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let checkpoint = persist_observability_provider_boundary_review_checkpoint(
+        &mut store,
+        &report,
+        now_unix_ms.saturating_add(8),
+    )
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    drop(store);
+    drop(journal);
+
+    let reopened_journal = AppendOnlyAuditJournal::open(&audit_path)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let replayed_records = reopened_journal.next_sequence().saturating_sub(1);
+    let reopened_store = SqliteWalStateStore::open(&state_path)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    reopened_store
+        .integrity_check()
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let recovered_checkpoint = reopened_store
+        .get_checkpoint(&checkpoint.key)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+
+    if audit_record.sequence != 1
+        || replayed_records != 1
+        || checkpoint.key != OBSERVABILITY_LAST_PROVIDER_BOUNDARY_REVIEW_CHECKPOINT_KEY
+        || recovered_checkpoint.is_none()
+        || report.status
+            != ObservabilityProviderBoundaryReviewStatus::BlockedPendingProviderValidation
+        || !report.operations_review_ready
+        || !report.export_dry_run_ready
+        || !report.alert_route_dispatch_ready
+        || !report.endpoint_preflight_ready
+        || !report.metrics_runtime_probe_ready
+        || report.missing_local_control_count != 0
+        || report.remaining_provider_evidence_count != 5
+        || report.provider_validation_performed
+        || report.telemetry_exported
+        || report.outbound_alerts_sent
+        || report.external_submission_performed
+        || report.public_network_exposed
+        || report.service_manager_action_performed
+        || report.sensitive_material_loaded
+        || report.live_execution_performed
+        || report.production_ready
+    {
+        return Err(AgentCliError::Validation(
+            "observability provider boundary validation failed".to_owned(),
+        ));
+    }
+
+    println!("observability-provider-boundary: validation passed");
+    println!(
+        "observability-provider-boundary-workspace: {}",
+        options.workspace_dir.display()
+    );
+    println!("observability-provider-boundary-version: {OBSERVABILITY_RUNBOOK_VERSION}");
+    println!(
+        "observability-provider-boundary-checkpoint-key: {OBSERVABILITY_LAST_PROVIDER_BOUNDARY_REVIEW_CHECKPOINT_KEY}"
+    );
+    println!("observability-provider-boundary-audit-records-replayed: {replayed_records}");
+    println!("observability-provider-boundary-checkpoint-recovered: true");
+    println!(
+        "observability-provider-boundary-status: {:?}",
+        report.status
+    );
+    println!(
+        "observability-provider-boundary-operations-review-ready: {}",
+        report.operations_review_ready
+    );
+    println!(
+        "observability-provider-boundary-export-dry-run-ready: {}",
+        report.export_dry_run_ready
+    );
+    println!(
+        "observability-provider-boundary-alert-route-dispatch-ready: {}",
+        report.alert_route_dispatch_ready
+    );
+    println!(
+        "observability-provider-boundary-endpoint-preflight-ready: {}",
+        report.endpoint_preflight_ready
+    );
+    println!(
+        "observability-provider-boundary-metrics-runtime-ready: {}",
+        report.metrics_runtime_probe_ready
+    );
+    println!(
+        "observability-provider-boundary-missing-local-controls: {}",
+        report.missing_local_control_count
+    );
+    println!(
+        "observability-provider-boundary-remaining-provider-evidence-count: {}",
+        report.remaining_provider_evidence_count
+    );
+    println!(
+        "observability-provider-boundary-provider-validation-performed: {}",
+        report.provider_validation_performed
+    );
+    println!("public-network-exposed: false");
+    println!("telemetry-exported: false");
+    println!("outbound-alerts-sent: false");
+    println!("external-submission-performed: false");
+    println!("service-manager-action-performed: false");
+    println!("sensitive-material-loaded: false");
+    println!("live-execution-performed: false");
+    println!("production-ready: false");
+    Ok(())
+}
+
 fn local_observability_runtime_snapshot(now_unix_ms: u64) -> ObservabilitySnapshot {
     ObservabilitySnapshot {
         snapshot_id: "local-observability-runtime-snapshot".to_owned(),
@@ -18626,7 +18891,8 @@ mod tests {
         run_market_data_history_persistence_validation,
         run_market_data_provider_preflight_validation,
         run_market_data_quality_assessment_validation, run_market_data_reconnect_plan_validation,
-        run_observability_metrics_runtime_validation, run_observability_runtime_validation,
+        run_observability_metrics_runtime_validation,
+        run_observability_provider_boundary_validation, run_observability_runtime_validation,
         run_opportunity_historical_fixture_validation, run_opportunity_planner_handoff_validation,
         run_opportunity_provider_ingestion_validation, run_opportunity_quote_load_validation,
         run_opportunity_replay_validation, run_opportunity_trace_recovery_validation,
@@ -19443,6 +19709,23 @@ mod tests {
             .exists());
         assert!(workspace
             .join("observability-metrics-runtime.sqlite3")
+            .exists());
+        cleanup_workspace(&workspace);
+    }
+
+    #[test]
+    fn observability_provider_boundary_validation_persists_and_reopens_local_records_only() {
+        let workspace = temp_workspace_path("observability-provider-boundary-runner");
+        run_observability_provider_boundary_validation(&LocalValidationRunOptions {
+            workspace_dir: workspace.clone(),
+        })
+        .expect("local observability provider boundary validation should pass");
+
+        assert!(workspace
+            .join("observability-provider-boundary.audit.jsonl")
+            .exists());
+        assert!(workspace
+            .join("observability-provider-boundary.sqlite3")
             .exists());
         cleanup_workspace(&workspace);
     }

@@ -63,6 +63,10 @@ pub const OBSERVABILITY_LAST_METRICS_ENDPOINT_VALIDATION_CHECKPOINT_KEY: &str =
 pub const OBSERVABILITY_LAST_METRICS_RUNTIME_PROBE_CHECKPOINT_KEY: &str =
     "observability:last-metrics-runtime-probe";
 
+/// State-store key for the latest local observability provider boundary review.
+pub const OBSERVABILITY_LAST_PROVIDER_BOUNDARY_REVIEW_CHECKPOINT_KEY: &str =
+    "observability:last-provider-boundary-review";
+
 /// State-store key for the latest local tracing subscriber validation.
 pub const OBSERVABILITY_LAST_TRACING_SUBSCRIBER_CHECKPOINT_KEY: &str =
     "observability:last-tracing-subscriber";
@@ -813,6 +817,121 @@ pub struct ObservabilityMetricsRuntimeProbeReport {
     pub production_ready: bool,
     /// Sanitized local validation warnings.
     pub warnings: Vec<String>,
+}
+
+/// Local provider boundary review request for future observability integrations.
+///
+/// This composes local observability controls and records the remaining
+/// external evidence required before real exporter sessions, log shipping,
+/// alert delivery, or deployment-host observability runtime can be trusted. It
+/// never performs those external/provider operations.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ObservabilityProviderBoundaryReviewRequest {
+    /// Stable local boundary review id.
+    pub boundary_review_id: String,
+    /// Local operations review that represents required controls.
+    pub operations_review: ObservabilityOperationsReviewReport,
+    /// Local non-network export dry-run report.
+    pub export_report: ObservabilityExportDryRunReport,
+    /// Local alert route dispatch bridge report.
+    pub alert_route_dispatch: ObservabilityAlertRouteDispatchReport,
+    /// Local endpoint/exporter preflight report.
+    pub endpoint_preflight: ObservabilityEndpointPreflightReport,
+    /// Bounded local metrics runtime probe report.
+    pub metrics_runtime_probe: ObservabilityMetricsRuntimeProbeReport,
+    /// Whether real provider validation was performed. Must remain false here.
+    pub provider_validation_performed: bool,
+    /// Whether real exporter-session evidence is available.
+    pub exporter_session_evidence_present: bool,
+    /// Whether real external log-shipping evidence is available.
+    pub log_shipping_evidence_present: bool,
+    /// Whether real outbound alert-delivery evidence is available.
+    pub alert_delivery_evidence_present: bool,
+    /// Whether deployment-host observability runtime evidence is available.
+    pub deployment_host_runtime_evidence_present: bool,
+    /// Whether production metrics authentication/scrape evidence is available.
+    pub production_metrics_auth_evidence_present: bool,
+    /// Whether telemetry export was requested. Must remain false here.
+    pub telemetry_export_requested: bool,
+    /// Whether outbound alert delivery was requested. Must remain false here.
+    pub outbound_alert_delivery_requested: bool,
+    /// Whether external submission was requested. Must remain false here.
+    pub external_submission_requested: bool,
+    /// Whether public network exposure was requested. Must remain false here.
+    pub public_network_exposure_requested: bool,
+    /// Whether service-manager action was requested. Must remain false here.
+    pub service_manager_action_requested: bool,
+    /// Whether sensitive material was loaded. Must remain false here.
+    pub sensitive_material_loaded: bool,
+    /// Whether live execution was requested. Must remain false here.
+    pub live_execution_requested: bool,
+    /// Whether production readiness was claimed. Must remain false here.
+    pub production_ready_claim_requested: bool,
+    /// Local review timestamp in Unix epoch milliseconds.
+    pub reviewed_at_ms: u64,
+}
+
+/// Local provider boundary review status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ObservabilityProviderBoundaryReviewStatus {
+    /// Local controls are ready, but real provider/runtime evidence is still missing.
+    BlockedPendingProviderValidation,
+    /// Local controls or side-effect invariants are missing.
+    BlockedMissingLocalControls,
+}
+
+/// Local provider boundary report for future observability integrations.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ObservabilityProviderBoundaryReviewReport {
+    /// Boundary version that produced this report.
+    pub observability_runbook_version: String,
+    /// Stable local boundary review id.
+    pub boundary_review_id: String,
+    /// Review status.
+    pub status: ObservabilityProviderBoundaryReviewStatus,
+    /// Linked operations review id.
+    pub review_id: String,
+    /// Source observability snapshot id.
+    pub snapshot_id: String,
+    /// Whether the operations review is ready locally.
+    pub operations_review_ready: bool,
+    /// Whether the export dry run rendered local metrics/log/alert accounting.
+    pub export_dry_run_ready: bool,
+    /// Whether local alert-route dispatch reached the communications boundary.
+    pub alert_route_dispatch_ready: bool,
+    /// Whether endpoint/exporter preflight controls are locally ready.
+    pub endpoint_preflight_ready: bool,
+    /// Whether bounded local metrics runtime probe is locally ready.
+    pub metrics_runtime_probe_ready: bool,
+    /// Number of missing local controls or unsafe local flags.
+    pub missing_local_control_count: u32,
+    /// Remaining external/provider evidence categories.
+    pub remaining_provider_evidence: Vec<String>,
+    /// Number of remaining external/provider evidence categories.
+    pub remaining_provider_evidence_count: u32,
+    /// Whether real provider validation was performed. Always false here.
+    pub provider_validation_performed: bool,
+    /// Whether telemetry was exported. Always false here.
+    pub telemetry_exported: bool,
+    /// Whether outbound alerts were sent. Always false here.
+    pub outbound_alerts_sent: bool,
+    /// Whether external submission was performed. Always false here.
+    pub external_submission_performed: bool,
+    /// Whether public network exposure occurred. Always false here.
+    pub public_network_exposed: bool,
+    /// Whether service-manager actions were performed. Always false here.
+    pub service_manager_action_performed: bool,
+    /// Whether sensitive material was loaded. Always false here.
+    pub sensitive_material_loaded: bool,
+    /// Whether live execution occurred. Always false here.
+    pub live_execution_performed: bool,
+    /// Whether this review approves production readiness. Always false here.
+    pub production_ready: bool,
+    /// Local review timestamp in Unix epoch milliseconds.
+    pub reviewed_at_ms: u64,
 }
 
 /// Local observability endpoint/exporter preflight input.
@@ -2918,6 +3037,134 @@ impl ObservabilityMetricsRuntimeProbeReport {
     }
 }
 
+impl ObservabilityProviderBoundaryReviewRequest {
+    /// Validate local observability provider boundary input.
+    pub fn validate(&self) -> Result<(), ObservabilityError> {
+        self.operations_review.validate()?;
+        self.export_report.validate()?;
+        self.alert_route_dispatch.validate()?;
+        self.endpoint_preflight.validate()?;
+        self.metrics_runtime_probe.validate()?;
+        let mut violations = Vec::new();
+        validate_id(
+            "observability provider boundary review",
+            &self.boundary_review_id,
+            &mut violations,
+        );
+        if self.reviewed_at_ms == 0 {
+            violations.push(ObservabilityViolation::new(
+                "OBSERVABILITY_PROVIDER_BOUNDARY_TIMESTAMP_ZERO",
+                "observability provider boundary review timestamp must be non-zero",
+            ));
+        }
+        if self.provider_validation_performed
+            || self.telemetry_export_requested
+            || self.outbound_alert_delivery_requested
+            || self.external_submission_requested
+            || self.public_network_exposure_requested
+            || self.service_manager_action_requested
+            || self.sensitive_material_loaded
+            || self.live_execution_requested
+            || self.production_ready_claim_requested
+        {
+            violations.push(ObservabilityViolation::new(
+                "OBSERVABILITY_PROVIDER_BOUNDARY_SIDE_EFFECT_REQUESTED",
+                "observability provider boundary reviews must not perform provider validation, export telemetry, deliver alerts, submit externally, expose public networks, use service managers, load sensitive material, execute live actions, or claim readiness",
+            ));
+        }
+        finish_validation(violations)
+    }
+}
+
+impl ObservabilityProviderBoundaryReviewReport {
+    /// Validate local observability provider boundary report invariants.
+    pub fn validate(&self) -> Result<(), ObservabilityError> {
+        let mut violations = Vec::new();
+        validate_id(
+            "observability provider boundary review",
+            &self.boundary_review_id,
+            &mut violations,
+        );
+        validate_id(
+            "observability operations review",
+            &self.review_id,
+            &mut violations,
+        );
+        validate_id("observability snapshot", &self.snapshot_id, &mut violations);
+        if self.observability_runbook_version != OBSERVABILITY_RUNBOOK_VERSION {
+            violations.push(ObservabilityViolation::new_owned(
+                "OBSERVABILITY_VERSION_MISMATCH",
+                format!(
+                    "observability_runbook_version must be {OBSERVABILITY_RUNBOOK_VERSION}, got {}",
+                    self.observability_runbook_version
+                ),
+            ));
+        }
+        if self.reviewed_at_ms == 0 {
+            violations.push(ObservabilityViolation::new(
+                "OBSERVABILITY_PROVIDER_BOUNDARY_TIMESTAMP_ZERO",
+                "observability provider boundary review timestamp must be non-zero",
+            ));
+        }
+        if usize::try_from(self.remaining_provider_evidence_count)
+            != Ok(self.remaining_provider_evidence.len())
+        {
+            violations.push(ObservabilityViolation::new(
+                "OBSERVABILITY_PROVIDER_BOUNDARY_EVIDENCE_COUNT_MISMATCH",
+                "remaining provider evidence count must match evidence category list",
+            ));
+        }
+        for evidence in &self.remaining_provider_evidence {
+            validate_name(
+                "observability provider evidence category",
+                evidence,
+                &mut violations,
+            );
+        }
+        if self.provider_validation_performed
+            || self.telemetry_exported
+            || self.outbound_alerts_sent
+            || self.external_submission_performed
+            || self.public_network_exposed
+            || self.service_manager_action_performed
+            || self.sensitive_material_loaded
+            || self.live_execution_performed
+            || self.production_ready
+        {
+            violations.push(ObservabilityViolation::new(
+                "OBSERVABILITY_PROVIDER_BOUNDARY_FORBIDDEN_SIDE_EFFECT",
+                "observability provider boundary reports must not perform provider validation, export telemetry, deliver alerts, submit externally, expose public networks, use service managers, load sensitive material, execute live actions, or approve production readiness",
+            ));
+        }
+        match self.status {
+            ObservabilityProviderBoundaryReviewStatus::BlockedPendingProviderValidation => {
+                if !self.operations_review_ready
+                    || !self.export_dry_run_ready
+                    || !self.alert_route_dispatch_ready
+                    || !self.endpoint_preflight_ready
+                    || !self.metrics_runtime_probe_ready
+                    || self.missing_local_control_count != 0
+                    || self.remaining_provider_evidence_count == 0
+                {
+                    violations.push(ObservabilityViolation::new(
+                        "OBSERVABILITY_PROVIDER_BOUNDARY_PENDING_MISMATCH",
+                        "provider-boundary reviews pending provider validation require all local controls ready, zero missing local controls, and at least one remaining provider evidence category",
+                    ));
+                }
+            }
+            ObservabilityProviderBoundaryReviewStatus::BlockedMissingLocalControls => {
+                if self.missing_local_control_count == 0 {
+                    violations.push(ObservabilityViolation::new(
+                        "OBSERVABILITY_PROVIDER_BOUNDARY_LOCAL_BLOCKED_MISMATCH",
+                        "provider-boundary reviews blocked on local controls require at least one missing local control",
+                    ));
+                }
+            }
+        }
+        finish_validation(violations)
+    }
+}
+
 impl ObservabilityEndpointPreflight {
     /// Validate local endpoint/exporter preflight input invariants.
     pub fn validate(&self) -> Result<(), ObservabilityError> {
@@ -3734,6 +3981,125 @@ pub fn validate_observability_metrics_runtime_probe(
         outbound_alerts_sent: false,
         production_ready: false,
         warnings,
+    };
+    report.validate()?;
+    Ok(report)
+}
+
+/// Review the local observability provider boundary without provider side effects.
+pub fn review_observability_provider_boundary(
+    request: ObservabilityProviderBoundaryReviewRequest,
+) -> Result<ObservabilityProviderBoundaryReviewReport, ObservabilityError> {
+    request.validate()?;
+    let operations_review_ready = request.operations_review.status
+        == ObservabilityOperationsReviewStatus::ReadyForLocalReview;
+    let export_dry_run_ready = !request.export_report.prometheus_metric_lines.is_empty()
+        && request.export_report.alert_route_count > 0
+        && !request.export_report.metrics_endpoint_started
+        && !request.export_report.public_network_exposed
+        && !request.export_report.outbound_alerts_sent
+        && !request.export_report.telemetry_exported
+        && !request.export_report.live_execution_performed
+        && !request.export_report.production_ready;
+    let alert_route_dispatch_ready = request.alert_route_dispatch.status
+        == ObservabilityAlertRouteDispatchStatus::ReadyForLocalReview
+        && request.alert_route_dispatch.recorded_local_channel_count > 0
+        && !request.alert_route_dispatch.outbound_alerts_sent
+        && !request.alert_route_dispatch.outbound_network_used
+        && !request.alert_route_dispatch.telemetry_exported
+        && !request.alert_route_dispatch.live_execution_performed
+        && !request.alert_route_dispatch.production_ready;
+    let endpoint_preflight_ready = request.endpoint_preflight.status
+        == ObservabilityEndpointPreflightStatus::ReadyForLocalReview
+        && request.endpoint_preflight.loopback_bind_validated
+        && request.endpoint_preflight.authentication_required
+        && request.endpoint_preflight.authorization_required
+        && request.endpoint_preflight.redaction_required
+        && request.endpoint_preflight.alert_routes_configured
+        && request.endpoint_preflight.alert_route_count > 0
+        && !request.endpoint_preflight.metrics_endpoint_started
+        && !request.endpoint_preflight.public_network_exposed
+        && !request.endpoint_preflight.telemetry_exported
+        && !request.endpoint_preflight.outbound_alerts_sent
+        && !request.endpoint_preflight.production_ready;
+    let metrics_runtime_probe_ready = request.metrics_runtime_probe.status
+        == ObservabilityMetricsRuntimeProbeStatus::ReadyForLocalReview
+        && request.metrics_runtime_probe.loopback_bind_validated
+        && request.metrics_runtime_probe.served_scrape_count
+            == request.metrics_runtime_probe.expected_scrape_count
+        && request.metrics_runtime_probe.all_scrapes_returned_ok
+        && request
+            .metrics_runtime_probe
+            .response_metric_lines_consistent
+        && request.metrics_runtime_probe.local_metrics_runtime_started
+        && request.metrics_runtime_probe.local_metrics_runtime_shutdown
+        && !request.metrics_runtime_probe.public_network_exposed
+        && !request.metrics_runtime_probe.telemetry_exported
+        && !request.metrics_runtime_probe.outbound_alerts_sent
+        && !request.metrics_runtime_probe.production_ready;
+
+    let mut missing_local_control_count = 0_u32;
+    for missing in [
+        !operations_review_ready,
+        !export_dry_run_ready,
+        !alert_route_dispatch_ready,
+        !endpoint_preflight_ready,
+        !metrics_runtime_probe_ready,
+    ] {
+        if missing {
+            missing_local_control_count = missing_local_control_count.saturating_add(1);
+        }
+    }
+
+    let mut remaining_provider_evidence = Vec::new();
+    if !request.exporter_session_evidence_present {
+        remaining_provider_evidence.push("exporter-session-evidence".to_owned());
+    }
+    if !request.log_shipping_evidence_present {
+        remaining_provider_evidence.push("log-shipping-evidence".to_owned());
+    }
+    if !request.alert_delivery_evidence_present {
+        remaining_provider_evidence.push("alert-delivery-evidence".to_owned());
+    }
+    if !request.deployment_host_runtime_evidence_present {
+        remaining_provider_evidence.push("deployment-host-runtime-evidence".to_owned());
+    }
+    if !request.production_metrics_auth_evidence_present {
+        remaining_provider_evidence.push("production-metrics-auth-evidence".to_owned());
+    }
+    let remaining_provider_evidence_count = u32::try_from(remaining_provider_evidence.len())
+        .map_err(|_| ObservabilityError::StateStoreFailed {
+            reason: "observability provider evidence count overflowed".to_owned(),
+        })?;
+    let status = if missing_local_control_count == 0 {
+        ObservabilityProviderBoundaryReviewStatus::BlockedPendingProviderValidation
+    } else {
+        ObservabilityProviderBoundaryReviewStatus::BlockedMissingLocalControls
+    };
+    let report = ObservabilityProviderBoundaryReviewReport {
+        observability_runbook_version: OBSERVABILITY_RUNBOOK_VERSION.to_owned(),
+        boundary_review_id: request.boundary_review_id,
+        status,
+        review_id: request.operations_review.review_id,
+        snapshot_id: request.export_report.snapshot_id,
+        operations_review_ready,
+        export_dry_run_ready,
+        alert_route_dispatch_ready,
+        endpoint_preflight_ready,
+        metrics_runtime_probe_ready,
+        missing_local_control_count,
+        remaining_provider_evidence,
+        remaining_provider_evidence_count,
+        provider_validation_performed: false,
+        telemetry_exported: false,
+        outbound_alerts_sent: false,
+        external_submission_performed: false,
+        public_network_exposed: false,
+        service_manager_action_performed: false,
+        sensitive_material_loaded: false,
+        live_execution_performed: false,
+        production_ready: false,
+        reviewed_at_ms: request.reviewed_at_ms,
     };
     report.validate()?;
     Ok(report)
@@ -5872,6 +6238,130 @@ pub fn append_observability_metrics_runtime_probe_audit(
         .map_err(ObservabilityError::from)
 }
 
+/// Persist the latest local observability provider boundary review through the typed state boundary.
+pub fn persist_observability_provider_boundary_review_checkpoint(
+    store: &mut impl StateStore,
+    report: &ObservabilityProviderBoundaryReviewReport,
+    updated_at_unix_ms: u64,
+) -> Result<StateCheckpoint, ObservabilityError> {
+    report.validate()?;
+    let checkpoint = StateCheckpoint {
+        key: OBSERVABILITY_LAST_PROVIDER_BOUNDARY_REVIEW_CHECKPOINT_KEY.to_owned(),
+        subsystem: OBSERVABILITY_STATE_SUBSYSTEM.to_owned(),
+        value: serde_json::to_string(report).map_err(|error| {
+            ObservabilityError::StateStoreFailed {
+                reason: format!(
+                    "failed to serialize observability provider boundary checkpoint: {error}"
+                ),
+            }
+        })?,
+        updated_at_unix_ms,
+    };
+    store
+        .put_checkpoint(checkpoint.clone())
+        .map_err(ObservabilityError::from)?;
+    Ok(checkpoint)
+}
+
+/// Append one local observability provider boundary review to the audit journal.
+pub fn append_observability_provider_boundary_review_audit(
+    journal: &mut AppendOnlyAuditJournal,
+    report: &ObservabilityProviderBoundaryReviewReport,
+    occurred_at_unix_ms: u64,
+) -> Result<AuditRecord, ObservabilityError> {
+    report.validate()?;
+    let mut event = AuditEvent::new(
+        format!(
+            "observability-provider-boundary-review-{}",
+            report.boundary_review_id
+        ),
+        AuditEventKind::RuntimeLifecycle,
+        OBSERVABILITY_STATE_SUBSYSTEM,
+        "observability-provider-boundary-review",
+        "observability provider boundary review recorded locally",
+    );
+    event.occurred_at_unix_ms = occurred_at_unix_ms;
+    event = event
+        .with_metadata(
+            "observability_runbook_version",
+            AuditValue::Text(OBSERVABILITY_RUNBOOK_VERSION.to_owned()),
+        )
+        .with_metadata(
+            "boundary_review_id",
+            AuditValue::Text(report.boundary_review_id.clone()),
+        )
+        .with_metadata("review_id", AuditValue::Text(report.review_id.clone()))
+        .with_metadata("snapshot_id", AuditValue::Text(report.snapshot_id.clone()))
+        .with_metadata("status", AuditValue::Text(format!("{:?}", report.status)))
+        .with_metadata(
+            "operations_review_ready",
+            AuditValue::Bool(report.operations_review_ready),
+        )
+        .with_metadata(
+            "export_dry_run_ready",
+            AuditValue::Bool(report.export_dry_run_ready),
+        )
+        .with_metadata(
+            "alert_route_dispatch_ready",
+            AuditValue::Bool(report.alert_route_dispatch_ready),
+        )
+        .with_metadata(
+            "endpoint_preflight_ready",
+            AuditValue::Bool(report.endpoint_preflight_ready),
+        )
+        .with_metadata(
+            "metrics_runtime_probe_ready",
+            AuditValue::Bool(report.metrics_runtime_probe_ready),
+        )
+        .with_metadata(
+            "missing_local_control_count",
+            AuditValue::Text(report.missing_local_control_count.to_string()),
+        )
+        .with_metadata(
+            "remaining_provider_evidence_count",
+            AuditValue::Text(report.remaining_provider_evidence_count.to_string()),
+        )
+        .with_metadata(
+            "provider_validation_performed",
+            AuditValue::Bool(report.provider_validation_performed),
+        )
+        .with_metadata(
+            "telemetry_exported",
+            AuditValue::Bool(report.telemetry_exported),
+        )
+        .with_metadata(
+            "outbound_alerts_sent",
+            AuditValue::Bool(report.outbound_alerts_sent),
+        )
+        .with_metadata(
+            "external_submission_performed",
+            AuditValue::Bool(report.external_submission_performed),
+        )
+        .with_metadata(
+            "public_network_exposed",
+            AuditValue::Bool(report.public_network_exposed),
+        )
+        .with_metadata(
+            "service_manager_action_performed",
+            AuditValue::Bool(report.service_manager_action_performed),
+        )
+        .with_metadata(
+            "sensitive_material_loaded",
+            AuditValue::Bool(report.sensitive_material_loaded),
+        )
+        .with_metadata(
+            "live_execution_performed",
+            AuditValue::Bool(report.live_execution_performed),
+        )
+        .with_metadata(
+            "production_ready",
+            AuditValue::Bool(report.production_ready),
+        );
+    journal
+        .append_event(event)
+        .map_err(ObservabilityError::from)
+}
+
 /// Persist the latest local runtime failure capture through the typed state boundary.
 ///
 /// This stores sanitized local failure metadata only. It does not start a
@@ -6320,7 +6810,8 @@ mod tests {
         append_observability_metrics_endpoint_validation_audit,
         append_observability_metrics_runtime_probe_audit,
         append_observability_metrics_scrape_preflight_audit,
-        append_observability_operations_review_audit, append_observability_record_audit,
+        append_observability_operations_review_audit,
+        append_observability_provider_boundary_review_audit, append_observability_record_audit,
         append_runtime_failure_capture_audit, capture_local_panic_with_scoped_hook,
         capture_local_runtime_failure, execute_local_observability_log_retention,
         install_local_runtime_panic_hook, persist_local_tracing_subscriber_checkpoint,
@@ -6333,31 +6824,34 @@ mod tests {
         persist_observability_metrics_runtime_probe_checkpoint,
         persist_observability_metrics_scrape_preflight_checkpoint,
         persist_observability_operations_review_checkpoint,
+        persist_observability_provider_boundary_review_checkpoint,
         persist_observability_record_checkpoint, persist_runtime_failure_capture_checkpoint,
         preflight_observability_endpoint, preflight_observability_metrics_scrape,
         record_observability_alert_route_dispatch, render_observability_export_dry_run,
-        review_observability_operations, validate_local_tracing_subscriber,
-        validate_observability_loopback_bind, validate_observability_metrics_endpoint,
-        validate_observability_metrics_runtime_probe, ComponentHealthStatus,
-        DeterministicObservabilityCollector, HealthStatus, LocalTracingSubscriberValidationRequest,
-        LocalTracingSubscriberValidationStatus, MetricKind, MetricLabel, MetricSample,
-        ObservabilityAccessAuthorizationStatus, ObservabilityAccessContext,
-        ObservabilityAccessSource, ObservabilityAlertRouteDispatchRequest,
-        ObservabilityAlertRouteDispatchStatus, ObservabilityBoundaryConfig,
-        ObservabilityCollectionRequest, ObservabilityCollector, ObservabilityEndpointBinding,
-        ObservabilityEndpointPreflight, ObservabilityEndpointPreflightStatus, ObservabilityError,
-        ObservabilityExportDryRunReport, ObservabilityExportDryRunRequest,
-        ObservabilityLogRetentionExecutionRequest, ObservabilityLoopbackBindValidationReport,
-        ObservabilityLoopbackBindValidationRequest, ObservabilityLoopbackBindValidationStatus,
-        ObservabilityMetricsEndpointValidationReport,
+        review_observability_operations, review_observability_provider_boundary,
+        validate_local_tracing_subscriber, validate_observability_loopback_bind,
+        validate_observability_metrics_endpoint, validate_observability_metrics_runtime_probe,
+        ComponentHealthStatus, DeterministicObservabilityCollector, HealthStatus,
+        LocalTracingSubscriberValidationRequest, LocalTracingSubscriberValidationStatus,
+        MetricKind, MetricLabel, MetricSample, ObservabilityAccessAuthorizationStatus,
+        ObservabilityAccessContext, ObservabilityAccessSource,
+        ObservabilityAlertRouteDispatchRequest, ObservabilityAlertRouteDispatchStatus,
+        ObservabilityBoundaryConfig, ObservabilityCollectionRequest, ObservabilityCollector,
+        ObservabilityEndpointBinding, ObservabilityEndpointPreflight,
+        ObservabilityEndpointPreflightStatus, ObservabilityError, ObservabilityExportDryRunReport,
+        ObservabilityExportDryRunRequest, ObservabilityLogRetentionExecutionRequest,
+        ObservabilityLoopbackBindValidationReport, ObservabilityLoopbackBindValidationRequest,
+        ObservabilityLoopbackBindValidationStatus, ObservabilityMetricsEndpointValidationReport,
         ObservabilityMetricsEndpointValidationRequest,
         ObservabilityMetricsEndpointValidationStatus, ObservabilityMetricsRuntimeProbe,
         ObservabilityMetricsRuntimeProbeReport, ObservabilityMetricsRuntimeProbeStatus,
         ObservabilityMetricsScrapePreflightReport, ObservabilityMetricsScrapePreflightRequest,
         ObservabilityMetricsScrapePreflightStatus, ObservabilityOperationsPolicy,
-        ObservabilityOperationsReviewStatus, ObservabilitySeverity, ObservabilitySnapshot, Runbook,
-        RunbookStep, RuntimeFailureCaptureRequest, RuntimeFailureKind,
-        RuntimePanicHookInstallationRequest, StructuredLogEvent, StructuredLogField,
+        ObservabilityOperationsReviewStatus, ObservabilityProviderBoundaryReviewReport,
+        ObservabilityProviderBoundaryReviewRequest, ObservabilityProviderBoundaryReviewStatus,
+        ObservabilitySeverity, ObservabilitySnapshot, Runbook, RunbookStep,
+        RuntimeFailureCaptureRequest, RuntimeFailureKind, RuntimePanicHookInstallationRequest,
+        StructuredLogEvent, StructuredLogField,
         OBSERVABILITY_LAST_ALERT_ROUTE_DISPATCH_CHECKPOINT_KEY,
         OBSERVABILITY_LAST_ENDPOINT_PREFLIGHT_CHECKPOINT_KEY,
         OBSERVABILITY_LAST_EXPORT_DRY_RUN_CHECKPOINT_KEY,
@@ -6368,6 +6862,7 @@ mod tests {
         OBSERVABILITY_LAST_METRICS_RUNTIME_PROBE_CHECKPOINT_KEY,
         OBSERVABILITY_LAST_METRICS_SCRAPE_PREFLIGHT_CHECKPOINT_KEY,
         OBSERVABILITY_LAST_OPERATIONS_REVIEW_CHECKPOINT_KEY,
+        OBSERVABILITY_LAST_PROVIDER_BOUNDARY_REVIEW_CHECKPOINT_KEY,
         OBSERVABILITY_LAST_RECORD_CHECKPOINT_KEY,
         OBSERVABILITY_LAST_TRACING_SUBSCRIBER_CHECKPOINT_KEY,
     };
@@ -7644,6 +8139,142 @@ mod tests {
         assert!(!recovered_report.public_network_exposed);
         assert!(!recovered_report.telemetry_exported);
         assert!(!recovered_report.outbound_alerts_sent);
+        assert!(!recovered_report.production_ready);
+
+        let _ = fs::remove_file(audit_path);
+        cleanup_state_files(&state_path);
+    }
+
+    #[test]
+    fn observability_provider_boundary_audit_and_state_reopen_locally() {
+        let audit_path = temp_audit_path("observability-provider-boundary");
+        let state_path = temp_state_path("observability-provider-boundary");
+        let export_report = ready_export_dry_run_report("provider-boundary");
+        let alert_route_dispatch =
+            record_observability_alert_route_dispatch(ObservabilityAlertRouteDispatchRequest {
+                dispatch_review_id: "provider-boundary-alert-route".to_owned(),
+                export_report: export_report.clone(),
+                alert_route_reference: "alert-route-provider-boundary".to_owned(),
+                notification_dispatch: local_notification_dispatch("provider-boundary"),
+                local_dispatch_required: true,
+                outbound_alert_delivery_requested: false,
+                reviewed_at_ms: 1_700_000_000_651,
+            })
+            .expect("local alert route dispatch should pass");
+        let endpoint_preflight =
+            preflight_observability_endpoint(&ObservabilityEndpointPreflight {
+                preflight_id: "provider-boundary-endpoint".to_owned(),
+                bind_host: "127.0.0.1".to_owned(),
+                bind_port: 9_090,
+                loopback_only_required: true,
+                authentication_required: true,
+                authorization_required: true,
+                transport_protection_required: true,
+                redaction_required: true,
+                alert_routes_configured: true,
+                alert_route_count: 1,
+                exporter_backpressure_required: true,
+                metrics_endpoint_start_requested: false,
+                public_network_exposure_requested: false,
+                telemetry_export_requested: false,
+                outbound_alert_delivery_requested: false,
+            })
+            .expect("endpoint preflight should pass");
+        let metrics_runtime_probe =
+            validate_observability_metrics_runtime_probe(ObservabilityMetricsRuntimeProbe {
+                probe_id: "provider-boundary-metrics-runtime".to_owned(),
+                export_report: export_report.clone(),
+                bind_host: "127.0.0.1".to_owned(),
+                requested_port: 0,
+                scrape_count: 2,
+                public_network_exposure_requested: false,
+                telemetry_export_requested: false,
+                outbound_alert_delivery_requested: false,
+            })
+            .expect("metrics runtime probe should pass");
+        let report =
+            review_observability_provider_boundary(ObservabilityProviderBoundaryReviewRequest {
+                boundary_review_id: "provider-boundary-review".to_owned(),
+                operations_review: ready_operations_review(),
+                export_report,
+                alert_route_dispatch,
+                endpoint_preflight,
+                metrics_runtime_probe,
+                provider_validation_performed: false,
+                exporter_session_evidence_present: false,
+                log_shipping_evidence_present: false,
+                alert_delivery_evidence_present: false,
+                deployment_host_runtime_evidence_present: false,
+                production_metrics_auth_evidence_present: false,
+                telemetry_export_requested: false,
+                outbound_alert_delivery_requested: false,
+                external_submission_requested: false,
+                public_network_exposure_requested: false,
+                service_manager_action_requested: false,
+                sensitive_material_loaded: false,
+                live_execution_requested: false,
+                production_ready_claim_requested: false,
+                reviewed_at_ms: 1_700_000_000_652,
+            })
+            .expect("provider boundary review should record local blocked state");
+        let mut journal = AppendOnlyAuditJournal::open(&audit_path).expect("journal opens");
+        let mut store = SqliteWalStateStore::open(&state_path).expect("sqlite opens");
+
+        let audit_record = append_observability_provider_boundary_review_audit(
+            &mut journal,
+            &report,
+            1_700_000_000_653,
+        )
+        .expect("provider boundary audit writes");
+        let checkpoint = persist_observability_provider_boundary_review_checkpoint(
+            &mut store,
+            &report,
+            1_700_000_000_654,
+        )
+        .expect("provider boundary checkpoint writes");
+        assert_eq!(audit_record.sequence, 1);
+        assert_eq!(
+            checkpoint.key,
+            OBSERVABILITY_LAST_PROVIDER_BOUNDARY_REVIEW_CHECKPOINT_KEY
+        );
+        assert_eq!(
+            report.status,
+            ObservabilityProviderBoundaryReviewStatus::BlockedPendingProviderValidation
+        );
+        assert!(report.operations_review_ready);
+        assert!(report.export_dry_run_ready);
+        assert!(report.alert_route_dispatch_ready);
+        assert!(report.endpoint_preflight_ready);
+        assert!(report.metrics_runtime_probe_ready);
+        assert_eq!(report.missing_local_control_count, 0);
+        assert_eq!(report.remaining_provider_evidence_count, 5);
+        assert!(!report.provider_validation_performed);
+        assert!(!report.telemetry_exported);
+        assert!(!report.outbound_alerts_sent);
+        assert!(!report.external_submission_performed);
+        assert!(!report.public_network_exposed);
+        assert!(!report.service_manager_action_performed);
+        assert!(!report.sensitive_material_loaded);
+        assert!(!report.live_execution_performed);
+        assert!(!report.production_ready);
+        drop(store);
+        drop(journal);
+
+        let replayed = AppendOnlyAuditJournal::open(&audit_path).expect("journal replays");
+        assert_eq!(replayed.next_sequence(), 2);
+        let reopened = SqliteWalStateStore::open(&state_path).expect("sqlite reopens");
+        let recovered = reopened
+            .get_checkpoint(OBSERVABILITY_LAST_PROVIDER_BOUNDARY_REVIEW_CHECKPOINT_KEY)
+            .expect("checkpoint lookup succeeds")
+            .expect("provider boundary checkpoint exists");
+        assert_eq!(recovered.value, checkpoint.value);
+        let recovered_report: ObservabilityProviderBoundaryReviewReport =
+            serde_json::from_str(&recovered.value).expect("provider checkpoint parses");
+        assert_eq!(
+            recovered_report.status,
+            ObservabilityProviderBoundaryReviewStatus::BlockedPendingProviderValidation
+        );
+        assert_eq!(recovered_report.remaining_provider_evidence_count, 5);
         assert!(!recovered_report.production_ready);
 
         let _ = fs::remove_file(audit_path);
