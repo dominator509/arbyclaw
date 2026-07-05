@@ -2,13 +2,13 @@
 """Run the strongest current local hardening core aggregate validation bundle.
 
 This gate composes the existing local packaging/deployment aggregate gate, the
-execution-path aggregate gate, the operator-surface aggregate gate, the locked
-dependency license-policy validator, and the local secret/policy boundary plus
-secret backup/restore, withdrawal-policy, signer-boundary, and
-destination-boundary validators. It preserves local-only/non-secret behavior:
-no live trading, no exchange/RPC calls, no service-manager actions, no
-credential loading, no signing, publishing, withdrawals, transfers, or
-production-readiness claims.
+execution-path aggregate gate, the operator-surface aggregate gate, the
+opportunity-scenario aggregate gate, the locked dependency license-policy
+validator, and the local secret/policy boundary plus secret backup/restore,
+withdrawal-policy, signer-boundary, and destination-boundary validators. It
+preserves local-only/non-secret behavior: no live trading, no exchange/RPC
+calls, no service-manager actions, no credential loading, no signing,
+publishing, withdrawals, transfers, or production-readiness claims.
 """
 
 from __future__ import annotations
@@ -50,6 +50,10 @@ def command_set(workspace_root: pathlib.Path, args: argparse.Namespace) -> list[
         (
             "operator_surface_gate",
             [sys.executable, "scripts/validate_operator_surface_gate.py", "--json"],
+        ),
+        (
+            "opportunity_scenario_gate",
+            [sys.executable, "scripts/validate_opportunity_scenario_gate.py", "--json"],
         ),
         (
             "dependency_license_policy",
@@ -261,6 +265,33 @@ def validate_components(components: list[dict[str, Any]]) -> tuple[list[str], bo
     ):
         if operator_surface.get(field) is not False:
             errors.append(f"operator surface gate reported unsafe field {field}")
+
+    opportunity_scenario = component_by_name["opportunity_scenario_gate"]["json_report"]
+    assert opportunity_scenario is not None
+    if opportunity_scenario.get("all_components_passed") is not True:
+        errors.append("opportunity scenario gate did not pass every component")
+    if opportunity_scenario.get("component_count") != 14:
+        errors.append("opportunity scenario gate did not report exactly 14 components")
+    if opportunity_scenario.get("unsafe_side_effect_flags_detected") is not False:
+        errors.append("opportunity scenario gate detected unsafe side-effect flags")
+    for field in (
+        "external_calls_performed",
+        "external_data_downloaded",
+        "adapter_submission_performed",
+        "external_fuzzer_invoked",
+        "live_network_used",
+        "signing_or_broadcast_performed",
+        "live_execution_performed",
+        "production_ready",
+    ):
+        if opportunity_scenario.get(field) is not False:
+            errors.append(f"opportunity scenario gate reported unsafe field {field}")
+    if opportunity_scenario.get("opportunity_replay_latency_review_enforced") is not True:
+        errors.append("opportunity scenario gate did not enforce replay latency review")
+    if opportunity_scenario.get("local_validation_coverage_review_enforced") is not True:
+        errors.append("opportunity scenario gate did not enforce validation coverage review")
+    if opportunity_scenario.get("total_candidate_mentions", 0) <= 0:
+        errors.append("opportunity scenario gate did not report candidate coverage")
 
     dependency_license = component_by_name["dependency_license_policy"]["json_report"]
     assert dependency_license is not None
