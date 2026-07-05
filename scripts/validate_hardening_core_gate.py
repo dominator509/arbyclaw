@@ -3,9 +3,9 @@
 
 This gate composes the existing local packaging/deployment aggregate gate, the
 locked dependency license-policy validator, and the local secret/policy
-boundary audit validators. It preserves local-only/non-secret behavior: no live
-trading, no exchange/RPC calls, no service-manager actions, no signing,
-publishing, or production-readiness claims.
+boundary plus secret backup/restore validators. It preserves local-only/non-secret
+behavior: no live trading, no exchange/RPC calls, no service-manager actions,
+no credential loading, no signing, publishing, or production-readiness claims.
 """
 
 from __future__ import annotations
@@ -55,6 +55,19 @@ def command_set(workspace_root: pathlib.Path, args: argparse.Namespace) -> list[
                 "validate-secret-boundary-audit",
                 "--workspace",
                 str(workspace_root / "secret-boundary-audit"),
+            ],
+        ),
+        (
+            "secret_backup_restore",
+            [
+                "cargo",
+                "run",
+                "-p",
+                "arb-agent",
+                "--",
+                "validate-secret-backup-restore",
+                "--workspace",
+                str(workspace_root / "secret-backup-restore"),
             ],
         ),
         (
@@ -193,6 +206,38 @@ def validate_components(components: list[dict[str, Any]]) -> tuple[list[str], bo
     ):
         if secret_boundary.get(key) != "false":
             errors.append(f"secret boundary audit reported unsafe field {key}")
+
+    secret_backup_restore = component_by_name["secret_backup_restore"]["parsed"]
+    if secret_backup_restore.get("ready-backup-restore-review") in {None, ""}:
+        errors.append("secret backup/restore did not report a ready review")
+    if secret_backup_restore.get("blocked-backup-restore-review") in {None, ""}:
+        errors.append("secret backup/restore did not report a blocked review")
+    if secret_backup_restore.get("blocked-backup-restore-validation-codes") in {"0", None}:
+        errors.append("secret backup/restore did not report blocked validation codes")
+    for key in (
+        "backup-reference-present",
+        "backup-payload-shape-verified",
+        "restore-verification-passed",
+        "references-sanitized",
+        "review-window-valid",
+        "audit-append-failure-failed-closed",
+        "state-failure-failed-closed",
+        "state-checkpoint-recovered",
+    ):
+        if secret_backup_restore.get(key) != "true":
+            errors.append(f"secret backup/restore did not report {key}=true")
+    if secret_backup_restore.get("audit-records-replayed") != "2":
+        errors.append("secret backup/restore did not replay exactly two audit records")
+    for key in (
+        "secret-material-loaded",
+        "plaintext-decrypted",
+        "keystore-entry-written",
+        "external-secret-restored",
+        "signing-or-broadcast-performed",
+        "production-ready",
+    ):
+        if secret_backup_restore.get(key) != "false":
+            errors.append(f"secret backup/restore reported unsafe field {key}")
 
     policy_audit = component_by_name["policy_decision_audit"]["parsed"]
     if policy_audit.get("approved-policy-decision") != "true":
