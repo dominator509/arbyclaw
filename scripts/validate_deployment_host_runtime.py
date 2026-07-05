@@ -11,7 +11,10 @@ candidate audit/state path parent permissions without creating, opening,
 locking, or fsyncing runtime files. When `--run-observability-runtime` is
 provided, it composes the local observability runtime CLI output into the same
 non-secret report without starting exporters, serving public endpoints, sending
-alerts, or changing runtime deployment behavior. When `--run-graceful-shutdown`
+alerts, or changing runtime deployment behavior. When
+`--run-observability-metrics-runtime` is provided, it composes the bounded local
+metrics runtime CLI output into the same report without daemon hosting,
+telemetry export, alert delivery, public exposure, or deployment mutation. When `--run-graceful-shutdown`
 is provided, it runs the local graceful-shutdown checkpoint/reopen CLI against a
 fresh workspace without stopping services or mutating deployment state. When
 `--run-backup-restore` is provided, it runs the local runtime backup/restore
@@ -166,6 +169,11 @@ def parse_args() -> argparse.Namespace:
         help="run arb-agent validate-observability-runtime against --observability-workspace",
     )
     parser.add_argument(
+        "--run-observability-metrics-runtime",
+        action="store_true",
+        help="run arb-agent validate-observability-metrics-runtime against --observability-metrics-workspace",
+    )
+    parser.add_argument(
         "--run-runtime-panic-hook",
         action="store_true",
         help="run arb-agent validate-runtime-panic-hook against --runtime-panic-hook-workspace",
@@ -276,6 +284,11 @@ def parse_args() -> argparse.Namespace:
         "--observability-workspace",
         type=pathlib.Path,
         help="fresh non-secret workspace for validate-observability-runtime",
+    )
+    parser.add_argument(
+        "--observability-metrics-workspace",
+        type=pathlib.Path,
+        help="fresh non-secret workspace for validate-observability-metrics-runtime",
     )
     parser.add_argument(
         "--runtime-panic-hook-workspace",
@@ -1167,6 +1180,34 @@ def observability_runtime_command(
         "arb-agent",
         "--",
         "validate-observability-runtime",
+        "--workspace",
+        str(workspace),
+    ]
+
+
+def observability_metrics_runtime_command(
+    agent_bin: pathlib.Path | None, workspace: pathlib.Path
+) -> list[str]:
+    if agent_bin is not None:
+        if not agent_bin.exists():
+            raise ValueError(f"agent binary does not exist: {relative_or_absolute(agent_bin)}")
+        return [
+            str(agent_bin),
+            "validate-observability-metrics-runtime",
+            "--workspace",
+            str(workspace),
+        ]
+
+    cargo = shutil.which("cargo")
+    if cargo is None:
+        raise RuntimeError("cargo unavailable and --agent-bin was not provided")
+    return [
+        cargo,
+        "run",
+        "-p",
+        "arb-agent",
+        "--",
+        "validate-observability-metrics-runtime",
         "--workspace",
         str(workspace),
     ]
@@ -2243,6 +2284,70 @@ def run_observability_runtime(
     }
 
 
+def run_observability_metrics_runtime(
+    workspace: pathlib.Path | None,
+    agent_bin: pathlib.Path | None,
+) -> dict[str, Any]:
+    metrics_workspace = validate_fresh_workspace(
+        workspace,
+        "--observability-metrics-workspace",
+        "--run-observability-metrics-runtime",
+    )
+    command = observability_metrics_runtime_command(agent_bin, metrics_workspace)
+    completed = subprocess.run(
+        command,
+        cwd=ROOT,
+        check=False,
+        encoding="utf-8",
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        timeout=LOCAL_RUNTIME_HELPER_TIMEOUT_SECONDS,
+    )
+    parsed = parse_key_value_output(completed.stdout)
+    return {
+        "command_kind": "agent-bin" if agent_bin is not None else "cargo-run",
+        "returncode": completed.returncode,
+        "workspace": relative_or_absolute(metrics_workspace),
+        "stdout_line_count": len(completed.stdout.splitlines()),
+        "audit_records_replayed": parsed.get(
+            "observability-metrics-runtime-audit-records-replayed"
+        ),
+        "checkpoint_recovered": parsed.get(
+            "observability-metrics-runtime-checkpoint-recovered"
+        ),
+        "loopback_bind_validated": parsed.get(
+            "observability-metrics-runtime-loopback-bind-validated"
+        ),
+        "expected_scrapes": parsed.get("observability-metrics-runtime-expected-scrapes"),
+        "served_scrapes": parsed.get("observability-metrics-runtime-served-scrapes"),
+        "all_scrapes_returned_ok": parsed.get(
+            "observability-metrics-runtime-all-scrapes-returned-ok"
+        ),
+        "response_lines_consistent": parsed.get(
+            "observability-metrics-runtime-response-lines-consistent"
+        ),
+        "response_metric_lines": parsed.get(
+            "observability-metrics-runtime-response-metric-lines"
+        ),
+        "local_metrics_runtime_started": parsed.get("observability-metrics-runtime-started"),
+        "local_metrics_runtime_shutdown": parsed.get(
+            "observability-metrics-runtime-shutdown"
+        ),
+        "public_network_exposed": parsed.get(
+            "observability-metrics-runtime-public-network-exposed"
+        ),
+        "telemetry_exported": parsed.get("observability-metrics-runtime-telemetry-exported"),
+        "outbound_alerts_sent": parsed.get(
+            "observability-metrics-runtime-outbound-alerts-sent"
+        ),
+        "external_submission_performed": parsed.get("external-submission-performed"),
+        "live_execution_performed": parsed.get("live-execution-performed"),
+        "production_ready": parsed.get("production-ready"),
+        "observability_metrics_runtime_passed": completed.returncode == 0,
+    }
+
+
 def run_runtime_panic_hook(
     workspace: pathlib.Path | None,
     agent_bin: pathlib.Path | None,
@@ -2644,6 +2749,14 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
         )
         if observability_report["returncode"] != 0:
             raise RuntimeError("validate-observability-runtime failed")
+    observability_metrics_report = None
+    if args.run_observability_metrics_runtime:
+        observability_metrics_report = run_observability_metrics_runtime(
+            args.observability_metrics_workspace,
+            args.agent_bin,
+        )
+        if observability_metrics_report["returncode"] != 0:
+            raise RuntimeError("validate-observability-metrics-runtime failed")
     panic_hook_report = None
     if args.run_runtime_panic_hook:
         panic_hook_report = run_runtime_panic_hook(
@@ -2710,6 +2823,8 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
         "retention_preflight_requested": args.run_retention_preflight,
         "observability_runtime": observability_report,
         "observability_runtime_requested": args.run_observability_runtime,
+        "observability_metrics_runtime": observability_metrics_report,
+        "observability_metrics_runtime_requested": args.run_observability_metrics_runtime,
         "runtime_panic_hook": panic_hook_report,
         "runtime_panic_hook_requested": args.run_runtime_panic_hook,
         "dashboard_runtime": dashboard_report,
@@ -3611,6 +3726,74 @@ def print_text_report(report: dict[str, Any]) -> None:
         )
         print(f"live-execution-performed: {observability.get('live_execution_performed', '')}")
         print(f"production-ready: {observability.get('production_ready', '')}")
+    if report["observability_metrics_runtime"] is not None:
+        metrics_runtime = report["observability_metrics_runtime"]
+        print(
+            "observability metrics runtime passed: "
+            f"{str(metrics_runtime['observability_metrics_runtime_passed']).lower()}"
+        )
+        print(f"observability metrics runtime workspace: {metrics_runtime['workspace']}")
+        print(
+            "observability-metrics-runtime-audit-records-replayed: "
+            f"{metrics_runtime.get('audit_records_replayed', '')}"
+        )
+        print(
+            "observability-metrics-runtime-checkpoint-recovered: "
+            f"{metrics_runtime.get('checkpoint_recovered', '')}"
+        )
+        print(
+            "observability-metrics-runtime-loopback-bind-validated: "
+            f"{metrics_runtime.get('loopback_bind_validated', '')}"
+        )
+        print(
+            "observability-metrics-runtime-expected-scrapes: "
+            f"{metrics_runtime.get('expected_scrapes', '')}"
+        )
+        print(
+            "observability-metrics-runtime-served-scrapes: "
+            f"{metrics_runtime.get('served_scrapes', '')}"
+        )
+        print(
+            "observability-metrics-runtime-all-scrapes-returned-ok: "
+            f"{metrics_runtime.get('all_scrapes_returned_ok', '')}"
+        )
+        print(
+            "observability-metrics-runtime-response-lines-consistent: "
+            f"{metrics_runtime.get('response_lines_consistent', '')}"
+        )
+        print(
+            "observability-metrics-runtime-response-metric-lines: "
+            f"{metrics_runtime.get('response_metric_lines', '')}"
+        )
+        print(
+            "observability-metrics-runtime-started: "
+            f"{metrics_runtime.get('local_metrics_runtime_started', '')}"
+        )
+        print(
+            "observability-metrics-runtime-shutdown: "
+            f"{metrics_runtime.get('local_metrics_runtime_shutdown', '')}"
+        )
+        print(
+            "observability-metrics-runtime-public-network-exposed: "
+            f"{metrics_runtime.get('public_network_exposed', '')}"
+        )
+        print(
+            "observability-metrics-runtime-telemetry-exported: "
+            f"{metrics_runtime.get('telemetry_exported', '')}"
+        )
+        print(
+            "observability-metrics-runtime-outbound-alerts-sent: "
+            f"{metrics_runtime.get('outbound_alerts_sent', '')}"
+        )
+        print(
+            "external-submission-performed: "
+            f"{metrics_runtime.get('external_submission_performed', '')}"
+        )
+        print(
+            "live-execution-performed: "
+            f"{metrics_runtime.get('live_execution_performed', '')}"
+        )
+        print(f"production-ready: {metrics_runtime.get('production_ready', '')}")
     if report["runtime_panic_hook"] is not None:
         panic_hook = report["runtime_panic_hook"]
         print(

@@ -42,6 +42,7 @@ EXPECTED_COMPONENTS = {
     "filesystem_preflight": "filesystem_preflight_requested",
     "retention_preflight": "retention_preflight_requested",
     "observability_runtime": "observability_runtime_requested",
+    "observability_metrics_runtime": "observability_metrics_runtime_requested",
     "runtime_panic_hook": "runtime_panic_hook_requested",
     "dashboard_runtime": "dashboard_runtime_requested",
     "communications_runtime": "communications_runtime_requested",
@@ -547,6 +548,9 @@ def build_command(args: argparse.Namespace, workspace: pathlib.Path) -> list[str
         "--run-observability-runtime",
         "--observability-workspace",
         str(workspace / "observability-runtime"),
+        "--run-observability-metrics-runtime",
+        "--observability-metrics-workspace",
+        str(workspace / "observability-metrics-runtime"),
         "--run-runtime-panic-hook",
         "--runtime-panic-hook-workspace",
         str(workspace / "runtime-panic-hook"),
@@ -591,6 +595,54 @@ def validate_report(report: dict[str, Any]) -> list[str]:
         key = path.rsplit(".", 1)[-1]
         if key in DANGEROUS_TRUE_KEYS and value:
             errors.append(f"unsafe side-effect flag set true at {path}")
+
+    metrics_runtime = report.get("observability_metrics_runtime")
+    if not isinstance(metrics_runtime, dict):
+        errors.append("observability_metrics_runtime report missing or invalid")
+    else:
+        if metrics_runtime.get("observability_metrics_runtime_passed") is not True:
+            errors.append("observability metrics runtime was not marked as passed")
+        for key in (
+            "checkpoint_recovered",
+            "loopback_bind_validated",
+            "all_scrapes_returned_ok",
+            "response_lines_consistent",
+            "local_metrics_runtime_started",
+            "local_metrics_runtime_shutdown",
+        ):
+            if metrics_runtime.get(key) != "true":
+                errors.append(f"observability metrics runtime {key} was not true")
+        for key in (
+            "public_network_exposed",
+            "telemetry_exported",
+            "outbound_alerts_sent",
+            "external_submission_performed",
+            "live_execution_performed",
+            "production_ready",
+        ):
+            if metrics_runtime.get(key) != "false":
+                errors.append(f"observability metrics runtime {key} was not false")
+        for key, expected in (
+            ("audit_records_replayed", 1),
+            ("expected_scrapes", 3),
+            ("served_scrapes", 3),
+        ):
+            try:
+                if int(metrics_runtime.get(key, "0")) != expected:
+                    errors.append(
+                        f"observability metrics runtime {key} was not {expected}"
+                    )
+            except ValueError:
+                errors.append(f"observability metrics runtime {key} was not an integer")
+        try:
+            if int(metrics_runtime.get("response_metric_lines", "0")) <= 0:
+                errors.append(
+                    "observability metrics runtime response_metric_lines was not positive"
+                )
+        except ValueError:
+            errors.append(
+                "observability metrics runtime response_metric_lines was not an integer"
+            )
 
     runtime_smoke = report.get("runtime_smoke")
     if not isinstance(runtime_smoke, dict):
