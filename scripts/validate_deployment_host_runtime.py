@@ -87,6 +87,11 @@ def parse_args() -> argparse.Namespace:
         help="run arb-agent validate-runtime-config-reload against --runtime-config-reload-workspace",
     )
     parser.add_argument(
+        "--run-sqlite-schema-migration",
+        action="store_true",
+        help="run arb-agent validate-sqlite-wal-schema-migration against --sqlite-schema-migration-workspace",
+    )
+    parser.add_argument(
         "--run-graceful-shutdown",
         action="store_true",
         help="run arb-agent validate-runtime-graceful-shutdown against --graceful-shutdown-workspace",
@@ -192,6 +197,11 @@ def parse_args() -> argparse.Namespace:
         "--runtime-config-reload-workspace",
         type=pathlib.Path,
         help="fresh non-secret workspace for validate-runtime-config-reload",
+    )
+    parser.add_argument(
+        "--sqlite-schema-migration-workspace",
+        type=pathlib.Path,
+        help="fresh non-secret workspace for validate-sqlite-wal-schema-migration",
     )
     parser.add_argument(
         "--graceful-shutdown-workspace",
@@ -741,6 +751,34 @@ def runtime_config_reload_command(
         "arb-agent",
         "--",
         "validate-runtime-config-reload",
+        "--workspace",
+        str(workspace),
+    ]
+
+
+def sqlite_schema_migration_command(
+    agent_bin: pathlib.Path | None, workspace: pathlib.Path
+) -> list[str]:
+    if agent_bin is not None:
+        if not agent_bin.exists():
+            raise ValueError(f"agent binary does not exist: {relative_or_absolute(agent_bin)}")
+        return [
+            str(agent_bin),
+            "validate-sqlite-wal-schema-migration",
+            "--workspace",
+            str(workspace),
+        ]
+
+    cargo = shutil.which("cargo")
+    if cargo is None:
+        raise RuntimeError("cargo unavailable and --agent-bin was not provided")
+    return [
+        cargo,
+        "run",
+        "-p",
+        "arb-agent",
+        "--",
+        "validate-sqlite-wal-schema-migration",
         "--workspace",
         str(workspace),
     ]
@@ -1375,6 +1413,48 @@ def run_runtime_config_reload(
         "live_execution_performed": parsed.get("live-execution-performed"),
         "production_ready": parsed.get("production-ready"),
         "runtime_config_reload_passed": completed.returncode == 0,
+    }
+
+
+def run_sqlite_schema_migration(
+    workspace: pathlib.Path | None,
+    agent_bin: pathlib.Path | None,
+) -> dict[str, Any]:
+    migration_workspace = validate_fresh_workspace(
+        workspace,
+        "--sqlite-schema-migration-workspace",
+        "--run-sqlite-schema-migration",
+    )
+    command = sqlite_schema_migration_command(agent_bin, migration_workspace)
+    completed = subprocess.run(
+        command,
+        cwd=ROOT,
+        check=False,
+        encoding="utf-8",
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        timeout=LOCAL_RUNTIME_HELPER_TIMEOUT_SECONDS,
+    )
+    parsed = parse_key_value_output(completed.stdout)
+    return {
+        "command_kind": "agent-bin" if agent_bin is not None else "cargo-run",
+        "returncode": completed.returncode,
+        "workspace": relative_or_absolute(migration_workspace),
+        "stdout_line_count": len(completed.stdout.splitlines()),
+        "status": parsed.get("sqlite-wal-schema-migration-status"),
+        "legacy_pre_schema_version": parsed.get("legacy-pre-schema-version"),
+        "migrated_schema_version": parsed.get("migrated-schema-version"),
+        "expected_schema_version": parsed.get("expected-schema-version"),
+        "legacy_checkpoint_preserved": parsed.get("legacy-checkpoint-preserved"),
+        "future_version_rejected": parsed.get("future-version-rejected"),
+        "migration_performed": parsed.get("migration-performed"),
+        "service_manager_action_performed": parsed.get("service-manager-action-performed"),
+        "external_network_used": parsed.get("external-network-used"),
+        "secret_material_recorded": parsed.get("secret-material-recorded"),
+        "live_execution_performed": parsed.get("live-execution-performed"),
+        "production_ready": parsed.get("production-ready"),
+        "sqlite_schema_migration_passed": completed.returncode == 0,
     }
 
 
@@ -2282,6 +2362,14 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
         )
         if runtime_config_reload_report["returncode"] != 0:
             raise RuntimeError("validate-runtime-config-reload failed")
+    sqlite_schema_migration_report = None
+    if args.run_sqlite_schema_migration:
+        sqlite_schema_migration_report = run_sqlite_schema_migration(
+            args.sqlite_schema_migration_workspace,
+            args.agent_bin,
+        )
+        if sqlite_schema_migration_report["returncode"] != 0:
+            raise RuntimeError("validate-sqlite-wal-schema-migration failed")
     graceful_shutdown_report = None
     if args.run_graceful_shutdown:
         graceful_shutdown_report = run_graceful_shutdown(
@@ -2414,6 +2502,8 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
         "audit_durability_requested": args.run_audit_durability,
         "runtime_config_reload": runtime_config_reload_report,
         "runtime_config_reload_requested": args.run_runtime_config_reload,
+        "sqlite_schema_migration": sqlite_schema_migration_report,
+        "sqlite_schema_migration_requested": args.run_sqlite_schema_migration,
         "graceful_shutdown": graceful_shutdown_report,
         "graceful_shutdown_requested": args.run_graceful_shutdown,
         "backup_restore": backup_restore_report,
@@ -2456,7 +2546,7 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
         "remaining_external_evidence": [
             "operator-controlled service start/shutdown/restart evidence",
             "deployment-host audit and SQLite recovery evidence under service lifecycle",
-            "deployment-host SQLite schema migration execution evidence",
+            "deployment-host SQLite schema migration execution evidence beyond local fixture validation",
             "physical disk-full fail-closed evidence",
             "deployment-host retention/rotation execution evidence",
             "rollback drill evidence",
@@ -2486,6 +2576,10 @@ def print_text_report(report: dict[str, Any]) -> None:
     print(
         "runtime config reload requested: "
         f"{str(report['runtime_config_reload_requested']).lower()}"
+    )
+    print(
+        "sqlite schema migration requested: "
+        f"{str(report['sqlite_schema_migration_requested']).lower()}"
     )
     print(
         "graceful shutdown requested: "

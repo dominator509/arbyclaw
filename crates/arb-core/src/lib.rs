@@ -488,8 +488,10 @@ pub use execution_adapter::{
 };
 
 pub use state::{
-    InMemoryStateStore, SqliteWalDurabilityReport, SqliteWalStateStore, StateCheckpoint,
-    StateStore, StateStoreError, SQLITE_WAL_DURABILITY_VERSION, SQLITE_WAL_STATE_SCHEMA_VERSION,
+    validate_sqlite_wal_schema_migration, InMemoryStateStore, SqliteWalDurabilityReport,
+    SqliteWalSchemaMigrationStatus, SqliteWalSchemaMigrationValidationReport, SqliteWalStateStore,
+    StateCheckpoint, StateStore, StateStoreError, SQLITE_WAL_DURABILITY_VERSION,
+    SQLITE_WAL_STATE_SCHEMA_VERSION,
 };
 
 pub use runtime::{

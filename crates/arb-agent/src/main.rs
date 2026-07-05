@@ -106,47 +106,48 @@ use arb_core::{
     validate_opportunity_planner_handoff_with_trace, validate_paid_market_data_provider_evaluation,
     validate_remote_command_envelope, validate_rollback_execution_transcript,
     validate_runtime_config_reload, validate_service_manager_lifecycle_rehearsal,
-    validate_service_manager_lifecycle_transcript, validate_strategy_profile_replay_corpus,
-    validate_strategy_profitability_tuning, AgentConfig, AgenticHandoffPackager,
-    AgenticHandoffReviewRecord, AgenticHandoffReviewRequest, AgenticHandoffReviewStatus,
-    AppendOnlyAuditJournal, ApprovedDestinationEntry, AuditDeploymentDiskFullTranscript,
-    AuditDeploymentDiskFullTranscriptStatus, AuditDeploymentRetentionTranscript,
-    AuditDeploymentRetentionTranscriptStatus, AuditEvent, AuditEventKind, AuditJournalFileMetadata,
-    AuditRecord, AuditRetentionExecutionRequest, AuditRetentionPolicy, AuditValue,
-    BacktestDatasetDefinition, BacktestScenarioDefinition, BuildIdentity,
-    CexBalanceSnapshotTranscript, CexBalanceSnapshotTranscriptFormat, CexCredentialPermission,
-    CexCredentialScopeReviewInput, CexCredentialScopeReviewStatus, CexExchangeMarketDataFormat,
-    CexMarketDataRequestKind, CexMarketDataRequestPlan, CexMockMarketDataTranscript,
-    CexOrderLifecycleRecord, CexOrderLifecycleTranscript, CexOrderLifecycleTranscriptFormat,
-    CexOrderRequest, CexOrderSide, CexOrderType, CexOrderValidationRecord, CexRateLimitObservation,
-    CexRateLimitScope, CexRateLimitStatus, CexTimeInForce, ChannelAdapterValidationReport,
-    ChannelAdapterValidationRequest, ChannelAdapterValidationStatus,
-    ChannelSessionValidationReport, ChannelSessionValidationStatus, CommunicationBoundaryConfig,
-    ComponentHealthStatus, ConfigError, ConfigMigrationStatus, DashboardAccessContext,
-    DashboardAccessSource, DashboardBoundaryConfig, DashboardHostedRequestMethod,
-    DashboardHostedRequestPreflight, DashboardHostedRequestValidation,
-    DashboardHostedRequestValidationStatus, DashboardHostedRuntimeReadinessReviewRequest,
-    DashboardHostedRuntimeReadinessReviewStatus, DashboardHostedSecurityPolicy,
-    DashboardHostedSecurityReviewStatus, DashboardHostedSessionValidationStatus, DashboardPanel,
-    DashboardPanelItem, DashboardPanelKind, DashboardRenderRequest, DashboardRenderer,
-    DashboardSeverity, DashboardSnapshot, DeploymentFailureCaptureTranscript,
-    DeploymentFailureCaptureTranscriptStatus, DeploymentResponseDrillRehearsalRequest,
-    DeploymentResponseDrillRehearsalStatus, DestinationAllowlist, DestinationApprovalSource,
-    DestinationOwnershipReviewReport, DestinationOwnershipReviewStatus, DestinationPolicy,
-    DeterministicAgenticHandoffPackager, DeterministicDashboardRenderer,
-    DeterministicExecutionAdapterBoundary, DeterministicExecutionPlanner,
-    DeterministicNotificationBoundary, DeterministicObservabilityCollector,
-    DeterministicOperatorCommandRouter, DeterministicOpportunityEngine,
-    DeterministicValidationHarness, DexProtocolRiskReviewRequest, DexProtocolRiskReviewStatus,
-    DexRequestPlan, DexRequestPlanKind, DexResponseTranscript, DexRouteKind, DexSimulationStatus,
-    DexSwapLifecycleRecord, DexSwapMode, DexSwapQuoteRequest, DexSwapQuoteResponse,
-    DexSwapValidationRecord, ExecutionAdapter, ExecutionAdapterConfig, ExecutionAdapterRequest,
-    ExecutionAdapterRunStatus, ExecutionIntent, ExecutionIntentKind, ExecutionPlanStatus,
-    ExecutionPlanner, ExecutionPlannerConfig, ExecutionPlannerRequest, ExecutionScope,
-    ExpectedValidationOutcome, FeeAdjustedEdge, FeeEstimate, FeeModelError, FeeProvider,
-    FeeSchedule, FeeScheduleReconciliationReviewRequest, FeeScheduleReconciliationReviewStatus,
-    FeeScheduleVerificationInput, FeeScheduleVerificationReport, FeeScheduleVerificationStatus,
-    FixtureKind, FuzzCorpusDefinition, FuzzSeedRecord, FuzzTargetKind, HealthStatus,
+    validate_service_manager_lifecycle_transcript, validate_sqlite_wal_schema_migration,
+    validate_strategy_profile_replay_corpus, validate_strategy_profitability_tuning, AgentConfig,
+    AgenticHandoffPackager, AgenticHandoffReviewRecord, AgenticHandoffReviewRequest,
+    AgenticHandoffReviewStatus, AppendOnlyAuditJournal, ApprovedDestinationEntry,
+    AuditDeploymentDiskFullTranscript, AuditDeploymentDiskFullTranscriptStatus,
+    AuditDeploymentRetentionTranscript, AuditDeploymentRetentionTranscriptStatus, AuditEvent,
+    AuditEventKind, AuditJournalFileMetadata, AuditRecord, AuditRetentionExecutionRequest,
+    AuditRetentionPolicy, AuditValue, BacktestDatasetDefinition, BacktestScenarioDefinition,
+    BuildIdentity, CexBalanceSnapshotTranscript, CexBalanceSnapshotTranscriptFormat,
+    CexCredentialPermission, CexCredentialScopeReviewInput, CexCredentialScopeReviewStatus,
+    CexExchangeMarketDataFormat, CexMarketDataRequestKind, CexMarketDataRequestPlan,
+    CexMockMarketDataTranscript, CexOrderLifecycleRecord, CexOrderLifecycleTranscript,
+    CexOrderLifecycleTranscriptFormat, CexOrderRequest, CexOrderSide, CexOrderType,
+    CexOrderValidationRecord, CexRateLimitObservation, CexRateLimitScope, CexRateLimitStatus,
+    CexTimeInForce, ChannelAdapterValidationReport, ChannelAdapterValidationRequest,
+    ChannelAdapterValidationStatus, ChannelSessionValidationReport, ChannelSessionValidationStatus,
+    CommunicationBoundaryConfig, ComponentHealthStatus, ConfigError, ConfigMigrationStatus,
+    DashboardAccessContext, DashboardAccessSource, DashboardBoundaryConfig,
+    DashboardHostedRequestMethod, DashboardHostedRequestPreflight,
+    DashboardHostedRequestValidation, DashboardHostedRequestValidationStatus,
+    DashboardHostedRuntimeReadinessReviewRequest, DashboardHostedRuntimeReadinessReviewStatus,
+    DashboardHostedSecurityPolicy, DashboardHostedSecurityReviewStatus,
+    DashboardHostedSessionValidationStatus, DashboardPanel, DashboardPanelItem, DashboardPanelKind,
+    DashboardRenderRequest, DashboardRenderer, DashboardSeverity, DashboardSnapshot,
+    DeploymentFailureCaptureTranscript, DeploymentFailureCaptureTranscriptStatus,
+    DeploymentResponseDrillRehearsalRequest, DeploymentResponseDrillRehearsalStatus,
+    DestinationAllowlist, DestinationApprovalSource, DestinationOwnershipReviewReport,
+    DestinationOwnershipReviewStatus, DestinationPolicy, DeterministicAgenticHandoffPackager,
+    DeterministicDashboardRenderer, DeterministicExecutionAdapterBoundary,
+    DeterministicExecutionPlanner, DeterministicNotificationBoundary,
+    DeterministicObservabilityCollector, DeterministicOperatorCommandRouter,
+    DeterministicOpportunityEngine, DeterministicValidationHarness, DexProtocolRiskReviewRequest,
+    DexProtocolRiskReviewStatus, DexRequestPlan, DexRequestPlanKind, DexResponseTranscript,
+    DexRouteKind, DexSimulationStatus, DexSwapLifecycleRecord, DexSwapMode, DexSwapQuoteRequest,
+    DexSwapQuoteResponse, DexSwapValidationRecord, ExecutionAdapter, ExecutionAdapterConfig,
+    ExecutionAdapterRequest, ExecutionAdapterRunStatus, ExecutionIntent, ExecutionIntentKind,
+    ExecutionPlanStatus, ExecutionPlanner, ExecutionPlannerConfig, ExecutionPlannerRequest,
+    ExecutionScope, ExpectedValidationOutcome, FeeAdjustedEdge, FeeEstimate, FeeModelError,
+    FeeProvider, FeeSchedule, FeeScheduleReconciliationReviewRequest,
+    FeeScheduleReconciliationReviewStatus, FeeScheduleVerificationInput,
+    FeeScheduleVerificationReport, FeeScheduleVerificationStatus, FixtureKind,
+    FuzzCorpusDefinition, FuzzSeedRecord, FuzzTargetKind, HealthStatus,
     HistoricalMarketDataPersistenceInput, HistoricalMarketDataPersistenceReport,
     HistoricalMarketDataPersistenceStatus, IncidentResponseExecutionTranscript,
     IncidentResponseExecutionTranscriptStatus, LiquidityRole, LocalFuzzCorpusReplayRequest,
@@ -208,17 +209,17 @@ use arb_core::{
     SignerAuthorizationEnvelopeStatus, SignerRequest, SignerRequestRecord, SignerRequestStatus,
     SignerRuntimeIsolationReviewReport, SignerRuntimeIsolationReviewRequest,
     SignerRuntimeIsolationReviewStatus, SignerSecretScopeReviewReport,
-    SignerSecretScopeReviewRequest, SignerSecretScopeReviewStatus, SqliteWalStateStore,
-    StateCheckpoint, StateStore, StateStoreError, StrategyPolicyConstraintStatus, StrategyProfile,
-    StrategyProfileReplayValidationStatus, StrategyProfitabilityTuningValidationStatus,
-    StructuredLogEvent, StructuredLogField, ValidationExecutionMode, ValidationFixtureRecord,
-    ValidationHarness, ValidationHarnessConfig, ValidationPlan, ValidationRunRequest,
-    ValidationRunStatus, ValidationSuiteKind, ValidationTestCase, VenueKind, VenueRef,
-    Web3BroadcastAdapterControlReviewReport, Web3BroadcastAdapterControlReviewRequest,
-    Web3BroadcastAdapterControlReviewStatus, Web3BroadcastReadinessReport,
-    Web3BroadcastReadinessRequest, Web3BroadcastReadinessStatus, Web3NonceReservationReport,
-    Web3NonceReservationRequest, Web3NonceReservationStatus, Web3PreSignSafetyReviewReport,
-    Web3PreSignSafetyReviewRequest, Web3PreSignSafetyReviewStatus,
+    SignerSecretScopeReviewRequest, SignerSecretScopeReviewStatus, SqliteWalSchemaMigrationStatus,
+    SqliteWalStateStore, StateCheckpoint, StateStore, StateStoreError,
+    StrategyPolicyConstraintStatus, StrategyProfile, StrategyProfileReplayValidationStatus,
+    StrategyProfitabilityTuningValidationStatus, StructuredLogEvent, StructuredLogField,
+    ValidationExecutionMode, ValidationFixtureRecord, ValidationHarness, ValidationHarnessConfig,
+    ValidationPlan, ValidationRunRequest, ValidationRunStatus, ValidationSuiteKind,
+    ValidationTestCase, VenueKind, VenueRef, Web3BroadcastAdapterControlReviewReport,
+    Web3BroadcastAdapterControlReviewRequest, Web3BroadcastAdapterControlReviewStatus,
+    Web3BroadcastReadinessReport, Web3BroadcastReadinessRequest, Web3BroadcastReadinessStatus,
+    Web3NonceReservationReport, Web3NonceReservationRequest, Web3NonceReservationStatus,
+    Web3PreSignSafetyReviewReport, Web3PreSignSafetyReviewRequest, Web3PreSignSafetyReviewStatus,
     Web3ProviderNonceReconciliationReport, Web3ProviderNonceReconciliationRequest,
     Web3ProviderNonceReconciliationStatus, Web3RawTransactionSerializationReviewReport,
     Web3RawTransactionSerializationReviewRequest, Web3RawTransactionSerializationReviewStatus,
@@ -536,6 +537,7 @@ fn is_local_workspace_validation_command(command: &str) -> bool {
             | "validate-connector-lifecycle-audit"
             | "validate-audit-retention-execution"
             | "validate-audit-durability"
+            | "validate-sqlite-wal-schema-migration"
             | "validate-runtime-config-reload"
             | "validate-runtime-graceful-shutdown"
             | "validate-runtime-backup-restore"
@@ -685,6 +687,9 @@ fn run_local_workspace_validation_command(
         "validate-connector-lifecycle-audit" => run_connector_lifecycle_audit_validation(&options),
         "validate-audit-retention-execution" => run_audit_retention_execution_validation(&options),
         "validate-audit-durability" => run_audit_durability_validation(&options),
+        "validate-sqlite-wal-schema-migration" => {
+            run_sqlite_wal_schema_migration_validation(&options)
+        }
         "validate-runtime-config-reload" => run_runtime_config_reload_validation(&options),
         "validate-runtime-graceful-shutdown" => run_runtime_graceful_shutdown_validation(&options),
         "validate-runtime-backup-restore" => run_runtime_backup_restore_validation(&options),
@@ -920,6 +925,7 @@ fn print_usage() {
     println!("       arb-agent validate-connector-lifecycle-audit --workspace <fresh-dir>");
     println!("       arb-agent validate-audit-durability --workspace <fresh-dir>");
     println!("       arb-agent validate-audit-retention-execution --workspace <fresh-dir>");
+    println!("       arb-agent validate-sqlite-wal-schema-migration --workspace <fresh-dir>");
     println!("       arb-agent validate-deployment-audit-sqlite-transcript");
     println!("       arb-agent validate-deployment-backup-restore-transcript");
     println!("       arb-agent validate-deployment-graceful-shutdown-transcript");
@@ -5202,6 +5208,78 @@ fn run_audit_durability_validation(
         report.unresolved_blockers.len()
     );
     println!("production-ready: {}", report.production_ready);
+    Ok(())
+}
+
+fn run_sqlite_wal_schema_migration_validation(
+    options: &LocalValidationRunOptions,
+) -> Result<(), AgentCliError> {
+    prepare_fresh_workspace(&options.workspace_dir)?;
+    let state_path = options
+        .workspace_dir
+        .join("sqlite-wal-schema-migration.sqlite3");
+    let report = validate_sqlite_wal_schema_migration(&state_path)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+
+    println!("sqlite-wal-schema-migration: validation passed");
+    println!(
+        "sqlite-wal-schema-migration-status: {}",
+        sqlite_wal_schema_migration_status_label(report.status)
+    );
+    println!(
+        "legacy-pre-schema-version: {}",
+        report.legacy_pre_schema_version
+    );
+    println!(
+        "migrated-schema-version: {}",
+        report.migrated_schema_version
+    );
+    println!(
+        "expected-schema-version: {}",
+        report.expected_schema_version
+    );
+    println!(
+        "legacy-checkpoint-preserved: {}",
+        report.legacy_checkpoint_preserved
+    );
+    println!(
+        "future-version-rejected: {}",
+        report.future_version_rejected
+    );
+    println!("migration-performed: {}", report.migration_performed);
+    println!(
+        "service-manager-action-performed: {}",
+        report.service_manager_action_performed
+    );
+    println!("external-network-used: {}", report.external_network_used);
+    println!(
+        "secret-material-recorded: {}",
+        report.secret_material_recorded
+    );
+    println!(
+        "live-execution-performed: {}",
+        report.live_execution_performed
+    );
+    println!("production-ready: {}", report.production_ready);
+
+    if report.status != SqliteWalSchemaMigrationStatus::ReadyForLocalReview
+        || report.legacy_pre_schema_version != 0
+        || report.migrated_schema_version != report.expected_schema_version
+        || !report.legacy_checkpoint_preserved
+        || !report.future_version_rejected
+        || !report.migration_performed
+        || report.service_manager_action_performed
+        || report.external_network_used
+        || report.secret_material_recorded
+        || report.live_execution_performed
+        || report.production_ready
+    {
+        return Err(AgentCliError::Validation(
+            "sqlite WAL schema migration validation did not satisfy local safety invariants"
+                .to_owned(),
+        ));
+    }
+
     Ok(())
 }
 
@@ -16428,6 +16506,15 @@ const fn runtime_config_reload_status_label(status: RuntimeConfigReloadStatus) -
     }
 }
 
+const fn sqlite_wal_schema_migration_status_label(
+    status: SqliteWalSchemaMigrationStatus,
+) -> &'static str {
+    match status {
+        SqliteWalSchemaMigrationStatus::ReadyForLocalReview => "ready-for-local-review",
+        SqliteWalSchemaMigrationStatus::Blocked => "blocked",
+    }
+}
+
 const fn opportunity_replay_status_label(status: OpportunityReplayStatus) -> &'static str {
     match status {
         OpportunityReplayStatus::Passed => "passed",
@@ -16604,10 +16691,11 @@ mod tests {
         run_runtime_panic_hook_validation, run_runtime_permission_denial_validation,
         run_runtime_restart_recovery_validation, run_secret_backup_restore_validation,
         run_secret_boundary_audit_validation, run_signer_boundary_audit_validation,
-        run_strategy_constrained_planner_validation, run_strategy_profitability_tuning_validation,
-        run_strategy_replay_corpus_validation, run_withdrawal_policy_validation,
-        runtime_config_reload_status_label, runtime_recovery_disposition_status,
-        runtime_supervised_restart_audit_path, runtime_supervised_restart_state_path,
+        run_sqlite_wal_schema_migration_validation, run_strategy_constrained_planner_validation,
+        run_strategy_profitability_tuning_validation, run_strategy_replay_corpus_validation,
+        run_withdrawal_policy_validation, runtime_config_reload_status_label,
+        runtime_recovery_disposition_status, runtime_supervised_restart_audit_path,
+        runtime_supervised_restart_state_path, sqlite_wal_schema_migration_status_label,
         strategy_profile_replay_status_label, strategy_profitability_tuning_status_label,
         validation_corpus_status_label, validation_run_status_label,
         write_runtime_supervised_restart_seed, ConfigMigrationStatus, ExecutionAdapterRunStatus,
@@ -16616,8 +16704,9 @@ mod tests {
         MarketDataProviderPreflightStatus, MarketDataQualityAssessmentStatus,
         MarketDataReconnectPlanStatus, OpportunityPlannerHandoffStatus, OpportunityReplayStatus,
         PaidMarketDataProviderEvaluationStatus, RuntimeConfigReloadStatus,
-        RuntimeRestartRecoveryDisposition, StrategyProfileReplayValidationStatus,
-        StrategyProfitabilityTuningValidationStatus, ValidationRunStatus,
+        RuntimeRestartRecoveryDisposition, SqliteWalSchemaMigrationStatus,
+        StrategyProfileReplayValidationStatus, StrategyProfitabilityTuningValidationStatus,
+        ValidationRunStatus,
     };
     use std::{
         env, fs,
@@ -16645,6 +16734,20 @@ mod tests {
         );
         assert_eq!(
             runtime_config_reload_status_label(RuntimeConfigReloadStatus::Blocked),
+            "blocked"
+        );
+    }
+
+    #[test]
+    fn sqlite_wal_schema_migration_status_labels_are_operator_facing() {
+        assert_eq!(
+            sqlite_wal_schema_migration_status_label(
+                SqliteWalSchemaMigrationStatus::ReadyForLocalReview
+            ),
+            "ready-for-local-review"
+        );
+        assert_eq!(
+            sqlite_wal_schema_migration_status_label(SqliteWalSchemaMigrationStatus::Blocked),
             "blocked"
         );
     }
@@ -17007,6 +17110,23 @@ mod tests {
             .expect("local runtime config reload should pass");
         assert!(workspace.join("runtime-config-initial.toml").exists());
         assert!(workspace.join("runtime-config-reloaded.toml").exists());
+        cleanup_workspace(&workspace);
+    }
+
+    #[test]
+    fn sqlite_wal_schema_migration_validation_runs_local_files_only() {
+        let workspace = temp_workspace_path("sqlite-wal-schema-migration");
+        let options = LocalValidationRunOptions {
+            workspace_dir: workspace.clone(),
+        };
+        run_sqlite_wal_schema_migration_validation(&options)
+            .expect("local sqlite WAL schema migration should pass");
+        assert!(workspace
+            .join("sqlite-wal-schema-migration.sqlite3")
+            .exists());
+        assert!(workspace
+            .join("sqlite-wal-schema-migration.future.sqlite")
+            .exists());
         cleanup_workspace(&workspace);
     }
 

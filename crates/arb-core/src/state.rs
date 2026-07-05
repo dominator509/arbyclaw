@@ -106,6 +106,50 @@ pub struct SqliteWalDurabilityReport {
     pub secret_material_recorded: bool,
 }
 
+/// Status for local SQLite WAL schema migration validation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SqliteWalSchemaMigrationStatus {
+    /// Legacy local schema migrated and future schema rejection was observed.
+    ReadyForLocalReview,
+    /// Required local schema migration evidence was not produced.
+    Blocked,
+}
+
+/// Non-secret report for local SQLite WAL schema migration validation.
+///
+/// This report records only version numbers and booleans. It does not include
+/// filesystem paths, checkpoint values, database contents, secrets, or embedded
+/// artifacts.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct SqliteWalSchemaMigrationValidationReport {
+    /// Overall local validation status.
+    pub status: SqliteWalSchemaMigrationStatus,
+    /// Schema version on the local legacy fixture before opening through the store.
+    pub legacy_pre_schema_version: i64,
+    /// Schema version observed after local migration.
+    pub migrated_schema_version: i64,
+    /// Schema version supported by this binary.
+    pub expected_schema_version: i64,
+    /// True when the legacy checkpoint remained readable after migration.
+    pub legacy_checkpoint_preserved: bool,
+    /// True when an intentionally future-versioned local fixture was rejected.
+    pub future_version_rejected: bool,
+    /// True when the local migration path was exercised.
+    pub migration_performed: bool,
+    /// Service-manager actions are never performed by this validation boundary.
+    pub service_manager_action_performed: bool,
+    /// External network access is never performed by this validation boundary.
+    pub external_network_used: bool,
+    /// Secret material is never recorded by this validation boundary.
+    pub secret_material_recorded: bool,
+    /// Live execution is never performed by this validation boundary.
+    pub live_execution_performed: bool,
+    /// This validation boundary never claims production readiness.
+    pub production_ready: bool,
+}
+
 impl SqliteWalStateStore {
     /// Open or create a SQLite WAL-backed state store at `path`.
     ///
@@ -354,6 +398,157 @@ impl SqliteWalStateStore {
     }
 }
 
+/// Validate local SQLite WAL schema migration and future-version rejection.
+///
+/// The supplied path must point to a non-existing local fixture database. The
+/// validator creates a legacy v0 checkpoint table, opens it through
+/// `SqliteWalStateStore` to exercise the real migration path, verifies the
+/// non-secret checkpoint survived, and separately proves a future schema version
+/// fails closed. No service-manager action, network access, secret handling, live
+/// execution, or production deployment is performed.
+pub fn validate_sqlite_wal_schema_migration(
+    path: impl AsRef<Path>,
+) -> Result<SqliteWalSchemaMigrationValidationReport, StateStoreError> {
+    let path = path.as_ref();
+    prepare_schema_migration_validation_path(path)?;
+    create_legacy_schema_migration_fixture(path)?;
+    let legacy_pre_schema_version = sqlite_schema_version(
+        path,
+        "failed to reopen legacy sqlite validation fixture",
+        "failed to read legacy sqlite schema version",
+    )?;
+    let store = SqliteWalStateStore::open(path)?;
+    let migrated_schema_version = store.schema_version()?;
+    let legacy_checkpoint_preserved = legacy_schema_checkpoint_preserved(&store)?;
+    drop(store);
+    let future_version_rejected = validate_future_schema_rejection(path)?;
+    let migration_performed = legacy_pre_schema_version == 0
+        && migrated_schema_version == SQLITE_WAL_STATE_SCHEMA_VERSION
+        && legacy_checkpoint_preserved;
+    let status = if migration_performed && future_version_rejected {
+        SqliteWalSchemaMigrationStatus::ReadyForLocalReview
+    } else {
+        SqliteWalSchemaMigrationStatus::Blocked
+    };
+
+    Ok(SqliteWalSchemaMigrationValidationReport {
+        status,
+        legacy_pre_schema_version,
+        migrated_schema_version,
+        expected_schema_version: SQLITE_WAL_STATE_SCHEMA_VERSION,
+        legacy_checkpoint_preserved,
+        future_version_rejected,
+        migration_performed,
+        service_manager_action_performed: false,
+        external_network_used: false,
+        secret_material_recorded: false,
+        live_execution_performed: false,
+        production_ready: false,
+    })
+}
+
+fn prepare_schema_migration_validation_path(path: &Path) -> Result<(), StateStoreError> {
+    if path.as_os_str().is_empty() {
+        return Err(StateStoreError::ValidationFailed {
+            reason: "schema migration validation database path is required".to_owned(),
+        });
+    }
+    if path.exists() {
+        return Err(StateStoreError::ValidationFailed {
+            reason: "schema migration validation database path must be fresh".to_owned(),
+        });
+    }
+    if let Some(parent) = path.parent() {
+        if !parent.as_os_str().is_empty() {
+            fs::create_dir_all(parent).map_err(|error| StateStoreError::BackendFailed {
+                reason: format!("failed to create schema migration validation directory: {error}"),
+            })?;
+        }
+    }
+    Ok(())
+}
+
+fn create_legacy_schema_migration_fixture(path: &Path) -> Result<(), StateStoreError> {
+    let connection = Connection::open(path).map_err(|error| StateStoreError::BackendFailed {
+        reason: format!("failed to create legacy sqlite validation fixture: {error}"),
+    })?;
+    connection
+        .execute_batch(
+            "CREATE TABLE state_checkpoints (
+                key TEXT PRIMARY KEY NOT NULL,
+                subsystem TEXT NOT NULL,
+                value TEXT NOT NULL,
+                updated_at_unix_ms INTEGER NOT NULL
+            );",
+        )
+        .map_err(sqlite_backend_error(
+            "failed to create legacy sqlite state schema fixture",
+        ))?;
+    connection
+        .execute(
+            "INSERT INTO state_checkpoints (key, subsystem, value, updated_at_unix_ms)
+             VALUES (?1, ?2, ?3, ?4)",
+            params![
+                "legacy:schema-migration-checkpoint",
+                "state",
+                "local-schema-migration-value",
+                7_i64
+            ],
+        )
+        .map_err(sqlite_backend_error(
+            "failed to write legacy sqlite schema migration checkpoint fixture",
+        ))?;
+    Ok(())
+}
+
+fn sqlite_schema_version(
+    path: &Path,
+    open_context: &'static str,
+    read_context: &'static str,
+) -> Result<i64, StateStoreError> {
+    let connection = Connection::open(path).map_err(|error| StateStoreError::BackendFailed {
+        reason: format!("{open_context}: {error}"),
+    })?;
+    connection
+        .pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
+        .map_err(sqlite_backend_error(read_context))
+}
+
+fn legacy_schema_checkpoint_preserved(
+    store: &SqliteWalStateStore,
+) -> Result<bool, StateStoreError> {
+    Ok(store
+        .get_checkpoint("legacy:schema-migration-checkpoint")?
+        .is_some_and(|checkpoint| {
+            checkpoint.subsystem == "state"
+                && checkpoint.value == "local-schema-migration-value"
+                && checkpoint.updated_at_unix_ms == 7
+        }))
+}
+
+fn validate_future_schema_rejection(path: &Path) -> Result<bool, StateStoreError> {
+    let future_path = path.with_extension("future.sqlite");
+    if future_path.exists() {
+        return Err(StateStoreError::ValidationFailed {
+            reason: "schema migration future-version validation path must be fresh".to_owned(),
+        });
+    }
+    let connection =
+        Connection::open(&future_path).map_err(|error| StateStoreError::BackendFailed {
+            reason: format!("failed to create future sqlite validation fixture: {error}"),
+        })?;
+    connection
+        .execute_batch("PRAGMA user_version = 2;")
+        .map_err(sqlite_backend_error(
+            "failed to write future sqlite schema version fixture",
+        ))?;
+    Ok(matches!(
+        SqliteWalStateStore::open(&future_path),
+        Err(StateStoreError::BackendFailed { reason })
+            if reason.contains("exceeds supported version")
+    ))
+}
+
 impl StateStore for SqliteWalStateStore {
     fn put_checkpoint(&mut self, checkpoint: StateCheckpoint) -> Result<(), StateStoreError> {
         checkpoint.validate()?;
@@ -542,7 +737,8 @@ fn filesystem_backend_error(
 #[cfg(test)]
 mod tests {
     use super::{
-        InMemoryStateStore, SqliteWalStateStore, StateCheckpoint, StateStore, StateStoreError,
+        validate_sqlite_wal_schema_migration, InMemoryStateStore, SqliteWalSchemaMigrationStatus,
+        SqliteWalStateStore, StateCheckpoint, StateStore, StateStoreError,
         SQLITE_WAL_STATE_SCHEMA_VERSION,
     };
     use rusqlite::{params, Connection};
@@ -763,6 +959,53 @@ mod tests {
             }
         }
 
+        cleanup_state_files(&path);
+    }
+
+    #[test]
+    fn sqlite_wal_schema_migration_validation_exercises_legacy_and_future_paths() {
+        let path = unique_state_path("schema-migration-validation");
+        let future_path = path.with_extension("future.sqlite");
+
+        let report = validate_sqlite_wal_schema_migration(&path)
+            .expect("schema migration validation passes");
+
+        assert_eq!(
+            report.status,
+            SqliteWalSchemaMigrationStatus::ReadyForLocalReview
+        );
+        assert_eq!(report.legacy_pre_schema_version, 0);
+        assert_eq!(
+            report.migrated_schema_version,
+            SQLITE_WAL_STATE_SCHEMA_VERSION
+        );
+        assert_eq!(
+            report.expected_schema_version,
+            SQLITE_WAL_STATE_SCHEMA_VERSION
+        );
+        assert!(report.legacy_checkpoint_preserved);
+        assert!(report.future_version_rejected);
+        assert!(report.migration_performed);
+        assert!(!report.service_manager_action_performed);
+        assert!(!report.external_network_used);
+        assert!(!report.secret_material_recorded);
+        assert!(!report.live_execution_performed);
+        assert!(!report.production_ready);
+
+        cleanup_state_files(&path);
+        cleanup_state_files(&future_path);
+    }
+
+    #[test]
+    fn sqlite_wal_schema_migration_validation_requires_fresh_path() {
+        let path = unique_state_path("schema-migration-validation-stale");
+        let store = SqliteWalStateStore::open(&path).expect("sqlite store opens");
+
+        let error = validate_sqlite_wal_schema_migration(&path)
+            .expect_err("stale validation path is rejected");
+
+        assert!(matches!(error, StateStoreError::ValidationFailed { .. }));
+        drop(store);
         cleanup_state_files(&path);
     }
 

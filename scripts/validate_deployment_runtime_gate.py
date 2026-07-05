@@ -27,6 +27,7 @@ EXPECTED_COMPONENTS = {
     "audit_durability": "audit_durability_requested",
     "audit_retention_execution": "audit_retention_execution_requested",
     "runtime_config_reload": "runtime_config_reload_requested",
+    "sqlite_schema_migration": "sqlite_schema_migration_requested",
     "graceful_shutdown": "graceful_shutdown_requested",
     "backup_restore": "backup_restore_requested",
     "backup_restore_load": "backup_restore_load_requested",
@@ -492,6 +493,9 @@ def build_command(args: argparse.Namespace, workspace: pathlib.Path) -> list[str
         "--run-runtime-config-reload",
         "--runtime-config-reload-workspace",
         str(workspace / "runtime-config-reload"),
+        "--run-sqlite-schema-migration",
+        "--sqlite-schema-migration-workspace",
+        str(workspace / "sqlite-schema-migration"),
         "--run-audit-retention-execution",
         "--retention-workspace",
         str(workspace / "audit-retention-execution"),
@@ -661,6 +665,33 @@ def validate_report(report: dict[str, Any]) -> list[str]:
     if config_reload.get("runtime_config_reload_passed") is not True:
         errors.append("runtime config reload did not pass")
 
+    sqlite_schema_migration = report.get("sqlite_schema_migration")
+    if not isinstance(sqlite_schema_migration, dict):
+        errors.append("sqlite_schema_migration report missing or invalid")
+        return errors
+    expected_sqlite_schema_values = {
+        "status": "ready-for-local-review",
+        "legacy_pre_schema_version": "0",
+        "migrated_schema_version": "1",
+        "expected_schema_version": "1",
+        "legacy_checkpoint_preserved": "true",
+        "future_version_rejected": "true",
+        "migration_performed": "true",
+        "service_manager_action_performed": "false",
+        "external_network_used": "false",
+        "secret_material_recorded": "false",
+        "live_execution_performed": "false",
+        "production_ready": "false",
+    }
+    for key, expected in expected_sqlite_schema_values.items():
+        if sqlite_schema_migration.get(key) != expected:
+            errors.append(
+                f"sqlite schema migration expected {key}={expected!r} "
+                f"but saw {sqlite_schema_migration.get(key)!r}"
+            )
+    if sqlite_schema_migration.get("sqlite_schema_migration_passed") is not True:
+        errors.append("sqlite schema migration did not pass")
+
     return errors
 
 
@@ -779,6 +810,7 @@ def main() -> int:
         "deployment_host_report_schema": nested_report["schema"],
         "runtime_smoke_production_preflight_enforced": True,
         "runtime_config_reload_enforced": True,
+        "sqlite_schema_migration_enforced": True,
         "runtime_load_profile_review_enforced": True,
         "transcript_component_names": [
             component["name"] for component in TRANSCRIPT_COMPONENTS
@@ -802,6 +834,7 @@ def main() -> int:
         print("secrets-loaded: false")
         print("production-readiness-claimed: false")
         print("runtime-config-reload-enforced: true")
+        print("sqlite-schema-migration-enforced: true")
         print("runtime-load-profile-review-enforced: true")
     return 0
 
