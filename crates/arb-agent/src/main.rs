@@ -7,7 +7,8 @@ use arb_core::{
     append_dashboard_hosted_request_preflight_audit,
     append_dashboard_hosted_request_validation_audit,
     append_dashboard_hosted_security_review_audit,
-    append_dashboard_hosted_session_validation_audit, append_dashboard_render_audit,
+    append_dashboard_hosted_session_validation_audit,
+    append_dashboard_loopback_runtime_probe_audit, append_dashboard_render_audit,
     append_destination_allowlist_audit, append_destination_ownership_review_audit,
     append_dex_swap_lifecycle_audit, append_execution_adapter_recovery_plan_audit,
     append_execution_adapter_run_audit, append_execution_plan_draft_audit,
@@ -44,7 +45,8 @@ use arb_core::{
     persist_dashboard_hosted_request_preflight_checkpoint,
     persist_dashboard_hosted_request_validation_checkpoint,
     persist_dashboard_hosted_security_review_checkpoint,
-    persist_dashboard_hosted_session_validation_checkpoint, persist_dashboard_render_checkpoint,
+    persist_dashboard_hosted_session_validation_checkpoint,
+    persist_dashboard_loopback_runtime_probe_checkpoint, persist_dashboard_render_checkpoint,
     persist_destination_allowlist_checkpoint, persist_destination_ownership_review_checkpoint,
     persist_dex_swap_lifecycle_checkpoint, persist_execution_adapter_recovery_plan_checkpoint,
     persist_execution_adapter_run_checkpoint, persist_execution_plan_draft_checkpoint,
@@ -91,8 +93,9 @@ use arb_core::{
     validate_audit_journal_durability, validate_cex_credential_scope_review,
     validate_cex_rate_limit, validate_channel_adapter, validate_channel_session,
     validate_dashboard_hosted_request, validate_dashboard_hosted_session,
-    validate_deployment_audit_sqlite_transcript, validate_deployment_backup_restore_transcript,
-    validate_deployment_disk_full_transcript, validate_deployment_failure_capture_transcript,
+    validate_dashboard_loopback_runtime_probe, validate_deployment_audit_sqlite_transcript,
+    validate_deployment_backup_restore_transcript, validate_deployment_disk_full_transcript,
+    validate_deployment_failure_capture_transcript,
     validate_deployment_graceful_shutdown_transcript, validate_deployment_permission_transcript,
     validate_deployment_response_drill_rehearsal, validate_deployment_retention_transcript,
     validate_deployment_sqlite_schema_migration_transcript, validate_fee_schedule_verification,
@@ -128,7 +131,8 @@ use arb_core::{
     DashboardHostedRequestValidation, DashboardHostedRequestValidationStatus,
     DashboardHostedRuntimeReadinessReviewRequest, DashboardHostedRuntimeReadinessReviewStatus,
     DashboardHostedSecurityPolicy, DashboardHostedSecurityReviewStatus,
-    DashboardHostedSessionValidationStatus, DashboardPanel, DashboardPanelItem, DashboardPanelKind,
+    DashboardHostedSessionValidationStatus, DashboardLoopbackRuntimeProbe,
+    DashboardLoopbackRuntimeProbeStatus, DashboardPanel, DashboardPanelItem, DashboardPanelKind,
     DashboardRenderRequest, DashboardRenderer, DashboardSeverity, DashboardSnapshot,
     DeploymentFailureCaptureTranscript, DeploymentFailureCaptureTranscriptStatus,
     DeploymentResponseDrillRehearsalRequest, DeploymentResponseDrillRehearsalStatus,
@@ -244,7 +248,8 @@ use arb_core::{
     DASHBOARD_LAST_HOSTED_REQUEST_PREFLIGHT_CHECKPOINT_KEY,
     DASHBOARD_LAST_HOSTED_REQUEST_VALIDATION_CHECKPOINT_KEY,
     DASHBOARD_LAST_HOSTED_SECURITY_REVIEW_CHECKPOINT_KEY,
-    DASHBOARD_LAST_HOSTED_SESSION_VALIDATION_CHECKPOINT_KEY, DASHBOARD_LAST_RENDER_CHECKPOINT_KEY,
+    DASHBOARD_LAST_HOSTED_SESSION_VALIDATION_CHECKPOINT_KEY,
+    DASHBOARD_LAST_LOOPBACK_RUNTIME_PROBE_CHECKPOINT_KEY, DASHBOARD_LAST_RENDER_CHECKPOINT_KEY,
     DEFAULT_MARKET_DATA_FRESHNESS_MS, DESTINATION_ALLOWLIST_CHECKPOINT_KEY,
     DESTINATION_ALLOWLIST_VERSION, DESTINATION_OWNERSHIP_REVIEW_CHECKPOINT_KEY,
     DEX_CONNECTOR_FRAMEWORK_VERSION, DEX_LAST_SWAP_LIFECYCLE_CHECKPOINT_KEY,
@@ -555,6 +560,7 @@ fn is_local_workspace_validation_command(command: &str) -> bool {
             | "validate-observability-runtime"
             | "validate-runtime-panic-hook"
             | "validate-dashboard-runtime"
+            | "validate-dashboard-loopback-runtime"
             | "validate-communications-runtime"
             | "validate-communications-outbox"
     )
@@ -722,6 +728,9 @@ fn run_local_workspace_validation_command(
         "validate-observability-runtime" => run_observability_runtime_validation(&options),
         "validate-runtime-panic-hook" => run_runtime_panic_hook_validation(&options),
         "validate-dashboard-runtime" => run_dashboard_runtime_validation(&options),
+        "validate-dashboard-loopback-runtime" => {
+            run_dashboard_loopback_runtime_validation(&options)
+        }
         "validate-communications-runtime" => run_communications_runtime_validation(&options),
         "validate-communications-outbox" => run_communications_outbox_validation(&options),
         _ => Err(ConfigError::ReadFailed {
@@ -962,6 +971,7 @@ fn print_usage() {
     println!("       arb-agent validate-communications-runtime --workspace <fresh-dir>");
     println!("       arb-agent validate-communications-outbox --workspace <fresh-dir>");
     println!("       arb-agent validate-dashboard-runtime --workspace <fresh-dir>");
+    println!("       arb-agent validate-dashboard-loopback-runtime --workspace <fresh-dir>");
     println!("       arb-agent validate-observability-runtime --workspace <fresh-dir>");
     println!("       arb-agent validate-runtime-panic-hook --workspace <fresh-dir>");
     println!(
@@ -15824,6 +15834,150 @@ fn run_dashboard_runtime_validation(
 }
 
 #[allow(clippy::too_many_lines)]
+fn run_dashboard_loopback_runtime_validation(
+    options: &LocalValidationRunOptions,
+) -> Result<(), AgentCliError> {
+    prepare_fresh_workspace(&options.workspace_dir)?;
+    let audit_path = options
+        .workspace_dir
+        .join("dashboard-loopback-runtime.audit.jsonl");
+    let state_path = options
+        .workspace_dir
+        .join("dashboard-loopback-runtime.sqlite3");
+    let now_unix_ms = current_unix_ms()?;
+    let mut journal = AppendOnlyAuditJournal::open(&audit_path)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let mut store = SqliteWalStateStore::open(&state_path)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let renderer = DeterministicDashboardRenderer;
+    let render_record = renderer
+        .render(DashboardRenderRequest {
+            config: DashboardBoundaryConfig::default(),
+            snapshot: local_dashboard_runtime_snapshot(now_unix_ms),
+            access: DashboardAccessContext::local_render(Some(
+                "local-dashboard-loopback-runtime-cli".to_owned(),
+            )),
+            requested_panels: Vec::new(),
+            operator_label: Some("local-dashboard-loopback-runtime-cli".to_owned()),
+            rendered_at_ms: now_unix_ms.saturating_add(1),
+        })
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let probe = validate_dashboard_loopback_runtime_probe(DashboardLoopbackRuntimeProbe {
+        probe_id: "local-dashboard-loopback-runtime-probe".to_owned(),
+        render_record,
+        bind_host: "127.0.0.1".to_owned(),
+        requested_port: 0,
+        request_count: 3,
+        public_exposure_requested: false,
+        live_controls_requested: false,
+    })
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let audit_record = append_dashboard_loopback_runtime_probe_audit(
+        &mut journal,
+        &probe,
+        now_unix_ms.saturating_add(2),
+    )
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let checkpoint = persist_dashboard_loopback_runtime_probe_checkpoint(
+        &mut store,
+        &probe,
+        now_unix_ms.saturating_add(3),
+    )
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    drop(store);
+    drop(journal);
+
+    let reopened_journal = AppendOnlyAuditJournal::open(&audit_path)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let replayed_records = reopened_journal.next_sequence().saturating_sub(1);
+    let reopened_store = SqliteWalStateStore::open(&state_path)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    reopened_store
+        .integrity_check()
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let recovered_checkpoint = reopened_store
+        .get_checkpoint(&checkpoint.key)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+
+    if audit_record.sequence != 1
+        || replayed_records != 1
+        || checkpoint.key != DASHBOARD_LAST_LOOPBACK_RUNTIME_PROBE_CHECKPOINT_KEY
+        || recovered_checkpoint.is_none()
+        || probe.status != DashboardLoopbackRuntimeProbeStatus::ReadyForLocalReview
+        || !probe.loopback_bind_validated
+        || probe.expected_request_count != 3
+        || probe.served_request_count != 3
+        || !probe.all_requests_returned_ok
+        || !probe.response_digest_consistent
+        || probe.missing_control_count != 0
+        || !probe.bounded_runtime_started
+        || !probe.bounded_runtime_shutdown
+        || probe.public_network_exposed
+        || probe.live_controls_enabled
+        || probe.production_ready
+    {
+        return Err(AgentCliError::Validation(
+            "dashboard loopback runtime validation failed".to_owned(),
+        ));
+    }
+
+    println!("dashboard-loopback-runtime: validation passed");
+    println!(
+        "dashboard-loopback-runtime-workspace: {}",
+        options.workspace_dir.display()
+    );
+    println!("dashboard-loopback-runtime-version: {DASHBOARD_BOUNDARY_VERSION}");
+    println!(
+        "dashboard-loopback-runtime-checkpoint-key: {DASHBOARD_LAST_LOOPBACK_RUNTIME_PROBE_CHECKPOINT_KEY}"
+    );
+    println!("dashboard-loopback-runtime-audit-records-replayed: {replayed_records}");
+    println!("dashboard-loopback-runtime-checkpoint-recovered: true");
+    println!(
+        "dashboard-loopback-runtime-loopback-bind-validated: {}",
+        probe.loopback_bind_validated
+    );
+    println!(
+        "dashboard-loopback-runtime-expected-requests: {}",
+        probe.expected_request_count
+    );
+    println!(
+        "dashboard-loopback-runtime-served-requests: {}",
+        probe.served_request_count
+    );
+    println!(
+        "dashboard-loopback-runtime-all-requests-returned-ok: {}",
+        probe.all_requests_returned_ok
+    );
+    println!(
+        "dashboard-loopback-runtime-response-digest-consistent: {}",
+        probe.response_digest_consistent
+    );
+    println!(
+        "dashboard-loopback-runtime-bounded-runtime-started: {}",
+        probe.bounded_runtime_started
+    );
+    println!(
+        "dashboard-loopback-runtime-bounded-runtime-shutdown: {}",
+        probe.bounded_runtime_shutdown
+    );
+    println!(
+        "dashboard-loopback-runtime-public-network-exposed: {}",
+        probe.public_network_exposed
+    );
+    println!(
+        "dashboard-loopback-runtime-live-controls-enabled: {}",
+        probe.live_controls_enabled
+    );
+    println!("public-network-exposed: false");
+    println!("persistent-dashboard-server-started: false");
+    println!("live-controls-enabled: false");
+    println!("external-submission-performed: false");
+    println!("live-execution-performed: false");
+    println!("production-ready: false");
+    Ok(())
+}
+
+#[allow(clippy::too_many_lines)]
 fn run_runtime_panic_hook_validation(
     options: &LocalValidationRunOptions,
 ) -> Result<(), AgentCliError> {
@@ -17135,14 +17289,15 @@ mod tests {
         run_audit_durability_validation, run_audit_retention_execution_validation,
         run_communications_outbox_validation, run_communications_runtime_validation,
         run_config_migration_validation, run_connector_lifecycle_audit_validation,
-        run_dashboard_runtime_validation, run_deployment_config_redaction_validation,
-        run_deployment_log_redaction_validation, run_destination_boundary_audit_validation,
-        run_execution_adapter_audit_validation, run_execution_planner_audit_validation,
-        run_fee_boundary_audit_validation, run_fee_schedule_reconciliation_validation,
-        run_fee_schedule_verification_validation, run_local_fuzz_corpus_runner,
-        run_local_paper_backtest_corpus_runner, run_local_property_check_runner,
-        run_local_validation_corpus_runner, run_local_validation_runner,
-        run_market_data_boundary_audit_validation, run_market_data_history_persistence_validation,
+        run_dashboard_loopback_runtime_validation, run_dashboard_runtime_validation,
+        run_deployment_config_redaction_validation, run_deployment_log_redaction_validation,
+        run_destination_boundary_audit_validation, run_execution_adapter_audit_validation,
+        run_execution_planner_audit_validation, run_fee_boundary_audit_validation,
+        run_fee_schedule_reconciliation_validation, run_fee_schedule_verification_validation,
+        run_local_fuzz_corpus_runner, run_local_paper_backtest_corpus_runner,
+        run_local_property_check_runner, run_local_validation_corpus_runner,
+        run_local_validation_runner, run_market_data_boundary_audit_validation,
+        run_market_data_history_persistence_validation,
         run_market_data_provider_preflight_validation,
         run_market_data_quality_assessment_validation, run_market_data_reconnect_plan_validation,
         run_observability_runtime_validation, run_opportunity_historical_fixture_validation,
@@ -17918,6 +18073,23 @@ mod tests {
 
         assert!(workspace.join("dashboard-audit.jsonl").exists());
         assert!(workspace.join("dashboard-state.sqlite3").exists());
+        cleanup_workspace(&workspace);
+    }
+
+    #[test]
+    fn dashboard_loopback_runtime_validation_persists_and_reopens_local_records_only() {
+        let workspace = temp_workspace_path("dashboard-loopback-runtime-runner");
+        run_dashboard_loopback_runtime_validation(&LocalValidationRunOptions {
+            workspace_dir: workspace.clone(),
+        })
+        .expect("local dashboard loopback runtime validation should pass");
+
+        assert!(workspace
+            .join("dashboard-loopback-runtime.audit.jsonl")
+            .exists());
+        assert!(workspace
+            .join("dashboard-loopback-runtime.sqlite3")
+            .exists());
         cleanup_workspace(&workspace);
     }
 

@@ -256,6 +256,41 @@ def validate_dashboard_cli(parsed: dict[str, str]) -> list[str]:
     return errors
 
 
+def validate_dashboard_loopback_runtime_cli(parsed: dict[str, str]) -> list[str]:
+    errors: list[str] = []
+    for key in (
+        "dashboard-loopback-runtime-checkpoint-recovered",
+        "dashboard-loopback-runtime-loopback-bind-validated",
+        "dashboard-loopback-runtime-all-requests-returned-ok",
+        "dashboard-loopback-runtime-response-digest-consistent",
+        "dashboard-loopback-runtime-bounded-runtime-started",
+        "dashboard-loopback-runtime-bounded-runtime-shutdown",
+    ):
+        if parsed.get(key) != "true":
+            errors.append(f"dashboard loopback runtime cli expected {key}=true")
+    for key in (
+        "dashboard-loopback-runtime-public-network-exposed",
+        "dashboard-loopback-runtime-live-controls-enabled",
+        "public-network-exposed",
+        "persistent-dashboard-server-started",
+        "live-controls-enabled",
+        "external-submission-performed",
+        "live-execution-performed",
+        "production-ready",
+    ):
+        if parsed.get(key) != "false":
+            errors.append(f"dashboard loopback runtime cli expected {key}=false")
+    if parsed.get("dashboard-loopback-runtime") != "validation passed":
+        errors.append("dashboard loopback runtime cli did not report validation passed")
+    if parse_positive_int(parsed.get("dashboard-loopback-runtime-audit-records-replayed")) != 1:
+        errors.append("dashboard loopback runtime cli expected one replayed audit record")
+    if parse_positive_int(parsed.get("dashboard-loopback-runtime-expected-requests")) != 3:
+        errors.append("dashboard loopback runtime cli expected three requests")
+    if parse_positive_int(parsed.get("dashboard-loopback-runtime-served-requests")) != 3:
+        errors.append("dashboard loopback runtime cli expected three served requests")
+    return errors
+
+
 def validate_observability_cli(parsed: dict[str, str]) -> list[str]:
     errors: list[str] = []
     for key in (
@@ -645,6 +680,19 @@ def main() -> int:
                 ],
             ),
             run_text_command(
+                "dashboard_loopback_runtime_cli",
+                [
+                    "cargo",
+                    "run",
+                    "-p",
+                    "arb-agent",
+                    "--",
+                    "validate-dashboard-loopback-runtime",
+                    "--workspace",
+                    str(workspace_root / "dashboard-loopback-runtime"),
+                ],
+            ),
+            run_text_command(
                 "observability_runtime_cli",
                 [
                     "cargo",
@@ -713,6 +761,7 @@ def main() -> int:
         "communications_runtime_cli": lambda component: validate_communications_cli(component["parsed"]),
         "communications_outbox_cli": lambda component: validate_communications_outbox_cli(component["parsed"]),
         "dashboard_runtime_cli": lambda component: validate_dashboard_cli(component["parsed"]),
+        "dashboard_loopback_runtime_cli": lambda component: validate_dashboard_loopback_runtime_cli(component["parsed"]),
         "observability_runtime_cli": lambda component: validate_observability_cli(component["parsed"]),
         "communications_runtime_wrapper": lambda component: validate_communications_wrapper(component["json_report"] or {}),
         "dashboard_runtime_wrapper": lambda component: validate_dashboard_wrapper(component["json_report"] or {}),

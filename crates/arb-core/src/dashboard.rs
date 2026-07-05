@@ -43,6 +43,10 @@ pub const DASHBOARD_LAST_HOSTED_REQUEST_VALIDATION_CHECKPOINT_KEY: &str =
 pub const DASHBOARD_LAST_HOSTED_SESSION_VALIDATION_CHECKPOINT_KEY: &str =
     "dashboard:last-hosted-session-validation";
 
+/// State-store key for the latest bounded loopback dashboard runtime probe.
+pub const DASHBOARD_LAST_LOOPBACK_RUNTIME_PROBE_CHECKPOINT_KEY: &str =
+    "dashboard:last-loopback-runtime-probe";
+
 /// Stable local hosted-dashboard runtime readiness review version.
 pub const DASHBOARD_HOSTED_RUNTIME_READINESS_REVIEW_VERSION: &str =
     "local-hosted-dashboard-runtime-readiness-review-v1";
@@ -559,6 +563,82 @@ pub struct DashboardHostedSessionValidationReport {
     pub production_ready: bool,
 }
 
+/// Bounded loopback dashboard runtime probe request.
+///
+/// This exercises a single local loopback listener for multiple read-only
+/// requests, then shuts it down. It is not public hosting and does not enable
+/// live controls.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DashboardLoopbackRuntimeProbe {
+    /// Stable local runtime probe id.
+    pub probe_id: String,
+    /// Rendered dashboard record to serve.
+    pub render_record: DashboardRenderRecord,
+    /// Numeric loopback bind host.
+    pub bind_host: String,
+    /// Requested local port, usually 0 for an ephemeral port.
+    pub requested_port: u16,
+    /// Number of read-only loopback requests to serve before shutdown.
+    pub request_count: u32,
+    /// Whether public exposure was requested. Must remain false here.
+    pub public_exposure_requested: bool,
+    /// Whether live controls were requested. Must remain false here.
+    pub live_controls_requested: bool,
+}
+
+/// Local bounded loopback dashboard runtime probe status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum DashboardLoopbackRuntimeProbeStatus {
+    /// Local bounded loopback runtime probe succeeded.
+    ReadyForLocalReview,
+    /// Runtime probe was blocked by missing controls or unsafe flags.
+    Blocked,
+}
+
+/// Local bounded loopback dashboard runtime probe report.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DashboardLoopbackRuntimeProbeReport {
+    /// Boundary version that produced this report.
+    pub dashboard_boundary_version: String,
+    /// Stable local runtime probe id.
+    pub probe_id: String,
+    /// Probe status.
+    pub status: DashboardLoopbackRuntimeProbeStatus,
+    /// Bind host used for the local listener.
+    pub bind_host: String,
+    /// Requested local port.
+    pub requested_port: u16,
+    /// Bound ephemeral/local port.
+    pub bound_port: Option<u16>,
+    /// Whether the bind host was numeric loopback.
+    pub loopback_bind_validated: bool,
+    /// Number of requests expected.
+    pub expected_request_count: u32,
+    /// Number of requests successfully served.
+    pub served_request_count: u32,
+    /// Whether all served requests returned HTTP 200.
+    pub all_requests_returned_ok: bool,
+    /// Whether all served responses matched the rendered body digest.
+    pub response_digest_consistent: bool,
+    /// Number of missing-control findings.
+    pub missing_control_count: u32,
+    /// Whether the bounded local listener started.
+    pub bounded_runtime_started: bool,
+    /// Whether the bounded local listener shut down after the expected requests.
+    pub bounded_runtime_shutdown: bool,
+    /// Whether public network exposure occurred. Always false here.
+    pub public_network_exposed: bool,
+    /// Whether live controls were enabled. Always false here.
+    pub live_controls_enabled: bool,
+    /// Whether this report approves production readiness. Always false here.
+    pub production_ready: bool,
+    /// Stable non-secret warnings.
+    pub warnings: Vec<String>,
+}
+
 /// Local hosted-dashboard runtime readiness review request.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -826,6 +906,117 @@ impl DashboardHostedSessionValidationReport {
                     violations.push(DashboardViolation::new(
                         "DASHBOARD_HOSTED_SESSION_BLOCKED_MISMATCH",
                         "blocked hosted dashboard session validation must be missing at least one required control",
+                    ));
+                }
+            }
+        }
+        finish_validation(violations)
+    }
+}
+
+impl DashboardLoopbackRuntimeProbe {
+    /// Validate bounded local loopback runtime probe input.
+    pub fn validate(&self) -> Result<(), DashboardError> {
+        self.render_record.validate()?;
+        let mut violations = Vec::new();
+        validate_id(
+            "dashboard loopback runtime probe",
+            &self.probe_id,
+            &mut violations,
+        );
+        if !is_loopback_host(&self.bind_host) {
+            violations.push(DashboardViolation::new(
+                "DASHBOARD_LOOPBACK_RUNTIME_BIND_NOT_LOOPBACK",
+                "dashboard loopback runtime probe requires numeric loopback binding",
+            ));
+        }
+        if self.request_count == 0 {
+            violations.push(DashboardViolation::new(
+                "DASHBOARD_LOOPBACK_RUNTIME_REQUEST_COUNT_ZERO",
+                "dashboard loopback runtime probe requires at least one request",
+            ));
+        }
+        if self.public_exposure_requested
+            || self.live_controls_requested
+            || self.render_record.public_network_exposed
+            || self.render_record.live_controls_enabled
+            || self.render_record.server_started
+        {
+            violations.push(DashboardViolation::new(
+                "DASHBOARD_LOOPBACK_RUNTIME_FORBIDDEN_SIDE_EFFECT_REQUEST",
+                "dashboard loopback runtime probe must not request public exposure, live controls, or reuse a side-effectful render record",
+            ));
+        }
+        finish_validation(violations)
+    }
+}
+
+impl DashboardLoopbackRuntimeProbeReport {
+    /// Validate bounded local loopback runtime probe output.
+    pub fn validate(&self) -> Result<(), DashboardError> {
+        let mut violations = Vec::new();
+        validate_id(
+            "dashboard loopback runtime probe",
+            &self.probe_id,
+            &mut violations,
+        );
+        if self.dashboard_boundary_version != DASHBOARD_BOUNDARY_VERSION {
+            violations.push(DashboardViolation::new_owned(
+                "DASHBOARD_VERSION_MISMATCH",
+                format!(
+                    "dashboard_boundary_version must be {DASHBOARD_BOUNDARY_VERSION}, got {}",
+                    self.dashboard_boundary_version
+                ),
+            ));
+        }
+        if !is_loopback_host(&self.bind_host) || !self.loopback_bind_validated {
+            violations.push(DashboardViolation::new(
+                "DASHBOARD_LOOPBACK_RUNTIME_BIND_NOT_VALIDATED",
+                "dashboard loopback runtime report requires validated numeric loopback binding",
+            ));
+        }
+        if self.public_network_exposed || self.live_controls_enabled || self.production_ready {
+            violations.push(DashboardViolation::new(
+                "DASHBOARD_LOOPBACK_RUNTIME_FORBIDDEN_SIDE_EFFECT",
+                "dashboard loopback runtime report must not expose public networks, enable live controls, or approve production readiness",
+            ));
+        }
+        for warning in &self.warnings {
+            validate_id(
+                "dashboard loopback runtime warning",
+                warning,
+                &mut violations,
+            );
+        }
+        match self.status {
+            DashboardLoopbackRuntimeProbeStatus::ReadyForLocalReview => {
+                if self.expected_request_count == 0
+                    || self.served_request_count != self.expected_request_count
+                    || !self.all_requests_returned_ok
+                    || !self.response_digest_consistent
+                    || self.missing_control_count != 0
+                    || !self.bounded_runtime_started
+                    || !self.bounded_runtime_shutdown
+                    || self.bound_port.is_none()
+                {
+                    violations.push(DashboardViolation::new(
+                        "DASHBOARD_LOOPBACK_RUNTIME_READY_MISMATCH",
+                        "ready dashboard loopback runtime report requires all expected local requests to return 200 with consistent response digest and clean shutdown",
+                    ));
+                }
+            }
+            DashboardLoopbackRuntimeProbeStatus::Blocked => {
+                if self.expected_request_count > 0
+                    && self.served_request_count == self.expected_request_count
+                    && self.all_requests_returned_ok
+                    && self.response_digest_consistent
+                    && self.missing_control_count == 0
+                    && self.bounded_runtime_started
+                    && self.bounded_runtime_shutdown
+                {
+                    violations.push(DashboardViolation::new(
+                        "DASHBOARD_LOOPBACK_RUNTIME_BLOCKED_MISMATCH",
+                        "blocked dashboard loopback runtime report must have at least one missing control or failed request",
                     ));
                 }
             }
@@ -1517,6 +1708,95 @@ pub fn validate_dashboard_hosted_session(
     Ok(report)
 }
 
+/// Validate a bounded loopback-only dashboard runtime that serves multiple
+/// read-only local requests on one listener before shutting down.
+///
+/// This exercises local socket lifecycle behavior only. It does not expose a
+/// public dashboard, authenticate real browsers, enable live controls, or claim
+/// production readiness.
+pub fn validate_dashboard_loopback_runtime_probe(
+    probe: DashboardLoopbackRuntimeProbe,
+) -> Result<DashboardLoopbackRuntimeProbeReport, DashboardError> {
+    probe.validate()?;
+    let mut missing_control_count = 0_u32;
+    let mut warnings = Vec::new();
+    let bind_host = probe.bind_host.trim().to_owned();
+    let loopback_ip = parse_loopback_ip(&bind_host);
+    let loopback_bind_validated = loopback_ip.is_some();
+    if !loopback_bind_validated {
+        missing_control_count = missing_control_count.saturating_add(1);
+        warnings.push("dashboard loopback runtime bind host is not loopback".to_owned());
+    }
+
+    let mut bound_port = None;
+    let mut served_request_count = 0_u32;
+    let mut all_requests_returned_ok = false;
+    let mut response_digest_consistent = false;
+    let mut bounded_runtime_started = false;
+    let mut bounded_runtime_shutdown = false;
+    if let Some(ip) = loopback_ip {
+        let body = render_dashboard_response_body(&probe.render_record)?;
+        match serve_bounded_dashboard_loopback_runtime(
+            ip,
+            probe.requested_port,
+            DashboardHostedRequestMethod::Get,
+            "/",
+            body,
+            probe.request_count,
+        ) {
+            Ok(exchange) => {
+                bound_port = Some(exchange.bound_port);
+                served_request_count = exchange.served_request_count;
+                all_requests_returned_ok = exchange.all_requests_returned_ok;
+                response_digest_consistent = exchange.response_digest_consistent;
+                bounded_runtime_started = true;
+                bounded_runtime_shutdown = exchange.bounded_runtime_shutdown;
+                if served_request_count != probe.request_count
+                    || !all_requests_returned_ok
+                    || !response_digest_consistent
+                    || !bounded_runtime_shutdown
+                {
+                    missing_control_count = missing_control_count.saturating_add(1);
+                    warnings.push(
+                        "dashboard loopback runtime did not serve all expected requests cleanly"
+                            .to_owned(),
+                    );
+                }
+            }
+            Err(error) => {
+                missing_control_count = missing_control_count.saturating_add(1);
+                warnings.push(format!("dashboard loopback runtime failed: {error}"));
+            }
+        }
+    }
+    let report = DashboardLoopbackRuntimeProbeReport {
+        dashboard_boundary_version: DASHBOARD_BOUNDARY_VERSION.to_owned(),
+        probe_id: probe.probe_id,
+        status: if missing_control_count == 0 {
+            DashboardLoopbackRuntimeProbeStatus::ReadyForLocalReview
+        } else {
+            DashboardLoopbackRuntimeProbeStatus::Blocked
+        },
+        bind_host,
+        requested_port: probe.requested_port,
+        bound_port,
+        loopback_bind_validated,
+        expected_request_count: probe.request_count,
+        served_request_count,
+        all_requests_returned_ok,
+        response_digest_consistent,
+        missing_control_count,
+        bounded_runtime_started,
+        bounded_runtime_shutdown,
+        public_network_exposed: false,
+        live_controls_enabled: false,
+        production_ready: false,
+        warnings,
+    };
+    report.validate()?;
+    Ok(report)
+}
+
 /// Compose local hosted-dashboard runtime readiness evidence without starting a
 /// persistent server, exposing public bindings, enabling live controls, or
 /// claiming production readiness.
@@ -1673,6 +1953,14 @@ struct DashboardHostedRequestExchange {
     response_body_sha256: String,
 }
 
+struct DashboardLoopbackRuntimeExchange {
+    bound_port: u16,
+    served_request_count: u32,
+    all_requests_returned_ok: bool,
+    response_digest_consistent: bool,
+    bounded_runtime_shutdown: bool,
+}
+
 fn serve_one_dashboard_request(
     ip: IpAddr,
     requested_port: u16,
@@ -1720,6 +2008,73 @@ fn serve_one_dashboard_request(
         network_request_served: request_served,
         response_body_bytes,
         response_body_sha256,
+    })
+}
+
+fn serve_bounded_dashboard_loopback_runtime(
+    ip: IpAddr,
+    requested_port: u16,
+    method: DashboardHostedRequestMethod,
+    path: &str,
+    body: String,
+    request_count: u32,
+) -> Result<DashboardLoopbackRuntimeExchange, String> {
+    if request_count == 0 {
+        return Err("request count must be positive".to_owned());
+    }
+    let listener = TcpListener::bind((ip, requested_port))
+        .map_err(|error| format!("bind failed: {}", error.kind()))?;
+    let bound_port = listener
+        .local_addr()
+        .map_err(|error| format!("local address failed: {}", error.kind()))?
+        .port();
+    let expected_body_sha256 = sha256_hex(body.as_bytes());
+    let server_handle =
+        thread::spawn(move || serve_dashboard_connections(listener, body, request_count));
+    let mut served_request_count = 0_u32;
+    let mut all_requests_returned_ok = true;
+    let mut response_digest_consistent = true;
+    for _ in 0..request_count {
+        let mut stream = TcpStream::connect((ip, bound_port))
+            .map_err(|error| format!("client connect failed: {}", error.kind()))?;
+        let timeout = Some(Duration::from_secs(2));
+        stream
+            .set_read_timeout(timeout)
+            .map_err(|error| format!("client read timeout failed: {}", error.kind()))?;
+        stream
+            .set_write_timeout(timeout)
+            .map_err(|error| format!("client write timeout failed: {}", error.kind()))?;
+        let request = format!(
+            "{} {path} HTTP/1.1\r\nHost: {ip}:{bound_port}\r\nAuthorization: Bearer local-dashboard-reference\r\nX-CSRF-Token: local\r\nConnection: close\r\n\r\n",
+            method.as_http_method()
+        );
+        stream
+            .write_all(request.as_bytes())
+            .map_err(|error| format!("client write failed: {}", error.kind()))?;
+        let mut response = String::new();
+        stream
+            .read_to_string(&mut response)
+            .map_err(|error| format!("client read failed: {}", error.kind()))?;
+        served_request_count = served_request_count.saturating_add(1);
+        all_requests_returned_ok &= parse_http_status_code(&response) == Some(200);
+        let body_start = response
+            .find("\r\n\r\n")
+            .map_or(response.as_str(), |index| {
+                &response[index.saturating_add(4)..]
+            });
+        response_digest_consistent &= sha256_hex(body_start.as_bytes()) == expected_body_sha256;
+    }
+    let server_served_count = server_handle
+        .join()
+        .map_err(|_| "server thread panicked".to_owned())?
+        .map_err(|error| format!("server failed: {error}"))?;
+    Ok(DashboardLoopbackRuntimeExchange {
+        bound_port,
+        served_request_count,
+        all_requests_returned_ok,
+        response_digest_consistent,
+        bounded_runtime_shutdown: server_served_count == request_count
+            && served_request_count == request_count,
     })
 }
 
@@ -1805,6 +2160,48 @@ fn serve_dashboard_connection(listener: TcpListener, body: String) -> Result<boo
         .write_all(response.as_bytes())
         .map_err(|error| format!("server write failed: {}", error.kind()))?;
     Ok(true)
+}
+
+fn serve_dashboard_connections(
+    listener: TcpListener,
+    body: String,
+    request_count: u32,
+) -> Result<u32, String> {
+    let mut served = 0_u32;
+    for _ in 0..request_count {
+        let (mut stream, _) = listener
+            .accept()
+            .map_err(|error| format!("accept failed: {}", error.kind()))?;
+        let timeout = Some(Duration::from_secs(2));
+        stream
+            .set_read_timeout(timeout)
+            .map_err(|error| format!("server read timeout failed: {}", error.kind()))?;
+        stream
+            .set_write_timeout(timeout)
+            .map_err(|error| format!("server write timeout failed: {}", error.kind()))?;
+        let mut buffer = [0_u8; 1024];
+        let bytes_read = stream
+            .read(&mut buffer)
+            .map_err(|error| format!("server read failed: {}", error.kind()))?;
+        let request = String::from_utf8_lossy(&buffer[..bytes_read]);
+        let authorized = request.starts_with("GET / ")
+            && request.contains("\r\nAuthorization: Bearer local-dashboard-reference\r\n")
+            && request.contains("\r\nX-CSRF-Token: local\r\n");
+        let (status, response_body) = if authorized {
+            ("200 OK", body.as_str())
+        } else {
+            ("403 Forbidden", "")
+        };
+        let response = format!(
+            "HTTP/1.1 {status}\r\nContent-Security-Policy: default-src 'self'\r\nX-Frame-Options: DENY\r\nX-Content-Type-Options: nosniff\r\nReferrer-Policy: no-referrer\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{response_body}",
+            response_body.len()
+        );
+        stream
+            .write_all(response.as_bytes())
+            .map_err(|error| format!("server write failed: {}", error.kind()))?;
+        served = served.saturating_add(1);
+    }
+    Ok(served)
 }
 
 fn parse_http_status_code(response: &str) -> Option<u16> {
@@ -2829,6 +3226,97 @@ pub fn append_dashboard_hosted_session_validation_audit(
     journal.append_event(event).map_err(DashboardError::from)
 }
 
+/// Persist the latest bounded local loopback dashboard runtime probe checkpoint.
+///
+/// This stores sanitized local runtime probe metadata only. It does not expose
+/// public networks, retain browser credentials, enable live controls, or claim
+/// production readiness.
+pub fn persist_dashboard_loopback_runtime_probe_checkpoint(
+    store: &mut impl StateStore,
+    report: &DashboardLoopbackRuntimeProbeReport,
+    updated_at_unix_ms: u64,
+) -> Result<StateCheckpoint, DashboardError> {
+    report.validate()?;
+    let checkpoint = StateCheckpoint {
+        key: DASHBOARD_LAST_LOOPBACK_RUNTIME_PROBE_CHECKPOINT_KEY.to_owned(),
+        subsystem: DASHBOARD_STATE_SUBSYSTEM.to_owned(),
+        value: serde_json::to_string(report).map_err(|error| DashboardError::StateStoreFailed {
+            reason: format!("failed to serialize dashboard loopback runtime checkpoint: {error}"),
+        })?,
+        updated_at_unix_ms,
+    };
+    store
+        .put_checkpoint(checkpoint.clone())
+        .map_err(DashboardError::from)?;
+    Ok(checkpoint)
+}
+
+/// Append a bounded local loopback dashboard runtime probe audit record.
+///
+/// This records local loopback lifecycle outcomes only. It does not expose
+/// public networks, store secret material, enable live controls, or claim
+/// production readiness.
+pub fn append_dashboard_loopback_runtime_probe_audit(
+    journal: &mut AppendOnlyAuditJournal,
+    report: &DashboardLoopbackRuntimeProbeReport,
+    occurred_at_unix_ms: u64,
+) -> Result<AuditRecord, DashboardError> {
+    report.validate()?;
+    let mut event = AuditEvent::new(
+        format!("dashboard-loopback-runtime-probe-{}", report.probe_id),
+        AuditEventKind::RuntimeLifecycle,
+        DASHBOARD_STATE_SUBSYSTEM,
+        "dashboard-loopback-runtime-probe",
+        "dashboard loopback runtime probe recorded",
+    );
+    event.occurred_at_unix_ms = occurred_at_unix_ms;
+    event = event
+        .with_metadata(
+            "dashboard_boundary_version",
+            AuditValue::Text(DASHBOARD_BOUNDARY_VERSION.to_owned()),
+        )
+        .with_metadata("probe_id", AuditValue::Text(report.probe_id.clone()))
+        .with_metadata("status", AuditValue::Text(format!("{:?}", report.status)))
+        .with_metadata("bind_host", AuditValue::Text(report.bind_host.clone()))
+        .with_metadata(
+            "expected_request_count",
+            AuditValue::Text(report.expected_request_count.to_string()),
+        )
+        .with_metadata(
+            "served_request_count",
+            AuditValue::Text(report.served_request_count.to_string()),
+        )
+        .with_metadata(
+            "all_requests_returned_ok",
+            AuditValue::Bool(report.all_requests_returned_ok),
+        )
+        .with_metadata(
+            "response_digest_consistent",
+            AuditValue::Bool(report.response_digest_consistent),
+        )
+        .with_metadata(
+            "bounded_runtime_started",
+            AuditValue::Bool(report.bounded_runtime_started),
+        )
+        .with_metadata(
+            "bounded_runtime_shutdown",
+            AuditValue::Bool(report.bounded_runtime_shutdown),
+        )
+        .with_metadata(
+            "public_network_exposed",
+            AuditValue::Bool(report.public_network_exposed),
+        )
+        .with_metadata(
+            "live_controls_enabled",
+            AuditValue::Bool(report.live_controls_enabled),
+        )
+        .with_metadata(
+            "production_ready",
+            AuditValue::Bool(report.production_ready),
+        );
+    journal.append_event(event).map_err(DashboardError::from)
+}
+
 /// One deterministic dashboard validation violation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DashboardViolation {
@@ -3072,14 +3560,16 @@ mod tests {
         append_dashboard_hosted_request_preflight_audit,
         append_dashboard_hosted_request_validation_audit,
         append_dashboard_hosted_security_review_audit,
-        append_dashboard_hosted_session_validation_audit, append_dashboard_render_audit,
+        append_dashboard_hosted_session_validation_audit,
+        append_dashboard_loopback_runtime_probe_audit, append_dashboard_render_audit,
         is_sha256_hex, persist_dashboard_hosted_request_preflight_checkpoint,
         persist_dashboard_hosted_request_validation_checkpoint,
         persist_dashboard_hosted_security_review_checkpoint,
         persist_dashboard_hosted_session_validation_checkpoint,
-        persist_dashboard_render_checkpoint, preflight_dashboard_hosted_request,
-        review_dashboard_hosted_runtime_readiness, review_dashboard_hosted_security, sha256_hex,
-        validate_dashboard_hosted_request, validate_dashboard_hosted_session,
+        persist_dashboard_loopback_runtime_probe_checkpoint, persist_dashboard_render_checkpoint,
+        preflight_dashboard_hosted_request, review_dashboard_hosted_runtime_readiness,
+        review_dashboard_hosted_security, sha256_hex, validate_dashboard_hosted_request,
+        validate_dashboard_hosted_session, validate_dashboard_loopback_runtime_probe,
         DashboardAccessAuthorizationStatus, DashboardAccessContext, DashboardAccessSource,
         DashboardBoundaryConfig, DashboardError, DashboardHostedRequestMethod,
         DashboardHostedRequestPreflight, DashboardHostedRequestPreflightStatus,
@@ -3087,14 +3577,15 @@ mod tests {
         DashboardHostedRequestValidationStatus, DashboardHostedRuntimeReadinessReviewRequest,
         DashboardHostedRuntimeReadinessReviewStatus, DashboardHostedSecurityPolicy,
         DashboardHostedSecurityReviewStatus, DashboardHostedSessionValidationReport,
-        DashboardHostedSessionValidationStatus, DashboardPanel, DashboardPanelItem,
-        DashboardPanelKind, DashboardRenderRecord, DashboardRenderRequest, DashboardRenderer,
-        DashboardServerBinding, DashboardSeverity, DashboardSnapshot,
+        DashboardHostedSessionValidationStatus, DashboardLoopbackRuntimeProbe,
+        DashboardLoopbackRuntimeProbeReport, DashboardLoopbackRuntimeProbeStatus, DashboardPanel,
+        DashboardPanelItem, DashboardPanelKind, DashboardRenderRecord, DashboardRenderRequest,
+        DashboardRenderer, DashboardServerBinding, DashboardSeverity, DashboardSnapshot,
         DeterministicDashboardRenderer, DASHBOARD_LAST_HOSTED_REQUEST_PREFLIGHT_CHECKPOINT_KEY,
         DASHBOARD_LAST_HOSTED_REQUEST_VALIDATION_CHECKPOINT_KEY,
         DASHBOARD_LAST_HOSTED_SECURITY_REVIEW_CHECKPOINT_KEY,
         DASHBOARD_LAST_HOSTED_SESSION_VALIDATION_CHECKPOINT_KEY,
-        DASHBOARD_LAST_RENDER_CHECKPOINT_KEY,
+        DASHBOARD_LAST_LOOPBACK_RUNTIME_PROBE_CHECKPOINT_KEY, DASHBOARD_LAST_RENDER_CHECKPOINT_KEY,
     };
     use crate::{AppendOnlyAuditJournal, RuntimeMode, SqliteWalStateStore, StateStore};
     use std::{env, fs, path::PathBuf, process};
@@ -3992,6 +4483,79 @@ mod tests {
         assert_eq!(recovered_report.rejected_unauthenticated_count, 1);
         assert_eq!(recovered_report.rejected_csrf_count, 1);
         assert_eq!(recovered_report.rejected_rate_limited_count, 1);
+        assert!(!recovered_report.public_network_exposed);
+        assert!(!recovered_report.live_controls_enabled);
+        assert!(!recovered_report.production_ready);
+
+        let _ = fs::remove_file(audit_path);
+        cleanup_state_files(&state_path);
+    }
+
+    #[test]
+    fn dashboard_loopback_runtime_probe_audit_and_state_reopen_locally() {
+        let audit_path = temp_audit_path("dashboard-loopback-runtime-probe");
+        let state_path = temp_state_path("dashboard-loopback-runtime-probe");
+        let report = validate_dashboard_loopback_runtime_probe(DashboardLoopbackRuntimeProbe {
+            probe_id: "dashboard-loopback-runtime-probe".to_owned(),
+            render_record: render_record(),
+            bind_host: "127.0.0.1".to_owned(),
+            requested_port: 0,
+            request_count: 3,
+            public_exposure_requested: false,
+            live_controls_requested: false,
+        })
+        .expect("loopback runtime probe should validate locally");
+        let mut journal = AppendOnlyAuditJournal::open(&audit_path).expect("journal opens");
+        let mut store = SqliteWalStateStore::open(&state_path).expect("sqlite opens");
+
+        let audit_record =
+            append_dashboard_loopback_runtime_probe_audit(&mut journal, &report, 1_700_000_000_801)
+                .expect("loopback runtime probe audit writes");
+        let checkpoint = persist_dashboard_loopback_runtime_probe_checkpoint(
+            &mut store,
+            &report,
+            1_700_000_000_802,
+        )
+        .expect("loopback runtime probe checkpoint writes");
+        assert_eq!(audit_record.sequence, 1);
+        assert_eq!(
+            checkpoint.key,
+            DASHBOARD_LAST_LOOPBACK_RUNTIME_PROBE_CHECKPOINT_KEY
+        );
+        assert_eq!(
+            report.status,
+            DashboardLoopbackRuntimeProbeStatus::ReadyForLocalReview
+        );
+        assert!(report.loopback_bind_validated);
+        assert_eq!(report.expected_request_count, 3);
+        assert_eq!(report.served_request_count, 3);
+        assert!(report.all_requests_returned_ok);
+        assert!(report.response_digest_consistent);
+        assert_eq!(report.missing_control_count, 0);
+        assert!(report.bounded_runtime_started);
+        assert!(report.bounded_runtime_shutdown);
+        assert!(!report.public_network_exposed);
+        assert!(!report.live_controls_enabled);
+        assert!(!report.production_ready);
+        drop(store);
+        drop(journal);
+
+        let replayed = AppendOnlyAuditJournal::open(&audit_path).expect("journal replays");
+        assert_eq!(replayed.next_sequence(), 2);
+        let reopened = SqliteWalStateStore::open(&state_path).expect("sqlite reopens");
+        let recovered = reopened
+            .get_checkpoint(DASHBOARD_LAST_LOOPBACK_RUNTIME_PROBE_CHECKPOINT_KEY)
+            .expect("checkpoint lookup succeeds")
+            .expect("loopback runtime probe checkpoint exists");
+        assert_eq!(recovered.value, checkpoint.value);
+        let recovered_report: DashboardLoopbackRuntimeProbeReport =
+            serde_json::from_str(&recovered.value).expect("checkpoint report parses");
+        assert_eq!(
+            recovered_report.status,
+            DashboardLoopbackRuntimeProbeStatus::ReadyForLocalReview
+        );
+        assert_eq!(recovered_report.served_request_count, 3);
+        assert!(recovered_report.bounded_runtime_shutdown);
         assert!(!recovered_report.public_network_exposed);
         assert!(!recovered_report.live_controls_enabled);
         assert!(!recovered_report.production_ready);
