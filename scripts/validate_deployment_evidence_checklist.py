@@ -57,6 +57,7 @@ BOOLEAN_SAFETY_FIELDS = (
 REQUIRED_BUNDLE_COMPONENTS = (
     "systemd-lifecycle-plan",
     "deployment-host-runtime-plan",
+    "deployment-host-dashboard-runtime",
     "deployment-host-observability-metrics-runtime",
     "deployment-host-observability-provider-boundary",
     "deployment-host-observability-provider-submission",

@@ -25,6 +25,7 @@ BUNDLE_WORKSPACE_ROOT = ROOT / "target/deployment-evidence-bundle"
 BUNDLE_WORKSPACE = BUNDLE_WORKSPACE_ROOT / f"run-{os.getpid()}"
 
 def component_commands(bundle_workspace: pathlib.Path) -> list[tuple[str, list[str], bool]]:
+    dashboard_runtime_workspace = bundle_workspace / "dashboard-runtime"
     observability_metrics_workspace = bundle_workspace / "observability-metrics-runtime"
     observability_provider_boundary_workspace = (
         bundle_workspace / "observability-provider-boundary"
@@ -60,6 +61,18 @@ def component_commands(bundle_workspace: pathlib.Path) -> list[tuple[str, list[s
     (
         "deployment-host-runtime-plan",
         [sys.executable, "scripts/validate_deployment_host_runtime.py", "--json"],
+        True,
+    ),
+    (
+        "deployment-host-dashboard-runtime",
+        [
+            sys.executable,
+            "scripts/validate_deployment_host_runtime.py",
+            "--run-dashboard-runtime",
+            "--dashboard-workspace",
+            str(dashboard_runtime_workspace),
+            "--json",
+        ],
         True,
     ),
     (
