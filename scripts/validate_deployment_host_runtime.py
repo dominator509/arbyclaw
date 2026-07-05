@@ -50,6 +50,10 @@ execution. When `--run-communications-delivery-provider-boundary` is provided,
 it composes the local delivery-provider boundary CLI output into the same report
 without provider calls, message delivery, token loading, outbound network use,
 service-manager actions, or deployment mutation.
+When `--run-communications-provider-submission-preflight` is provided, it also
+composes the local provider-submission preflight CLI output without provider
+calls, message delivery, token loading, outbound network use, service-manager
+actions, or deployment mutation.
 """
 
 from __future__ import annotations
@@ -215,6 +219,11 @@ def parse_args() -> argparse.Namespace:
         help="run arb-agent validate-communications-delivery-provider-boundary against --communications-delivery-provider-workspace",
     )
     parser.add_argument(
+        "--run-communications-provider-submission-preflight",
+        action="store_true",
+        help="run arb-agent validate-communications-provider-submission-preflight against --communications-provider-submission-workspace",
+    )
+    parser.add_argument(
         "--runtime-smoke-iterations",
         type=int,
         default=1,
@@ -340,6 +349,11 @@ def parse_args() -> argparse.Namespace:
         "--communications-delivery-provider-workspace",
         type=pathlib.Path,
         help="fresh non-secret workspace for validate-communications-delivery-provider-boundary",
+    )
+    parser.add_argument(
+        "--communications-provider-submission-workspace",
+        type=pathlib.Path,
+        help="fresh non-secret workspace for validate-communications-provider-submission-preflight",
     )
     parser.add_argument(
         "--filesystem-audit-path",
@@ -1419,6 +1433,34 @@ def communications_delivery_provider_command(
         "arb-agent",
         "--",
         "validate-communications-delivery-provider-boundary",
+        "--workspace",
+        str(workspace),
+    ]
+
+
+def communications_provider_submission_command(
+    agent_bin: pathlib.Path | None, workspace: pathlib.Path
+) -> list[str]:
+    if agent_bin is not None:
+        if not agent_bin.exists():
+            raise ValueError(f"agent binary does not exist: {relative_or_absolute(agent_bin)}")
+        return [
+            str(agent_bin),
+            "validate-communications-provider-submission-preflight",
+            "--workspace",
+            str(workspace),
+        ]
+
+    cargo = shutil.which("cargo")
+    if cargo is None:
+        raise RuntimeError("cargo unavailable and --agent-bin was not provided")
+    return [
+        cargo,
+        "run",
+        "-p",
+        "arb-agent",
+        "--",
+        "validate-communications-provider-submission-preflight",
         "--workspace",
         str(workspace),
     ]
@@ -2918,6 +2960,77 @@ def run_communications_delivery_provider(
     }
 
 
+def run_communications_provider_submission(
+    workspace: pathlib.Path | None,
+    agent_bin: pathlib.Path | None,
+) -> dict[str, Any]:
+    submission_workspace = validate_fresh_workspace(
+        workspace,
+        "--communications-provider-submission-workspace",
+        "--run-communications-provider-submission-preflight",
+    )
+    command = communications_provider_submission_command(agent_bin, submission_workspace)
+    completed = subprocess.run(
+        command,
+        cwd=ROOT,
+        check=False,
+        encoding="utf-8",
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        timeout=LOCAL_RUNTIME_HELPER_TIMEOUT_SECONDS,
+    )
+    parsed = parse_key_value_output(completed.stdout)
+    return {
+        "command_kind": "agent-bin" if agent_bin is not None else "cargo-run",
+        "returncode": completed.returncode,
+        "workspace": relative_or_absolute(submission_workspace),
+        "stdout_line_count": len(completed.stdout.splitlines()),
+        "status": parsed.get("communications-provider-submission-preflight-status"),
+        "delivery_provider_boundary_ready": parsed.get(
+            "communications-provider-submission-delivery-boundary-ready"
+        ),
+        "delivery_kill_switch_armed": parsed.get(
+            "communications-provider-submission-kill-switch-armed"
+        ),
+        "audit_state_preflight_required": parsed.get(
+            "communications-provider-submission-audit-state-preflight-required"
+        ),
+        "delivery_idempotency_required": parsed.get(
+            "communications-provider-submission-idempotency-required"
+        ),
+        "rate_limit_controls_required": parsed.get(
+            "communications-provider-submission-rate-limit-controls-required"
+        ),
+        "outage_backoff_controls_required": parsed.get(
+            "communications-provider-submission-outage-backoff-controls-required"
+        ),
+        "payload_redaction_required": parsed.get(
+            "communications-provider-submission-payload-redaction-required"
+        ),
+        "provider_validation_evidence_available": parsed.get(
+            "communications-provider-submission-provider-validation-evidence-available"
+        ),
+        "blocker_count": parsed.get("communications-provider-submission-blocker-count"),
+        "violation_count": parsed.get("communications-provider-submission-violation-count"),
+        "audit_records_replayed": parsed.get(
+            "communications-provider-submission-audit-records-replayed"
+        ),
+        "checkpoints_recovered": parsed.get(
+            "communications-provider-submission-checkpoints-recovered"
+        ),
+        "outbound_delivery_requested": parsed.get("outbound-delivery-requested"),
+        "outbound_network_used": parsed.get("outbound-network-used"),
+        "message_delivered": parsed.get("message-delivered"),
+        "provider_call_performed": parsed.get("provider-call-performed"),
+        "token_secret_material_loaded": parsed.get("token-secret-material-loaded"),
+        "live_execution_performed": parsed.get("live-execution-performed"),
+        "signing_or_broadcast_performed": parsed.get("signing-or-broadcast-performed"),
+        "production_ready": parsed.get("production-ready"),
+        "communications_provider_submission_passed": completed.returncode == 0,
+    }
+
+
 def build_report(args: argparse.Namespace) -> dict[str, Any]:
     systemd_report = run_systemd_lifecycle(args.systemd_mode, args.unit)
     runtime_report = None
@@ -3129,6 +3242,14 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
         )
         if communications_delivery_report["returncode"] != 0:
             raise RuntimeError("validate-communications-delivery-provider-boundary failed")
+    communications_provider_submission_report = None
+    if args.run_communications_provider_submission_preflight:
+        communications_provider_submission_report = run_communications_provider_submission(
+            args.communications_provider_submission_workspace,
+            args.agent_bin,
+        )
+        if communications_provider_submission_report["returncode"] != 0:
+            raise RuntimeError("validate-communications-provider-submission-preflight failed")
 
     return {
         "schema": "arbyclaw.deployment_host_runtime_validation.v1",
@@ -3185,6 +3306,8 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
         "communications_runtime_requested": args.run_communications_runtime,
         "communications_delivery_provider": communications_delivery_report,
         "communications_delivery_provider_requested": args.run_communications_delivery_provider_boundary,
+        "communications_provider_submission": communications_provider_submission_report,
+        "communications_provider_submission_requested": args.run_communications_provider_submission_preflight,
         "bounded_timeouts": {
             "systemd_lifecycle_seconds": SYSTEMD_LIFECYCLE_TIMEOUT_SECONDS,
             "local_runtime_helper_seconds": LOCAL_RUNTIME_HELPER_TIMEOUT_SECONDS,
@@ -3313,6 +3436,10 @@ def print_text_report(report: dict[str, Any]) -> None:
     print(
         "communications delivery provider requested: "
         f"{str(report['communications_delivery_provider_requested']).lower()}"
+    )
+    print(
+        "communications provider submission requested: "
+        f"{str(report['communications_provider_submission_requested']).lower()}"
     )
     if report["runtime_smoke"] is not None:
         smoke = report["runtime_smoke"]
@@ -4486,6 +4613,82 @@ def print_text_report(report: dict[str, Any]) -> None:
             f"{delivery.get('signing_or_broadcast_performed', '')}"
         )
         print(f"production-ready: {delivery.get('production_ready', '')}")
+    if report["communications_provider_submission"] is not None:
+        submission = report["communications_provider_submission"]
+        print(
+            "communications provider submission passed: "
+            f"{str(submission['communications_provider_submission_passed']).lower()}"
+        )
+        print(f"communications provider submission workspace: {submission['workspace']}")
+        print(
+            "communications-provider-submission-preflight-status: "
+            f"{submission.get('status', '')}"
+        )
+        print(
+            "communications-provider-submission-delivery-boundary-ready: "
+            f"{submission.get('delivery_provider_boundary_ready', '')}"
+        )
+        print(
+            "communications-provider-submission-kill-switch-armed: "
+            f"{submission.get('delivery_kill_switch_armed', '')}"
+        )
+        print(
+            "communications-provider-submission-audit-state-preflight-required: "
+            f"{submission.get('audit_state_preflight_required', '')}"
+        )
+        print(
+            "communications-provider-submission-idempotency-required: "
+            f"{submission.get('delivery_idempotency_required', '')}"
+        )
+        print(
+            "communications-provider-submission-rate-limit-controls-required: "
+            f"{submission.get('rate_limit_controls_required', '')}"
+        )
+        print(
+            "communications-provider-submission-outage-backoff-controls-required: "
+            f"{submission.get('outage_backoff_controls_required', '')}"
+        )
+        print(
+            "communications-provider-submission-payload-redaction-required: "
+            f"{submission.get('payload_redaction_required', '')}"
+        )
+        print(
+            "communications-provider-submission-provider-validation-evidence-available: "
+            f"{submission.get('provider_validation_evidence_available', '')}"
+        )
+        print(
+            "communications-provider-submission-blocker-count: "
+            f"{submission.get('blocker_count', '')}"
+        )
+        print(
+            "communications-provider-submission-violation-count: "
+            f"{submission.get('violation_count', '')}"
+        )
+        print(
+            "communications-provider-submission-audit-records-replayed: "
+            f"{submission.get('audit_records_replayed', '')}"
+        )
+        print(
+            "communications-provider-submission-checkpoints-recovered: "
+            f"{submission.get('checkpoints_recovered', '')}"
+        )
+        print(
+            "outbound-delivery-requested: "
+            f"{submission.get('outbound_delivery_requested', '')}"
+        )
+        print(f"outbound-network-used: {submission.get('outbound_network_used', '')}")
+        print(f"message-delivered: {submission.get('message_delivered', '')}")
+        print(f"provider-call-performed: {submission.get('provider_call_performed', '')}")
+        print(
+            "token-secret-material-loaded: "
+            f"{submission.get('token_secret_material_loaded', '')}"
+        )
+        print(f"live-execution-performed: {submission.get('live_execution_performed', '')}")
+        print(
+            "signing-or-broadcast-performed: "
+            f"{submission.get('signing_or_broadcast_performed', '')}"
+        )
+        print(f"production-ready: {submission.get('production_ready', '')}")
     print(f"service actions performed: {str(report['service_actions_performed']).lower()}")
     print(f"secrets loaded: {str(report['secrets_loaded']).lower()}")
     print(f"external calls performed: {str(report['external_calls_performed']).lower()}")

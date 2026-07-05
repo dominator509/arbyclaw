@@ -2,7 +2,15 @@
 
 ## Executive Status Summary
 
-Current status override: the project is in Phase 111 communications provider submission preflight gate status for ChatGPT Project Mode. The local operator-surface aggregate has 14 components, including the local communications provider submission preflight, and deployment-host runtime, deployment-runtime, deployment evidence bundle, and deployment evidence checklist gates require the local communications delivery-provider wrapper. This is local/CI validation evidence only and does not approve live funds, production deployment, real outbound communications, persistent dashboard hosting, real observability/exporter/alert runtime, real provider calls, real message delivery, platform-token loading, outbound network use, signing, broadcasts, secrets, service-manager execution, or autonomous execution.
+Current status override: the project is in Phase 112 deployment communications provider submission preflight gate status for ChatGPT Project Mode. The local operator-surface aggregate has 14 components, and deployment-host runtime, deployment-runtime, deployment evidence bundle, and deployment evidence checklist gates now require the local communications provider-submission preflight wrapper. This is local/CI validation evidence only and does not approve live funds, production deployment, real outbound communications, persistent dashboard hosting, real observability/exporter/alert runtime, real provider calls, real message delivery, platform-token loading, outbound network use, signing, broadcasts, secrets, service-manager execution, or autonomous execution.
+
+Latest Phase 112 local update:
+- Added `--run-communications-provider-submission-preflight` and `--communications-provider-submission-workspace` to `scripts/validate_deployment_host_runtime.py`.
+- Added deployment-host wrapper parsing for `arb-agent validate-communications-provider-submission-preflight --workspace <fresh-dir>`.
+- Added `deployment-host-communications-provider-submission` to `scripts/validate_deployment_evidence_bundle.py`.
+- Required that bundle component in `scripts/validate_deployment_evidence_checklist.py`.
+- Added provider-submission preflight wrapper assertions to `scripts/validate_deployment_runtime_gate.py`, raising the aggregate deployment-runtime gate to 40 components.
+- This strengthens GAP-0060, GAP-0068, and GAP-0076 deployment-facing local evidence only. It does not create messaging provider calls, platform-token loading, message delivery, outbound network use, service-manager execution, external AppSec review, or production readiness.
 
 Latest Phase 111 local update:
 - Added `CommunicationProviderSubmissionPreflightRequest`, `CommunicationProviderSubmissionPreflightReport`, and `CommunicationProviderSubmissionPreflightStatus`.
