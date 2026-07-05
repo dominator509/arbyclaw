@@ -159,6 +159,42 @@ def component_commands(bundle_workspace: pathlib.Path) -> list[tuple[str, list[s
         False,
     ),
     (
+        "deployment-disk-full-transcript",
+        [
+            "cargo",
+            "run",
+            "-p",
+            "arb-agent",
+            "--",
+            "validate-deployment-disk-full-transcript",
+        ],
+        False,
+    ),
+    (
+        "deployment-retention-transcript",
+        [
+            "cargo",
+            "run",
+            "-p",
+            "arb-agent",
+            "--",
+            "validate-deployment-retention-transcript",
+        ],
+        False,
+    ),
+    (
+        "deployment-permission-transcript",
+        [
+            "cargo",
+            "run",
+            "-p",
+            "arb-agent",
+            "--",
+            "validate-deployment-permission-transcript",
+        ],
+        False,
+    ),
+    (
         "deployment-audit-sqlite-transcript",
         [
             "cargo",

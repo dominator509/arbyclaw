@@ -59,6 +59,9 @@ REQUIRED_BUNDLE_COMPONENTS = (
     "deployment-host-static-hardening-config-smoke",
     "deployment-host-config-redaction",
     "deployment-host-log-redaction",
+    "deployment-disk-full-transcript",
+    "deployment-retention-transcript",
+    "deployment-permission-transcript",
 )
 
 
