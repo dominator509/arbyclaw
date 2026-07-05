@@ -182,6 +182,17 @@ def command_set(workspace_root: pathlib.Path) -> list[tuple[str, list[str]]]:
             ],
         ),
         (
+            "cex_live_adapter_boundary",
+            [
+                "cargo",
+                "run",
+                "-p",
+                "arb-agent",
+                "--",
+                "validate-cex-live-adapter-boundary",
+            ],
+        ),
+        (
             "cex_balance_snapshots",
             [
                 "cargo",
@@ -546,6 +557,46 @@ def validate_components(components: list[dict[str, Any]]) -> list[str]:
     require(cex_request, "rest-request-plan-count", "3", errors, "cex_market_data_request_plans")
     require(cex_request, "websocket-request-plan-count", "3", errors, "cex_market_data_request_plans")
     require(cex_request, "parsed-transcript-count", "3", errors, "cex_market_data_request_plans")
+
+    cex_live_adapter = by_name["cex_live_adapter_boundary"]["parsed"]
+    require(
+        cex_live_adapter,
+        "cex-live-adapter-boundary",
+        "validation passed",
+        errors,
+        "cex_live_adapter_boundary",
+    )
+    require(
+        cex_live_adapter,
+        "cex-live-adapter-boundary-status",
+        "blocked-pending-live-adapter-implementation",
+        errors,
+        "cex_live_adapter_boundary",
+    )
+    for key in (
+        "cex-live-adapter-rest-plan-validated",
+        "cex-live-adapter-websocket-plan-validated",
+        "cex-live-adapter-lifecycle-transcript-validated",
+        "cex-live-adapter-balance-transcript-validated",
+        "cex-live-adapter-credential-scope-reviewed",
+        "cex-live-adapter-rate-limit-reviewed",
+        "cex-live-adapter-matching-rules-validated",
+    ):
+        require(cex_live_adapter, key, "true", errors, "cex_live_adapter_boundary")
+    for key in (
+        "cex-live-adapter-sandbox-lifecycle-evidence-available",
+        "cex-live-adapter-sandbox-balance-evidence-available",
+        "cex-live-adapter-sandbox-cancel-evidence-available",
+        "cex-live-adapter-production-idempotency-evidence-available",
+    ):
+        require(cex_live_adapter, key, "false", errors, "cex_live_adapter_boundary")
+    require(
+        cex_live_adapter,
+        "cex-live-adapter-blocker-count",
+        "4",
+        errors,
+        "cex_live_adapter_boundary",
+    )
 
     cex_balances = by_name["cex_balance_snapshots"]["parsed"]
     require(cex_balances, "balance-transcript-count", "3", errors, "cex_balance_snapshots")

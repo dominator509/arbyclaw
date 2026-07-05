@@ -190,6 +190,120 @@ pub struct CexExchangeFixtureValidation {
     pub unresolved_blockers: Vec<String>,
 }
 
+/// Local CEX live-adapter implementation boundary review status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum CexLiveAdapterBoundaryReviewStatus {
+    /// Local prerequisites exist, but live adapter implementation and external validation are missing.
+    BlockedPendingLiveAdapterImplementation,
+}
+
+/// Non-secret local review request for the CEX live-adapter boundary.
+///
+/// This consumes local validation booleans only. It must not perform exchange
+/// calls, open WebSockets, load credentials, submit orders, cancel orders, or
+/// claim production readiness.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct CexLiveAdapterBoundaryReviewRequest {
+    /// Stable review id.
+    pub review_id: String,
+    /// Connector or adapter label under review.
+    pub connector_name: String,
+    /// Venue under review.
+    pub venue: VenueRef,
+    /// Whether local REST request-plan validation exists.
+    pub rest_request_plan_validated: bool,
+    /// Whether local WebSocket request-plan validation exists.
+    pub websocket_request_plan_validated: bool,
+    /// Whether local exchange-shaped lifecycle transcript parsing exists.
+    pub lifecycle_transcript_parsing_validated: bool,
+    /// Whether local exchange-shaped balance snapshot parsing exists.
+    pub balance_snapshot_parsing_validated: bool,
+    /// Whether local credential/API-scope review exists.
+    pub credential_scope_reviewed: bool,
+    /// Whether local rate-limit review exists.
+    pub rate_limit_reviewed: bool,
+    /// Whether local exchange-specific matching rules are validated.
+    pub exchange_matching_rules_validated: bool,
+    /// Whether external sandbox order lifecycle evidence is available.
+    pub sandbox_order_lifecycle_evidence_available: bool,
+    /// Whether external sandbox balance snapshot evidence is available.
+    pub sandbox_balance_evidence_available: bool,
+    /// Whether external sandbox cancel/reconciliation evidence is available.
+    pub sandbox_cancel_evidence_available: bool,
+    /// Whether production idempotency/replay evidence is available.
+    pub production_idempotency_evidence_available: bool,
+    /// Whether credential material was loaded by this review. Must remain false.
+    pub credential_material_loaded: bool,
+    /// Whether a REST call was performed by this review. Must remain false.
+    pub rest_call_performed: bool,
+    /// Whether a WebSocket connection was opened by this review. Must remain false.
+    pub websocket_connection_opened: bool,
+    /// Whether an external order/cancel submission occurred. Must remain false.
+    pub external_submission_performed: bool,
+    /// Whether live execution occurred. Must remain false.
+    pub live_execution_performed: bool,
+    /// Whether the request attempts to claim production readiness. Must remain false.
+    pub production_ready_claimed: bool,
+    /// Validation timestamp in Unix milliseconds.
+    pub validated_at_unix_ms: u64,
+}
+
+/// Non-secret local CEX live-adapter boundary review report.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct CexLiveAdapterBoundaryReviewReport {
+    /// Framework version that produced this report.
+    pub framework_version: String,
+    /// Stable review id.
+    pub review_id: String,
+    /// Connector or adapter label under review.
+    pub connector_name: String,
+    /// Venue under review.
+    pub venue: VenueRef,
+    /// Local review status.
+    pub status: CexLiveAdapterBoundaryReviewStatus,
+    /// Whether local REST request-plan validation exists.
+    pub rest_request_plan_validated: bool,
+    /// Whether local WebSocket request-plan validation exists.
+    pub websocket_request_plan_validated: bool,
+    /// Whether local lifecycle transcript parsing exists.
+    pub lifecycle_transcript_parsing_validated: bool,
+    /// Whether local balance snapshot parsing exists.
+    pub balance_snapshot_parsing_validated: bool,
+    /// Whether local credential/API-scope review exists.
+    pub credential_scope_reviewed: bool,
+    /// Whether local rate-limit review exists.
+    pub rate_limit_reviewed: bool,
+    /// Whether local exchange-specific matching rules are validated.
+    pub exchange_matching_rules_validated: bool,
+    /// Whether external sandbox order lifecycle evidence is available.
+    pub sandbox_order_lifecycle_evidence_available: bool,
+    /// Whether external sandbox balance snapshot evidence is available.
+    pub sandbox_balance_evidence_available: bool,
+    /// Whether external sandbox cancel/reconciliation evidence is available.
+    pub sandbox_cancel_evidence_available: bool,
+    /// Whether production idempotency/replay evidence is available.
+    pub production_idempotency_evidence_available: bool,
+    /// Whether credential material was loaded. Always false here.
+    pub credential_material_loaded: bool,
+    /// Whether a REST call was performed. Always false here.
+    pub rest_call_performed: bool,
+    /// Whether a WebSocket connection was opened. Always false here.
+    pub websocket_connection_opened: bool,
+    /// Whether an external order/cancel submission occurred. Always false here.
+    pub external_submission_performed: bool,
+    /// Whether live execution occurred. Always false here.
+    pub live_execution_performed: bool,
+    /// Whether this local review claims production readiness. Always false.
+    pub production_ready: bool,
+    /// Validation timestamp in Unix milliseconds.
+    pub validated_at_unix_ms: u64,
+    /// Remaining blocker codes for live adapter implementation and validation.
+    pub blocker_codes: Vec<String>,
+}
+
 /// Supported local exchange-specific market-data transcript formats.
 ///
 /// These are parser fixtures for captured/mock payloads only. They do not
@@ -919,6 +1033,129 @@ impl CexExchangeFixtureValidation {
             Err(CexConnectorError::ValidationFailed { violations })
         }
     }
+}
+
+impl CexLiveAdapterBoundaryReviewRequest {
+    /// Validate request shape and side-effect flags before building a report.
+    pub fn validate(&self) -> Result<(), CexConnectorError> {
+        let mut violations = Vec::new();
+        validate_id("live adapter review", &self.review_id, &mut violations);
+        validate_id(
+            "live adapter connector",
+            &self.connector_name,
+            &mut violations,
+        );
+        validate_venue_ref(&self.venue, &mut violations);
+        if self.validated_at_unix_ms == 0 {
+            violations.push(CexConnectorViolation::new(
+                "CEX_LIVE_ADAPTER_REVIEW_TIMESTAMP_REQUIRED",
+                "CEX live adapter boundary review timestamp is required",
+            ));
+        }
+        if self.credential_material_loaded
+            || self.rest_call_performed
+            || self.websocket_connection_opened
+            || self.external_submission_performed
+            || self.live_execution_performed
+            || self.production_ready_claimed
+        {
+            violations.push(CexConnectorViolation::new(
+                "CEX_LIVE_ADAPTER_REVIEW_SIDE_EFFECT",
+                "CEX live adapter boundary review must not load credentials, call exchanges, submit orders, execute live, or claim readiness",
+            ));
+        }
+        if violations.is_empty() {
+            Ok(())
+        } else {
+            Err(CexConnectorError::ValidationFailed { violations })
+        }
+    }
+}
+
+impl CexLiveAdapterBoundaryReviewReport {
+    /// Validate report invariants before callers persist or aggregate it.
+    pub fn validate(&self) -> Result<(), CexConnectorError> {
+        let mut violations = Vec::new();
+        if self.framework_version != CEX_CONNECTOR_FRAMEWORK_VERSION {
+            violations.push(CexConnectorViolation::new(
+                "CEX_FRAMEWORK_VERSION_MISMATCH",
+                "CEX live adapter boundary review has an unexpected framework version",
+            ));
+        }
+        validate_id("live adapter review", &self.review_id, &mut violations);
+        validate_id(
+            "live adapter connector",
+            &self.connector_name,
+            &mut violations,
+        );
+        validate_venue_ref(&self.venue, &mut violations);
+        if self.credential_material_loaded
+            || self.rest_call_performed
+            || self.websocket_connection_opened
+            || self.external_submission_performed
+            || self.live_execution_performed
+            || self.production_ready
+        {
+            violations.push(CexConnectorViolation::new(
+                "CEX_LIVE_ADAPTER_REVIEW_SIDE_EFFECT",
+                "CEX live adapter boundary report must remain side-effect free and not claim readiness",
+            ));
+        }
+        if self.blocker_codes.is_empty() {
+            violations.push(CexConnectorViolation::new(
+                "CEX_LIVE_ADAPTER_REVIEW_BLOCKERS_REQUIRED",
+                "CEX live adapter boundary report must retain live-adapter blockers",
+            ));
+        }
+        if violations.is_empty() {
+            Ok(())
+        } else {
+            Err(CexConnectorError::ValidationFailed { violations })
+        }
+    }
+}
+
+/// Review local CEX live-adapter implementation prerequisites without
+/// performing any live adapter work.
+///
+/// This converts the previous loose "not implemented" boundary into a typed,
+/// auditable report. It is still blocked until real sandbox/live exchange
+/// evidence exists outside this local-only validator.
+pub fn review_cex_live_adapter_boundary(
+    request: CexLiveAdapterBoundaryReviewRequest,
+) -> Result<CexLiveAdapterBoundaryReviewReport, CexConnectorError> {
+    request.validate()?;
+    let blocker_codes = cex_live_adapter_boundary_blockers(&request);
+    let report = CexLiveAdapterBoundaryReviewReport {
+        framework_version: CEX_CONNECTOR_FRAMEWORK_VERSION.to_owned(),
+        review_id: request.review_id,
+        connector_name: request.connector_name,
+        venue: request.venue,
+        status: CexLiveAdapterBoundaryReviewStatus::BlockedPendingLiveAdapterImplementation,
+        rest_request_plan_validated: request.rest_request_plan_validated,
+        websocket_request_plan_validated: request.websocket_request_plan_validated,
+        lifecycle_transcript_parsing_validated: request.lifecycle_transcript_parsing_validated,
+        balance_snapshot_parsing_validated: request.balance_snapshot_parsing_validated,
+        credential_scope_reviewed: request.credential_scope_reviewed,
+        rate_limit_reviewed: request.rate_limit_reviewed,
+        exchange_matching_rules_validated: request.exchange_matching_rules_validated,
+        sandbox_order_lifecycle_evidence_available: request
+            .sandbox_order_lifecycle_evidence_available,
+        sandbox_balance_evidence_available: request.sandbox_balance_evidence_available,
+        sandbox_cancel_evidence_available: request.sandbox_cancel_evidence_available,
+        production_idempotency_evidence_available: request
+            .production_idempotency_evidence_available,
+        credential_material_loaded: false,
+        rest_call_performed: false,
+        websocket_connection_opened: false,
+        external_submission_performed: false,
+        live_execution_performed: false,
+        production_ready: false,
+        validated_at_unix_ms: request.validated_at_unix_ms,
+        blocker_codes,
+    };
+    report.validate()?;
+    Ok(report)
 }
 
 impl CexMarketDataRequestPlan {
@@ -3712,6 +3949,49 @@ pub fn validate_cex_client_order_id_uniqueness(
     Ok(())
 }
 
+fn cex_live_adapter_boundary_blockers(
+    request: &CexLiveAdapterBoundaryReviewRequest,
+) -> Vec<String> {
+    let mut blockers = Vec::new();
+    if !request.rest_request_plan_validated {
+        blockers.push("local-rest-request-plan-validation-missing".to_owned());
+    }
+    if !request.websocket_request_plan_validated {
+        blockers.push("local-websocket-request-plan-validation-missing".to_owned());
+    }
+    if !request.lifecycle_transcript_parsing_validated {
+        blockers.push("local-lifecycle-transcript-parsing-missing".to_owned());
+    }
+    if !request.balance_snapshot_parsing_validated {
+        blockers.push("local-balance-snapshot-parsing-missing".to_owned());
+    }
+    if !request.credential_scope_reviewed {
+        blockers.push("local-credential-scope-review-missing".to_owned());
+    }
+    if !request.rate_limit_reviewed {
+        blockers.push("local-rate-limit-review-missing".to_owned());
+    }
+    if !request.exchange_matching_rules_validated {
+        blockers.push("local-exchange-matching-rules-validation-missing".to_owned());
+    }
+    if !request.sandbox_order_lifecycle_evidence_available {
+        blockers.push("sandbox-order-lifecycle-evidence-missing".to_owned());
+    }
+    if !request.sandbox_balance_evidence_available {
+        blockers.push("sandbox-balance-evidence-missing".to_owned());
+    }
+    if !request.sandbox_cancel_evidence_available {
+        blockers.push("sandbox-cancel-reconciliation-evidence-missing".to_owned());
+    }
+    if !request.production_idempotency_evidence_available {
+        blockers.push("production-idempotency-replay-evidence-missing".to_owned());
+    }
+    if blockers.is_empty() {
+        blockers.push("live-exchange-adapter-implementation-review-required".to_owned());
+    }
+    blockers
+}
+
 fn parse_binance_depth_payload(
     value: &serde_json::Value,
 ) -> Result<ParsedCexOrderBook, CexConnectorError> {
@@ -4413,7 +4693,8 @@ mod tests {
         validate_cex_rate_limit, CexBalanceSnapshotTranscript, CexBalanceSnapshotTranscriptFormat,
         CexConnectorCapabilities, CexConnectorError, CexConnectorRegistry, CexCredentialPermission,
         CexCredentialScopeReviewInput, CexCredentialScopeReviewStatus, CexExchangeMarketDataFormat,
-        CexExchangeMatchingRules, CexMarketDataRequestPlan, CexMockMarketDataTranscript,
+        CexExchangeMatchingRules, CexLiveAdapterBoundaryReviewRequest,
+        CexLiveAdapterBoundaryReviewStatus, CexMarketDataRequestPlan, CexMockMarketDataTranscript,
         CexOrderLifecycleRecord, CexOrderLifecycleResponse, CexOrderLifecycleTranscript,
         CexOrderLifecycleTranscriptFormat, CexOrderRequest, CexOrderSide, CexOrderStatus,
         CexOrderType, CexOrderValidationRecord, CexPolicyGate, CexRateLimitObservation,
@@ -4818,6 +5099,93 @@ redact_secrets = true
             assert!(!report.live_execution_performed);
             assert!(!report.production_ready);
         }
+    }
+
+    #[test]
+    fn cex_live_adapter_boundary_blocks_until_sandbox_and_live_evidence_exists() {
+        let report = super::review_cex_live_adapter_boundary(CexLiveAdapterBoundaryReviewRequest {
+            review_id: "local-cex-live-adapter-boundary".to_owned(),
+            connector_name: "binance-local-boundary".to_owned(),
+            venue: exchange_venue("binance"),
+            rest_request_plan_validated: true,
+            websocket_request_plan_validated: true,
+            lifecycle_transcript_parsing_validated: true,
+            balance_snapshot_parsing_validated: true,
+            credential_scope_reviewed: true,
+            rate_limit_reviewed: true,
+            exchange_matching_rules_validated: true,
+            sandbox_order_lifecycle_evidence_available: false,
+            sandbox_balance_evidence_available: false,
+            sandbox_cancel_evidence_available: false,
+            production_idempotency_evidence_available: false,
+            credential_material_loaded: false,
+            rest_call_performed: false,
+            websocket_connection_opened: false,
+            external_submission_performed: false,
+            live_execution_performed: false,
+            production_ready_claimed: false,
+            validated_at_unix_ms: 100_000,
+        })
+        .expect("local CEX live adapter boundary should produce a blocked report");
+
+        assert_eq!(
+            report.status,
+            CexLiveAdapterBoundaryReviewStatus::BlockedPendingLiveAdapterImplementation
+        );
+        assert!(report.rest_request_plan_validated);
+        assert!(report.websocket_request_plan_validated);
+        assert!(report.lifecycle_transcript_parsing_validated);
+        assert!(report.balance_snapshot_parsing_validated);
+        assert!(report.credential_scope_reviewed);
+        assert!(report.rate_limit_reviewed);
+        assert!(report.exchange_matching_rules_validated);
+        assert!(report
+            .blocker_codes
+            .iter()
+            .any(|code| { code == "sandbox-order-lifecycle-evidence-missing" }));
+        assert!(report
+            .blocker_codes
+            .iter()
+            .any(|code| { code == "production-idempotency-replay-evidence-missing" }));
+        assert!(!report.credential_material_loaded);
+        assert!(!report.rest_call_performed);
+        assert!(!report.websocket_connection_opened);
+        assert!(!report.external_submission_performed);
+        assert!(!report.live_execution_performed);
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn cex_live_adapter_boundary_rejects_side_effect_claims() {
+        let error = super::review_cex_live_adapter_boundary(CexLiveAdapterBoundaryReviewRequest {
+            review_id: "local-cex-live-adapter-boundary".to_owned(),
+            connector_name: "binance-local-boundary".to_owned(),
+            venue: exchange_venue("binance"),
+            rest_request_plan_validated: true,
+            websocket_request_plan_validated: true,
+            lifecycle_transcript_parsing_validated: true,
+            balance_snapshot_parsing_validated: true,
+            credential_scope_reviewed: true,
+            rate_limit_reviewed: true,
+            exchange_matching_rules_validated: true,
+            sandbox_order_lifecycle_evidence_available: true,
+            sandbox_balance_evidence_available: true,
+            sandbox_cancel_evidence_available: true,
+            production_idempotency_evidence_available: true,
+            credential_material_loaded: true,
+            rest_call_performed: false,
+            websocket_connection_opened: false,
+            external_submission_performed: false,
+            live_execution_performed: false,
+            production_ready_claimed: true,
+            validated_at_unix_ms: 100_000,
+        })
+        .expect_err("side-effect claims must be rejected");
+
+        assert!(error
+            .violations()
+            .iter()
+            .any(|violation| violation.code() == "CEX_LIVE_ADAPTER_REVIEW_SIDE_EFFECT"));
     }
 
     #[test]

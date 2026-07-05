@@ -83,15 +83,16 @@ use arb_core::{
     plan_execution_adapter_recovery, plan_local_secret_rotation,
     preflight_dashboard_hosted_request, preflight_observability_endpoint,
     preflight_observability_metrics_scrape, record_observability_alert_route_dispatch,
-    render_observability_export_dry_run, review_dashboard_hosted_runtime_readiness,
-    review_dashboard_hosted_security, review_fee_schedule_reconciliation,
-    review_local_secret_backup_restore, review_local_validation_coverage,
-    review_market_data_bad_data_rejection, review_market_data_provider_latency,
-    review_market_data_provider_reconciliation, review_observability_operations,
-    review_platform_adapter_controls, review_platform_command_ingress,
-    review_remote_command_security, review_signer_runtime_isolation, review_signer_secret_scope,
-    run_local_fuzz_corpus_replay, run_local_graceful_shutdown_checkpoint,
-    run_local_runtime_lifecycle, run_local_validation_corpus, run_local_validation_property_checks,
+    render_observability_export_dry_run, review_cex_live_adapter_boundary,
+    review_dashboard_hosted_runtime_readiness, review_dashboard_hosted_security,
+    review_fee_schedule_reconciliation, review_local_secret_backup_restore,
+    review_local_validation_coverage, review_market_data_bad_data_rejection,
+    review_market_data_provider_latency, review_market_data_provider_reconciliation,
+    review_observability_operations, review_platform_adapter_controls,
+    review_platform_command_ingress, review_remote_command_security,
+    review_signer_runtime_isolation, review_signer_secret_scope, run_local_fuzz_corpus_replay,
+    run_local_graceful_shutdown_checkpoint, run_local_runtime_lifecycle,
+    run_local_validation_corpus, run_local_validation_property_checks,
     validate_audit_journal_durability, validate_cex_credential_scope_review,
     validate_cex_rate_limit, validate_channel_adapter, validate_channel_session,
     validate_dashboard_hosted_request, validate_dashboard_hosted_session,
@@ -122,39 +123,40 @@ use arb_core::{
     AuditRetentionPolicy, AuditValue, BacktestDatasetDefinition, BacktestScenarioDefinition,
     BuildIdentity, CexBalanceSnapshotTranscript, CexBalanceSnapshotTranscriptFormat,
     CexCredentialPermission, CexCredentialScopeReviewInput, CexCredentialScopeReviewStatus,
-    CexExchangeMarketDataFormat, CexMarketDataRequestKind, CexMarketDataRequestPlan,
-    CexMockMarketDataTranscript, CexOrderLifecycleRecord, CexOrderLifecycleTranscript,
-    CexOrderLifecycleTranscriptFormat, CexOrderRequest, CexOrderSide, CexOrderType,
-    CexOrderValidationRecord, CexRateLimitObservation, CexRateLimitScope, CexRateLimitStatus,
-    CexTimeInForce, ChannelAdapterValidationReport, ChannelAdapterValidationRequest,
-    ChannelAdapterValidationStatus, ChannelSessionValidationReport, ChannelSessionValidationStatus,
-    CommunicationBoundaryConfig, ComponentHealthStatus, ConfigError, ConfigMigrationStatus,
-    DashboardAccessContext, DashboardAccessSource, DashboardBoundaryConfig,
-    DashboardHostedRequestMethod, DashboardHostedRequestPreflight,
-    DashboardHostedRequestValidation, DashboardHostedRequestValidationStatus,
-    DashboardHostedRuntimeReadinessReviewRequest, DashboardHostedRuntimeReadinessReviewStatus,
-    DashboardHostedSecurityPolicy, DashboardHostedSecurityReviewStatus,
-    DashboardHostedSessionValidationStatus, DashboardLoopbackRuntimeProbe,
-    DashboardLoopbackRuntimeProbeStatus, DashboardPanel, DashboardPanelItem, DashboardPanelKind,
-    DashboardRenderRequest, DashboardRenderer, DashboardSeverity, DashboardSnapshot,
-    DeploymentFailureCaptureTranscript, DeploymentFailureCaptureTranscriptStatus,
-    DeploymentResponseDrillRehearsalRequest, DeploymentResponseDrillRehearsalStatus,
-    DestinationAllowlist, DestinationApprovalSource, DestinationOwnershipReviewReport,
-    DestinationOwnershipReviewStatus, DestinationPolicy, DeterministicAgenticHandoffPackager,
-    DeterministicDashboardRenderer, DeterministicExecutionAdapterBoundary,
-    DeterministicExecutionPlanner, DeterministicNotificationBoundary,
-    DeterministicObservabilityCollector, DeterministicOperatorCommandRouter,
-    DeterministicOpportunityEngine, DeterministicValidationHarness, DexProtocolRiskReviewRequest,
-    DexProtocolRiskReviewStatus, DexRequestPlan, DexRequestPlanKind, DexResponseTranscript,
-    DexRouteKind, DexSimulationStatus, DexSwapLifecycleRecord, DexSwapMode, DexSwapQuoteRequest,
-    DexSwapQuoteResponse, DexSwapValidationRecord, ExecutionAdapter, ExecutionAdapterConfig,
-    ExecutionAdapterRequest, ExecutionAdapterRunStatus, ExecutionIntent, ExecutionIntentKind,
-    ExecutionPlanStatus, ExecutionPlanner, ExecutionPlannerConfig, ExecutionPlannerRequest,
-    ExecutionScope, ExpectedValidationOutcome, FeeAdjustedEdge, FeeEstimate, FeeModelError,
-    FeeProvider, FeeSchedule, FeeScheduleReconciliationReviewRequest,
-    FeeScheduleReconciliationReviewStatus, FeeScheduleVerificationInput,
-    FeeScheduleVerificationReport, FeeScheduleVerificationStatus, FixtureKind,
-    FuzzCorpusDefinition, FuzzSeedRecord, FuzzTargetKind, HealthStatus,
+    CexExchangeMarketDataFormat, CexLiveAdapterBoundaryReviewReport,
+    CexLiveAdapterBoundaryReviewRequest, CexLiveAdapterBoundaryReviewStatus,
+    CexMarketDataRequestKind, CexMarketDataRequestPlan, CexMockMarketDataTranscript,
+    CexOrderLifecycleRecord, CexOrderLifecycleTranscript, CexOrderLifecycleTranscriptFormat,
+    CexOrderRequest, CexOrderSide, CexOrderType, CexOrderValidationRecord, CexRateLimitObservation,
+    CexRateLimitScope, CexRateLimitStatus, CexTimeInForce, ChannelAdapterValidationReport,
+    ChannelAdapterValidationRequest, ChannelAdapterValidationStatus,
+    ChannelSessionValidationReport, ChannelSessionValidationStatus, CommunicationBoundaryConfig,
+    ComponentHealthStatus, ConfigError, ConfigMigrationStatus, DashboardAccessContext,
+    DashboardAccessSource, DashboardBoundaryConfig, DashboardHostedRequestMethod,
+    DashboardHostedRequestPreflight, DashboardHostedRequestValidation,
+    DashboardHostedRequestValidationStatus, DashboardHostedRuntimeReadinessReviewRequest,
+    DashboardHostedRuntimeReadinessReviewStatus, DashboardHostedSecurityPolicy,
+    DashboardHostedSecurityReviewStatus, DashboardHostedSessionValidationStatus,
+    DashboardLoopbackRuntimeProbe, DashboardLoopbackRuntimeProbeStatus, DashboardPanel,
+    DashboardPanelItem, DashboardPanelKind, DashboardRenderRequest, DashboardRenderer,
+    DashboardSeverity, DashboardSnapshot, DeploymentFailureCaptureTranscript,
+    DeploymentFailureCaptureTranscriptStatus, DeploymentResponseDrillRehearsalRequest,
+    DeploymentResponseDrillRehearsalStatus, DestinationAllowlist, DestinationApprovalSource,
+    DestinationOwnershipReviewReport, DestinationOwnershipReviewStatus, DestinationPolicy,
+    DeterministicAgenticHandoffPackager, DeterministicDashboardRenderer,
+    DeterministicExecutionAdapterBoundary, DeterministicExecutionPlanner,
+    DeterministicNotificationBoundary, DeterministicObservabilityCollector,
+    DeterministicOperatorCommandRouter, DeterministicOpportunityEngine,
+    DeterministicValidationHarness, DexProtocolRiskReviewRequest, DexProtocolRiskReviewStatus,
+    DexRequestPlan, DexRequestPlanKind, DexResponseTranscript, DexRouteKind, DexSimulationStatus,
+    DexSwapLifecycleRecord, DexSwapMode, DexSwapQuoteRequest, DexSwapQuoteResponse,
+    DexSwapValidationRecord, ExecutionAdapter, ExecutionAdapterConfig, ExecutionAdapterRequest,
+    ExecutionAdapterRunStatus, ExecutionIntent, ExecutionIntentKind, ExecutionPlanStatus,
+    ExecutionPlanner, ExecutionPlannerConfig, ExecutionPlannerRequest, ExecutionScope,
+    ExpectedValidationOutcome, FeeAdjustedEdge, FeeEstimate, FeeModelError, FeeProvider,
+    FeeSchedule, FeeScheduleReconciliationReviewRequest, FeeScheduleReconciliationReviewStatus,
+    FeeScheduleVerificationInput, FeeScheduleVerificationReport, FeeScheduleVerificationStatus,
+    FixtureKind, FuzzCorpusDefinition, FuzzSeedRecord, FuzzTargetKind, HealthStatus,
     HistoricalMarketDataPersistenceInput, HistoricalMarketDataPersistenceReport,
     HistoricalMarketDataPersistenceStatus, IncidentResponseExecutionTranscript,
     IncidentResponseExecutionTranscriptStatus, LiquidityRole, LocalFuzzCorpusReplayRequest,
@@ -474,6 +476,7 @@ fn run_with_args(args: impl IntoIterator<Item = String>) -> Result<(), AgentCliE
         Some("validate-cex-market-data-request-plans") => {
             run_cex_market_data_request_plan_validation()
         }
+        Some("validate-cex-live-adapter-boundary") => run_cex_live_adapter_boundary_validation(),
         Some("validate-cex-balance-snapshots") => run_cex_balance_snapshot_validation(),
         Some("validate-dex-request-plans") => run_dex_request_plan_validation(),
         Some("validate-dex-response-transcripts") => run_dex_response_transcript_validation(),
@@ -910,6 +913,7 @@ fn print_usage() {
     println!("       arb-agent validate-fee-schedule-reconciliation");
     println!("       arb-agent validate-cex-governance-review");
     println!("       arb-agent validate-cex-market-data-request-plans");
+    println!("       arb-agent validate-cex-live-adapter-boundary");
     println!("       arb-agent validate-cex-balance-snapshots");
     println!("       arb-agent validate-dex-request-plans");
     println!("       arb-agent validate-dex-response-transcripts");
@@ -3320,6 +3324,142 @@ fn run_cex_market_data_request_plan_validation() -> Result<(), AgentCliError> {
         ));
     }
 
+    Ok(())
+}
+
+fn run_cex_live_adapter_boundary_validation() -> Result<(), AgentCliError> {
+    let report = local_cex_live_adapter_boundary_report()?;
+    print_cex_live_adapter_boundary_report(&report);
+    validate_cex_live_adapter_boundary_report(&report)?;
+    Ok(())
+}
+
+fn local_cex_live_adapter_boundary_report(
+) -> Result<CexLiveAdapterBoundaryReviewReport, AgentCliError> {
+    review_cex_live_adapter_boundary(CexLiveAdapterBoundaryReviewRequest {
+        review_id: "cli-cex-live-adapter-boundary".to_owned(),
+        connector_name: "binance-local-boundary".to_owned(),
+        venue: local_cex_exchange_venue("binance"),
+        rest_request_plan_validated: true,
+        websocket_request_plan_validated: true,
+        lifecycle_transcript_parsing_validated: true,
+        balance_snapshot_parsing_validated: true,
+        credential_scope_reviewed: true,
+        rate_limit_reviewed: true,
+        exchange_matching_rules_validated: true,
+        sandbox_order_lifecycle_evidence_available: false,
+        sandbox_balance_evidence_available: false,
+        sandbox_cancel_evidence_available: false,
+        production_idempotency_evidence_available: false,
+        credential_material_loaded: false,
+        rest_call_performed: false,
+        websocket_connection_opened: false,
+        external_submission_performed: false,
+        live_execution_performed: false,
+        production_ready_claimed: false,
+        validated_at_unix_ms: current_unix_ms()?,
+    })
+    .map_err(|error| AgentCliError::Validation(error.to_string()))
+}
+
+fn print_cex_live_adapter_boundary_report(report: &CexLiveAdapterBoundaryReviewReport) {
+    println!("cex-live-adapter-boundary: validation passed");
+    println!(
+        "cex-live-adapter-boundary-status: {}",
+        cex_live_adapter_boundary_status_label(report.status)
+    );
+    println!(
+        "cex-live-adapter-rest-plan-validated: {}",
+        report.rest_request_plan_validated
+    );
+    println!(
+        "cex-live-adapter-websocket-plan-validated: {}",
+        report.websocket_request_plan_validated
+    );
+    println!(
+        "cex-live-adapter-lifecycle-transcript-validated: {}",
+        report.lifecycle_transcript_parsing_validated
+    );
+    println!(
+        "cex-live-adapter-balance-transcript-validated: {}",
+        report.balance_snapshot_parsing_validated
+    );
+    println!(
+        "cex-live-adapter-credential-scope-reviewed: {}",
+        report.credential_scope_reviewed
+    );
+    println!(
+        "cex-live-adapter-rate-limit-reviewed: {}",
+        report.rate_limit_reviewed
+    );
+    println!(
+        "cex-live-adapter-matching-rules-validated: {}",
+        report.exchange_matching_rules_validated
+    );
+    println!(
+        "cex-live-adapter-sandbox-lifecycle-evidence-available: {}",
+        report.sandbox_order_lifecycle_evidence_available
+    );
+    println!(
+        "cex-live-adapter-sandbox-balance-evidence-available: {}",
+        report.sandbox_balance_evidence_available
+    );
+    println!(
+        "cex-live-adapter-sandbox-cancel-evidence-available: {}",
+        report.sandbox_cancel_evidence_available
+    );
+    println!(
+        "cex-live-adapter-production-idempotency-evidence-available: {}",
+        report.production_idempotency_evidence_available
+    );
+    println!(
+        "cex-live-adapter-blocker-count: {}",
+        report.blocker_codes.len()
+    );
+    println!("credential-loaded: {}", report.credential_material_loaded);
+    println!("rest-call-performed: {}", report.rest_call_performed);
+    println!(
+        "websocket-connection-opened: {}",
+        report.websocket_connection_opened
+    );
+    println!(
+        "external-submission-performed: {}",
+        report.external_submission_performed
+    );
+    println!(
+        "live-execution-performed: {}",
+        report.live_execution_performed
+    );
+    println!("production-ready: {}", report.production_ready);
+}
+
+fn validate_cex_live_adapter_boundary_report(
+    report: &CexLiveAdapterBoundaryReviewReport,
+) -> Result<(), AgentCliError> {
+    if report.status != CexLiveAdapterBoundaryReviewStatus::BlockedPendingLiveAdapterImplementation
+        || !report.rest_request_plan_validated
+        || !report.websocket_request_plan_validated
+        || !report.lifecycle_transcript_parsing_validated
+        || !report.balance_snapshot_parsing_validated
+        || !report.credential_scope_reviewed
+        || !report.rate_limit_reviewed
+        || !report.exchange_matching_rules_validated
+        || report.sandbox_order_lifecycle_evidence_available
+        || report.sandbox_balance_evidence_available
+        || report.sandbox_cancel_evidence_available
+        || report.production_idempotency_evidence_available
+        || report.blocker_codes.is_empty()
+        || report.credential_material_loaded
+        || report.rest_call_performed
+        || report.websocket_connection_opened
+        || report.external_submission_performed
+        || report.live_execution_performed
+        || report.production_ready
+    {
+        return Err(AgentCliError::Validation(
+            "CEX live adapter boundary validation failed".to_owned(),
+        ));
+    }
     Ok(())
 }
 
@@ -17481,6 +17621,16 @@ const fn market_data_provider_reconciliation_review_status_label(
             "ready-for-local-review"
         }
         MarketDataProviderReconciliationReviewStatus::Blocked => "blocked",
+    }
+}
+
+const fn cex_live_adapter_boundary_status_label(
+    status: CexLiveAdapterBoundaryReviewStatus,
+) -> &'static str {
+    match status {
+        CexLiveAdapterBoundaryReviewStatus::BlockedPendingLiveAdapterImplementation => {
+            "blocked-pending-live-adapter-implementation"
+        }
     }
 }
 
