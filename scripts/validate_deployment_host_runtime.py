@@ -218,6 +218,11 @@ def parse_args() -> argparse.Namespace:
         help="run arb-agent validate-dashboard-runtime against --dashboard-workspace",
     )
     parser.add_argument(
+        "--run-dashboard-loopback-runtime",
+        action="store_true",
+        help="run arb-agent validate-dashboard-loopback-runtime against --dashboard-loopback-workspace",
+    )
+    parser.add_argument(
         "--run-communications-runtime",
         action="store_true",
         help="run arb-agent validate-communications-runtime against --communications-workspace",
@@ -353,6 +358,11 @@ def parse_args() -> argparse.Namespace:
         "--dashboard-workspace",
         type=pathlib.Path,
         help="fresh non-secret workspace for validate-dashboard-runtime",
+    )
+    parser.add_argument(
+        "--dashboard-loopback-workspace",
+        type=pathlib.Path,
+        help="fresh non-secret workspace for validate-dashboard-loopback-runtime",
     )
     parser.add_argument(
         "--communications-workspace",
@@ -1419,6 +1429,34 @@ def dashboard_runtime_command(
         "arb-agent",
         "--",
         "validate-dashboard-runtime",
+        "--workspace",
+        str(workspace),
+    ]
+
+
+def dashboard_loopback_runtime_command(
+    agent_bin: pathlib.Path | None, workspace: pathlib.Path
+) -> list[str]:
+    if agent_bin is not None:
+        if not agent_bin.exists():
+            raise ValueError(f"agent binary does not exist: {relative_or_absolute(agent_bin)}")
+        return [
+            str(agent_bin),
+            "validate-dashboard-loopback-runtime",
+            "--workspace",
+            str(workspace),
+        ]
+
+    cargo = shutil.which("cargo")
+    if cargo is None:
+        raise RuntimeError("cargo unavailable and --agent-bin was not provided")
+    return [
+        cargo,
+        "run",
+        "-p",
+        "arb-agent",
+        "--",
+        "validate-dashboard-loopback-runtime",
         "--workspace",
         str(workspace),
     ]
@@ -2902,6 +2940,72 @@ def run_dashboard_runtime(
     }
 
 
+def run_dashboard_loopback_runtime(
+    workspace: pathlib.Path | None,
+    agent_bin: pathlib.Path | None,
+) -> dict[str, Any]:
+    dashboard_workspace = validate_fresh_workspace(
+        workspace,
+        "--dashboard-loopback-workspace",
+        "--run-dashboard-loopback-runtime",
+    )
+    command = dashboard_loopback_runtime_command(agent_bin, dashboard_workspace)
+    completed = subprocess.run(
+        command,
+        cwd=ROOT,
+        check=False,
+        encoding="utf-8",
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        timeout=LOCAL_RUNTIME_HELPER_TIMEOUT_SECONDS,
+    )
+    parsed = parse_key_value_output(completed.stdout)
+    return {
+        "command_kind": "agent-bin" if agent_bin is not None else "cargo-run",
+        "returncode": completed.returncode,
+        "workspace": relative_or_absolute(dashboard_workspace),
+        "stdout_line_count": len(completed.stdout.splitlines()),
+        "audit_records_replayed": parsed.get(
+            "dashboard-loopback-runtime-audit-records-replayed"
+        ),
+        "checkpoint_recovered": parsed.get(
+            "dashboard-loopback-runtime-checkpoint-recovered"
+        ),
+        "loopback_bind_validated": parsed.get(
+            "dashboard-loopback-runtime-loopback-bind-validated"
+        ),
+        "expected_requests": parsed.get(
+            "dashboard-loopback-runtime-expected-requests"
+        ),
+        "served_requests": parsed.get(
+            "dashboard-loopback-runtime-served-requests"
+        ),
+        "all_requests_returned_ok": parsed.get(
+            "dashboard-loopback-runtime-all-requests-returned-ok"
+        ),
+        "response_digest_consistent": parsed.get(
+            "dashboard-loopback-runtime-response-digest-consistent"
+        ),
+        "bounded_runtime_started": parsed.get(
+            "dashboard-loopback-runtime-bounded-runtime-started"
+        ),
+        "bounded_runtime_shutdown": parsed.get(
+            "dashboard-loopback-runtime-bounded-runtime-shutdown"
+        ),
+        "public_network_exposed": parsed.get(
+            "dashboard-loopback-runtime-public-network-exposed"
+        ),
+        "live_controls_enabled": parsed.get(
+            "dashboard-loopback-runtime-live-controls-enabled"
+        ),
+        "external_submission_performed": False,
+        "live_execution_performed": False,
+        "production_ready": False,
+        "dashboard_loopback_runtime_passed": completed.returncode == 0,
+    }
+
+
 def run_communications_runtime(
     workspace: pathlib.Path | None,
     agent_bin: pathlib.Path | None,
@@ -3354,6 +3458,14 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
         )
         if dashboard_report["returncode"] != 0:
             raise RuntimeError("validate-dashboard-runtime failed")
+    dashboard_loopback_report = None
+    if args.run_dashboard_loopback_runtime:
+        dashboard_loopback_report = run_dashboard_loopback_runtime(
+            args.dashboard_loopback_workspace,
+            args.agent_bin,
+        )
+        if dashboard_loopback_report["returncode"] != 0:
+            raise RuntimeError("validate-dashboard-loopback-runtime failed")
     communications_report = None
     if args.run_communications_runtime:
         communications_report = run_communications_runtime(
@@ -3432,6 +3544,8 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
         "runtime_panic_hook_requested": args.run_runtime_panic_hook,
         "dashboard_runtime": dashboard_report,
         "dashboard_runtime_requested": args.run_dashboard_runtime,
+        "dashboard_loopback_runtime": dashboard_loopback_report,
+        "dashboard_loopback_runtime_requested": args.run_dashboard_loopback_runtime,
         "communications_runtime": communications_report,
         "communications_runtime_requested": args.run_communications_runtime,
         "communications_delivery_provider": communications_delivery_report,
@@ -3558,6 +3672,10 @@ def print_text_report(report: dict[str, Any]) -> None:
     print(
         "dashboard runtime requested: "
         f"{str(report['dashboard_runtime_requested']).lower()}"
+    )
+    print(
+        "dashboard loopback runtime requested: "
+        f"{str(report['dashboard_loopback_runtime_requested']).lower()}"
     )
     print(
         "communications runtime requested: "
@@ -4710,6 +4828,63 @@ def print_text_report(report: dict[str, Any]) -> None:
         )
         print(f"live-execution-performed: {dashboard.get('live_execution_performed', '')}")
         print(f"production-ready: {dashboard.get('production_ready', '')}")
+    if report["dashboard_loopback_runtime"] is not None:
+        loopback = report["dashboard_loopback_runtime"]
+        print(
+            "dashboard loopback runtime passed: "
+            f"{str(loopback['dashboard_loopback_runtime_passed']).lower()}"
+        )
+        print(f"dashboard loopback runtime workspace: {loopback['workspace']}")
+        print(
+            "dashboard-loopback-runtime-audit-records-replayed: "
+            f"{loopback.get('audit_records_replayed', '')}"
+        )
+        print(
+            "dashboard-loopback-runtime-checkpoint-recovered: "
+            f"{loopback.get('checkpoint_recovered', '')}"
+        )
+        print(
+            "dashboard-loopback-runtime-loopback-bind-validated: "
+            f"{loopback.get('loopback_bind_validated', '')}"
+        )
+        print(
+            "dashboard-loopback-runtime-expected-requests: "
+            f"{loopback.get('expected_requests', '')}"
+        )
+        print(
+            "dashboard-loopback-runtime-served-requests: "
+            f"{loopback.get('served_requests', '')}"
+        )
+        print(
+            "dashboard-loopback-runtime-all-requests-returned-ok: "
+            f"{loopback.get('all_requests_returned_ok', '')}"
+        )
+        print(
+            "dashboard-loopback-runtime-response-digest-consistent: "
+            f"{loopback.get('response_digest_consistent', '')}"
+        )
+        print(
+            "dashboard-loopback-runtime-bounded-runtime-started: "
+            f"{loopback.get('bounded_runtime_started', '')}"
+        )
+        print(
+            "dashboard-loopback-runtime-bounded-runtime-shutdown: "
+            f"{loopback.get('bounded_runtime_shutdown', '')}"
+        )
+        print(
+            "dashboard-loopback-runtime-public-network-exposed: "
+            f"{loopback.get('public_network_exposed', '')}"
+        )
+        print(
+            "dashboard-loopback-runtime-live-controls-enabled: "
+            f"{loopback.get('live_controls_enabled', '')}"
+        )
+        print(
+            "external-submission-performed: "
+            f"{loopback.get('external_submission_performed', '')}"
+        )
+        print(f"live-execution-performed: {loopback.get('live_execution_performed', '')}")
+        print(f"production-ready: {loopback.get('production_ready', '')}")
     if report["communications_runtime"] is not None:
         communications = report["communications_runtime"]
         print(

@@ -48,6 +48,7 @@ EXPECTED_COMPONENTS = {
     "observability_provider_submission": "observability_provider_submission_requested",
     "runtime_panic_hook": "runtime_panic_hook_requested",
     "dashboard_runtime": "dashboard_runtime_requested",
+    "dashboard_loopback_runtime": "dashboard_loopback_runtime_requested",
     "communications_runtime": "communications_runtime_requested",
     "communications_delivery_provider": "communications_delivery_provider_requested",
     "communications_provider_submission": "communications_provider_submission_requested",
@@ -570,6 +571,9 @@ def build_command(args: argparse.Namespace, workspace: pathlib.Path) -> list[str
         "--run-dashboard-runtime",
         "--dashboard-workspace",
         str(workspace / "dashboard-runtime"),
+        "--run-dashboard-loopback-runtime",
+        "--dashboard-loopback-workspace",
+        str(workspace / "dashboard-loopback-runtime"),
         "--run-communications-runtime",
         "--communications-workspace",
         str(workspace / "communications-runtime"),
@@ -662,6 +666,44 @@ def validate_report(report: dict[str, Any]) -> list[str]:
             errors.append(
                 "observability metrics runtime response_metric_lines was not an integer"
             )
+
+    dashboard_loopback = report.get("dashboard_loopback_runtime")
+    if not isinstance(dashboard_loopback, dict):
+        errors.append("dashboard_loopback_runtime report missing or invalid")
+    else:
+        if dashboard_loopback.get("dashboard_loopback_runtime_passed") is not True:
+            errors.append("dashboard loopback runtime was not marked as passed")
+        for key in (
+            "checkpoint_recovered",
+            "loopback_bind_validated",
+            "all_requests_returned_ok",
+            "response_digest_consistent",
+            "bounded_runtime_started",
+            "bounded_runtime_shutdown",
+        ):
+            if dashboard_loopback.get(key) != "true":
+                errors.append(f"dashboard loopback runtime {key} was not true")
+        for key in (
+            "public_network_exposed",
+            "live_controls_enabled",
+            "external_submission_performed",
+            "live_execution_performed",
+            "production_ready",
+        ):
+            if dashboard_loopback.get(key) not in ("false", False):
+                errors.append(f"dashboard loopback runtime {key} was not false")
+        for key, expected in (
+            ("audit_records_replayed", 1),
+            ("expected_requests", 3),
+            ("served_requests", 3),
+        ):
+            try:
+                if int(dashboard_loopback.get(key, "0")) != expected:
+                    errors.append(
+                        f"dashboard loopback runtime {key} was not {expected}"
+                    )
+            except ValueError:
+                errors.append(f"dashboard loopback runtime {key} was not an integer")
 
     provider_boundary = report.get("observability_provider_boundary")
     if not isinstance(provider_boundary, dict):
