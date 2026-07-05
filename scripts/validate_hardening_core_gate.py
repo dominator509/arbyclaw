@@ -3,12 +3,13 @@
 
 This gate composes the existing local packaging/deployment aggregate gate, the
 execution-path aggregate gate, the operator-surface aggregate gate, the
-opportunity-scenario aggregate gate, the locked dependency license-policy
-validator, and the local secret/policy boundary plus secret backup/restore,
-withdrawal-policy, signer-boundary, and destination-boundary validators. It
-preserves local-only/non-secret behavior: no live trading, no exchange/RPC
-calls, no service-manager actions, no credential loading, no signing,
-publishing, withdrawals, transfers, or production-readiness claims.
+opportunity-scenario aggregate gate, the connector-scenario aggregate gate, the
+locked dependency license-policy validator, and the local secret/policy
+boundary plus secret backup/restore, withdrawal-policy, signer-boundary, and
+destination-boundary validators. It preserves local-only/non-secret behavior:
+no live trading, no exchange/RPC calls, no service-manager actions, no
+credential loading, no signing, publishing, withdrawals, transfers, or
+production-readiness claims.
 """
 
 from __future__ import annotations
@@ -54,6 +55,10 @@ def command_set(workspace_root: pathlib.Path, args: argparse.Namespace) -> list[
         (
             "opportunity_scenario_gate",
             [sys.executable, "scripts/validate_opportunity_scenario_gate.py", "--json"],
+        ),
+        (
+            "connector_scenario_gate",
+            [sys.executable, "scripts/validate_connector_scenario_gate.py", "--json"],
         ),
         (
             "dependency_license_policy",
@@ -292,6 +297,42 @@ def validate_components(components: list[dict[str, Any]]) -> tuple[list[str], bo
         errors.append("opportunity scenario gate did not enforce validation coverage review")
     if opportunity_scenario.get("total_candidate_mentions", 0) <= 0:
         errors.append("opportunity scenario gate did not report candidate coverage")
+
+    connector_scenario = component_by_name["connector_scenario_gate"]["json_report"]
+    assert connector_scenario is not None
+    if connector_scenario.get("all_components_passed") is not True:
+        errors.append("connector scenario gate did not pass every component")
+    if connector_scenario.get("component_count") != 25:
+        errors.append("connector scenario gate did not report exactly 25 components")
+    if connector_scenario.get("unsafe_side_effect_flags_detected") is not False:
+        errors.append("connector scenario gate detected unsafe side-effect flags")
+    for field in (
+        "live_network_used",
+        "credential_loaded",
+        "websocket_connection_opened",
+        "live_provider_call_performed",
+        "external_submission_performed",
+        "rpc_call_performed",
+        "signing_or_broadcast_performed",
+        "live_execution_performed",
+        "production_ready",
+    ):
+        if connector_scenario.get(field) is not False:
+            errors.append(f"connector scenario gate reported unsafe field {field}")
+    for field in (
+        "fee_live_provider_boundary_enforced",
+        "fee_schedule_reconciliation_review_enforced",
+        "web3_provider_nonce_reconciliation_enforced",
+        "web3_sandbox_live_discrepancy_calibration_enforced",
+        "market_data_bad_data_rejection_review_enforced",
+        "market_data_live_provider_boundary_enforced",
+        "market_data_provider_latency_review_enforced",
+        "market_data_provider_reconciliation_review_enforced",
+    ):
+        if connector_scenario.get(field) is not True:
+            errors.append(f"connector scenario gate did not enforce {field}")
+    if connector_scenario.get("audit_records_replayed", 0) <= 0:
+        errors.append("connector scenario gate did not report audit replay coverage")
 
     dependency_license = component_by_name["dependency_license_policy"]["json_report"]
     assert dependency_license is not None
