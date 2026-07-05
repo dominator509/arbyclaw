@@ -248,10 +248,13 @@ pub use strategy::{
 
 pub use fees::{
     append_fee_schedule_verification_audit, persist_fee_schedule_verification_checkpoint,
-    validate_fee_schedule_verification, FeeAdjustedEdge, FeeEstimate, FeeModelError,
-    FeeModelViolation, FeeProvider, FeeSchedule, FeeScheduleVerificationInput,
+    review_fee_schedule_reconciliation, validate_fee_schedule_verification, FeeAdjustedEdge,
+    FeeEstimate, FeeModelError, FeeModelViolation, FeeProvider, FeeSchedule,
+    FeeScheduleReconciliationReviewReport, FeeScheduleReconciliationReviewRequest,
+    FeeScheduleReconciliationReviewStatus, FeeScheduleVerificationInput,
     FeeScheduleVerificationReport, FeeScheduleVerificationStatus, LiquidityRole,
-    FEE_LAST_VERIFICATION_CHECKPOINT_KEY, FEE_MODEL_VERSION, FEE_STATE_SUBSYSTEM,
+    FEE_LAST_VERIFICATION_CHECKPOINT_KEY, FEE_MODEL_VERSION,
+    FEE_SCHEDULE_RECONCILIATION_REVIEW_VERSION, FEE_STATE_SUBSYSTEM,
 };
 
 pub use handoff::{

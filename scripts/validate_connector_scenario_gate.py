@@ -143,6 +143,10 @@ def command_set(workspace_root: pathlib.Path) -> list[tuple[str, list[str]]]:
             ["cargo", "run", "-p", "arb-agent", "--", "validate-fee-schedule-verification"],
         ),
         (
+            "fee_schedule_reconciliation",
+            ["cargo", "run", "-p", "arb-agent", "--", "validate-fee-schedule-reconciliation"],
+        ),
+        (
             "fee_boundary_audit",
             [
                 "cargo",
@@ -486,6 +490,31 @@ def validate_components(components: list[dict[str, Any]]) -> list[str]:
     require(fee, "blocked-fee-review-status", "blocked", errors, "fee_schedule_verification")
     require(fee, "stale-review-blocked", "true", errors, "fee_schedule_verification")
 
+    fee_reconciliation = by_name["fee_schedule_reconciliation"]["parsed"]
+    require(
+        fee_reconciliation,
+        "fee-schedule-reconciliation-review",
+        "ready-for-local-review",
+        errors,
+        "fee_schedule_reconciliation",
+    )
+    for key in (
+        "fee-reconciliation-current-review-ready",
+        "fee-reconciliation-unverified-schedule-blocked",
+        "fee-reconciliation-maker-taker-unverified-blocked",
+        "fee-reconciliation-network-fee-unverified-blocked",
+        "fee-reconciliation-withdrawal-fee-unreviewed-blocked",
+        "fee-reconciliation-stale-review-blocked",
+    ):
+        require(fee_reconciliation, key, "true", errors, "fee_schedule_reconciliation")
+    require(
+        fee_reconciliation,
+        "fee-reconciliation-remaining-external-evidence-count",
+        "4",
+        errors,
+        "fee_schedule_reconciliation",
+    )
+
     fee_audit = by_name["fee_boundary_audit"]["parsed"]
     require(fee_audit, "current-fee-review-status", "ready-for-local-review", errors, "fee_boundary_audit")
     require(fee_audit, "blocked-fee-review-status", "blocked", errors, "fee_boundary_audit")
@@ -609,6 +638,7 @@ def main() -> int:
         "live_execution_performed": False,
         "production_ready": False,
         "audit_records_replayed": audit_records,
+        "fee_schedule_reconciliation_review_enforced": True,
         "market_data_bad_data_rejection_review_enforced": True,
         "market_data_provider_latency_review_enforced": True,
         "market_data_provider_reconciliation_review_enforced": True,

@@ -80,14 +80,14 @@ use arb_core::{
     preflight_dashboard_hosted_request, preflight_observability_endpoint,
     preflight_observability_metrics_scrape, record_observability_alert_route_dispatch,
     render_observability_export_dry_run, review_dashboard_hosted_runtime_readiness,
-    review_dashboard_hosted_security, review_local_secret_backup_restore,
-    review_local_validation_coverage, review_market_data_bad_data_rejection,
-    review_market_data_provider_latency, review_market_data_provider_reconciliation,
-    review_observability_operations, review_platform_adapter_controls,
-    review_platform_command_ingress, review_remote_command_security,
-    review_signer_runtime_isolation, review_signer_secret_scope, run_local_fuzz_corpus_replay,
-    run_local_graceful_shutdown_checkpoint, run_local_runtime_lifecycle,
-    run_local_validation_corpus, run_local_validation_property_checks,
+    review_dashboard_hosted_security, review_fee_schedule_reconciliation,
+    review_local_secret_backup_restore, review_local_validation_coverage,
+    review_market_data_bad_data_rejection, review_market_data_provider_latency,
+    review_market_data_provider_reconciliation, review_observability_operations,
+    review_platform_adapter_controls, review_platform_command_ingress,
+    review_remote_command_security, review_signer_runtime_isolation, review_signer_secret_scope,
+    run_local_fuzz_corpus_replay, run_local_graceful_shutdown_checkpoint,
+    run_local_runtime_lifecycle, run_local_validation_corpus, run_local_validation_property_checks,
     validate_audit_journal_durability, validate_cex_credential_scope_review,
     validate_cex_rate_limit, validate_channel_adapter, validate_channel_session,
     validate_dashboard_hosted_request, validate_dashboard_hosted_session,
@@ -143,14 +143,16 @@ use arb_core::{
     ExecutionAdapterRequest, ExecutionAdapterRunStatus, ExecutionIntent, ExecutionIntentKind,
     ExecutionPlanStatus, ExecutionPlanner, ExecutionPlannerConfig, ExecutionPlannerRequest,
     ExecutionScope, ExpectedValidationOutcome, FeeAdjustedEdge, FeeEstimate, FeeModelError,
-    FeeProvider, FeeSchedule, FeeScheduleVerificationInput, FeeScheduleVerificationReport,
-    FeeScheduleVerificationStatus, FixtureKind, FuzzCorpusDefinition, FuzzSeedRecord,
-    FuzzTargetKind, HealthStatus, HistoricalMarketDataPersistenceInput,
-    HistoricalMarketDataPersistenceReport, HistoricalMarketDataPersistenceStatus,
-    IncidentResponseExecutionTranscript, IncidentResponseExecutionTranscriptStatus, LiquidityRole,
-    LocalFuzzCorpusReplayRequest, LocalFuzzCorpusReplayStatus,
-    LocalTracingSubscriberValidationRequest, LocalTracingSubscriberValidationStatus,
-    LocalValidationCorpusRequest, LocalValidationCorpusStatus, LocalValidationCoverageReviewReport,
+    FeeProvider, FeeSchedule, FeeScheduleReconciliationReviewRequest,
+    FeeScheduleReconciliationReviewStatus, FeeScheduleVerificationInput,
+    FeeScheduleVerificationReport, FeeScheduleVerificationStatus, FixtureKind,
+    FuzzCorpusDefinition, FuzzSeedRecord, FuzzTargetKind, HealthStatus,
+    HistoricalMarketDataPersistenceInput, HistoricalMarketDataPersistenceReport,
+    HistoricalMarketDataPersistenceStatus, IncidentResponseExecutionTranscript,
+    IncidentResponseExecutionTranscriptStatus, LiquidityRole, LocalFuzzCorpusReplayRequest,
+    LocalFuzzCorpusReplayStatus, LocalTracingSubscriberValidationRequest,
+    LocalTracingSubscriberValidationStatus, LocalValidationCorpusRequest,
+    LocalValidationCorpusStatus, LocalValidationCoverageReviewReport,
     LocalValidationCoverageReviewRequest, LocalValidationCoverageReviewStatus,
     MarketDataBadDataRejectionReviewRequest, MarketDataBadDataRejectionReviewStatus,
     MarketDataCapabilities, MarketDataError, MarketDataProvider,
@@ -452,6 +454,9 @@ fn run_with_args(args: impl IntoIterator<Item = String>) -> Result<(), AgentCliE
             run_paid_market_data_provider_evaluation_validation()
         }
         Some("validate-fee-schedule-verification") => run_fee_schedule_verification_validation(),
+        Some("validate-fee-schedule-reconciliation") => {
+            run_fee_schedule_reconciliation_validation()
+        }
         Some("validate-cex-governance-review") => run_cex_governance_review_validation(),
         Some("validate-cex-market-data-request-plans") => {
             run_cex_market_data_request_plan_validation()
@@ -867,6 +872,7 @@ fn print_usage() {
     println!("       arb-agent validate-market-data-bad-data-rejection");
     println!("       arb-agent validate-paid-market-data-provider-evaluation");
     println!("       arb-agent validate-fee-schedule-verification");
+    println!("       arb-agent validate-fee-schedule-reconciliation");
     println!("       arb-agent validate-cex-governance-review");
     println!("       arb-agent validate-cex-market-data-request-plans");
     println!("       arb-agent validate-cex-balance-snapshots");
@@ -2772,6 +2778,123 @@ fn run_fee_schedule_verification_validation() -> Result<(), AgentCliError> {
     }
 
     Ok(())
+}
+
+fn run_fee_schedule_reconciliation_validation() -> Result<(), AgentCliError> {
+    let report =
+        review_fee_schedule_reconciliation(local_fee_schedule_reconciliation_review_request()?)
+            .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+
+    println!("fee-schedule-reconciliation: validation passed");
+    println!(
+        "fee-schedule-reconciliation-review: {}",
+        fee_schedule_reconciliation_review_status_label(report.status)
+    );
+    println!(
+        "fee-reconciliation-current-review-ready: {}",
+        report.current_fee_review_ready
+    );
+    println!(
+        "fee-reconciliation-unverified-schedule-blocked: {}",
+        report.unverified_schedule_blocked
+    );
+    println!(
+        "fee-reconciliation-maker-taker-unverified-blocked: {}",
+        report.maker_taker_unverified_blocked
+    );
+    println!(
+        "fee-reconciliation-network-fee-unverified-blocked: {}",
+        report.network_fee_unverified_blocked
+    );
+    println!(
+        "fee-reconciliation-withdrawal-fee-unreviewed-blocked: {}",
+        report.withdrawal_fee_unreviewed_blocked
+    );
+    println!(
+        "fee-reconciliation-stale-review-blocked: {}",
+        report.stale_review_blocked
+    );
+    println!(
+        "fee-reconciliation-remaining-external-evidence-count: {}",
+        report.remaining_external_evidence_count
+    );
+    println!(
+        "live-provider-call-performed: {}",
+        report.live_provider_call_performed
+    );
+    println!("credential-loaded: {}", report.credential_loaded);
+    println!("production-ready: {}", report.production_ready);
+
+    if report.status != FeeScheduleReconciliationReviewStatus::ReadyForLocalReview
+        || !report.current_fee_review_ready
+        || !report.unverified_schedule_blocked
+        || !report.maker_taker_unverified_blocked
+        || !report.network_fee_unverified_blocked
+        || !report.withdrawal_fee_unreviewed_blocked
+        || !report.stale_review_blocked
+        || report.remaining_external_evidence_count != 4
+        || report.live_provider_call_performed
+        || report.credential_loaded
+        || report.production_ready
+    {
+        return Err(AgentCliError::Validation(
+            "fee schedule reconciliation validation failed".to_owned(),
+        ));
+    }
+
+    Ok(())
+}
+
+fn local_fee_schedule_reconciliation_review_request(
+) -> Result<FeeScheduleReconciliationReviewRequest, AgentCliError> {
+    let current_review = validate_fee_schedule_verification(FeeScheduleVerificationInput {
+        schedule: local_verified_fee_schedule(true),
+        review_id: "local-fee-reconciliation-current".to_owned(),
+        source_reference: "operator-fee-reconciliation-current".to_owned(),
+        account_tier: "paper-tier".to_owned(),
+        maker_taker_tier_verified: true,
+        network_fee_verified: true,
+        withdrawal_fee_review_required: false,
+        withdrawal_fee_reviewed: false,
+        reviewed_at_unix_ms: 10_000,
+        now_unix_ms: 10_500,
+        max_review_age_ms: 1_000,
+        live_provider_call_performed: false,
+        credential_loaded: false,
+    })
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let blocked_review = validate_fee_schedule_verification(FeeScheduleVerificationInput {
+        schedule: local_verified_fee_schedule(false),
+        review_id: "local-fee-reconciliation-blocked".to_owned(),
+        source_reference: "operator-fee-reconciliation-blocked".to_owned(),
+        account_tier: "paper-tier".to_owned(),
+        maker_taker_tier_verified: false,
+        network_fee_verified: false,
+        withdrawal_fee_review_required: true,
+        withdrawal_fee_reviewed: false,
+        reviewed_at_unix_ms: 10_000,
+        now_unix_ms: 12_500,
+        max_review_age_ms: 1_000,
+        live_provider_call_performed: false,
+        credential_loaded: false,
+    })
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+
+    Ok(FeeScheduleReconciliationReviewRequest {
+        review_id: "local-fee-schedule-reconciliation".to_owned(),
+        current_review,
+        blocked_review,
+        min_remaining_external_evidence: 4,
+        remaining_external_evidence: vec![
+            "venue account-tier fee evidence".to_owned(),
+            "provider/API maker-taker fee evidence".to_owned(),
+            "chain gas/network fee evidence".to_owned(),
+            "withdrawal-cost fee evidence".to_owned(),
+        ],
+        live_provider_call_performed: false,
+        credential_loaded: false,
+        production_ready_claimed: false,
+    })
 }
 
 fn local_cex_governance_review_inputs(
@@ -16260,22 +16383,32 @@ const fn fee_schedule_verification_status_label(
     }
 }
 
+const fn fee_schedule_reconciliation_review_status_label(
+    status: FeeScheduleReconciliationReviewStatus,
+) -> &'static str {
+    match status {
+        FeeScheduleReconciliationReviewStatus::ReadyForLocalReview => "ready-for-local-review",
+        FeeScheduleReconciliationReviewStatus::Blocked => "blocked",
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
         config_migration_status_label, execution_adapter_run_status_label,
-        fee_schedule_verification_status_label, fuzz_corpus_replay_status_label,
-        market_data_preflight_status_label, market_data_quality_assessment_status_label,
-        market_data_reconnect_plan_status_label, opportunity_planner_handoff_status_label,
-        opportunity_replay_status_label, paid_market_data_provider_evaluation_status_label,
-        parse_local_iteration_options, parse_local_validation_run_options,
-        parse_runtime_smoke_options, recovery_disposition_label,
-        run_agentic_handoff_audit_validation, run_audit_durability_validation,
-        run_audit_retention_execution_validation, run_communications_runtime_validation,
-        run_config_migration_validation, run_connector_lifecycle_audit_validation,
-        run_dashboard_runtime_validation, run_destination_boundary_audit_validation,
-        run_execution_adapter_audit_validation, run_execution_planner_audit_validation,
-        run_fee_boundary_audit_validation, run_fee_schedule_verification_validation,
+        fee_schedule_reconciliation_review_status_label, fee_schedule_verification_status_label,
+        fuzz_corpus_replay_status_label, market_data_preflight_status_label,
+        market_data_quality_assessment_status_label, market_data_reconnect_plan_status_label,
+        opportunity_planner_handoff_status_label, opportunity_replay_status_label,
+        paid_market_data_provider_evaluation_status_label, parse_local_iteration_options,
+        parse_local_validation_run_options, parse_runtime_smoke_options,
+        recovery_disposition_label, run_agentic_handoff_audit_validation,
+        run_audit_durability_validation, run_audit_retention_execution_validation,
+        run_communications_runtime_validation, run_config_migration_validation,
+        run_connector_lifecycle_audit_validation, run_dashboard_runtime_validation,
+        run_destination_boundary_audit_validation, run_execution_adapter_audit_validation,
+        run_execution_planner_audit_validation, run_fee_boundary_audit_validation,
+        run_fee_schedule_reconciliation_validation, run_fee_schedule_verification_validation,
         run_local_fuzz_corpus_runner, run_local_paper_backtest_corpus_runner,
         run_local_property_check_runner, run_local_validation_corpus_runner,
         run_local_validation_runner, run_market_data_boundary_audit_validation,
@@ -16300,10 +16433,10 @@ mod tests {
         strategy_profile_replay_status_label, strategy_profitability_tuning_status_label,
         validation_corpus_status_label, validation_run_status_label,
         write_runtime_supervised_restart_seed, ConfigMigrationStatus, ExecutionAdapterRunStatus,
-        FeeScheduleVerificationStatus, LocalFuzzCorpusReplayStatus, LocalValidationCorpusStatus,
-        LocalValidationRunOptions, MarketDataProviderPreflightStatus,
-        MarketDataQualityAssessmentStatus, MarketDataReconnectPlanStatus,
-        OpportunityPlannerHandoffStatus, OpportunityReplayStatus,
+        FeeScheduleReconciliationReviewStatus, FeeScheduleVerificationStatus,
+        LocalFuzzCorpusReplayStatus, LocalValidationCorpusStatus, LocalValidationRunOptions,
+        MarketDataProviderPreflightStatus, MarketDataQualityAssessmentStatus,
+        MarketDataReconnectPlanStatus, OpportunityPlannerHandoffStatus, OpportunityReplayStatus,
         PaidMarketDataProviderEvaluationStatus, RuntimeRestartRecoveryDisposition,
         StrategyProfileReplayValidationStatus, StrategyProfitabilityTuningValidationStatus,
         ValidationRunStatus,
@@ -16629,6 +16762,22 @@ mod tests {
     }
 
     #[test]
+    fn fee_schedule_reconciliation_status_labels_are_operator_facing() {
+        assert_eq!(
+            fee_schedule_reconciliation_review_status_label(
+                FeeScheduleReconciliationReviewStatus::ReadyForLocalReview
+            ),
+            "ready-for-local-review"
+        );
+        assert_eq!(
+            fee_schedule_reconciliation_review_status_label(
+                FeeScheduleReconciliationReviewStatus::Blocked
+            ),
+            "blocked"
+        );
+    }
+
+    #[test]
     fn opportunity_replay_validation_runs_local_corpus_only() {
         run_opportunity_replay_validation(2).expect("local opportunity replay should pass");
     }
@@ -16686,6 +16835,12 @@ mod tests {
     fn fee_schedule_verification_validation_runs_local_records_only() {
         run_fee_schedule_verification_validation()
             .expect("local fee schedule verification should pass");
+    }
+
+    #[test]
+    fn fee_schedule_reconciliation_validation_runs_local_records_only() {
+        run_fee_schedule_reconciliation_validation()
+            .expect("local fee schedule reconciliation should pass");
     }
 
     #[test]

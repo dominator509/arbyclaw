@@ -13,6 +13,10 @@ use std::{error::Error, fmt};
 /// Stable fee model version for audit and replay surfaces.
 pub const FEE_MODEL_VERSION: &str = "phase-5-fees-v1";
 
+/// Stable version for local fee schedule reconciliation review reports.
+pub const FEE_SCHEDULE_RECONCILIATION_REVIEW_VERSION: &str =
+    "fee-schedule-reconciliation-review-v1";
+
 /// State-store subsystem name for local fee verification checkpoints.
 pub const FEE_STATE_SUBSYSTEM: &str = "fees";
 
@@ -287,6 +291,76 @@ pub struct FeeScheduleVerificationReport {
     pub violation_codes: Vec<String>,
 }
 
+/// Local reconciliation request over current and intentionally blocked fee reviews.
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FeeScheduleReconciliationReviewRequest {
+    /// Stable non-secret reconciliation review id.
+    pub review_id: String,
+    /// Current fee review expected to be ready for local review.
+    pub current_review: FeeScheduleVerificationReport,
+    /// Blocked fee review expected to cover fail-closed paths.
+    pub blocked_review: FeeScheduleVerificationReport,
+    /// Minimum non-secret external evidence references still required.
+    pub min_remaining_external_evidence: usize,
+    /// Non-secret references to remaining external fee evidence gaps.
+    pub remaining_external_evidence: Vec<String>,
+    /// Whether any live provider/API call was performed by this review. Must remain false.
+    pub live_provider_call_performed: bool,
+    /// Whether any credential was loaded by this review. Must remain false.
+    pub credential_loaded: bool,
+    /// Whether this review claims production readiness. Must remain false.
+    pub production_ready_claimed: bool,
+}
+
+/// Local fee reconciliation review status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum FeeScheduleReconciliationReviewStatus {
+    /// Local current/blocked fee evidence is coherent and ready for local review.
+    ReadyForLocalReview,
+    /// Local fee evidence is incomplete or unsafe.
+    Blocked,
+}
+
+/// Non-secret local fee reconciliation report.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FeeScheduleReconciliationReviewReport {
+    /// Stable report schema version.
+    pub version: String,
+    /// Stable non-secret reconciliation review id.
+    pub review_id: String,
+    /// Review status.
+    pub status: FeeScheduleReconciliationReviewStatus,
+    /// Venue name for the reconciled current fee review.
+    pub venue_name: String,
+    /// Whether the current fee review is ready for local review.
+    pub current_fee_review_ready: bool,
+    /// Whether unverified fee schedules are blocked.
+    pub unverified_schedule_blocked: bool,
+    /// Whether missing maker/taker tier review is blocked.
+    pub maker_taker_unverified_blocked: bool,
+    /// Whether missing network/gas fee review is blocked.
+    pub network_fee_unverified_blocked: bool,
+    /// Whether missing required withdrawal-fee review is blocked.
+    pub withdrawal_fee_unreviewed_blocked: bool,
+    /// Whether stale fee review evidence is blocked.
+    pub stale_review_blocked: bool,
+    /// Whether unresolved external fee evidence references were recorded.
+    pub remaining_external_evidence_recorded: bool,
+    /// Number of unresolved external fee evidence references.
+    pub remaining_external_evidence_count: usize,
+    /// Whether any live provider/API call was performed. Always false here.
+    pub live_provider_call_performed: bool,
+    /// Whether any credential was loaded. Always false here.
+    pub credential_loaded: bool,
+    /// Whether this report approves production readiness. Always false here.
+    pub production_ready: bool,
+    /// Sanitized local violation codes.
+    pub violation_codes: Vec<String>,
+}
+
 impl FeeScheduleVerificationInput {
     /// Validate local fee verification input shape.
     pub fn validate(&self) -> Result<(), FeeModelError> {
@@ -388,6 +462,102 @@ impl FeeScheduleVerificationReport {
     }
 }
 
+impl FeeScheduleReconciliationReviewRequest {
+    /// Validate local fee reconciliation request shape.
+    pub fn validate(&self) -> Result<(), FeeModelError> {
+        self.current_review.validate()?;
+        self.blocked_review.validate()?;
+        let mut violations = Vec::new();
+        validate_text(
+            "fee schedule reconciliation review",
+            &self.review_id,
+            &mut violations,
+        );
+        if self.min_remaining_external_evidence == 0 {
+            violations.push(FeeModelViolation::new(
+                "FEE_RECONCILIATION_EXTERNAL_EVIDENCE_FLOOR_ZERO",
+                "fee reconciliation must require at least one remaining external evidence reference",
+            ));
+        }
+        if self
+            .remaining_external_evidence
+            .iter()
+            .any(|item| item.trim().is_empty())
+        {
+            violations.push(FeeModelViolation::new(
+                "FEE_RECONCILIATION_EXTERNAL_EVIDENCE_BLANK",
+                "fee reconciliation external evidence references must be non-empty",
+            ));
+        }
+
+        if violations.is_empty() {
+            Ok(())
+        } else {
+            Err(FeeModelError::ValidationFailed { violations })
+        }
+    }
+}
+
+impl FeeScheduleReconciliationReviewReport {
+    /// Validate local fee reconciliation report invariants.
+    pub fn validate(&self) -> Result<(), FeeModelError> {
+        let mut violations = Vec::new();
+        if self.version != FEE_SCHEDULE_RECONCILIATION_REVIEW_VERSION {
+            violations.push(FeeModelViolation::new(
+                "FEE_RECONCILIATION_VERSION_INVALID",
+                "fee reconciliation report version is invalid",
+            ));
+        }
+        validate_text(
+            "fee schedule reconciliation report",
+            &self.review_id,
+            &mut violations,
+        );
+        validate_text(
+            "fee schedule reconciliation venue",
+            &self.venue_name,
+            &mut violations,
+        );
+
+        let should_be_ready = self.current_fee_review_ready
+            && self.unverified_schedule_blocked
+            && self.maker_taker_unverified_blocked
+            && self.network_fee_unverified_blocked
+            && self.withdrawal_fee_unreviewed_blocked
+            && self.stale_review_blocked
+            && self.remaining_external_evidence_recorded
+            && !self.live_provider_call_performed
+            && !self.credential_loaded
+            && !self.production_ready;
+        if should_be_ready
+            && self.status != FeeScheduleReconciliationReviewStatus::ReadyForLocalReview
+        {
+            violations.push(FeeModelViolation::new(
+                "FEE_RECONCILIATION_STATUS_SHOULD_BE_READY",
+                "complete local fee reconciliation evidence must be ready for local review",
+            ));
+        }
+        if !should_be_ready && self.status != FeeScheduleReconciliationReviewStatus::Blocked {
+            violations.push(FeeModelViolation::new(
+                "FEE_RECONCILIATION_STATUS_SHOULD_BLOCK",
+                "incomplete local fee reconciliation evidence must be blocked",
+            ));
+        }
+        if self.production_ready {
+            violations.push(FeeModelViolation::new(
+                "FEE_RECONCILIATION_PRODUCTION_READY_FORBIDDEN",
+                "local fee reconciliation must not approve production readiness",
+            ));
+        }
+
+        if violations.is_empty() {
+            Ok(())
+        } else {
+            Err(FeeModelError::ValidationFailed { violations })
+        }
+    }
+}
+
 /// Validate local fee schedule verification metadata without external calls.
 pub fn validate_fee_schedule_verification(
     input: FeeScheduleVerificationInput,
@@ -463,6 +633,133 @@ pub fn validate_fee_schedule_verification(
         stale_review_blocked,
         live_provider_call_performed: input.live_provider_call_performed,
         credential_loaded: input.credential_loaded,
+        production_ready: false,
+        violation_codes,
+    };
+    report.validate()?;
+    Ok(report)
+}
+
+/// Review local current/blocked fee schedule evidence without external calls.
+pub fn review_fee_schedule_reconciliation(
+    request: FeeScheduleReconciliationReviewRequest,
+) -> Result<FeeScheduleReconciliationReviewReport, FeeModelError> {
+    request.validate()?;
+
+    let current_fee_review_ready = request.current_review.status
+        == FeeScheduleVerificationStatus::ReadyForLocalReview
+        && request.current_review.schedule_externally_verified
+        && request.current_review.maker_taker_tier_verified
+        && request.current_review.network_fee_verified
+        && !request.current_review.stale_review_blocked
+        && !request.current_review.live_provider_call_performed
+        && !request.current_review.credential_loaded
+        && !request.current_review.production_ready;
+    let blocked_review_failed_closed = request.blocked_review.status
+        == FeeScheduleVerificationStatus::Blocked
+        && !request.blocked_review.live_provider_call_performed
+        && !request.blocked_review.credential_loaded
+        && !request.blocked_review.production_ready;
+    let has_blocker = |code: &str| {
+        request
+            .blocked_review
+            .violation_codes
+            .iter()
+            .any(|violation| violation == code)
+    };
+    let unverified_schedule_blocked =
+        blocked_review_failed_closed && has_blocker("FEE_VERIFICATION_SCHEDULE_UNVERIFIED");
+    let maker_taker_unverified_blocked =
+        blocked_review_failed_closed && has_blocker("FEE_VERIFICATION_MAKER_TAKER_UNVERIFIED");
+    let network_fee_unverified_blocked =
+        blocked_review_failed_closed && has_blocker("FEE_VERIFICATION_NETWORK_FEE_UNVERIFIED");
+    let withdrawal_fee_unreviewed_blocked =
+        blocked_review_failed_closed && has_blocker("FEE_VERIFICATION_WITHDRAWAL_FEE_UNREVIEWED");
+    let stale_review_blocked =
+        blocked_review_failed_closed && has_blocker("FEE_VERIFICATION_REVIEW_STALE");
+    let remaining_external_evidence_recorded =
+        request.remaining_external_evidence.len() >= request.min_remaining_external_evidence;
+    let live_provider_call_performed = request.live_provider_call_performed
+        || request.current_review.live_provider_call_performed
+        || request.blocked_review.live_provider_call_performed;
+    let credential_loaded = request.credential_loaded
+        || request.current_review.credential_loaded
+        || request.blocked_review.credential_loaded;
+    let production_ready_claimed = request.production_ready_claimed
+        || request.current_review.production_ready
+        || request.blocked_review.production_ready;
+
+    let mut violation_codes = Vec::new();
+    push_if(
+        &mut violation_codes,
+        !current_fee_review_ready,
+        "FEE_RECONCILIATION_CURRENT_REVIEW_NOT_READY",
+    );
+    push_if(
+        &mut violation_codes,
+        !unverified_schedule_blocked,
+        "FEE_RECONCILIATION_UNVERIFIED_SCHEDULE_NOT_BLOCKED",
+    );
+    push_if(
+        &mut violation_codes,
+        !maker_taker_unverified_blocked,
+        "FEE_RECONCILIATION_MAKER_TAKER_NOT_BLOCKED",
+    );
+    push_if(
+        &mut violation_codes,
+        !network_fee_unverified_blocked,
+        "FEE_RECONCILIATION_NETWORK_FEE_NOT_BLOCKED",
+    );
+    push_if(
+        &mut violation_codes,
+        !withdrawal_fee_unreviewed_blocked,
+        "FEE_RECONCILIATION_WITHDRAWAL_FEE_NOT_BLOCKED",
+    );
+    push_if(
+        &mut violation_codes,
+        !stale_review_blocked,
+        "FEE_RECONCILIATION_STALE_REVIEW_NOT_BLOCKED",
+    );
+    push_if(
+        &mut violation_codes,
+        !remaining_external_evidence_recorded,
+        "FEE_RECONCILIATION_EXTERNAL_EVIDENCE_MISSING",
+    );
+    push_if(
+        &mut violation_codes,
+        live_provider_call_performed,
+        "FEE_RECONCILIATION_LIVE_PROVIDER_CALL",
+    );
+    push_if(
+        &mut violation_codes,
+        credential_loaded,
+        "FEE_RECONCILIATION_CREDENTIAL_LOADED",
+    );
+    push_if(
+        &mut violation_codes,
+        production_ready_claimed,
+        "FEE_RECONCILIATION_PRODUCTION_READY_CLAIMED",
+    );
+
+    let report = FeeScheduleReconciliationReviewReport {
+        version: FEE_SCHEDULE_RECONCILIATION_REVIEW_VERSION.to_owned(),
+        review_id: request.review_id,
+        status: if violation_codes.is_empty() {
+            FeeScheduleReconciliationReviewStatus::ReadyForLocalReview
+        } else {
+            FeeScheduleReconciliationReviewStatus::Blocked
+        },
+        venue_name: request.current_review.venue_name,
+        current_fee_review_ready,
+        unverified_schedule_blocked,
+        maker_taker_unverified_blocked,
+        network_fee_unverified_blocked,
+        withdrawal_fee_unreviewed_blocked,
+        stale_review_blocked,
+        remaining_external_evidence_recorded,
+        remaining_external_evidence_count: request.remaining_external_evidence.len(),
+        live_provider_call_performed,
+        credential_loaded,
         production_ready: false,
         violation_codes,
     };
@@ -770,7 +1067,8 @@ fn is_non_negative_finite(value: f64) -> bool {
 mod tests {
     use super::{
         append_fee_schedule_verification_audit, persist_fee_schedule_verification_checkpoint,
-        validate_fee_schedule_verification, FeeAdjustedEdge, FeeSchedule,
+        review_fee_schedule_reconciliation, validate_fee_schedule_verification, FeeAdjustedEdge,
+        FeeSchedule, FeeScheduleReconciliationReviewRequest, FeeScheduleReconciliationReviewStatus,
         FeeScheduleVerificationInput, FeeScheduleVerificationReport, FeeScheduleVerificationStatus,
         LiquidityRole, FEE_LAST_VERIFICATION_CHECKPOINT_KEY, FEE_STATE_SUBSYSTEM,
     };
@@ -913,6 +1211,74 @@ mod tests {
     }
 
     #[test]
+    fn fee_schedule_reconciliation_accepts_local_current_and_blocked_evidence() {
+        let report = review_fee_schedule_reconciliation(fee_reconciliation_request(false, 4))
+            .expect("fee reconciliation should validate");
+
+        assert_eq!(
+            report.status,
+            FeeScheduleReconciliationReviewStatus::ReadyForLocalReview
+        );
+        assert!(report.current_fee_review_ready);
+        assert!(report.unverified_schedule_blocked);
+        assert!(report.maker_taker_unverified_blocked);
+        assert!(report.network_fee_unverified_blocked);
+        assert!(report.withdrawal_fee_unreviewed_blocked);
+        assert!(report.stale_review_blocked);
+        assert!(report.remaining_external_evidence_recorded);
+        assert_eq!(report.remaining_external_evidence_count, 4);
+        assert!(!report.live_provider_call_performed);
+        assert!(!report.credential_loaded);
+        assert!(!report.production_ready);
+        assert!(report.violation_codes.is_empty());
+    }
+
+    #[test]
+    fn fee_schedule_reconciliation_blocks_missing_external_evidence() {
+        let report = review_fee_schedule_reconciliation(fee_reconciliation_request(false, 5))
+            .expect("fee reconciliation should produce blocked report");
+
+        assert_eq!(
+            report.status,
+            FeeScheduleReconciliationReviewStatus::Blocked
+        );
+        assert!(!report.remaining_external_evidence_recorded);
+        assert!(report
+            .violation_codes
+            .iter()
+            .any(|code| code == "FEE_RECONCILIATION_EXTERNAL_EVIDENCE_MISSING"));
+        assert!(!report.live_provider_call_performed);
+        assert!(!report.credential_loaded);
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn fee_schedule_reconciliation_fails_closed_on_side_effect_claims() {
+        let report = review_fee_schedule_reconciliation(fee_reconciliation_request(true, 4))
+            .expect("fee reconciliation should produce blocked report");
+
+        assert_eq!(
+            report.status,
+            FeeScheduleReconciliationReviewStatus::Blocked
+        );
+        assert!(report.live_provider_call_performed);
+        assert!(report.credential_loaded);
+        assert!(!report.production_ready);
+        assert!(report
+            .violation_codes
+            .iter()
+            .any(|code| code == "FEE_RECONCILIATION_LIVE_PROVIDER_CALL"));
+        assert!(report
+            .violation_codes
+            .iter()
+            .any(|code| code == "FEE_RECONCILIATION_CREDENTIAL_LOADED"));
+        assert!(report
+            .violation_codes
+            .iter()
+            .any(|code| code == "FEE_RECONCILIATION_PRODUCTION_READY_CLAIMED"));
+    }
+
+    #[test]
     fn fee_schedule_verification_audit_and_state_reopen_locally() {
         let report = validate_fee_schedule_verification(FeeScheduleVerificationInput {
             schedule: verified_schedule(),
@@ -977,6 +1343,62 @@ mod tests {
             taker_bps: 6.0,
             network_fee_quote: 0.50,
             externally_verified: true,
+        }
+    }
+
+    fn fee_reconciliation_request(
+        side_effect_claimed: bool,
+        min_remaining_external_evidence: usize,
+    ) -> FeeScheduleReconciliationReviewRequest {
+        let current_review = validate_fee_schedule_verification(FeeScheduleVerificationInput {
+            schedule: verified_schedule(),
+            review_id: "fee-review-current-reconciliation".to_owned(),
+            source_reference: "operator-fee-review-current-reconciliation".to_owned(),
+            account_tier: "paper-tier".to_owned(),
+            maker_taker_tier_verified: true,
+            network_fee_verified: true,
+            withdrawal_fee_review_required: false,
+            withdrawal_fee_reviewed: false,
+            reviewed_at_unix_ms: 10_000,
+            now_unix_ms: 10_500,
+            max_review_age_ms: 1_000,
+            live_provider_call_performed: false,
+            credential_loaded: false,
+        })
+        .expect("current fee review should validate");
+        let mut blocked_schedule = verified_schedule();
+        blocked_schedule.externally_verified = false;
+        let blocked_review = validate_fee_schedule_verification(FeeScheduleVerificationInput {
+            schedule: blocked_schedule,
+            review_id: "fee-review-blocked-reconciliation".to_owned(),
+            source_reference: "operator-fee-review-blocked-reconciliation".to_owned(),
+            account_tier: "paper-tier".to_owned(),
+            maker_taker_tier_verified: false,
+            network_fee_verified: false,
+            withdrawal_fee_review_required: true,
+            withdrawal_fee_reviewed: false,
+            reviewed_at_unix_ms: 10_000,
+            now_unix_ms: 12_500,
+            max_review_age_ms: 1_000,
+            live_provider_call_performed: false,
+            credential_loaded: false,
+        })
+        .expect("blocked fee review should validate");
+
+        FeeScheduleReconciliationReviewRequest {
+            review_id: "fee-schedule-reconciliation-review".to_owned(),
+            current_review,
+            blocked_review,
+            min_remaining_external_evidence,
+            remaining_external_evidence: vec![
+                "venue account-tier fee evidence".to_owned(),
+                "provider/API maker-taker fee evidence".to_owned(),
+                "chain gas/network fee evidence".to_owned(),
+                "withdrawal-cost fee evidence".to_owned(),
+            ],
+            live_provider_call_performed: side_effect_claimed,
+            credential_loaded: side_effect_claimed,
+            production_ready_claimed: side_effect_claimed,
         }
     }
 
