@@ -299,6 +299,45 @@ def validate_dashboard_cli(parsed: dict[str, str]) -> list[str]:
     return errors
 
 
+def validate_dashboard_session_lifecycle_cli(parsed: dict[str, str]) -> list[str]:
+    errors: list[str] = []
+    for key in (
+        "dashboard-session-lifecycle-checkpoint-recovered",
+        "dashboard-session-reference-recorded",
+        "dashboard-csrf-reference-recorded",
+        "dashboard-session-authenticated",
+        "dashboard-session-authorized",
+        "dashboard-session-csrf-lifecycle-validated",
+        "dashboard-session-revocation-supported",
+        "dashboard-session-read-only-role",
+        "dashboard-session-rate-limit-validated",
+        "dashboard-session-loopback-only",
+    ):
+        if parsed.get(key) != "true":
+            errors.append(f"dashboard session lifecycle cli expected {key}=true")
+    for key in (
+        "dashboard-session-revoked",
+        "public-network-exposed",
+        "live-controls-enabled",
+        "secret-material-present",
+        "persistent-dashboard-server-started",
+        "external-submission-performed",
+        "live-execution-performed",
+        "production-ready",
+    ):
+        if parsed.get(key) != "false":
+            errors.append(f"dashboard session lifecycle cli expected {key}=false")
+    if parsed.get("dashboard-session-lifecycle") != "validation passed":
+        errors.append("dashboard session lifecycle cli did not report validation passed")
+    if parsed.get("dashboard-session-lifecycle-status") != "ready-for-local-review":
+        errors.append("dashboard session lifecycle cli expected ready-for-local-review")
+    if parse_positive_int(parsed.get("dashboard-session-lifecycle-audit-records-replayed")) != 1:
+        errors.append("dashboard session lifecycle cli expected one replayed audit record")
+    if parse_positive_int(parsed.get("dashboard-session-missing-control-count")) != 0:
+        errors.append("dashboard session lifecycle cli expected zero missing controls")
+    return errors
+
+
 def validate_dashboard_loopback_runtime_cli(parsed: dict[str, str]) -> list[str]:
     errors: list[str] = []
     for key in (
@@ -774,6 +813,19 @@ def main() -> int:
                 ],
             ),
             run_text_command(
+                "dashboard_session_lifecycle_cli",
+                [
+                    "cargo",
+                    "run",
+                    "-p",
+                    "arb-agent",
+                    "--",
+                    "validate-dashboard-session-lifecycle",
+                    "--workspace",
+                    str(workspace_root / "dashboard-session-lifecycle"),
+                ],
+            ),
+            run_text_command(
                 "dashboard_loopback_runtime_cli",
                 [
                     "cargo",
@@ -869,6 +921,7 @@ def main() -> int:
         "communications_outbox_cli": lambda component: validate_communications_outbox_cli(component["parsed"]),
         "communications_delivery_provider_boundary_cli": lambda component: validate_communications_delivery_provider_boundary_cli(component["parsed"]),
         "dashboard_runtime_cli": lambda component: validate_dashboard_cli(component["parsed"]),
+        "dashboard_session_lifecycle_cli": lambda component: validate_dashboard_session_lifecycle_cli(component["parsed"]),
         "dashboard_loopback_runtime_cli": lambda component: validate_dashboard_loopback_runtime_cli(component["parsed"]),
         "observability_runtime_cli": lambda component: validate_observability_cli(component["parsed"]),
         "observability_metrics_runtime_cli": lambda component: validate_observability_metrics_runtime_cli(component["parsed"]),

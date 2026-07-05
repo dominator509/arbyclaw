@@ -43,6 +43,10 @@ pub const DASHBOARD_LAST_HOSTED_REQUEST_VALIDATION_CHECKPOINT_KEY: &str =
 pub const DASHBOARD_LAST_HOSTED_SESSION_VALIDATION_CHECKPOINT_KEY: &str =
     "dashboard:last-hosted-session-validation";
 
+/// State-store key for the latest local hosted dashboard session lifecycle validation.
+pub const DASHBOARD_LAST_HOSTED_SESSION_LIFECYCLE_CHECKPOINT_KEY: &str =
+    "dashboard:last-hosted-session-lifecycle";
+
 /// State-store key for the latest bounded loopback dashboard runtime probe.
 pub const DASHBOARD_LAST_LOOPBACK_RUNTIME_PROBE_CHECKPOINT_KEY: &str =
     "dashboard:last-loopback-runtime-probe";
@@ -563,6 +567,116 @@ pub struct DashboardHostedSessionValidationReport {
     pub production_ready: bool,
 }
 
+/// Local hosted dashboard session lifecycle validation input.
+///
+/// This records non-secret session and CSRF reference lifecycle facts for future
+/// hosted dashboard work. It does not create browser sessions, store cookies,
+/// retain CSRF token material, start servers, expose networks, or enable live controls.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DashboardHostedSessionLifecycleValidation {
+    /// Stable local lifecycle validation id.
+    pub lifecycle_id: String,
+    /// Non-secret session reference id, never a cookie or bearer token.
+    pub session_reference: String,
+    /// Non-secret CSRF reference id, never token material.
+    pub csrf_reference: String,
+    /// Sanitized operator role label.
+    pub operator_role: String,
+    /// Whether the session reference was authenticated by local metadata.
+    pub authenticated: bool,
+    /// Whether the operator role was authorized by local policy metadata.
+    pub authorized: bool,
+    /// Whether a CSRF reference was issued.
+    pub csrf_reference_issued: bool,
+    /// Whether the CSRF reference was scoped to the session/request class.
+    pub csrf_reference_scoped: bool,
+    /// Whether CSRF rotation is represented.
+    pub csrf_reference_rotated: bool,
+    /// Whether session revocation/logout is represented.
+    pub session_revocation_supported: bool,
+    /// Whether the session was revoked.
+    pub session_revoked: bool,
+    /// Whether the role is read-only for current dashboard controls.
+    pub read_only_role: bool,
+    /// Remaining requests in the local rate-limit bucket.
+    pub rate_limit_remaining: u32,
+    /// Maximum requests per minute for this local lifecycle record.
+    pub max_requests_per_minute: u32,
+    /// Whether the lifecycle remains loopback-only.
+    pub loopback_only: bool,
+    /// Whether public network exposure occurred. Must remain false.
+    pub public_network_exposed: bool,
+    /// Whether live controls were enabled. Must remain false.
+    pub live_controls_enabled: bool,
+    /// Whether secret/session/token material was present. Must remain false.
+    pub secret_material_present: bool,
+    /// Whether a persistent server was started. Must remain false.
+    pub persistent_server_started: bool,
+    /// Whether this lifecycle claims production readiness. Must remain false.
+    pub production_ready_claimed: bool,
+    /// Local validation timestamp.
+    pub validated_at_unix_ms: u64,
+}
+
+/// Local hosted dashboard session lifecycle validation status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum DashboardHostedSessionLifecycleValidationStatus {
+    /// Local session lifecycle references are coherent for local review only.
+    ReadyForLocalReview,
+    /// Required lifecycle controls are missing or unsafe side effects occurred.
+    BlockedMissingControls,
+}
+
+/// Local hosted dashboard session lifecycle validation report.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DashboardHostedSessionLifecycleValidationReport {
+    /// Boundary version that produced this report.
+    pub dashboard_boundary_version: String,
+    /// Stable local lifecycle validation id.
+    pub lifecycle_id: String,
+    /// Validation status.
+    pub status: DashboardHostedSessionLifecycleValidationStatus,
+    /// Whether the session reference is non-secret and present.
+    pub session_reference_recorded: bool,
+    /// Whether the CSRF reference is non-secret and present.
+    pub csrf_reference_recorded: bool,
+    /// Sanitized operator role label.
+    pub operator_role: String,
+    /// Whether the session reference was authenticated by local metadata.
+    pub authenticated: bool,
+    /// Whether the operator role was authorized by local policy metadata.
+    pub authorized: bool,
+    /// Whether the CSRF lifecycle is represented.
+    pub csrf_lifecycle_validated: bool,
+    /// Whether revocation/logout controls are represented.
+    pub session_revocation_supported: bool,
+    /// Whether the session was revoked.
+    pub session_revoked: bool,
+    /// Whether the role is read-only for current dashboard controls.
+    pub read_only_role: bool,
+    /// Whether rate-limit metadata is usable.
+    pub rate_limit_validated: bool,
+    /// Whether the lifecycle remains loopback-only.
+    pub loopback_only: bool,
+    /// Number of missing or unsafe control findings.
+    pub missing_control_count: u32,
+    /// Whether public network exposure occurred. Always false for ready reports.
+    pub public_network_exposed: bool,
+    /// Whether live controls were enabled. Always false.
+    pub live_controls_enabled: bool,
+    /// Whether secret/session/token material was present. Always false.
+    pub secret_material_present: bool,
+    /// Whether a persistent server was started. Always false.
+    pub persistent_server_started: bool,
+    /// Whether this report approves production readiness. Always false.
+    pub production_ready: bool,
+    /// Stable non-secret violation codes.
+    pub violation_codes: Vec<String>,
+}
+
 /// Bounded loopback dashboard runtime probe request.
 ///
 /// This exercises a single local loopback listener for multiple read-only
@@ -906,6 +1020,110 @@ impl DashboardHostedSessionValidationReport {
                     violations.push(DashboardViolation::new(
                         "DASHBOARD_HOSTED_SESSION_BLOCKED_MISMATCH",
                         "blocked hosted dashboard session validation must be missing at least one required control",
+                    ));
+                }
+            }
+        }
+        finish_validation(violations)
+    }
+}
+
+impl DashboardHostedSessionLifecycleValidation {
+    /// Validate local hosted dashboard session lifecycle input.
+    pub fn validate(&self) -> Result<(), DashboardError> {
+        let mut violations = Vec::new();
+        validate_id(
+            "dashboard hosted session lifecycle validation",
+            &self.lifecycle_id,
+            &mut violations,
+        );
+        validate_reference_id(
+            "dashboard hosted session reference",
+            &self.session_reference,
+            &mut violations,
+        );
+        validate_reference_id(
+            "dashboard hosted CSRF reference",
+            &self.csrf_reference,
+            &mut violations,
+        );
+        validate_id(
+            "dashboard hosted operator role",
+            &self.operator_role,
+            &mut violations,
+        );
+        if self.max_requests_per_minute == 0 {
+            violations.push(DashboardViolation::new(
+                "DASHBOARD_HOSTED_SESSION_LIFECYCLE_RATE_LIMIT_ZERO",
+                "hosted dashboard session lifecycle requires a positive rate limit",
+            ));
+        }
+        finish_validation(violations)
+    }
+}
+
+impl DashboardHostedSessionLifecycleValidationReport {
+    /// Validate local hosted dashboard session lifecycle report invariants.
+    pub fn validate(&self) -> Result<(), DashboardError> {
+        let mut violations = Vec::new();
+        validate_id(
+            "dashboard hosted session lifecycle validation",
+            &self.lifecycle_id,
+            &mut violations,
+        );
+        if self.dashboard_boundary_version != DASHBOARD_BOUNDARY_VERSION {
+            violations.push(DashboardViolation::new_owned(
+                "DASHBOARD_VERSION_MISMATCH",
+                format!(
+                    "dashboard_boundary_version must be {DASHBOARD_BOUNDARY_VERSION}, got {}",
+                    self.dashboard_boundary_version
+                ),
+            ));
+        }
+        let forbidden_side_effects = self.public_network_exposed
+            || self.live_controls_enabled
+            || self.secret_material_present
+            || self.persistent_server_started
+            || self.production_ready;
+        if forbidden_side_effects
+            && self.status == DashboardHostedSessionLifecycleValidationStatus::ReadyForLocalReview
+        {
+            violations.push(DashboardViolation::new(
+                "DASHBOARD_HOSTED_SESSION_LIFECYCLE_FORBIDDEN_SIDE_EFFECT",
+                "hosted dashboard session lifecycle must not expose networks, enable controls, retain secrets, start servers, or approve production readiness",
+            ));
+        }
+        let ready = self.session_reference_recorded
+            && self.csrf_reference_recorded
+            && self.authenticated
+            && self.authorized
+            && self.csrf_lifecycle_validated
+            && self.session_revocation_supported
+            && !self.session_revoked
+            && self.read_only_role
+            && self.rate_limit_validated
+            && self.loopback_only
+            && self.missing_control_count == 0
+            && self.violation_codes.is_empty()
+            && !self.public_network_exposed
+            && !self.live_controls_enabled
+            && !self.secret_material_present
+            && !self.persistent_server_started
+            && !self.production_ready;
+        match self.status {
+            DashboardHostedSessionLifecycleValidationStatus::ReadyForLocalReview => {
+                if !ready {
+                    violations.push(DashboardViolation::new(
+                        "DASHBOARD_HOSTED_SESSION_LIFECYCLE_READY_MISMATCH",
+                        "ready hosted dashboard session lifecycle requires non-secret references, auth, authorization, CSRF lifecycle, revocation, read-only role, rate limit, loopback-only scope, and zero side effects",
+                    ));
+                }
+            }
+            DashboardHostedSessionLifecycleValidationStatus::BlockedMissingControls => {
+                if ready {
+                    violations.push(DashboardViolation::new(
+                        "DASHBOARD_HOSTED_SESSION_LIFECYCLE_BLOCKED_MISMATCH",
+                        "blocked hosted dashboard session lifecycle must be missing at least one required control",
                     ));
                 }
             }
@@ -1703,6 +1921,128 @@ pub fn validate_dashboard_hosted_session(
         public_network_exposed,
         live_controls_enabled,
         production_ready,
+    };
+    report.validate()?;
+    Ok(report)
+}
+
+/// Validate local hosted dashboard session lifecycle references and controls.
+pub fn validate_dashboard_hosted_session_lifecycle(
+    request: &DashboardHostedSessionLifecycleValidation,
+) -> Result<DashboardHostedSessionLifecycleValidationReport, DashboardError> {
+    request.validate()?;
+    let session_reference_recorded = !request.session_reference.trim().is_empty()
+        && !contains_secret_like_text(&request.session_reference);
+    let csrf_reference_recorded = !request.csrf_reference.trim().is_empty()
+        && !contains_secret_like_text(&request.csrf_reference);
+    let csrf_lifecycle_validated = request.csrf_reference_issued
+        && request.csrf_reference_scoped
+        && request.csrf_reference_rotated;
+    let rate_limit_validated = request.max_requests_per_minute > 0
+        && request.rate_limit_remaining <= request.max_requests_per_minute;
+    let mut violation_codes = Vec::new();
+    push_dashboard_code(
+        &mut violation_codes,
+        !session_reference_recorded,
+        "DASHBOARD_HOSTED_SESSION_LIFECYCLE_SESSION_REFERENCE_MISSING",
+    );
+    push_dashboard_code(
+        &mut violation_codes,
+        !csrf_reference_recorded,
+        "DASHBOARD_HOSTED_SESSION_LIFECYCLE_CSRF_REFERENCE_MISSING",
+    );
+    push_dashboard_code(
+        &mut violation_codes,
+        !request.authenticated,
+        "DASHBOARD_HOSTED_SESSION_LIFECYCLE_NOT_AUTHENTICATED",
+    );
+    push_dashboard_code(
+        &mut violation_codes,
+        !request.authorized,
+        "DASHBOARD_HOSTED_SESSION_LIFECYCLE_NOT_AUTHORIZED",
+    );
+    push_dashboard_code(
+        &mut violation_codes,
+        !csrf_lifecycle_validated,
+        "DASHBOARD_HOSTED_SESSION_LIFECYCLE_CSRF_INCOMPLETE",
+    );
+    push_dashboard_code(
+        &mut violation_codes,
+        !request.session_revocation_supported,
+        "DASHBOARD_HOSTED_SESSION_LIFECYCLE_REVOCATION_MISSING",
+    );
+    push_dashboard_code(
+        &mut violation_codes,
+        request.session_revoked,
+        "DASHBOARD_HOSTED_SESSION_LIFECYCLE_SESSION_REVOKED",
+    );
+    push_dashboard_code(
+        &mut violation_codes,
+        !request.read_only_role,
+        "DASHBOARD_HOSTED_SESSION_LIFECYCLE_ROLE_NOT_READ_ONLY",
+    );
+    push_dashboard_code(
+        &mut violation_codes,
+        !rate_limit_validated,
+        "DASHBOARD_HOSTED_SESSION_LIFECYCLE_RATE_LIMIT_INVALID",
+    );
+    push_dashboard_code(
+        &mut violation_codes,
+        !request.loopback_only,
+        "DASHBOARD_HOSTED_SESSION_LIFECYCLE_NOT_LOOPBACK_ONLY",
+    );
+    push_dashboard_code(
+        &mut violation_codes,
+        request.public_network_exposed,
+        "DASHBOARD_HOSTED_SESSION_LIFECYCLE_PUBLIC_NETWORK_EXPOSED",
+    );
+    push_dashboard_code(
+        &mut violation_codes,
+        request.live_controls_enabled,
+        "DASHBOARD_HOSTED_SESSION_LIFECYCLE_LIVE_CONTROLS_ENABLED",
+    );
+    push_dashboard_code(
+        &mut violation_codes,
+        request.secret_material_present,
+        "DASHBOARD_HOSTED_SESSION_LIFECYCLE_SECRET_MATERIAL_PRESENT",
+    );
+    push_dashboard_code(
+        &mut violation_codes,
+        request.persistent_server_started,
+        "DASHBOARD_HOSTED_SESSION_LIFECYCLE_SERVER_STARTED",
+    );
+    push_dashboard_code(
+        &mut violation_codes,
+        request.production_ready_claimed,
+        "DASHBOARD_HOSTED_SESSION_LIFECYCLE_PRODUCTION_READY_CLAIMED",
+    );
+    let missing_control_count = u32::try_from(violation_codes.len()).unwrap_or(u32::MAX);
+    let report = DashboardHostedSessionLifecycleValidationReport {
+        dashboard_boundary_version: DASHBOARD_BOUNDARY_VERSION.to_owned(),
+        lifecycle_id: request.lifecycle_id.clone(),
+        status: if missing_control_count == 0 {
+            DashboardHostedSessionLifecycleValidationStatus::ReadyForLocalReview
+        } else {
+            DashboardHostedSessionLifecycleValidationStatus::BlockedMissingControls
+        },
+        session_reference_recorded,
+        csrf_reference_recorded,
+        operator_role: request.operator_role.clone(),
+        authenticated: request.authenticated,
+        authorized: request.authorized,
+        csrf_lifecycle_validated,
+        session_revocation_supported: request.session_revocation_supported,
+        session_revoked: request.session_revoked,
+        read_only_role: request.read_only_role,
+        rate_limit_validated,
+        loopback_only: request.loopback_only,
+        missing_control_count,
+        public_network_exposed: request.public_network_exposed,
+        live_controls_enabled: request.live_controls_enabled,
+        secret_material_present: request.secret_material_present,
+        persistent_server_started: request.persistent_server_started,
+        production_ready: false,
+        violation_codes,
     };
     report.validate()?;
     Ok(report)
@@ -3226,6 +3566,117 @@ pub fn append_dashboard_hosted_session_validation_audit(
     journal.append_event(event).map_err(DashboardError::from)
 }
 
+/// Persist the latest local hosted-dashboard session lifecycle validation.
+///
+/// This stores sanitized local lifecycle metadata only. It does not store
+/// cookies, CSRF token material, browser credentials, live controls, or readiness claims.
+pub fn persist_dashboard_hosted_session_lifecycle_checkpoint(
+    store: &mut impl StateStore,
+    report: &DashboardHostedSessionLifecycleValidationReport,
+    updated_at_unix_ms: u64,
+) -> Result<StateCheckpoint, DashboardError> {
+    report.validate()?;
+    let checkpoint = StateCheckpoint {
+        key: DASHBOARD_LAST_HOSTED_SESSION_LIFECYCLE_CHECKPOINT_KEY.to_owned(),
+        subsystem: DASHBOARD_STATE_SUBSYSTEM.to_owned(),
+        value: serde_json::to_string(report).map_err(|error| DashboardError::StateStoreFailed {
+            reason: format!(
+                "failed to serialize dashboard hosted session lifecycle checkpoint: {error}"
+            ),
+        })?,
+        updated_at_unix_ms,
+    };
+    store
+        .put_checkpoint(checkpoint.clone())
+        .map_err(DashboardError::from)?;
+    Ok(checkpoint)
+}
+
+/// Append one local hosted-dashboard session lifecycle validation to audit.
+///
+/// This records non-secret lifecycle outcomes only. It does not expose public
+/// networks, store token material, start persistent servers, enable live controls,
+/// or claim production readiness.
+pub fn append_dashboard_hosted_session_lifecycle_audit(
+    journal: &mut AppendOnlyAuditJournal,
+    report: &DashboardHostedSessionLifecycleValidationReport,
+    occurred_at_unix_ms: u64,
+) -> Result<AuditRecord, DashboardError> {
+    report.validate()?;
+    let mut event = AuditEvent::new(
+        format!("dashboard-hosted-session-lifecycle-{}", report.lifecycle_id),
+        AuditEventKind::RuntimeLifecycle,
+        DASHBOARD_STATE_SUBSYSTEM,
+        "dashboard-hosted-session-lifecycle",
+        "dashboard hosted session lifecycle validation recorded",
+    );
+    event.occurred_at_unix_ms = occurred_at_unix_ms;
+    event = event
+        .with_metadata(
+            "dashboard_boundary_version",
+            AuditValue::Text(DASHBOARD_BOUNDARY_VERSION.to_owned()),
+        )
+        .with_metadata(
+            "lifecycle_id",
+            AuditValue::Text(report.lifecycle_id.clone()),
+        )
+        .with_metadata("status", AuditValue::Text(format!("{:?}", report.status)))
+        .with_metadata(
+            "session_reference_recorded",
+            AuditValue::Bool(report.session_reference_recorded),
+        )
+        .with_metadata(
+            "csrf_reference_recorded",
+            AuditValue::Bool(report.csrf_reference_recorded),
+        )
+        .with_metadata(
+            "operator_role",
+            AuditValue::Text(report.operator_role.clone()),
+        )
+        .with_metadata("authenticated", AuditValue::Bool(report.authenticated))
+        .with_metadata("authorized", AuditValue::Bool(report.authorized))
+        .with_metadata(
+            "csrf_lifecycle_validated",
+            AuditValue::Bool(report.csrf_lifecycle_validated),
+        )
+        .with_metadata(
+            "session_revocation_supported",
+            AuditValue::Bool(report.session_revocation_supported),
+        )
+        .with_metadata("session_revoked", AuditValue::Bool(report.session_revoked))
+        .with_metadata("read_only_role", AuditValue::Bool(report.read_only_role))
+        .with_metadata(
+            "rate_limit_validated",
+            AuditValue::Bool(report.rate_limit_validated),
+        )
+        .with_metadata("loopback_only", AuditValue::Bool(report.loopback_only))
+        .with_metadata(
+            "missing_control_count",
+            AuditValue::Text(report.missing_control_count.to_string()),
+        )
+        .with_metadata(
+            "public_network_exposed",
+            AuditValue::Bool(report.public_network_exposed),
+        )
+        .with_metadata(
+            "live_controls_enabled",
+            AuditValue::Bool(report.live_controls_enabled),
+        )
+        .with_metadata(
+            "sensitive_material_present",
+            AuditValue::Bool(report.secret_material_present),
+        )
+        .with_metadata(
+            "persistent_server_started",
+            AuditValue::Bool(report.persistent_server_started),
+        )
+        .with_metadata(
+            "production_ready",
+            AuditValue::Bool(report.production_ready),
+        );
+    journal.append_event(event).map_err(DashboardError::from)
+}
+
 /// Persist the latest bounded local loopback dashboard runtime probe checkpoint.
 ///
 /// This stores sanitized local runtime probe metadata only. It does not expose
@@ -3426,6 +3877,20 @@ fn push_dashboard_code_if(codes: &mut Vec<String>, condition: bool, code: &str) 
     }
 }
 
+fn push_dashboard_code(codes: &mut Vec<String>, condition: bool, code: &'static str) {
+    push_dashboard_code_if(codes, condition, code);
+}
+
+fn validate_reference_id(kind: &'static str, id: &str, violations: &mut Vec<DashboardViolation>) {
+    validate_id(kind, id, violations);
+    if contains_secret_like_text(id) {
+        violations.push(DashboardViolation::new_owned(
+            "DASHBOARD_REFERENCE_SECRET_LIKE",
+            format!("{kind} must be a non-secret reference"),
+        ));
+    }
+}
+
 fn validate_id(kind: &'static str, id: &str, violations: &mut Vec<DashboardViolation>) {
     let trimmed = id.trim();
     if trimmed.is_empty() {
@@ -3560,23 +4025,27 @@ mod tests {
         append_dashboard_hosted_request_preflight_audit,
         append_dashboard_hosted_request_validation_audit,
         append_dashboard_hosted_security_review_audit,
+        append_dashboard_hosted_session_lifecycle_audit,
         append_dashboard_hosted_session_validation_audit,
         append_dashboard_loopback_runtime_probe_audit, append_dashboard_render_audit,
         is_sha256_hex, persist_dashboard_hosted_request_preflight_checkpoint,
         persist_dashboard_hosted_request_validation_checkpoint,
         persist_dashboard_hosted_security_review_checkpoint,
+        persist_dashboard_hosted_session_lifecycle_checkpoint,
         persist_dashboard_hosted_session_validation_checkpoint,
         persist_dashboard_loopback_runtime_probe_checkpoint, persist_dashboard_render_checkpoint,
         preflight_dashboard_hosted_request, review_dashboard_hosted_runtime_readiness,
         review_dashboard_hosted_security, sha256_hex, validate_dashboard_hosted_request,
-        validate_dashboard_hosted_session, validate_dashboard_loopback_runtime_probe,
-        DashboardAccessAuthorizationStatus, DashboardAccessContext, DashboardAccessSource,
-        DashboardBoundaryConfig, DashboardError, DashboardHostedRequestMethod,
-        DashboardHostedRequestPreflight, DashboardHostedRequestPreflightStatus,
-        DashboardHostedRequestValidation, DashboardHostedRequestValidationReport,
-        DashboardHostedRequestValidationStatus, DashboardHostedRuntimeReadinessReviewRequest,
-        DashboardHostedRuntimeReadinessReviewStatus, DashboardHostedSecurityPolicy,
-        DashboardHostedSecurityReviewStatus, DashboardHostedSessionValidationReport,
+        validate_dashboard_hosted_session, validate_dashboard_hosted_session_lifecycle,
+        validate_dashboard_loopback_runtime_probe, DashboardAccessAuthorizationStatus,
+        DashboardAccessContext, DashboardAccessSource, DashboardBoundaryConfig, DashboardError,
+        DashboardHostedRequestMethod, DashboardHostedRequestPreflight,
+        DashboardHostedRequestPreflightStatus, DashboardHostedRequestValidation,
+        DashboardHostedRequestValidationReport, DashboardHostedRequestValidationStatus,
+        DashboardHostedRuntimeReadinessReviewRequest, DashboardHostedRuntimeReadinessReviewStatus,
+        DashboardHostedSecurityPolicy, DashboardHostedSecurityReviewStatus,
+        DashboardHostedSessionLifecycleValidation, DashboardHostedSessionLifecycleValidationReport,
+        DashboardHostedSessionLifecycleValidationStatus, DashboardHostedSessionValidationReport,
         DashboardHostedSessionValidationStatus, DashboardLoopbackRuntimeProbe,
         DashboardLoopbackRuntimeProbeReport, DashboardLoopbackRuntimeProbeStatus, DashboardPanel,
         DashboardPanelItem, DashboardPanelKind, DashboardRenderRecord, DashboardRenderRequest,
@@ -3584,6 +4053,7 @@ mod tests {
         DeterministicDashboardRenderer, DASHBOARD_LAST_HOSTED_REQUEST_PREFLIGHT_CHECKPOINT_KEY,
         DASHBOARD_LAST_HOSTED_REQUEST_VALIDATION_CHECKPOINT_KEY,
         DASHBOARD_LAST_HOSTED_SECURITY_REVIEW_CHECKPOINT_KEY,
+        DASHBOARD_LAST_HOSTED_SESSION_LIFECYCLE_CHECKPOINT_KEY,
         DASHBOARD_LAST_HOSTED_SESSION_VALIDATION_CHECKPOINT_KEY,
         DASHBOARD_LAST_LOOPBACK_RUNTIME_PROBE_CHECKPOINT_KEY, DASHBOARD_LAST_RENDER_CHECKPOINT_KEY,
     };
@@ -4485,6 +4955,168 @@ mod tests {
         assert_eq!(recovered_report.rejected_rate_limited_count, 1);
         assert!(!recovered_report.public_network_exposed);
         assert!(!recovered_report.live_controls_enabled);
+        assert!(!recovered_report.production_ready);
+
+        let _ = fs::remove_file(audit_path);
+        cleanup_state_files(&state_path);
+    }
+
+    fn ready_hosted_session_lifecycle_request() -> DashboardHostedSessionLifecycleValidation {
+        DashboardHostedSessionLifecycleValidation {
+            lifecycle_id: "dashboard-session-lifecycle-ready".to_owned(),
+            session_reference: "session-ref-local-001".to_owned(),
+            csrf_reference: "csrf-ref-local-001".to_owned(),
+            operator_role: "operator-read-only".to_owned(),
+            authenticated: true,
+            authorized: true,
+            csrf_reference_issued: true,
+            csrf_reference_scoped: true,
+            csrf_reference_rotated: true,
+            session_revocation_supported: true,
+            session_revoked: false,
+            read_only_role: true,
+            rate_limit_remaining: 59,
+            max_requests_per_minute: 60,
+            loopback_only: true,
+            public_network_exposed: false,
+            live_controls_enabled: false,
+            secret_material_present: false,
+            persistent_server_started: false,
+            production_ready_claimed: false,
+            validated_at_unix_ms: 1_700_000_000_731,
+        }
+    }
+
+    #[test]
+    fn hosted_dashboard_session_lifecycle_accepts_non_secret_local_references() {
+        let report =
+            validate_dashboard_hosted_session_lifecycle(&ready_hosted_session_lifecycle_request())
+                .expect("ready hosted dashboard session lifecycle should validate locally");
+
+        assert_eq!(
+            report.status,
+            DashboardHostedSessionLifecycleValidationStatus::ReadyForLocalReview
+        );
+        assert!(report.session_reference_recorded);
+        assert!(report.csrf_reference_recorded);
+        assert!(report.authenticated);
+        assert!(report.authorized);
+        assert!(report.csrf_lifecycle_validated);
+        assert!(report.session_revocation_supported);
+        assert!(!report.session_revoked);
+        assert!(report.read_only_role);
+        assert!(report.rate_limit_validated);
+        assert!(report.loopback_only);
+        assert_eq!(report.missing_control_count, 0);
+        assert!(report.violation_codes.is_empty());
+        assert!(!report.public_network_exposed);
+        assert!(!report.live_controls_enabled);
+        assert!(!report.secret_material_present);
+        assert!(!report.persistent_server_started);
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn hosted_dashboard_session_lifecycle_blocks_side_effects_and_missing_controls() {
+        let mut request = ready_hosted_session_lifecycle_request();
+        request.lifecycle_id = "dashboard-session-lifecycle-blocked".to_owned();
+        request.authenticated = false;
+        request.csrf_reference_rotated = false;
+        request.session_revoked = true;
+        request.read_only_role = false;
+        request.rate_limit_remaining = 61;
+        request.public_network_exposed = true;
+        request.live_controls_enabled = true;
+        request.secret_material_present = true;
+        request.persistent_server_started = true;
+        request.production_ready_claimed = true;
+
+        let report = validate_dashboard_hosted_session_lifecycle(&request)
+            .expect("blocked hosted dashboard session lifecycle should report locally");
+
+        assert_eq!(
+            report.status,
+            DashboardHostedSessionLifecycleValidationStatus::BlockedMissingControls
+        );
+        assert!(!report.authenticated);
+        assert!(!report.csrf_lifecycle_validated);
+        assert!(report.session_revoked);
+        assert!(!report.read_only_role);
+        assert!(!report.rate_limit_validated);
+        assert!(report.public_network_exposed);
+        assert!(report.live_controls_enabled);
+        assert!(report.secret_material_present);
+        assert!(report.persistent_server_started);
+        assert!(!report.production_ready);
+        assert!(report.missing_control_count >= 9);
+        for expected in [
+            "DASHBOARD_HOSTED_SESSION_LIFECYCLE_NOT_AUTHENTICATED",
+            "DASHBOARD_HOSTED_SESSION_LIFECYCLE_CSRF_INCOMPLETE",
+            "DASHBOARD_HOSTED_SESSION_LIFECYCLE_SESSION_REVOKED",
+            "DASHBOARD_HOSTED_SESSION_LIFECYCLE_ROLE_NOT_READ_ONLY",
+            "DASHBOARD_HOSTED_SESSION_LIFECYCLE_RATE_LIMIT_INVALID",
+            "DASHBOARD_HOSTED_SESSION_LIFECYCLE_PUBLIC_NETWORK_EXPOSED",
+            "DASHBOARD_HOSTED_SESSION_LIFECYCLE_LIVE_CONTROLS_ENABLED",
+            "DASHBOARD_HOSTED_SESSION_LIFECYCLE_SECRET_MATERIAL_PRESENT",
+            "DASHBOARD_HOSTED_SESSION_LIFECYCLE_SERVER_STARTED",
+            "DASHBOARD_HOSTED_SESSION_LIFECYCLE_PRODUCTION_READY_CLAIMED",
+        ] {
+            assert!(
+                report.violation_codes.iter().any(|code| code == expected),
+                "missing expected violation code {expected}"
+            );
+        }
+    }
+
+    #[test]
+    fn hosted_dashboard_session_lifecycle_audit_and_state_reopen_locally() {
+        let audit_path = temp_audit_path("dashboard-hosted-session-lifecycle");
+        let state_path = temp_state_path("dashboard-hosted-session-lifecycle");
+        let report =
+            validate_dashboard_hosted_session_lifecycle(&ready_hosted_session_lifecycle_request())
+                .expect("ready hosted dashboard session lifecycle should validate locally");
+        let mut journal = AppendOnlyAuditJournal::open(&audit_path).expect("journal opens");
+        let mut store = SqliteWalStateStore::open(&state_path).expect("sqlite opens");
+
+        let audit_record = append_dashboard_hosted_session_lifecycle_audit(
+            &mut journal,
+            &report,
+            1_700_000_000_732,
+        )
+        .expect("hosted session lifecycle audit writes");
+        let checkpoint = persist_dashboard_hosted_session_lifecycle_checkpoint(
+            &mut store,
+            &report,
+            1_700_000_000_733,
+        )
+        .expect("hosted session lifecycle checkpoint writes");
+        assert_eq!(audit_record.sequence, 1);
+        assert_eq!(
+            checkpoint.key,
+            DASHBOARD_LAST_HOSTED_SESSION_LIFECYCLE_CHECKPOINT_KEY
+        );
+        drop(store);
+        drop(journal);
+
+        let replayed = AppendOnlyAuditJournal::open(&audit_path).expect("journal replays");
+        assert_eq!(replayed.next_sequence(), 2);
+        let reopened = SqliteWalStateStore::open(&state_path).expect("sqlite reopens");
+        let recovered = reopened
+            .get_checkpoint(DASHBOARD_LAST_HOSTED_SESSION_LIFECYCLE_CHECKPOINT_KEY)
+            .expect("checkpoint lookup succeeds")
+            .expect("hosted session lifecycle checkpoint exists");
+        assert_eq!(recovered.value, checkpoint.value);
+        let recovered_report: DashboardHostedSessionLifecycleValidationReport =
+            serde_json::from_str(&recovered.value).expect("checkpoint report parses");
+        assert_eq!(
+            recovered_report.status,
+            DashboardHostedSessionLifecycleValidationStatus::ReadyForLocalReview
+        );
+        assert!(recovered_report.csrf_lifecycle_validated);
+        assert!(recovered_report.session_revocation_supported);
+        assert!(recovered_report.read_only_role);
+        assert!(!recovered_report.secret_material_present);
+        assert!(!recovered_report.persistent_server_started);
         assert!(!recovered_report.production_ready);
 
         let _ = fs::remove_file(audit_path);

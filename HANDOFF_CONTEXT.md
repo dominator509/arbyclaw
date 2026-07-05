@@ -117,6 +117,7 @@ The current authoritative baseline is the Phase 18 agentic handoff package snaps
 - Phase 104 - Fee Live Provider Boundary Gate
 - Phase 105 - Web3 Connector Aggregate Coverage Gate
 - Phase 106 - Communications Delivery Provider Boundary Gate
+- Phase 107 - Dashboard Session Lifecycle Boundary Gate
 
 ## Current Production Readiness
 

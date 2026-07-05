@@ -6,7 +6,7 @@ use arb_core::{
     append_channel_adapter_validation_audit, append_channel_session_validation_audit,
     append_dashboard_hosted_request_preflight_audit,
     append_dashboard_hosted_request_validation_audit,
-    append_dashboard_hosted_security_review_audit,
+    append_dashboard_hosted_security_review_audit, append_dashboard_hosted_session_lifecycle_audit,
     append_dashboard_hosted_session_validation_audit,
     append_dashboard_loopback_runtime_probe_audit, append_dashboard_render_audit,
     append_destination_allowlist_audit, append_destination_ownership_review_audit,
@@ -46,6 +46,7 @@ use arb_core::{
     persist_dashboard_hosted_request_preflight_checkpoint,
     persist_dashboard_hosted_request_validation_checkpoint,
     persist_dashboard_hosted_security_review_checkpoint,
+    persist_dashboard_hosted_session_lifecycle_checkpoint,
     persist_dashboard_hosted_session_validation_checkpoint,
     persist_dashboard_loopback_runtime_probe_checkpoint, persist_dashboard_render_checkpoint,
     persist_destination_allowlist_checkpoint, persist_destination_ownership_review_checkpoint,
@@ -98,9 +99,9 @@ use arb_core::{
     validate_audit_journal_durability, validate_cex_credential_scope_review,
     validate_cex_rate_limit, validate_channel_adapter, validate_channel_session,
     validate_dashboard_hosted_request, validate_dashboard_hosted_session,
-    validate_dashboard_loopback_runtime_probe, validate_deployment_audit_sqlite_transcript,
-    validate_deployment_backup_restore_transcript, validate_deployment_disk_full_transcript,
-    validate_deployment_failure_capture_transcript,
+    validate_dashboard_hosted_session_lifecycle, validate_dashboard_loopback_runtime_probe,
+    validate_deployment_audit_sqlite_transcript, validate_deployment_backup_restore_transcript,
+    validate_deployment_disk_full_transcript, validate_deployment_failure_capture_transcript,
     validate_deployment_graceful_shutdown_transcript, validate_deployment_permission_transcript,
     validate_deployment_response_drill_rehearsal, validate_deployment_retention_transcript,
     validate_deployment_sqlite_schema_migration_transcript, validate_fee_schedule_verification,
@@ -140,29 +141,31 @@ use arb_core::{
     DashboardHostedRequestValidation, DashboardHostedRequestValidationStatus,
     DashboardHostedRuntimeReadinessReviewRequest, DashboardHostedRuntimeReadinessReviewStatus,
     DashboardHostedSecurityPolicy, DashboardHostedSecurityReviewStatus,
-    DashboardHostedSessionValidationStatus, DashboardLoopbackRuntimeProbe,
-    DashboardLoopbackRuntimeProbeStatus, DashboardPanel, DashboardPanelItem, DashboardPanelKind,
-    DashboardRenderRequest, DashboardRenderer, DashboardSeverity, DashboardSnapshot,
-    DeploymentFailureCaptureTranscript, DeploymentFailureCaptureTranscriptStatus,
-    DeploymentResponseDrillRehearsalRequest, DeploymentResponseDrillRehearsalStatus,
-    DestinationAllowlist, DestinationApprovalSource, DestinationOwnershipReviewReport,
-    DestinationOwnershipReviewStatus, DestinationPolicy, DeterministicAgenticHandoffPackager,
-    DeterministicDashboardRenderer, DeterministicExecutionAdapterBoundary,
-    DeterministicExecutionPlanner, DeterministicNotificationBoundary,
-    DeterministicObservabilityCollector, DeterministicOperatorCommandRouter,
-    DeterministicOpportunityEngine, DeterministicValidationHarness,
-    DexLiveAdapterBoundaryReviewReport, DexLiveAdapterBoundaryReviewRequest,
-    DexLiveAdapterBoundaryReviewStatus, DexProtocolRiskReviewRequest, DexProtocolRiskReviewStatus,
-    DexRequestPlan, DexRequestPlanKind, DexResponseTranscript, DexRouteKind, DexSimulationStatus,
-    DexSwapLifecycleRecord, DexSwapMode, DexSwapQuoteRequest, DexSwapQuoteResponse,
-    DexSwapValidationRecord, ExecutionAdapter, ExecutionAdapterConfig, ExecutionAdapterRequest,
-    ExecutionAdapterRunStatus, ExecutionIntent, ExecutionIntentKind, ExecutionPlanStatus,
-    ExecutionPlanner, ExecutionPlannerConfig, ExecutionPlannerRequest, ExecutionScope,
-    ExpectedValidationOutcome, FeeAdjustedEdge, FeeEstimate, FeeLiveProviderBoundaryReviewRequest,
-    FeeLiveProviderBoundaryReviewStatus, FeeModelError, FeeProvider, FeeSchedule,
-    FeeScheduleReconciliationReviewRequest, FeeScheduleReconciliationReviewStatus,
-    FeeScheduleVerificationInput, FeeScheduleVerificationReport, FeeScheduleVerificationStatus,
-    FixtureKind, FuzzCorpusDefinition, FuzzSeedRecord, FuzzTargetKind, HealthStatus,
+    DashboardHostedSessionLifecycleValidation, DashboardHostedSessionLifecycleValidationReport,
+    DashboardHostedSessionLifecycleValidationStatus, DashboardHostedSessionValidationStatus,
+    DashboardLoopbackRuntimeProbe, DashboardLoopbackRuntimeProbeStatus, DashboardPanel,
+    DashboardPanelItem, DashboardPanelKind, DashboardRenderRequest, DashboardRenderer,
+    DashboardSeverity, DashboardSnapshot, DeploymentFailureCaptureTranscript,
+    DeploymentFailureCaptureTranscriptStatus, DeploymentResponseDrillRehearsalRequest,
+    DeploymentResponseDrillRehearsalStatus, DestinationAllowlist, DestinationApprovalSource,
+    DestinationOwnershipReviewReport, DestinationOwnershipReviewStatus, DestinationPolicy,
+    DeterministicAgenticHandoffPackager, DeterministicDashboardRenderer,
+    DeterministicExecutionAdapterBoundary, DeterministicExecutionPlanner,
+    DeterministicNotificationBoundary, DeterministicObservabilityCollector,
+    DeterministicOperatorCommandRouter, DeterministicOpportunityEngine,
+    DeterministicValidationHarness, DexLiveAdapterBoundaryReviewReport,
+    DexLiveAdapterBoundaryReviewRequest, DexLiveAdapterBoundaryReviewStatus,
+    DexProtocolRiskReviewRequest, DexProtocolRiskReviewStatus, DexRequestPlan, DexRequestPlanKind,
+    DexResponseTranscript, DexRouteKind, DexSimulationStatus, DexSwapLifecycleRecord, DexSwapMode,
+    DexSwapQuoteRequest, DexSwapQuoteResponse, DexSwapValidationRecord, ExecutionAdapter,
+    ExecutionAdapterConfig, ExecutionAdapterRequest, ExecutionAdapterRunStatus, ExecutionIntent,
+    ExecutionIntentKind, ExecutionPlanStatus, ExecutionPlanner, ExecutionPlannerConfig,
+    ExecutionPlannerRequest, ExecutionScope, ExpectedValidationOutcome, FeeAdjustedEdge,
+    FeeEstimate, FeeLiveProviderBoundaryReviewRequest, FeeLiveProviderBoundaryReviewStatus,
+    FeeModelError, FeeProvider, FeeSchedule, FeeScheduleReconciliationReviewRequest,
+    FeeScheduleReconciliationReviewStatus, FeeScheduleVerificationInput,
+    FeeScheduleVerificationReport, FeeScheduleVerificationStatus, FixtureKind,
+    FuzzCorpusDefinition, FuzzSeedRecord, FuzzTargetKind, HealthStatus,
     HistoricalMarketDataPersistenceInput, HistoricalMarketDataPersistenceReport,
     HistoricalMarketDataPersistenceStatus, IncidentResponseExecutionTranscript,
     IncidentResponseExecutionTranscriptStatus, LiquidityRole, LocalFuzzCorpusReplayRequest,
@@ -262,6 +265,7 @@ use arb_core::{
     DASHBOARD_LAST_HOSTED_REQUEST_PREFLIGHT_CHECKPOINT_KEY,
     DASHBOARD_LAST_HOSTED_REQUEST_VALIDATION_CHECKPOINT_KEY,
     DASHBOARD_LAST_HOSTED_SECURITY_REVIEW_CHECKPOINT_KEY,
+    DASHBOARD_LAST_HOSTED_SESSION_LIFECYCLE_CHECKPOINT_KEY,
     DASHBOARD_LAST_HOSTED_SESSION_VALIDATION_CHECKPOINT_KEY,
     DASHBOARD_LAST_LOOPBACK_RUNTIME_PROBE_CHECKPOINT_KEY, DASHBOARD_LAST_RENDER_CHECKPOINT_KEY,
     DEFAULT_MARKET_DATA_FRESHNESS_MS, DESTINATION_ALLOWLIST_CHECKPOINT_KEY,
@@ -582,6 +586,7 @@ fn is_local_workspace_validation_command(command: &str) -> bool {
             | "validate-observability-metrics-runtime"
             | "validate-runtime-panic-hook"
             | "validate-dashboard-runtime"
+            | "validate-dashboard-session-lifecycle"
             | "validate-dashboard-loopback-runtime"
             | "validate-communications-runtime"
             | "validate-communications-delivery-provider-boundary"
@@ -754,6 +759,9 @@ fn run_local_workspace_validation_command(
         }
         "validate-runtime-panic-hook" => run_runtime_panic_hook_validation(&options),
         "validate-dashboard-runtime" => run_dashboard_runtime_validation(&options),
+        "validate-dashboard-session-lifecycle" => {
+            run_dashboard_session_lifecycle_validation(&options)
+        }
         "validate-dashboard-loopback-runtime" => {
             run_dashboard_loopback_runtime_validation(&options)
         }
@@ -1008,6 +1016,7 @@ fn print_usage() {
     );
     println!("       arb-agent validate-communications-outbox --workspace <fresh-dir>");
     println!("       arb-agent validate-dashboard-runtime --workspace <fresh-dir>");
+    println!("       arb-agent validate-dashboard-session-lifecycle --workspace <fresh-dir>");
     println!("       arb-agent validate-dashboard-loopback-runtime --workspace <fresh-dir>");
     println!("       arb-agent validate-observability-runtime --workspace <fresh-dir>");
     println!("       arb-agent validate-observability-metrics-runtime --workspace <fresh-dir>");
@@ -16725,6 +16734,178 @@ fn run_dashboard_runtime_validation(
     Ok(())
 }
 
+fn run_dashboard_session_lifecycle_validation(
+    options: &LocalValidationRunOptions,
+) -> Result<(), AgentCliError> {
+    prepare_fresh_workspace(&options.workspace_dir)?;
+    let audit_path = options
+        .workspace_dir
+        .join("dashboard-session-lifecycle.audit.jsonl");
+    let state_path = options
+        .workspace_dir
+        .join("dashboard-session-lifecycle.sqlite3");
+    let now_unix_ms = current_unix_ms()?;
+    let report = validate_dashboard_hosted_session_lifecycle(
+        &local_dashboard_session_lifecycle_request(now_unix_ms),
+    )
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let mut journal = AppendOnlyAuditJournal::open(&audit_path)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let mut store = SqliteWalStateStore::open(&state_path)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let audit_record = append_dashboard_hosted_session_lifecycle_audit(
+        &mut journal,
+        &report,
+        now_unix_ms.saturating_add(1),
+    )
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let checkpoint = persist_dashboard_hosted_session_lifecycle_checkpoint(
+        &mut store,
+        &report,
+        now_unix_ms.saturating_add(2),
+    )
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    drop(store);
+    drop(journal);
+
+    let reopened_journal = AppendOnlyAuditJournal::open(&audit_path)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let replayed_records = reopened_journal.next_sequence().saturating_sub(1);
+    let reopened_store = SqliteWalStateStore::open(&state_path)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    reopened_store
+        .integrity_check()
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let recovered_checkpoint = reopened_store
+        .get_checkpoint(DASHBOARD_LAST_HOSTED_SESSION_LIFECYCLE_CHECKPOINT_KEY)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?
+        .is_some();
+
+    if report.status != DashboardHostedSessionLifecycleValidationStatus::ReadyForLocalReview
+        || replayed_records != audit_record.sequence
+        || !recovered_checkpoint
+        || checkpoint.key != DASHBOARD_LAST_HOSTED_SESSION_LIFECYCLE_CHECKPOINT_KEY
+        || !report.session_reference_recorded
+        || !report.csrf_reference_recorded
+        || !report.authenticated
+        || !report.authorized
+        || !report.csrf_lifecycle_validated
+        || !report.session_revocation_supported
+        || report.session_revoked
+        || !report.read_only_role
+        || !report.rate_limit_validated
+        || !report.loopback_only
+        || report.missing_control_count != 0
+        || report.public_network_exposed
+        || report.live_controls_enabled
+        || report.secret_material_present
+        || report.persistent_server_started
+        || report.production_ready
+    {
+        return Err(AgentCliError::Validation(
+            "dashboard session lifecycle validation failed local-only invariants".to_owned(),
+        ));
+    }
+
+    print_dashboard_session_lifecycle_report(options, &report, replayed_records);
+    Ok(())
+}
+
+fn local_dashboard_session_lifecycle_request(
+    now_unix_ms: u64,
+) -> DashboardHostedSessionLifecycleValidation {
+    DashboardHostedSessionLifecycleValidation {
+        lifecycle_id: "local-dashboard-session-lifecycle".to_owned(),
+        session_reference: "local-session-ref-operator-readonly".to_owned(),
+        csrf_reference: "local-csrf-ref-rotated".to_owned(),
+        operator_role: "operator-read-only".to_owned(),
+        authenticated: true,
+        authorized: true,
+        csrf_reference_issued: true,
+        csrf_reference_scoped: true,
+        csrf_reference_rotated: true,
+        session_revocation_supported: true,
+        session_revoked: false,
+        read_only_role: true,
+        rate_limit_remaining: 59,
+        max_requests_per_minute: 60,
+        loopback_only: true,
+        public_network_exposed: false,
+        live_controls_enabled: false,
+        secret_material_present: false,
+        persistent_server_started: false,
+        production_ready_claimed: false,
+        validated_at_unix_ms: now_unix_ms,
+    }
+}
+
+fn print_dashboard_session_lifecycle_report(
+    options: &LocalValidationRunOptions,
+    report: &DashboardHostedSessionLifecycleValidationReport,
+    replayed_records: u64,
+) {
+    println!("dashboard-session-lifecycle: validation passed");
+    println!(
+        "dashboard-session-lifecycle-workspace: {}",
+        options.workspace_dir.display()
+    );
+    println!("dashboard-session-lifecycle-version: {DASHBOARD_BOUNDARY_VERSION}");
+    println!(
+        "dashboard-session-lifecycle-status: {}",
+        dashboard_session_lifecycle_status_label(report.status)
+    );
+    println!("dashboard-session-lifecycle-audit-records-replayed: {replayed_records}");
+    println!("dashboard-session-lifecycle-checkpoint-recovered: true");
+    println!(
+        "dashboard-session-lifecycle-checkpoint-key: {DASHBOARD_LAST_HOSTED_SESSION_LIFECYCLE_CHECKPOINT_KEY}"
+    );
+    println!(
+        "dashboard-session-reference-recorded: {}",
+        report.session_reference_recorded
+    );
+    println!(
+        "dashboard-csrf-reference-recorded: {}",
+        report.csrf_reference_recorded
+    );
+    println!("dashboard-session-authenticated: {}", report.authenticated);
+    println!("dashboard-session-authorized: {}", report.authorized);
+    println!(
+        "dashboard-session-csrf-lifecycle-validated: {}",
+        report.csrf_lifecycle_validated
+    );
+    println!(
+        "dashboard-session-revocation-supported: {}",
+        report.session_revocation_supported
+    );
+    println!("dashboard-session-revoked: {}", report.session_revoked);
+    println!(
+        "dashboard-session-read-only-role: {}",
+        report.read_only_role
+    );
+    println!(
+        "dashboard-session-rate-limit-validated: {}",
+        report.rate_limit_validated
+    );
+    println!("dashboard-session-loopback-only: {}", report.loopback_only);
+    println!(
+        "dashboard-session-missing-control-count: {}",
+        report.missing_control_count
+    );
+    println!("public-network-exposed: {}", report.public_network_exposed);
+    println!("live-controls-enabled: {}", report.live_controls_enabled);
+    println!(
+        "secret-material-present: {}",
+        report.secret_material_present
+    );
+    println!(
+        "persistent-dashboard-server-started: {}",
+        report.persistent_server_started
+    );
+    println!("external-submission-performed: false");
+    println!("live-execution-performed: false");
+    println!("production-ready: {}", report.production_ready);
+}
+
 #[allow(clippy::too_many_lines)]
 fn run_dashboard_loopback_runtime_validation(
     options: &LocalValidationRunOptions,
@@ -18403,31 +18584,46 @@ const fn communication_delivery_provider_boundary_status_label(
     }
 }
 
+const fn dashboard_session_lifecycle_status_label(
+    status: DashboardHostedSessionLifecycleValidationStatus,
+) -> &'static str {
+    match status {
+        DashboardHostedSessionLifecycleValidationStatus::ReadyForLocalReview => {
+            "ready-for-local-review"
+        }
+        DashboardHostedSessionLifecycleValidationStatus::BlockedMissingControls => {
+            "blocked-missing-controls"
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
         communication_delivery_provider_boundary_status_label, config_migration_status_label,
-        execution_adapter_run_status_label, fee_live_provider_boundary_status_label,
-        fee_schedule_reconciliation_review_status_label, fee_schedule_verification_status_label,
-        fuzz_corpus_replay_status_label, market_data_preflight_status_label,
-        market_data_quality_assessment_status_label, market_data_reconnect_plan_status_label,
-        opportunity_planner_handoff_status_label, opportunity_replay_status_label,
-        paid_market_data_provider_evaluation_status_label, parse_local_iteration_options,
-        parse_local_validation_run_options, parse_runtime_smoke_options,
-        recovery_disposition_label, run_agentic_handoff_audit_validation,
-        run_audit_durability_validation, run_audit_retention_execution_validation,
+        dashboard_session_lifecycle_status_label, execution_adapter_run_status_label,
+        fee_live_provider_boundary_status_label, fee_schedule_reconciliation_review_status_label,
+        fee_schedule_verification_status_label, fuzz_corpus_replay_status_label,
+        market_data_preflight_status_label, market_data_quality_assessment_status_label,
+        market_data_reconnect_plan_status_label, opportunity_planner_handoff_status_label,
+        opportunity_replay_status_label, paid_market_data_provider_evaluation_status_label,
+        parse_local_iteration_options, parse_local_validation_run_options,
+        parse_runtime_smoke_options, recovery_disposition_label,
+        run_agentic_handoff_audit_validation, run_audit_durability_validation,
+        run_audit_retention_execution_validation,
         run_communications_delivery_provider_boundary_validation,
         run_communications_outbox_validation, run_communications_runtime_validation,
         run_config_migration_validation, run_connector_lifecycle_audit_validation,
         run_dashboard_loopback_runtime_validation, run_dashboard_runtime_validation,
-        run_deployment_config_redaction_validation, run_deployment_log_redaction_validation,
-        run_destination_boundary_audit_validation, run_execution_adapter_audit_validation,
-        run_execution_planner_audit_validation, run_fee_boundary_audit_validation,
-        run_fee_live_provider_boundary_validation, run_fee_schedule_reconciliation_validation,
-        run_fee_schedule_verification_validation, run_local_fuzz_corpus_runner,
-        run_local_paper_backtest_corpus_runner, run_local_property_check_runner,
-        run_local_validation_corpus_runner, run_local_validation_runner,
-        run_market_data_boundary_audit_validation, run_market_data_history_persistence_validation,
+        run_dashboard_session_lifecycle_validation, run_deployment_config_redaction_validation,
+        run_deployment_log_redaction_validation, run_destination_boundary_audit_validation,
+        run_execution_adapter_audit_validation, run_execution_planner_audit_validation,
+        run_fee_boundary_audit_validation, run_fee_live_provider_boundary_validation,
+        run_fee_schedule_reconciliation_validation, run_fee_schedule_verification_validation,
+        run_local_fuzz_corpus_runner, run_local_paper_backtest_corpus_runner,
+        run_local_property_check_runner, run_local_validation_corpus_runner,
+        run_local_validation_runner, run_market_data_boundary_audit_validation,
+        run_market_data_history_persistence_validation,
         run_market_data_provider_preflight_validation,
         run_market_data_quality_assessment_validation, run_market_data_reconnect_plan_validation,
         run_observability_metrics_runtime_validation, run_observability_runtime_validation,
@@ -18450,7 +18646,8 @@ mod tests {
         strategy_profile_replay_status_label, strategy_profitability_tuning_status_label,
         validation_corpus_status_label, validation_run_status_label,
         write_runtime_supervised_restart_seed, CommunicationDeliveryProviderBoundaryStatus,
-        ConfigMigrationStatus, ExecutionAdapterRunStatus, FeeLiveProviderBoundaryReviewStatus,
+        ConfigMigrationStatus, DashboardHostedSessionLifecycleValidationStatus,
+        ExecutionAdapterRunStatus, FeeLiveProviderBoundaryReviewStatus,
         FeeScheduleReconciliationReviewStatus, FeeScheduleVerificationStatus,
         LocalFuzzCorpusReplayStatus, LocalValidationCorpusStatus, LocalValidationRunOptions,
         MarketDataProviderPreflightStatus, MarketDataQualityAssessmentStatus,
@@ -18849,6 +19046,22 @@ mod tests {
                 CommunicationDeliveryProviderBoundaryStatus::Blocked
             ),
             "blocked"
+        );
+    }
+
+    #[test]
+    fn dashboard_session_lifecycle_status_labels_are_operator_facing() {
+        assert_eq!(
+            dashboard_session_lifecycle_status_label(
+                DashboardHostedSessionLifecycleValidationStatus::ReadyForLocalReview
+            ),
+            "ready-for-local-review"
+        );
+        assert_eq!(
+            dashboard_session_lifecycle_status_label(
+                DashboardHostedSessionLifecycleValidationStatus::BlockedMissingControls
+            ),
+            "blocked-missing-controls"
         );
     }
 
@@ -19257,6 +19470,23 @@ mod tests {
 
         assert!(workspace.join("dashboard-audit.jsonl").exists());
         assert!(workspace.join("dashboard-state.sqlite3").exists());
+        cleanup_workspace(&workspace);
+    }
+
+    #[test]
+    fn dashboard_session_lifecycle_validation_persists_and_reopens_local_records_only() {
+        let workspace = temp_workspace_path("dashboard-session-lifecycle-runner");
+        run_dashboard_session_lifecycle_validation(&LocalValidationRunOptions {
+            workspace_dir: workspace.clone(),
+        })
+        .expect("local dashboard session lifecycle validation should pass");
+
+        assert!(workspace
+            .join("dashboard-session-lifecycle.audit.jsonl")
+            .exists());
+        assert!(workspace
+            .join("dashboard-session-lifecycle.sqlite3")
+            .exists());
         cleanup_workspace(&workspace);
     }
 
