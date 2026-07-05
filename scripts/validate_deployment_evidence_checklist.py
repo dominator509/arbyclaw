@@ -62,6 +62,14 @@ REQUIRED_BUNDLE_COMPONENTS = (
     "deployment-disk-full-transcript",
     "deployment-retention-transcript",
     "deployment-permission-transcript",
+    "deployment-audit-sqlite-transcript",
+    "deployment-backup-restore-transcript",
+    "deployment-graceful-shutdown-transcript",
+    "deployment-sqlite-schema-migration-transcript",
+    "rollback-execution-transcript",
+    "incident-response-execution-transcript",
+    "deployment-failure-capture-transcript",
+    "deployment-response-drill-rehearsal",
 )
 
 
