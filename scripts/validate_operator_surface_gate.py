@@ -242,6 +242,52 @@ def validate_communications_delivery_provider_boundary_cli(
     return errors
 
 
+def validate_communications_provider_submission_preflight_cli(
+    parsed: dict[str, str],
+) -> list[str]:
+    errors: list[str] = []
+    for key in (
+        "communications-provider-submission-delivery-boundary-ready",
+        "communications-provider-submission-kill-switch-armed",
+        "communications-provider-submission-audit-state-preflight-required",
+        "communications-provider-submission-idempotency-required",
+        "communications-provider-submission-rate-limit-controls-required",
+        "communications-provider-submission-outage-backoff-controls-required",
+        "communications-provider-submission-payload-redaction-required",
+    ):
+        if parsed.get(key) != "true":
+            errors.append(f"communications provider submission cli expected {key}=true")
+    for key in (
+        "communications-provider-submission-provider-validation-evidence-available",
+        "outbound-delivery-requested",
+        "outbound-network-used",
+        "message-delivered",
+        "provider-call-performed",
+        "token-secret-material-loaded",
+        "live-execution-performed",
+        "signing-or-broadcast-performed",
+        "production-ready",
+    ):
+        if parsed.get(key) != "false":
+            errors.append(f"communications provider submission cli expected {key}=false")
+    if parsed.get("communications-provider-submission-preflight") != "validation passed":
+        errors.append("communications provider submission cli did not report validation passed")
+    if (
+        parsed.get("communications-provider-submission-preflight-status")
+        != "blocked-pending-provider-validation"
+    ):
+        errors.append("communications provider submission cli expected blocked pending provider validation")
+    if parse_positive_int(parsed.get("communications-provider-submission-blocker-count")) != 1:
+        errors.append("communications provider submission cli expected one blocker")
+    if parse_positive_int(parsed.get("communications-provider-submission-violation-count")) != 0:
+        errors.append("communications provider submission cli expected zero violations")
+    if parse_positive_int(parsed.get("communications-provider-submission-audit-records-replayed")) != 8:
+        errors.append("communications provider submission cli expected eight replayed audit records")
+    if parse_positive_int(parsed.get("communications-provider-submission-checkpoints-recovered")) != 8:
+        errors.append("communications provider submission cli expected eight recovered checkpoints")
+    return errors
+
+
 def validate_dashboard_cli(parsed: dict[str, str]) -> list[str]:
     errors: list[str] = []
     for key in (
@@ -845,6 +891,19 @@ def main() -> int:
                 ],
             ),
             run_text_command(
+                "communications_provider_submission_preflight_cli",
+                [
+                    "cargo",
+                    "run",
+                    "-p",
+                    "arb-agent",
+                    "--",
+                    "validate-communications-provider-submission-preflight",
+                    "--workspace",
+                    str(workspace_root / "communications-provider-submission-preflight"),
+                ],
+            ),
+            run_text_command(
                 "dashboard_runtime_cli",
                 [
                     "cargo",
@@ -978,6 +1037,7 @@ def main() -> int:
         "communications_runtime_cli": lambda component: validate_communications_cli(component["parsed"]),
         "communications_outbox_cli": lambda component: validate_communications_outbox_cli(component["parsed"]),
         "communications_delivery_provider_boundary_cli": lambda component: validate_communications_delivery_provider_boundary_cli(component["parsed"]),
+        "communications_provider_submission_preflight_cli": lambda component: validate_communications_provider_submission_preflight_cli(component["parsed"]),
         "dashboard_runtime_cli": lambda component: validate_dashboard_cli(component["parsed"]),
         "dashboard_session_lifecycle_cli": lambda component: validate_dashboard_session_lifecycle_cli(component["parsed"]),
         "dashboard_loopback_runtime_cli": lambda component: validate_dashboard_loopback_runtime_cli(component["parsed"]),

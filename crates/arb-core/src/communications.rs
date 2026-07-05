@@ -1133,6 +1133,108 @@ pub struct CommunicationDeliveryProviderBoundaryReport {
     pub violation_codes: Vec<String>,
 }
 
+/// Local communications provider submission preflight request.
+///
+/// This is the last local gate before any future outbound provider adapter
+/// could be considered. It does not load tokens, call providers, deliver
+/// messages, enable remote commands, or approve production readiness.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct CommunicationProviderSubmissionPreflightRequest {
+    /// Stable local preflight id.
+    pub preflight_id: String,
+    /// Local delivery-provider boundary prerequisite.
+    pub delivery_provider_boundary: CommunicationDeliveryProviderBoundaryReport,
+    /// Whether the future delivery kill switch is represented as armed.
+    pub delivery_kill_switch_armed: bool,
+    /// Whether audit/state preflight is represented as required before submit.
+    pub audit_state_preflight_required: bool,
+    /// Whether delivery idempotency is represented as required.
+    pub delivery_idempotency_required: bool,
+    /// Whether provider rate-limit controls are represented as required.
+    pub rate_limit_controls_required: bool,
+    /// Whether provider outage/backoff controls are represented as required.
+    pub outage_backoff_controls_required: bool,
+    /// Whether payload redaction is represented as required.
+    pub payload_redaction_required: bool,
+    /// Whether real provider validation evidence exists. Must remain false here.
+    pub provider_validation_evidence_available: bool,
+    /// Whether outbound delivery was requested. Must remain false.
+    pub outbound_delivery_requested: bool,
+    /// Whether outbound network was used. Must remain false.
+    pub outbound_network_used: bool,
+    /// Whether a real message was delivered. Must remain false.
+    pub message_delivered: bool,
+    /// Whether a provider API call was performed. Must remain false.
+    pub provider_call_performed: bool,
+    /// Whether token or secret material was loaded. Must remain false.
+    pub token_secret_material_loaded: bool,
+    /// Whether live execution occurred. Must remain false.
+    pub live_execution_performed: bool,
+    /// Whether signing or broadcast occurred. Must remain false.
+    pub signing_or_broadcast_performed: bool,
+    /// Whether this preflight claims production readiness. Must remain false.
+    pub production_ready_claimed: bool,
+}
+
+/// Local communications provider submission preflight status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum CommunicationProviderSubmissionPreflightStatus {
+    /// Local submit controls exist, but real provider validation is missing.
+    BlockedPendingProviderValidation,
+    /// The preflight is unsafe or internally incomplete.
+    Blocked,
+}
+
+/// Non-secret local communications provider submission preflight report.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct CommunicationProviderSubmissionPreflightReport {
+    /// Communications/CLI boundary version.
+    pub communications_version: String,
+    /// Stable local preflight id.
+    pub preflight_id: String,
+    /// Preflight status.
+    pub status: CommunicationProviderSubmissionPreflightStatus,
+    /// Whether the delivery-provider boundary prerequisite is coherent.
+    pub delivery_provider_boundary_ready: bool,
+    /// Whether the future delivery kill switch is represented as armed.
+    pub delivery_kill_switch_armed: bool,
+    /// Whether audit/state preflight is represented as required before submit.
+    pub audit_state_preflight_required: bool,
+    /// Whether delivery idempotency is represented as required.
+    pub delivery_idempotency_required: bool,
+    /// Whether provider rate-limit controls are represented as required.
+    pub rate_limit_controls_required: bool,
+    /// Whether provider outage/backoff controls are represented as required.
+    pub outage_backoff_controls_required: bool,
+    /// Whether payload redaction is represented as required.
+    pub payload_redaction_required: bool,
+    /// Whether real provider validation evidence exists.
+    pub provider_validation_evidence_available: bool,
+    /// Whether outbound delivery was requested. Always false here.
+    pub outbound_delivery_requested: bool,
+    /// Whether outbound network was used. Always false here.
+    pub outbound_network_used: bool,
+    /// Whether a real message was delivered. Always false here.
+    pub message_delivered: bool,
+    /// Whether a provider API call was performed. Always false here.
+    pub provider_call_performed: bool,
+    /// Whether token or secret material was loaded. Always false here.
+    pub token_secret_material_loaded: bool,
+    /// Whether live execution occurred. Always false here.
+    pub live_execution_performed: bool,
+    /// Whether signing or broadcast occurred. Always false here.
+    pub signing_or_broadcast_performed: bool,
+    /// Whether this report approves production readiness. Always false here.
+    pub production_ready: bool,
+    /// Sanitized blocker descriptions.
+    pub blockers: Vec<String>,
+    /// Sanitized validation codes.
+    pub violation_codes: Vec<String>,
+}
+
 impl RemoteCommandSecurityReviewRequest {
     /// Validate local remote command security review input.
     pub fn validate(&self) -> Result<(), CommunicationError> {
@@ -2001,6 +2103,96 @@ impl CommunicationDeliveryProviderBoundaryReport {
     }
 }
 
+impl CommunicationProviderSubmissionPreflightRequest {
+    /// Validate local provider submission preflight input.
+    pub fn validate(&self) -> Result<(), CommunicationError> {
+        self.delivery_provider_boundary.validate()?;
+        let mut violations = Vec::new();
+        validate_id(
+            "communications provider submission preflight",
+            &self.preflight_id,
+            &mut violations,
+        );
+        if self.outbound_delivery_requested
+            || self.outbound_network_used
+            || self.message_delivered
+            || self.provider_call_performed
+            || self.token_secret_material_loaded
+            || self.live_execution_performed
+            || self.signing_or_broadcast_performed
+            || self.production_ready_claimed
+        {
+            violations.push(CommunicationViolation::new(
+                "COMMUNICATION_PROVIDER_SUBMISSION_PREFLIGHT_SIDE_EFFECT",
+                "provider submission preflight must not request delivery, use network, call providers, load tokens, execute live actions, sign, broadcast, or claim readiness",
+            ));
+        }
+        finish_validation(violations)
+    }
+}
+
+impl CommunicationProviderSubmissionPreflightReport {
+    /// Validate local provider submission preflight report invariants.
+    pub fn validate(&self) -> Result<(), CommunicationError> {
+        let mut violations = Vec::new();
+        validate_id(
+            "communications provider submission preflight",
+            &self.preflight_id,
+            &mut violations,
+        );
+        if self.communications_version != COMMUNICATIONS_CLI_VERSION {
+            violations.push(CommunicationViolation::new_owned(
+                "COMMUNICATION_VERSION_MISMATCH",
+                format!(
+                    "communications_version must be {COMMUNICATIONS_CLI_VERSION}, got {}",
+                    self.communications_version
+                ),
+            ));
+        }
+        if self.outbound_delivery_requested
+            || self.outbound_network_used
+            || self.message_delivered
+            || self.provider_call_performed
+            || self.token_secret_material_loaded
+            || self.live_execution_performed
+            || self.signing_or_broadcast_performed
+            || self.production_ready
+        {
+            violations.push(CommunicationViolation::new(
+                "COMMUNICATION_PROVIDER_SUBMISSION_PREFLIGHT_REPORT_SIDE_EFFECT",
+                "provider submission preflight report contains forbidden side effects or readiness claim",
+            ));
+        }
+        match self.status {
+            CommunicationProviderSubmissionPreflightStatus::BlockedPendingProviderValidation => {
+                if !self.delivery_provider_boundary_ready
+                    || !self.delivery_kill_switch_armed
+                    || !self.audit_state_preflight_required
+                    || !self.delivery_idempotency_required
+                    || !self.rate_limit_controls_required
+                    || !self.outage_backoff_controls_required
+                    || !self.payload_redaction_required
+                    || self.provider_validation_evidence_available
+                {
+                    violations.push(CommunicationViolation::new(
+                        "COMMUNICATION_PROVIDER_SUBMISSION_PREFLIGHT_PENDING_MISMATCH",
+                        "pending provider submission preflight requires local controls, no provider validation evidence, and no side effects",
+                    ));
+                }
+            }
+            CommunicationProviderSubmissionPreflightStatus::Blocked => {
+                if self.violation_codes.is_empty() && self.blockers.is_empty() {
+                    violations.push(CommunicationViolation::new(
+                        "COMMUNICATION_PROVIDER_SUBMISSION_PREFLIGHT_BLOCKERS_EMPTY",
+                        "blocked provider submission preflight must record blockers or violations",
+                    ));
+                }
+            }
+        }
+        finish_validation(violations)
+    }
+}
+
 /// Review future remote operator command controls without enabling remote commands.
 pub fn review_remote_command_security(
     request: &RemoteCommandSecurityReviewRequest,
@@ -2630,6 +2822,194 @@ pub fn review_communication_delivery_provider_boundary(
         token_secret_material_loaded,
         live_execution_performed,
         signing_or_broadcast_performed,
+        production_ready: false,
+        blockers,
+        violation_codes,
+    };
+    report.validate()?;
+    Ok(report)
+}
+
+/// Review local provider submission preflight without delivery.
+pub fn review_communication_provider_submission_preflight(
+    request: &CommunicationProviderSubmissionPreflightRequest,
+) -> Result<CommunicationProviderSubmissionPreflightReport, CommunicationError> {
+    request.validate()?;
+    let delivery_provider_boundary_ready = request.delivery_provider_boundary.status
+        == CommunicationDeliveryProviderBoundaryStatus::BlockedPendingProviderDeliveryValidation
+        && request.delivery_provider_boundary.channel_session_ready
+        && request.delivery_provider_boundary.platform_adapter_ready
+        && !request
+            .delivery_provider_boundary
+            .provider_delivery_evidence_available
+        && !request
+            .delivery_provider_boundary
+            .provider_rate_limit_evidence_available
+        && !request
+            .delivery_provider_boundary
+            .provider_outage_evidence_available
+        && !request
+            .delivery_provider_boundary
+            .platform_identity_evidence_available
+        && request
+            .delivery_provider_boundary
+            .remaining_external_evidence_recorded
+        && !request.delivery_provider_boundary.outbound_network_used
+        && !request.delivery_provider_boundary.message_delivered
+        && !request.delivery_provider_boundary.provider_call_performed
+        && !request
+            .delivery_provider_boundary
+            .token_secret_material_loaded
+        && !request.delivery_provider_boundary.live_execution_performed
+        && !request
+            .delivery_provider_boundary
+            .signing_or_broadcast_performed
+        && !request.delivery_provider_boundary.production_ready;
+    let local_submit_controls_ready = request.delivery_kill_switch_armed
+        && request.audit_state_preflight_required
+        && request.delivery_idempotency_required
+        && request.rate_limit_controls_required
+        && request.outage_backoff_controls_required
+        && request.payload_redaction_required;
+
+    let mut blockers = Vec::new();
+    if !delivery_provider_boundary_ready {
+        blockers.push("delivery-provider boundary prerequisite not ready".to_owned());
+    }
+    if !request.delivery_kill_switch_armed {
+        blockers.push("delivery kill switch not armed".to_owned());
+    }
+    if !request.audit_state_preflight_required {
+        blockers.push("audit/state preflight not required".to_owned());
+    }
+    if !request.delivery_idempotency_required {
+        blockers.push("delivery idempotency not required".to_owned());
+    }
+    if !request.rate_limit_controls_required {
+        blockers.push("provider rate-limit controls not required".to_owned());
+    }
+    if !request.outage_backoff_controls_required {
+        blockers.push("provider outage/backoff controls not required".to_owned());
+    }
+    if !request.payload_redaction_required {
+        blockers.push("payload redaction not required".to_owned());
+    }
+    if !request.provider_validation_evidence_available {
+        blockers.push("real provider validation evidence missing".to_owned());
+    }
+
+    let mut violation_codes = Vec::new();
+    push_code(
+        &mut violation_codes,
+        !delivery_provider_boundary_ready,
+        "COMMUNICATION_PROVIDER_SUBMISSION_PREFLIGHT_BOUNDARY_NOT_READY",
+    );
+    push_code(
+        &mut violation_codes,
+        !request.delivery_kill_switch_armed,
+        "COMMUNICATION_PROVIDER_SUBMISSION_PREFLIGHT_KILL_SWITCH_MISSING",
+    );
+    push_code(
+        &mut violation_codes,
+        !request.audit_state_preflight_required,
+        "COMMUNICATION_PROVIDER_SUBMISSION_PREFLIGHT_AUDIT_STATE_MISSING",
+    );
+    push_code(
+        &mut violation_codes,
+        !request.delivery_idempotency_required,
+        "COMMUNICATION_PROVIDER_SUBMISSION_PREFLIGHT_IDEMPOTENCY_MISSING",
+    );
+    push_code(
+        &mut violation_codes,
+        !request.rate_limit_controls_required,
+        "COMMUNICATION_PROVIDER_SUBMISSION_PREFLIGHT_RATE_LIMIT_MISSING",
+    );
+    push_code(
+        &mut violation_codes,
+        !request.outage_backoff_controls_required,
+        "COMMUNICATION_PROVIDER_SUBMISSION_PREFLIGHT_OUTAGE_BACKOFF_MISSING",
+    );
+    push_code(
+        &mut violation_codes,
+        !request.payload_redaction_required,
+        "COMMUNICATION_PROVIDER_SUBMISSION_PREFLIGHT_REDACTION_MISSING",
+    );
+    push_code(
+        &mut violation_codes,
+        request.outbound_delivery_requested,
+        "COMMUNICATION_PROVIDER_SUBMISSION_PREFLIGHT_DELIVERY_REQUESTED",
+    );
+    push_code(
+        &mut violation_codes,
+        request.outbound_network_used,
+        "COMMUNICATION_PROVIDER_SUBMISSION_PREFLIGHT_OUTBOUND_NETWORK_USED",
+    );
+    push_code(
+        &mut violation_codes,
+        request.message_delivered,
+        "COMMUNICATION_PROVIDER_SUBMISSION_PREFLIGHT_MESSAGE_DELIVERED",
+    );
+    push_code(
+        &mut violation_codes,
+        request.provider_call_performed,
+        "COMMUNICATION_PROVIDER_SUBMISSION_PREFLIGHT_PROVIDER_CALL",
+    );
+    push_code(
+        &mut violation_codes,
+        request.token_secret_material_loaded,
+        "COMMUNICATION_PROVIDER_SUBMISSION_PREFLIGHT_TOKEN_SECRET_LOADED",
+    );
+    push_code(
+        &mut violation_codes,
+        request.live_execution_performed,
+        "COMMUNICATION_PROVIDER_SUBMISSION_PREFLIGHT_LIVE_EXECUTION",
+    );
+    push_code(
+        &mut violation_codes,
+        request.signing_or_broadcast_performed,
+        "COMMUNICATION_PROVIDER_SUBMISSION_PREFLIGHT_SIGNING_OR_BROADCAST",
+    );
+    push_code(
+        &mut violation_codes,
+        request.production_ready_claimed,
+        "COMMUNICATION_PROVIDER_SUBMISSION_PREFLIGHT_PRODUCTION_READY_CLAIMED",
+    );
+
+    let safe_pending_provider_validation = delivery_provider_boundary_ready
+        && local_submit_controls_ready
+        && !request.provider_validation_evidence_available
+        && !request.outbound_delivery_requested
+        && !request.outbound_network_used
+        && !request.message_delivered
+        && !request.provider_call_performed
+        && !request.token_secret_material_loaded
+        && !request.live_execution_performed
+        && !request.signing_or_broadcast_performed
+        && !request.production_ready_claimed;
+
+    let report = CommunicationProviderSubmissionPreflightReport {
+        communications_version: COMMUNICATIONS_CLI_VERSION.to_owned(),
+        preflight_id: request.preflight_id.clone(),
+        status: if safe_pending_provider_validation {
+            CommunicationProviderSubmissionPreflightStatus::BlockedPendingProviderValidation
+        } else {
+            CommunicationProviderSubmissionPreflightStatus::Blocked
+        },
+        delivery_provider_boundary_ready,
+        delivery_kill_switch_armed: request.delivery_kill_switch_armed,
+        audit_state_preflight_required: request.audit_state_preflight_required,
+        delivery_idempotency_required: request.delivery_idempotency_required,
+        rate_limit_controls_required: request.rate_limit_controls_required,
+        outage_backoff_controls_required: request.outage_backoff_controls_required,
+        payload_redaction_required: request.payload_redaction_required,
+        provider_validation_evidence_available: request.provider_validation_evidence_available,
+        outbound_delivery_requested: request.outbound_delivery_requested,
+        outbound_network_used: request.outbound_network_used,
+        message_delivered: request.message_delivered,
+        provider_call_performed: request.provider_call_performed,
+        token_secret_material_loaded: request.token_secret_material_loaded,
+        live_execution_performed: request.live_execution_performed,
+        signing_or_broadcast_performed: request.signing_or_broadcast_performed,
         production_ready: false,
         blockers,
         violation_codes,
@@ -4699,13 +5079,16 @@ mod tests {
         persist_remote_command_envelope_validation_checkpoint,
         persist_remote_command_security_review_checkpoint,
         persist_routed_operator_command_checkpoint,
-        review_communication_delivery_provider_boundary, review_platform_adapter_controls,
+        review_communication_delivery_provider_boundary,
+        review_communication_provider_submission_preflight, review_platform_adapter_controls,
         review_platform_command_ingress, review_remote_command_security, validate_channel_adapter,
         validate_channel_session, validate_remote_command_envelope, ChannelAdapterValidationReport,
         ChannelAdapterValidationRequest, ChannelAdapterValidationStatus,
         ChannelSessionValidationReport, ChannelSessionValidationStatus,
         CommunicationBoundaryConfig, CommunicationDeliveryProviderBoundaryRequest,
-        CommunicationDeliveryProviderBoundaryStatus, DeterministicNotificationBoundary,
+        CommunicationDeliveryProviderBoundaryStatus,
+        CommunicationProviderSubmissionPreflightRequest,
+        CommunicationProviderSubmissionPreflightStatus, DeterministicNotificationBoundary,
         DeterministicOperatorCommandRouter, NotificationChannelDispatchStatus,
         NotificationChannelProfile, NotificationChannelSafetyState, NotificationDispatchRecord,
         NotificationDispatchStatus, NotificationPublishRequest, NotificationPublisher,
@@ -4941,6 +5324,33 @@ mod tests {
                 "provider outage/backoff evidence".to_owned(),
                 "production platform identity authorization evidence".to_owned(),
             ],
+            outbound_network_used: false,
+            message_delivered: false,
+            provider_call_performed: false,
+            token_secret_material_loaded: false,
+            live_execution_performed: false,
+            signing_or_broadcast_performed: false,
+            production_ready_claimed: false,
+        }
+    }
+
+    fn ready_communication_provider_submission_preflight_request(
+    ) -> CommunicationProviderSubmissionPreflightRequest {
+        let boundary = review_communication_delivery_provider_boundary(
+            &ready_communication_delivery_provider_boundary_request(),
+        )
+        .expect("delivery-provider boundary should validate locally");
+        CommunicationProviderSubmissionPreflightRequest {
+            preflight_id: "communications-provider-submission-preflight".to_owned(),
+            delivery_provider_boundary: boundary,
+            delivery_kill_switch_armed: true,
+            audit_state_preflight_required: true,
+            delivery_idempotency_required: true,
+            rate_limit_controls_required: true,
+            outage_backoff_controls_required: true,
+            payload_redaction_required: true,
+            provider_validation_evidence_available: false,
+            outbound_delivery_requested: false,
             outbound_network_used: false,
             message_delivered: false,
             provider_call_performed: false,
@@ -5866,6 +6276,60 @@ mod tests {
                 "missing expected violation code {expected}"
             );
         }
+    }
+
+    #[test]
+    fn communication_provider_submission_preflight_blocks_pending_provider_validation() {
+        let report = review_communication_provider_submission_preflight(
+            &ready_communication_provider_submission_preflight_request(),
+        )
+        .expect("provider submission preflight should produce a blocked report");
+
+        assert_eq!(
+            report.status,
+            CommunicationProviderSubmissionPreflightStatus::BlockedPendingProviderValidation
+        );
+        assert!(report.delivery_provider_boundary_ready);
+        assert!(report.delivery_kill_switch_armed);
+        assert!(report.audit_state_preflight_required);
+        assert!(report.delivery_idempotency_required);
+        assert!(report.rate_limit_controls_required);
+        assert!(report.outage_backoff_controls_required);
+        assert!(report.payload_redaction_required);
+        assert!(!report.provider_validation_evidence_available);
+        assert_eq!(
+            report.blockers,
+            ["real provider validation evidence missing"]
+        );
+        assert!(report.violation_codes.is_empty());
+        assert!(!report.outbound_delivery_requested);
+        assert!(!report.outbound_network_used);
+        assert!(!report.message_delivered);
+        assert!(!report.provider_call_performed);
+        assert!(!report.token_secret_material_loaded);
+        assert!(!report.live_execution_performed);
+        assert!(!report.signing_or_broadcast_performed);
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn communication_provider_submission_preflight_fails_closed_on_side_effects() {
+        let mut request = ready_communication_provider_submission_preflight_request();
+        request.preflight_id = "communications-provider-submission-side-effect".to_owned();
+        request.outbound_delivery_requested = true;
+        request.outbound_network_used = true;
+        request.message_delivered = true;
+        request.provider_call_performed = true;
+        request.token_secret_material_loaded = true;
+        request.live_execution_performed = true;
+        request.signing_or_broadcast_performed = true;
+        request.production_ready_claimed = true;
+
+        let error = review_communication_provider_submission_preflight(&request)
+            .expect_err("side-effect preflight must fail before reporting");
+        assert!(error.violations().iter().any(|violation| {
+            violation.code() == "COMMUNICATION_PROVIDER_SUBMISSION_PREFLIGHT_SIDE_EFFECT"
+        }));
     }
 
     #[test]
