@@ -3,10 +3,10 @@
 
 This gate composes the existing local packaging/deployment aggregate gate, the
 locked dependency license-policy validator, and the local secret/policy
-boundary plus secret backup/restore and withdrawal-policy validators. It
-preserves local-only/non-secret behavior: no live trading, no exchange/RPC
-calls, no service-manager actions, no credential loading, no signing,
-publishing, withdrawals, or production-readiness claims.
+boundary plus secret backup/restore, withdrawal-policy, and signer-boundary
+validators. It preserves local-only/non-secret behavior: no live trading, no
+exchange/RPC calls, no service-manager actions, no credential loading, no
+signing, publishing, withdrawals, or production-readiness claims.
 """
 
 from __future__ import annotations
@@ -82,6 +82,19 @@ def command_set(workspace_root: pathlib.Path, args: argparse.Namespace) -> list[
                 "validate-withdrawal-policy-boundary",
                 "--workspace",
                 str(workspace_root / "withdrawal-policy-boundary"),
+            ],
+        ),
+        (
+            "signer_boundary_audit",
+            [
+                "cargo",
+                "run",
+                "-p",
+                "arb-agent",
+                "--",
+                "validate-signer-boundary-audit",
+                "--workspace",
+                str(workspace_root / "signer-boundary-audit"),
             ],
         ),
         (
@@ -276,6 +289,32 @@ def validate_components(components: list[dict[str, Any]]) -> tuple[list[str], bo
     ):
         if withdrawal_policy.get(key) != "false":
             errors.append(f"withdrawal policy boundary reported unsafe field {key}")
+
+    signer_boundary = component_by_name["signer_boundary_audit"]["parsed"]
+    if signer_boundary.get("signer-request-status") != "RejectedSignerUnavailable":
+        errors.append("signer boundary did not reject unavailable signer requests")
+    if signer_boundary.get("signer-scope-status") != "ReadyForLocalReview":
+        errors.append("signer boundary did not report signer scope ready for local review")
+    for key in (
+        "signer-request-audit-failed-closed",
+        "signer-scope-audit-failed-closed",
+        "state-failure-failed-closed",
+        "state-checkpoints-recovered",
+    ):
+        if signer_boundary.get(key) != "true":
+            errors.append(f"signer boundary did not report {key}=true")
+    if signer_boundary.get("audit-records-replayed") != "2":
+        errors.append("signer boundary did not replay exactly two audit records")
+    for key in (
+        "signer-material-loaded",
+        "plaintext-decrypted",
+        "signing-performed",
+        "broadcast-performed",
+        "rpc-called",
+        "production-ready",
+    ):
+        if signer_boundary.get(key) != "false":
+            errors.append(f"signer boundary reported unsafe field {key}")
 
     policy_audit = component_by_name["policy_decision_audit"]["parsed"]
     if policy_audit.get("approved-policy-decision") != "true":
