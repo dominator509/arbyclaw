@@ -3,9 +3,10 @@
 
 This gate composes the existing local packaging/deployment aggregate gate, the
 locked dependency license-policy validator, and the local secret/policy
-boundary plus secret backup/restore validators. It preserves local-only/non-secret
-behavior: no live trading, no exchange/RPC calls, no service-manager actions,
-no credential loading, no signing, publishing, or production-readiness claims.
+boundary plus secret backup/restore and withdrawal-policy validators. It
+preserves local-only/non-secret behavior: no live trading, no exchange/RPC
+calls, no service-manager actions, no credential loading, no signing,
+publishing, withdrawals, or production-readiness claims.
 """
 
 from __future__ import annotations
@@ -68,6 +69,19 @@ def command_set(workspace_root: pathlib.Path, args: argparse.Namespace) -> list[
                 "validate-secret-backup-restore",
                 "--workspace",
                 str(workspace_root / "secret-backup-restore"),
+            ],
+        ),
+        (
+            "withdrawal_policy_boundary",
+            [
+                "cargo",
+                "run",
+                "-p",
+                "arb-agent",
+                "--",
+                "validate-withdrawal-policy-boundary",
+                "--workspace",
+                str(workspace_root / "withdrawal-policy-boundary"),
             ],
         ),
         (
@@ -238,6 +252,30 @@ def validate_components(components: list[dict[str, Any]]) -> tuple[list[str], bo
     ):
         if secret_backup_restore.get(key) != "false":
             errors.append(f"secret backup/restore reported unsafe field {key}")
+
+    withdrawal_policy = component_by_name["withdrawal_policy_boundary"]["parsed"]
+    for key in (
+        "config-guard-active",
+        "strategy-flag-guard-active",
+        "strategy-intent-guard-active",
+        "trust-contract-guard-active",
+        "destination-allowlist-guard-active",
+        "signing-boundary-guard-active",
+        "audit-append-failure-failed-closed",
+        "state-failure-failed-closed",
+        "state-checkpoint-recovered",
+    ):
+        if withdrawal_policy.get(key) != "true":
+            errors.append(f"withdrawal policy boundary did not report {key}=true")
+    if withdrawal_policy.get("audit-records-replayed") != "1":
+        errors.append("withdrawal policy boundary did not replay exactly one audit record")
+    for key in (
+        "external-submission-performed",
+        "secret-material-recorded",
+        "production-ready",
+    ):
+        if withdrawal_policy.get(key) != "false":
+            errors.append(f"withdrawal policy boundary reported unsafe field {key}")
 
     policy_audit = component_by_name["policy_decision_audit"]["parsed"]
     if policy_audit.get("approved-policy-decision") != "true":
