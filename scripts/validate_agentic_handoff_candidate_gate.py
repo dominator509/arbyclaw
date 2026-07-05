@@ -78,6 +78,8 @@ def run_component(name: str, command: list[str]) -> dict[str, Any]:
         command,
         cwd=ROOT,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         capture_output=True,
         timeout=TIMEOUT_SECONDS,
         check=False,
@@ -157,6 +159,7 @@ def validate_components(components: list[dict[str, Any]]) -> tuple[list[str], bo
         errors.append("hardening core gate detected unsafe side-effect flags")
     for field in (
         "deployment_performed",
+        "service_installed",
         "service_actions_performed",
         "network_listeners_started",
         "secrets_loaded",
@@ -227,6 +230,7 @@ def main() -> int:
         "bounded_toolchain_external_path_used": bounded_toolchain_external_path_used,
         "external_agent_execution_performed": False,
         "deployment_performed": False,
+        "service_installed": False,
         "service_actions_performed": False,
         "network_listeners_started": False,
         "secrets_loaded": False,
@@ -261,6 +265,7 @@ def main() -> int:
         )
         print("external-agent-execution-performed: false")
         print("deployment-performed: false")
+        print("service-installed: false")
         print("service-actions-performed: false")
         print("network-listeners-started: false")
         print("secrets-loaded: false")

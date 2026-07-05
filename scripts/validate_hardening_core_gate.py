@@ -89,6 +89,8 @@ def run_component(name: str, command: list[str]) -> dict[str, Any]:
         command,
         cwd=ROOT,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         capture_output=True,
         timeout=TIMEOUT_SECONDS,
         check=False,
@@ -140,6 +142,7 @@ def validate_components(components: list[dict[str, Any]]) -> tuple[list[str], bo
     for field in (
         "release_published",
         "deployment_performed",
+        "service_installed",
         "service_actions_performed",
         "network_listeners_started",
         "secrets_loaded",
@@ -236,6 +239,7 @@ def main() -> int:
         "unsafe_side_effect_flags_detected": False,
         "bounded_toolchain_external_path_used": bounded_toolchain_external_path_used,
         "deployment_performed": False,
+        "service_installed": False,
         "service_actions_performed": False,
         "network_listeners_started": False,
         "secrets_loaded": False,
@@ -253,7 +257,7 @@ def main() -> int:
             "SBOM reviewer sign-off and provenance review",
             "CodeQL upload processing or accepted local-SARIF-only governance review",
             "secret-pattern scan evidence on hosts where gitleaks is approved and installed",
-            "container image scan and deployment-surface validation",
+            "deployment-surface validation under service lifecycle",
             "penetration, load, rollback, incident, and production-readiness reviews",
         ],
     }
@@ -268,6 +272,7 @@ def main() -> int:
             f"{str(report['bounded_toolchain_external_path_used']).lower()}"
         )
         print("deployment-performed: false")
+        print("service-installed: false")
         print("service-actions-performed: false")
         print("network-listeners-started: false")
         print("secrets-loaded: false")

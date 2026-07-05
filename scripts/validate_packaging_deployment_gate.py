@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Run the strongest local packaging/deployment aggregate validation bundle.
 
-This gate composes existing release-artifact, systemd example, static
-deployment hardening, ARM profile, and ARM cross-target validators. It preserves
-the local-only boundary: no signing, publishing, deployment, service-manager
-actions, secret loading, ARM binary execution, or production-readiness claims.
+This gate composes existing release-artifact, production-container, systemd
+example, static deployment hardening, ARM profile, and ARM cross-target
+validators. It preserves the local-only boundary: no signing, publishing,
+deployment, service-manager actions, secret loading, ARM binary execution, or
+production-readiness claims.
 When the ARM cross-target check uses the documented host-or-Docker fallback
 path, the gate records that bounded toolchain/dependency path separately rather
 than treating it as deployment execution.
@@ -53,6 +54,10 @@ def command_set(args: argparse.Namespace) -> list[tuple[str, list[str]]]:
         systemd.append("--require-systemd-analyze")
     return [
         ("release_artifact", release_command()),
+        (
+            "production_container",
+            [sys.executable, "scripts/validate_production_container.py", "--json"],
+        ),
         ("systemd_example", systemd),
         (
             "deployment_static_hardening",
@@ -75,13 +80,14 @@ def command_set(args: argparse.Namespace) -> list[tuple[str, list[str]]]:
 
 
 def extract_json_report(output: str) -> dict[str, Any]:
-    for index, line in enumerate(output.splitlines()):
-        if line.lstrip().startswith("{"):
-            candidate = "\n".join(output.splitlines()[index:])
-            loaded = json.loads(candidate)
-            if not isinstance(loaded, dict):
-                raise RuntimeError("validator did not emit a JSON object")
-            return loaded
+    decoder = json.JSONDecoder()
+    for index, char in enumerate(output):
+        if char != "{":
+            continue
+        loaded, _ = decoder.raw_decode(output[index:])
+        if not isinstance(loaded, dict):
+            raise RuntimeError("validator did not emit a JSON object")
+        return loaded
     raise RuntimeError("validator did not emit a JSON object")
 
 
@@ -90,6 +96,8 @@ def run_component(name: str, command: list[str]) -> dict[str, Any]:
         command,
         cwd=ROOT,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         capture_output=True,
         timeout=TIMEOUT_SECONDS,
         check=False,
@@ -148,6 +156,32 @@ def validate_components(components: list[dict[str, Any]]) -> tuple[list[str], bo
     ):
         if release.get(field) is not False:
             errors.append(f"release artifact reported unsafe field {field}")
+
+    production_container = component_by_name["production_container"]["parsed"]
+    if production_container.get("passed") is not True:
+        errors.append("production container validation did not pass")
+    if production_container.get("docker_validation_completed") is not True:
+        errors.append("production container validation did not complete Docker validation")
+    if production_container.get("hardened_runtime_smoke_passed") is not True:
+        errors.append("production container validation did not pass hardened runtime smoke")
+    for field in (
+        "read_only_filesystem",
+        "network_disabled",
+        "capabilities_dropped",
+        "no_new_privileges",
+    ):
+        if production_container.get(field) is not True:
+            errors.append(f"production container validation did not confirm {field}")
+    for field in (
+        "deployment_performed",
+        "service_installed",
+        "network_listeners_started",
+        "secrets_loaded",
+        "live_execution_enabled",
+        "production_readiness_claimed",
+    ):
+        if production_container.get(field) is not False:
+            errors.append(f"production container reported unsafe field {field}")
 
     systemd = component_by_name["systemd_example"]["parsed"]
     if systemd.get("passed") is not True or systemd.get("static_validation_passed") is not True:
@@ -262,6 +296,7 @@ def main() -> int:
         "bounded_toolchain_external_path_used": bounded_toolchain_external_path_used,
         "release_published": False,
         "deployment_performed": False,
+        "service_installed": False,
         "service_actions_performed": False,
         "network_listeners_started": False,
         "secrets_loaded": False,
@@ -279,7 +314,6 @@ def main() -> int:
             for component in components
         ],
         "remaining_external_evidence": [
-            "production container build/scan runtime evidence review",
             "signed release workflow and artifact repository retention review",
             "deployment-host systemd installation and hardened runtime validation",
             "ARM target-class runtime smoke and deployment validation",
