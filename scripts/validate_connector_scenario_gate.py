@@ -23,6 +23,7 @@ TIMEOUT_SECONDS = 900
 DANGEROUS_TRUE_KEYS = {
     "account-state-queried",
     "broadcast-performed",
+    "external-call-performed",
     "credential-loaded",
     "external-calls-performed",
     "external-execution-performed",
@@ -31,6 +32,7 @@ DANGEROUS_TRUE_KEYS = {
     "live-network-used",
     "live-provider-call-performed",
     "production-ready",
+    "rpc-called",
     "rpc-call-performed",
     "signing-or-broadcast-performed",
     "signing-performed",
@@ -272,6 +274,28 @@ def command_set(workspace_root: pathlib.Path) -> list[tuple[str, list[str]]]:
                 "arb-agent",
                 "--",
                 "validate-dex-live-adapter-boundary",
+            ],
+        ),
+        (
+            "web3_provider_nonce_reconciliation",
+            [
+                "cargo",
+                "run",
+                "-p",
+                "arb-agent",
+                "--",
+                "validate-web3-provider-nonce-reconciliation",
+            ],
+        ),
+        (
+            "web3_sandbox_live_discrepancy_calibration",
+            [
+                "cargo",
+                "run",
+                "-p",
+                "arb-agent",
+                "--",
+                "validate-web3-sandbox-live-discrepancy-calibration",
             ],
         ),
         (
@@ -789,6 +813,72 @@ def validate_components(components: list[dict[str, Any]]) -> list[str]:
         "dex_live_adapter_boundary",
     )
 
+    web3_nonce = by_name["web3_provider_nonce_reconciliation"]["parsed"]
+    require(
+        web3_nonce,
+        "web3-provider-nonce-reconciliation",
+        "validation passed",
+        errors,
+        "web3_provider_nonce_reconciliation",
+    )
+    require(
+        web3_nonce,
+        "web3-provider-nonce-reconciliation-ready-count",
+        "1",
+        errors,
+        "web3_provider_nonce_reconciliation",
+    )
+    require(
+        web3_nonce,
+        "web3-provider-nonce-reconciliation-blocked-count",
+        "1",
+        errors,
+        "web3_provider_nonce_reconciliation",
+    )
+    for key in (
+        "unsigned-transaction-ready",
+        "provider-snapshot-reference-ready",
+        "provider-next-nonce-ready",
+        "construction-nonce-matches-provider",
+        "construction-nonce-not-pending",
+        "pending-nonce-set-unique",
+        "snapshot-fresh",
+    ):
+        require(web3_nonce, key, "true", errors, "web3_provider_nonce_reconciliation")
+
+    web3_discrepancy = by_name["web3_sandbox_live_discrepancy_calibration"]["parsed"]
+    require(
+        web3_discrepancy,
+        "web3-sandbox-live-discrepancy-calibration",
+        "validation passed",
+        errors,
+        "web3_sandbox_live_discrepancy_calibration",
+    )
+    require(
+        web3_discrepancy,
+        "web3-sandbox-live-discrepancy-calibration-ready-count",
+        "1",
+        errors,
+        "web3_sandbox_live_discrepancy_calibration",
+    )
+    require(
+        web3_discrepancy,
+        "web3-sandbox-live-discrepancy-calibration-blocked-count",
+        "1",
+        errors,
+        "web3_sandbox_live_discrepancy_calibration",
+    )
+    for key in (
+        "broadcast-adapter-control-ready",
+        "sandbox-observation-reference-ready",
+        "live-observation-reference-ready",
+        "sample-size-ready",
+        "price-deviation-within-limit",
+        "latency-deviation-within-limit",
+        "fee-deviation-within-limit",
+    ):
+        require(web3_discrepancy, key, "true", errors, "web3_sandbox_live_discrepancy_calibration")
+
     lifecycle = by_name["connector_lifecycle_audit"]["parsed"]
     require(lifecycle, "cex-lifecycle-final-status", "Filled", errors, "connector_lifecycle_audit")
     require(lifecycle, "cex-lifecycle-transcript-count", "3", errors, "connector_lifecycle_audit")
@@ -844,6 +934,8 @@ def main() -> int:
         "audit_records_replayed": audit_records,
         "fee_live_provider_boundary_enforced": True,
         "fee_schedule_reconciliation_review_enforced": True,
+        "web3_provider_nonce_reconciliation_enforced": True,
+        "web3_sandbox_live_discrepancy_calibration_enforced": True,
         "market_data_bad_data_rejection_review_enforced": True,
         "market_data_live_provider_boundary_enforced": True,
         "market_data_provider_latency_review_enforced": True,
