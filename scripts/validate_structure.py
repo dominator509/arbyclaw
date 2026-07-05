@@ -6,9 +6,10 @@ from __future__ import annotations
 import pathlib
 import re
 import sys
+import hashlib
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-LATEST_REQUIRED_PHASE = 101
+LATEST_REQUIRED_PHASE = 102
 
 REQUIRED_FILES = [
     "ARCHITECTURE.md",
@@ -92,6 +93,7 @@ REQUIRED_FILES = [
 FORBIDDEN_SECRET_ASSIGNMENT = re.compile(
     r"(?i)(api[_-]?key|secret|private[_-]?key|seed[_-]?phrase|mnemonic|token)\s*[:=]\s*['\"]?[A-Za-z0-9_/+=.-]{12,}"
 )
+MANIFEST_ROW = re.compile(r"^\| `(?P<path>[^`]+)` \| (?P<bytes>\d+) \| `(?P<sha>[0-9a-f]{64})` \|$")
 
 SKIP_DIRS = {".git", "target"}
 SCAN_SUFFIXES = {".md", ".toml", ".rs", ".yml", ".yaml", ".env", ".example", ".production"}
@@ -102,10 +104,33 @@ def fail(message: str) -> int:
     return 1
 
 
+def parse_manifest() -> dict[str, tuple[int, str]]:
+    manifest_path = ROOT / "STRUCTURE_MANIFEST.md"
+    manifest: dict[str, tuple[int, str]] = {}
+    for line in manifest_path.read_text(encoding="utf-8").splitlines():
+        match = MANIFEST_ROW.match(line)
+        if match is None:
+            continue
+        manifest[match.group("path")] = (int(match.group("bytes")), match.group("sha"))
+    return manifest
+
+
 def main() -> int:
     for relative in REQUIRED_FILES:
         if not (ROOT / relative).exists():
             return fail(f"missing required file: {relative}")
+
+    manifest = parse_manifest()
+    for relative in REQUIRED_FILES:
+        if relative == "STRUCTURE_MANIFEST.md":
+            continue
+        if relative not in manifest:
+            return fail(f"required file missing from structure manifest: {relative}")
+        data = (ROOT / relative).read_bytes()
+        expected_bytes, expected_sha = manifest[relative]
+        actual_sha = hashlib.sha256(data).hexdigest()
+        if len(data) != expected_bytes or actual_sha != expected_sha:
+            return fail(f"stale structure manifest entry: {relative}")
 
     cargo_toml = (ROOT / "Cargo.toml").read_text(encoding="utf-8")
     for member in ["crates/arb-core", "crates/arb-agent"]:

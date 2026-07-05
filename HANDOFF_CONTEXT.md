@@ -95,16 +95,28 @@ The current authoritative baseline is the Phase 18 agentic handoff package snaps
 - Phase 82 - Local Deployment Config Redaction Gate
 - Phase 83 - Local Deployment Log Redaction Gate
 - Phase 84 - Local Communications Outbox Aggregate Gate
+- Phase 85 - Deployment Host Observability Metrics Runtime Gate
+- Phase 86 - Local Observability Metrics Runtime Validation
+- Phase 87 - Deployment Runtime Gate Metrics Runtime Component
+- Phase 88 - Deployment Evidence Bundle Metrics Runtime Component Gate
+- Phase 89 - Deployment Evidence Checklist Required Bundle Component Gate
+- Phase 90 - Deployment Host Static Hardening Config Smoke Runtime Gate
+- Phase 91 - Deployment Evidence Bundle Static Hardening Component Gate
+- Phase 92 - Deployment Evidence Bundle Config And Log Redaction Component Gate
 - Phase 93 - Deployment Evidence Bundle Filesystem Transcript Component Gate
 - Phase 94 - Production Runtime Preflight Evidence Category Expansion
 - Phase 95 - CEX Live Adapter Boundary Review Gate
 - Phase 96 - DEX/Web3 Live Adapter Boundary Review Gate
 - Phase 97 - Deployment Evidence Checklist Required Transcript Expansion
 - Phase 98 - Deployment Checklist Lifecycle and Drill Plan Requirement Expansion
+- Phase 99 - Production Container Aggregate Gate Enforcement
+- Phase 100 - Handoff Candidate Full Local Surface Gate
+- Phase 101 - CI Handoff Aggregate Container Scan Preparation
+- Phase 102 - Structure Manifest Consistency Gate
 
 ## Current Production Readiness
 
-96% as of Phase 98 governance. Phase 98 expands deployment evidence checklist requirements so existing local lifecycle/drill planning and service-manager rehearsal components are required before the checklist can report zero missing required components. Phase 97 requires existing local transcript bundle components for audit/SQLite recovery, backup/restore, graceful shutdown, SQLite schema migration, rollback execution, incident-response execution, failure capture, and response-drill rehearsal. Live exchange/RPC adapter implementation, live REST/WebSocket market-data providers, provider-backed latency/rate-limit/outage validation, provider-backed bad-data rejection validation, real provider-backed nonce retrieval, provider-backed validation, external fee/account-tier/gas/withdrawal validation, custody-backed signer implementation, broader external/deployment scenario-corpus validation, external fuzz/property execution, production load/security/backtest validation, actual deployment-host config reload/start/stop/restart validation, actual deployment-host backup/restore execution under service lifecycle and load, actual deployment-host graceful-shutdown execution, deployment-host audit validation, deployment-host schema migration execution, deployment-host config loading under service lifecycle, deployment-host log/audit redaction under service lifecycle, real deployment-host runtime-write permission-denial execution, physical disk-full evidence, deployment-host retention/rotation execution, operator-controlled service-manager lifecycle execution evidence, real daemon-hosted observability/exporter/alert operation, real persistent dashboard hosting, real outbound communications delivery, actual rollback execution evidence, actual incident-response execution evidence, daemon failure-capture execution evidence, external sandbox/live calibration evidence, and real deployment-host validation remain environment-limited. This percentage is a governance approximation only and does not imply readiness for live funds or production deployment.
+96% as of Phase 102 governance. Phase 102 enforces required-file structure-manifest consistency for local/CI governance artifacts. Phase 101 made the strict handoff-candidate aggregate reproducible on fresh CI runners by preparing the Dockerized Trivy image. Phase 100 requires execution-path, operator-surface, opportunity-scenario, connector-scenario, hardening-core, deployment-evidence checklist, and local handoff audit gates before the local handoff candidate can pass. Live exchange/RPC adapter implementation, live REST/WebSocket market-data providers, provider-backed latency/rate-limit/outage validation, provider-backed bad-data rejection validation, real provider-backed nonce retrieval, provider-backed validation, external fee/account-tier/gas/withdrawal validation, custody-backed signer implementation, broader external/deployment scenario-corpus validation, external fuzz/property execution, production load/security/backtest validation, actual deployment-host config reload/start/stop/restart validation, actual deployment-host backup/restore execution under service lifecycle and load, actual deployment-host graceful-shutdown execution, deployment-host audit validation, deployment-host schema migration execution, deployment-host config loading under service lifecycle, deployment-host log/audit redaction under service lifecycle, real deployment-host runtime-write permission-denial execution, physical disk-full evidence, deployment-host retention/rotation execution, operator-controlled service-manager lifecycle execution evidence, real daemon-hosted observability/exporter/alert operation, real persistent dashboard hosting, real outbound communications delivery, actual rollback execution evidence, actual incident-response execution evidence, daemon failure-capture execution evidence, external sandbox/live calibration evidence, and real deployment-host validation remain environment-limited. This percentage is a governance approximation only and does not imply readiness for live funds or production deployment.
 
 ## Non-Negotiable Safety State
 
@@ -191,8 +203,9 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 Current GitHub Actions evidence exists for pushed commits on `dominator509/arbyclaw`:
 
-- latest recorded run: `https://github.com/dominator509/arbyclaw/actions/runs/26738593650`
-- latest recorded commit: `20b39c86873ac127cbb2027116bebb828e3eee9d`
+- latest completed recorded run: `https://github.com/dominator509/arbyclaw/actions/runs/28741475080`
+- latest completed recorded commit: `0330ad02c6263bd3b11e51b2d9b1bcac6b3c63d2`
+- newer docs-only run `28742165064` for commit `99a0d7983c3d38638098b9737b6525eba571110f` was still in progress when this handoff text was refreshed.
 
 - structure validation
 - Rust formatting, workspace check, tests, and clippy
