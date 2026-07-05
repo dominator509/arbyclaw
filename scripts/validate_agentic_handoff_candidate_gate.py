@@ -2,6 +2,7 @@
 """Run the strongest current local agentic handoff candidate validation bundle.
 
 This gate composes the local Phase 18 handoff audit/state replay validator, the
+execution-path, operator-surface, opportunity-scenario, connector-scenario,
 Phase 17 hardening-core aggregate gate, and the local deployment evidence
 checklist. It preserves local-only/non-secret behavior: no external agent
 execution, no production deployment, no live trading, no signing, no
@@ -54,6 +55,22 @@ def command_set(
                 str(workspace_root / "agentic-handoff-audit"),
             ],
         ),
+        (
+            "execution_path_gate",
+            [sys.executable, "scripts/validate_execution_path_gate.py"],
+        ),
+        (
+            "operator_surface_gate",
+            [sys.executable, "scripts/validate_operator_surface_gate.py"],
+        ),
+        (
+            "opportunity_scenario_gate",
+            [sys.executable, "scripts/validate_opportunity_scenario_gate.py", "--json"],
+        ),
+        (
+            "connector_scenario_gate",
+            [sys.executable, "scripts/validate_connector_scenario_gate.py", "--json"],
+        ),
         ("hardening_core_gate", hardening),
         (
             "deployment_evidence_checklist",
@@ -87,17 +104,8 @@ def run_component(name: str, command: list[str]) -> dict[str, Any]:
     output = f"{completed.stdout}\n{completed.stderr}".strip()
     json_report: dict[str, Any] | None = None
     parsed = parse_output(output)
-    if "--json" in command and completed.returncode == 0:
-        for index, line in enumerate(output.splitlines()):
-            if line.lstrip().startswith("{"):
-                candidate = "\n".join(output.splitlines()[index:])
-                loaded = json.loads(candidate)
-                if not isinstance(loaded, dict):
-                    raise RuntimeError(f"{name} did not emit a JSON object")
-                json_report = loaded
-                break
-        if json_report is None:
-            raise RuntimeError(f"{name} did not emit JSON output")
+    if completed.returncode == 0:
+        json_report = extract_json_report(output)
     return {
         "name": name,
         "command": " ".join(command),
@@ -107,6 +115,55 @@ def run_component(name: str, command: list[str]) -> dict[str, Any]:
         "parsed": parsed,
         "output_tail": output.splitlines()[-20:],
     }
+
+
+def extract_json_report(output: str) -> dict[str, Any] | None:
+    decoder = json.JSONDecoder()
+    for index, char in enumerate(output):
+        if char != "{":
+            continue
+        loaded, _ = decoder.raw_decode(output[index:])
+        if not isinstance(loaded, dict):
+            raise RuntimeError("validator did not emit a JSON object")
+        return loaded
+    return None
+
+
+def require_false_fields(
+    report: dict[str, Any],
+    gate_name: str,
+    fields: tuple[str, ...],
+    errors: list[str],
+) -> None:
+    for field in fields:
+        if report.get(field) is not False:
+            errors.append(f"{gate_name} reported unsafe field {field}")
+
+
+def validate_json_gate(
+    report: dict[str, Any],
+    gate_name: str,
+    false_fields: tuple[str, ...],
+    errors: list[str],
+) -> None:
+    if report.get("all_components_passed") is not True:
+        errors.append(f"{gate_name} did not pass every component")
+    if report.get("unsafe_side_effect_flags_detected") is not False:
+        errors.append(f"{gate_name} detected unsafe side-effect flags")
+    require_false_fields(report, gate_name, false_fields, errors)
+
+
+def json_report_for(
+    component_by_name: dict[str, dict[str, Any]],
+    component_name: str,
+    gate_name: str,
+    errors: list[str],
+) -> dict[str, Any]:
+    report = component_by_name[component_name]["json_report"]
+    if not isinstance(report, dict):
+        errors.append(f"{gate_name} did not produce a JSON report")
+        return {}
+    return report
 
 
 def validate_components(components: list[dict[str, Any]]) -> tuple[list[str], bool]:
@@ -151,8 +208,83 @@ def validate_components(components: list[dict[str, Any]]) -> tuple[list[str], bo
         if handoff.get(false_key) != "false":
             errors.append(f"agentic handoff audit reported unsafe field {false_key}")
 
-    hardening = component_by_name["hardening_core_gate"]["json_report"]
-    assert hardening is not None
+    execution_path = json_report_for(component_by_name, "execution_path_gate", "execution path gate", errors)
+    validate_json_gate(
+        execution_path,
+        "execution path gate",
+        (
+            "external_calls_performed",
+            "external_submission_performed",
+            "signer_material_loaded",
+            "plaintext_decrypted",
+            "signing_performed",
+            "broadcast_performed",
+            "live_execution_performed",
+            "production_ready",
+        ),
+        errors,
+    )
+
+    operator_surface = json_report_for(component_by_name, "operator_surface_gate", "operator surface gate", errors)
+    validate_json_gate(
+        operator_surface,
+        "operator surface gate",
+        (
+            "outbound_network_used",
+            "public_network_exposed",
+            "service_actions_performed",
+            "external_submission_performed",
+            "signing_or_broadcast_performed",
+            "live_execution_performed",
+            "production_ready",
+        ),
+        errors,
+    )
+
+    opportunity_scenario = json_report_for(
+        component_by_name, "opportunity_scenario_gate", "opportunity scenario gate", errors
+    )
+    validate_json_gate(
+        opportunity_scenario,
+        "opportunity scenario gate",
+        (
+            "external_calls_performed",
+            "external_data_downloaded",
+            "adapter_submission_performed",
+            "external_fuzzer_invoked",
+            "live_network_used",
+            "signing_or_broadcast_performed",
+            "live_execution_performed",
+            "production_ready",
+        ),
+        errors,
+    )
+    if opportunity_scenario.get("opportunity_replay_latency_review_enforced") is not True:
+        errors.append("opportunity scenario gate did not enforce replay latency review")
+    if opportunity_scenario.get("local_validation_coverage_review_enforced") is not True:
+        errors.append("opportunity scenario gate did not enforce validation coverage review")
+
+    connector_scenario = json_report_for(
+        component_by_name, "connector_scenario_gate", "connector scenario gate", errors
+    )
+    validate_json_gate(
+        connector_scenario,
+        "connector scenario gate",
+        (
+            "live_network_used",
+            "credential_loaded",
+            "websocket_connection_opened",
+            "live_provider_call_performed",
+            "external_submission_performed",
+            "rpc_call_performed",
+            "signing_or_broadcast_performed",
+            "live_execution_performed",
+            "production_ready",
+        ),
+        errors,
+    )
+
+    hardening = json_report_for(component_by_name, "hardening_core_gate", "hardening core gate", errors)
     if hardening.get("all_components_passed") is not True:
         errors.append("hardening core gate did not pass every component")
     if hardening.get("unsafe_side_effect_flags_detected") is not False:
@@ -172,8 +304,9 @@ def validate_components(components: list[dict[str, Any]]) -> tuple[list[str], bo
         hardening.get("bounded_toolchain_external_path_used") is True
     )
 
-    checklist = component_by_name["deployment_evidence_checklist"]["json_report"]
-    assert checklist is not None
+    checklist = json_report_for(
+        component_by_name, "deployment_evidence_checklist", "deployment evidence checklist", errors
+    )
     bundle_index = checklist.get("bundle_index", {})
     if bundle_index.get("all_components_passed") is not True:
         errors.append("deployment evidence checklist bundle index did not pass")
@@ -221,6 +354,15 @@ def main() -> int:
     )
     assert hardening is not None
     assert checklist is not None
+    extra_remaining_evidence = []
+    for component in components:
+        report = component["json_report"]
+        if not isinstance(report, dict):
+            continue
+        for key in ("remaining_external_evidence", "remaining_external_validation"):
+            values = report.get(key, [])
+            if isinstance(values, list):
+                extra_remaining_evidence.extend(str(value) for value in values)
 
     report = {
         "schema": "arbyclaw.agentic_handoff_candidate_gate.v1",
@@ -249,6 +391,7 @@ def main() -> int:
             for component in components
         ],
         "remaining_external_evidence": hardening.get("remaining_external_evidence", []),
+        "remaining_software_surface_external_evidence": sorted(set(extra_remaining_evidence)),
         "remaining_external_checklist_categories": checklist.get(
             "remaining_missing_categories", []
         ),
