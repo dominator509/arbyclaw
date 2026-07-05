@@ -55,16 +55,22 @@ BOOLEAN_SAFETY_FIELDS = (
 )
 
 REQUIRED_BUNDLE_COMPONENTS = (
+    "systemd-lifecycle-plan",
+    "deployment-host-runtime-plan",
     "deployment-host-observability-metrics-runtime",
     "deployment-host-static-hardening-config-smoke",
     "deployment-host-config-redaction",
     "deployment-host-log-redaction",
+    "deployment-host-retention-preflight",
+    "rollback-drill-plan",
+    "incident-response-drill-plan",
     "deployment-disk-full-transcript",
     "deployment-retention-transcript",
     "deployment-permission-transcript",
     "deployment-audit-sqlite-transcript",
     "deployment-backup-restore-transcript",
     "deployment-graceful-shutdown-transcript",
+    "service-manager-lifecycle-rehearsal",
     "deployment-sqlite-schema-migration-transcript",
     "rollback-execution-transcript",
     "incident-response-execution-transcript",
