@@ -6,8 +6,8 @@ ArbyClaw
 
 ## Current Roadmap Position
 
-- Active phase: Phase 91 - Deployment Evidence Bundle Static Hardening Component Gate implemented for direct bundle/checklist enforcement of local static hardening/config smoke evidence only; next required work remains live REST/WebSocket providers, provider-backed reconnect/rate-limit/outage validation, provider-backed bad-data rejection validation, external fee/account-tier/gas/withdrawal validation, external latency measurement, external fuzz/property execution, broader external/deployment replay corpora, production load/security/backtest validation, real daemon-hosted observability/exporter/alert validation, real persistent dashboard hosting/auth/session/authorization validation, real outbound communications adapters, real platform authentication/authorization, real external sandbox/live calibration, live exchange/RPC adapter implementation, custody-backed signer implementation, operator-controlled deployment-host/service-manager execution, real deployment-host config reload/start/stop/restart validation, real deployment-host backup/restore execution under service lifecycle and load, real deployment-host permission execution during runtime writes, physical disk-full execution, deployment-host retention/rotation execution, actual rollback execution, actual incident-response execution, real daemon failure-capture execution, real deployment-host audit/SQLite recovery execution, real deployment-host SQLite schema migration execution under service lifecycle, deployment-host config loading under service lifecycle, deployment-host log/audit redaction under service lifecycle, production image publishing, service deployment, and external evidence beyond current Rust/CI/local gates
-- Active sub-roadmap: `PHASE_91_SUBROADMAP.md`
+- Active phase: Phase 92 - Deployment Evidence Bundle Config And Log Redaction Component Gate implemented for direct bundle/checklist enforcement of local deployment-host config/log redaction evidence only; next required work remains live REST/WebSocket providers, provider-backed reconnect/rate-limit/outage validation, provider-backed bad-data rejection validation, external fee/account-tier/gas/withdrawal validation, external latency measurement, external fuzz/property execution, broader external/deployment replay corpora, production load/security/backtest validation, real daemon-hosted observability/exporter/alert validation, real persistent dashboard hosting/auth/session/authorization validation, real outbound communications adapters, real platform authentication/authorization, real external sandbox/live calibration, live exchange/RPC adapter implementation, custody-backed signer implementation, operator-controlled deployment-host/service-manager execution, real deployment-host config reload/start/stop/restart validation, real deployment-host backup/restore execution under service lifecycle and load, real deployment-host permission execution during runtime writes, physical disk-full execution, deployment-host retention/rotation execution, actual rollback execution, actual incident-response execution, real daemon failure-capture execution, real deployment-host audit/SQLite recovery execution, real deployment-host SQLite schema migration execution under service lifecycle, deployment-host config loading under service lifecycle, deployment-host log/audit redaction under service lifecycle, production image publishing, service deployment, and external evidence beyond current Rust/CI/local gates
+- Active sub-roadmap: `PHASE_92_SUBROADMAP.md`
 - Runtime-smoke composition update: local deployment-like runtime smoke now recovers observability operations review, export dry-run, alert-route dispatch, endpoint preflight, loopback bind, metrics scrape preflight, one-shot metrics endpoint validation, and scoped tracing capture alongside lifecycle, communications, dashboard, validation-runner, and paper-ledger recovery, without telemetry export, outbound alerts, public exposure, service-manager action, live execution, or production-readiness claims.
 - Current production readiness: 96%
 - Current implementation status: Minimal Rust workspace, typed config, reference-only secret boundary, policy/audit/state/runtime lifecycle gates, deterministic local market-data/fee/paper/CEX/DEX/opportunity/planner/adapter boundaries, local communications/dashboard/observability/testing/packaging/handoff gates, and aggregate local validation scripts exist. The current deployment-host runtime wrapper and Phase 28/90 aggregate deployment-runtime gate compose 37 local runtime/deployment probes, including 24 nested runtime/helper probes and thirteen sanitized runtime/deployment transcript validators, with static deployment hardening/config smoke validation, runtime config reload, SQLite WAL schema migration, deployment config/log redaction, observability metrics runtime, runtime load-profile review, and production-runtime preflight enforcement while failing on unsafe side-effect flags. Local and GitHub Actions evidence covers current structure, formatting, workspace compilation, tests, clippy, locked release build, aggregate packaging/deployment gate validation, dependency audit, dependency license policy validation, SBOM generation, local-SARIF SAST, example image scan, static example systemd-unit checks, secret-pattern scan, deployment evidence checklist artifact generation, and hardening evidence indexing. Live trading, production container/systemd/ARM deployment validation, real validation runner execution beyond Cargo tests, real fuzzing engines, broader external/deployment opportunity scenario-corpus execution, real external backtest corpus execution, real observability runtime, real dashboard hosting, outbound messaging integrations, external adapter submission, real exchange-specific live connectors, DEX RPC adapters, wallet signer, transaction broadcasts, custody backend, deployment-host durability validation, real deployment-host permission execution, physical disk-full and retention/rotation execution evidence, operator-controlled service-manager lifecycle execution evidence, deployment-host schema migration execution under service lifecycle, actual rollback execution evidence, incident-response execution evidence, daemon failure-capture execution evidence, external sandbox/live calibration evidence, and production execution logic are not implemented.
@@ -3564,3 +3564,41 @@ cargo clippy --workspace --all-targets -- -D warnings
 ### Exit Criteria
 
 Met for direct deployment evidence bundle/checklist enforcement of local static hardening/config smoke wrapper evidence only. Real service-manager config loading, deployed config reload, production filesystem validation, deployment-host service orchestration, external review, and production readiness remain unclaimed.
+
+## Phase 92 - Deployment Evidence Bundle Config And Log Redaction Component Gate
+
+### Goal
+
+Expose deployment-host config redaction and log redaction wrapper evidence as direct deployment evidence bundle components and require them in the checklist.
+
+### Completed Tasks
+
+- Created `PHASE_92_SUBROADMAP.md`.
+- Added `deployment-host-config-redaction` and `deployment-host-log-redaction` to `scripts/validate_deployment_evidence_bundle.py`.
+- Scoped both components to the per-process deployment evidence bundle workspace.
+- Added both components to `REQUIRED_BUNDLE_COMPONENTS` in `scripts/validate_deployment_evidence_checklist.py`.
+- Verified the deployment evidence bundle reports 23 bounded local components with both redaction components present.
+- Verified the deployment evidence checklist reports four required bundle components and zero missing required components.
+
+### Explicit Non-Goals
+
+- No deployed config mutation or deployed log scraping.
+- No systemd install, reload, start, stop, restart, enable, or daemon deployment.
+- No production path mutation.
+- No external calls, live execution, signing, broadcast, exchange call, RPC call, wallet custody, or production-readiness approval.
+
+### Validation
+
+```bash
+python3 scripts/validate_deployment_evidence_bundle.py --json
+python3 scripts/validate_deployment_evidence_checklist.py --json
+python3 scripts/validate_structure.py
+cargo fmt --check
+cargo check --workspace
+cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
+```
+
+### Exit Criteria
+
+Met for direct deployment evidence bundle/checklist enforcement of local deployment-host config/log redaction wrapper evidence only. Real deployed config loading, deployed log/audit redaction, production filesystem validation, deployment-host service orchestration, external review, and production readiness remain unclaimed.

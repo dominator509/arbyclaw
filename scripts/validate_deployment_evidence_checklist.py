@@ -57,6 +57,8 @@ BOOLEAN_SAFETY_FIELDS = (
 REQUIRED_BUNDLE_COMPONENTS = (
     "deployment-host-observability-metrics-runtime",
     "deployment-host-static-hardening-config-smoke",
+    "deployment-host-config-redaction",
+    "deployment-host-log-redaction",
 )
 
 
