@@ -538,6 +538,7 @@ fn is_local_workspace_validation_command(command: &str) -> bool {
             | "validate-audit-retention-execution"
             | "validate-audit-durability"
             | "validate-sqlite-wal-schema-migration"
+            | "validate-deployment-config-redaction"
             | "validate-runtime-config-reload"
             | "validate-runtime-graceful-shutdown"
             | "validate-runtime-backup-restore"
@@ -689,6 +690,9 @@ fn run_local_workspace_validation_command(
         "validate-audit-durability" => run_audit_durability_validation(&options),
         "validate-sqlite-wal-schema-migration" => {
             run_sqlite_wal_schema_migration_validation(&options)
+        }
+        "validate-deployment-config-redaction" => {
+            run_deployment_config_redaction_validation(&options)
         }
         "validate-runtime-config-reload" => run_runtime_config_reload_validation(&options),
         "validate-runtime-graceful-shutdown" => run_runtime_graceful_shutdown_validation(&options),
@@ -926,6 +930,7 @@ fn print_usage() {
     println!("       arb-agent validate-audit-durability --workspace <fresh-dir>");
     println!("       arb-agent validate-audit-retention-execution --workspace <fresh-dir>");
     println!("       arb-agent validate-sqlite-wal-schema-migration --workspace <fresh-dir>");
+    println!("       arb-agent validate-deployment-config-redaction --workspace <fresh-dir>");
     println!("       arb-agent validate-deployment-audit-sqlite-transcript");
     println!("       arb-agent validate-deployment-backup-restore-transcript");
     println!("       arb-agent validate-deployment-graceful-shutdown-transcript");
@@ -5276,6 +5281,100 @@ fn run_sqlite_wal_schema_migration_validation(
     {
         return Err(AgentCliError::Validation(
             "sqlite WAL schema migration validation did not satisfy local safety invariants"
+                .to_owned(),
+        ));
+    }
+
+    Ok(())
+}
+
+fn run_deployment_config_redaction_validation(
+    options: &LocalValidationRunOptions,
+) -> Result<(), AgentCliError> {
+    prepare_fresh_workspace(&options.workspace_dir)?;
+    let config_path = options
+        .workspace_dir
+        .join("deployment-config-redaction.toml");
+    fs::write(&config_path, LOCAL_DEPLOYMENT_CONFIG_REDACTION_TOML).map_err(|error| {
+        AgentCliError::Validation(format!(
+            "failed to write local deployment config fixture: {error}"
+        ))
+    })?;
+
+    let config = load_config_file(&config_path)?;
+    let config_loaded = matches!(
+        config.runtime.mode,
+        arb_core::RuntimeMode::Observe | arb_core::RuntimeMode::Paper
+    ) && !config.runtime.live_execution_enabled
+        && !config.runtime.allow_withdrawals
+        && config.runtime.kill_switch_enabled == Some(true)
+        && config.audit.enabled
+        && config.audit.redact_secrets == Some(true);
+
+    let audit_path = options
+        .workspace_dir
+        .join("deployment-config-redaction.audit.jsonl");
+    let mut journal = AppendOnlyAuditJournal::open(&audit_path)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+
+    let unsafe_event = AuditEvent::new(
+        "deployment-config-redaction-unsafe",
+        AuditEventKind::Configuration,
+        "deployment",
+        "local-validator",
+        "local deployment config redaction rejection probe",
+    )
+    .with_metadata(
+        "api_key",
+        AuditValue::Text("local-fixture-secret-like-value".to_owned()),
+    );
+    let unsafe_metadata_rejected = journal.append_event(unsafe_event).is_err();
+
+    let redacted_event = AuditEvent::new(
+        "deployment-config-redaction-redacted",
+        AuditEventKind::Configuration,
+        "deployment",
+        "local-validator",
+        "local deployment config redaction accepted probe",
+    )
+    .with_metadata("api_key", AuditValue::Redacted)
+    .with_metadata(
+        "config_mode",
+        AuditValue::Text(format!("{:?}", config.runtime.mode)),
+    )
+    .with_metadata(
+        "audit_redaction_required",
+        AuditValue::Bool(config.audit.redact_secrets == Some(true)),
+    )
+    .with_metadata("live_execution_enabled", AuditValue::Bool(false))
+    .with_metadata("external_network_used", AuditValue::Bool(false))
+    .with_metadata("production_ready", AuditValue::Bool(false));
+    let record = journal
+        .append_event(redacted_event)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    drop(journal);
+
+    let reopened = AppendOnlyAuditJournal::open(&audit_path)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let audit_replay_validated =
+        reopened.next_sequence() == 2 && reopened.previous_hash() == record.record_hash;
+
+    println!("deployment-config-redaction: validation passed");
+    println!("config-loaded: {config_loaded}");
+    println!("config-mode-safe: true");
+    println!("audit-redaction-required: true");
+    println!("unsafe-metadata-rejected: {unsafe_metadata_rejected}");
+    println!("redacted-event-appended: true");
+    println!("audit-replay-validated: {audit_replay_validated}");
+    println!("secret-material-recorded: false");
+    println!("external-network-used: false");
+    println!("service-manager-action-performed: false");
+    println!("live-execution-performed: false");
+    println!("production-ready: false");
+
+    if !config_loaded || !unsafe_metadata_rejected || !audit_replay_validated {
+        return Err(AgentCliError::Validation(
+            "deployment config redaction validation did not satisfy local safety invariants"
                 .to_owned(),
         ));
     }
@@ -12607,6 +12706,40 @@ const fn local_runtime_config_reload_toml(reloaded: bool) -> &'static str {
     }
 }
 
+const LOCAL_DEPLOYMENT_CONFIG_REDACTION_TOML: &str = r#"
+[runtime]
+mode = "paper"
+live_execution_enabled = false
+allow_withdrawals = false
+kill_switch_enabled = true
+
+[risk]
+max_single_trade_quote = 1_000.0
+max_daily_loss_quote = 2_000.0
+max_open_exposure_quote = 5_000.0
+slippage_bps = 50
+gas_fee_cap_quote = 100.0
+
+[venues]
+cex_allowlist = ["paper-a", "paper-b"]
+dex_allowlist = ["paper-dex-a"]
+chain_allowlist = ["local-chain"]
+asset_allowlist = ["BTC", "ETH", "USD"]
+
+[secrets]
+backend = "disabled"
+exchange_credentials = { source = "disabled" }
+wallet_signer = { source = "disabled" }
+
+[communication]
+cli_enabled = true
+notify_channels = []
+
+[audit]
+enabled = true
+redact_secrets = true
+"#;
+
 const LOCAL_RUNTIME_INITIAL_CONFIG_TOML: &str = r#"
 [runtime]
 mode = "observe"
@@ -16670,13 +16803,13 @@ mod tests {
         run_audit_durability_validation, run_audit_retention_execution_validation,
         run_communications_runtime_validation, run_config_migration_validation,
         run_connector_lifecycle_audit_validation, run_dashboard_runtime_validation,
-        run_destination_boundary_audit_validation, run_execution_adapter_audit_validation,
-        run_execution_planner_audit_validation, run_fee_boundary_audit_validation,
-        run_fee_schedule_reconciliation_validation, run_fee_schedule_verification_validation,
-        run_local_fuzz_corpus_runner, run_local_paper_backtest_corpus_runner,
-        run_local_property_check_runner, run_local_validation_corpus_runner,
-        run_local_validation_runner, run_market_data_boundary_audit_validation,
-        run_market_data_history_persistence_validation,
+        run_deployment_config_redaction_validation, run_destination_boundary_audit_validation,
+        run_execution_adapter_audit_validation, run_execution_planner_audit_validation,
+        run_fee_boundary_audit_validation, run_fee_schedule_reconciliation_validation,
+        run_fee_schedule_verification_validation, run_local_fuzz_corpus_runner,
+        run_local_paper_backtest_corpus_runner, run_local_property_check_runner,
+        run_local_validation_corpus_runner, run_local_validation_runner,
+        run_market_data_boundary_audit_validation, run_market_data_history_persistence_validation,
         run_market_data_provider_preflight_validation,
         run_market_data_quality_assessment_validation, run_market_data_reconnect_plan_validation,
         run_observability_runtime_validation, run_opportunity_historical_fixture_validation,
@@ -17126,6 +17259,21 @@ mod tests {
             .exists());
         assert!(workspace
             .join("sqlite-wal-schema-migration.future.sqlite")
+            .exists());
+        cleanup_workspace(&workspace);
+    }
+
+    #[test]
+    fn deployment_config_redaction_validation_runs_local_files_only() {
+        let workspace = temp_workspace_path("deployment-config-redaction");
+        let options = LocalValidationRunOptions {
+            workspace_dir: workspace.clone(),
+        };
+        run_deployment_config_redaction_validation(&options)
+            .expect("local deployment config redaction should pass");
+        assert!(workspace.join("deployment-config-redaction.toml").exists());
+        assert!(workspace
+            .join("deployment-config-redaction.audit.jsonl")
             .exists());
         cleanup_workspace(&workspace);
     }

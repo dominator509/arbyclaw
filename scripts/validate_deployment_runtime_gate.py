@@ -28,6 +28,7 @@ EXPECTED_COMPONENTS = {
     "audit_retention_execution": "audit_retention_execution_requested",
     "runtime_config_reload": "runtime_config_reload_requested",
     "sqlite_schema_migration": "sqlite_schema_migration_requested",
+    "deployment_config_redaction": "deployment_config_redaction_requested",
     "graceful_shutdown": "graceful_shutdown_requested",
     "backup_restore": "backup_restore_requested",
     "backup_restore_load": "backup_restore_load_requested",
@@ -496,6 +497,9 @@ def build_command(args: argparse.Namespace, workspace: pathlib.Path) -> list[str
         "--run-sqlite-schema-migration",
         "--sqlite-schema-migration-workspace",
         str(workspace / "sqlite-schema-migration"),
+        "--run-deployment-config-redaction",
+        "--deployment-config-redaction-workspace",
+        str(workspace / "deployment-config-redaction"),
         "--run-audit-retention-execution",
         "--retention-workspace",
         str(workspace / "audit-retention-execution"),
@@ -692,6 +696,32 @@ def validate_report(report: dict[str, Any]) -> list[str]:
     if sqlite_schema_migration.get("sqlite_schema_migration_passed") is not True:
         errors.append("sqlite schema migration did not pass")
 
+    deployment_config_redaction = report.get("deployment_config_redaction")
+    if not isinstance(deployment_config_redaction, dict):
+        errors.append("deployment_config_redaction report missing or invalid")
+        return errors
+    expected_config_redaction_values = {
+        "config_loaded": "true",
+        "config_mode_safe": "true",
+        "audit_redaction_required": "true",
+        "unsafe_metadata_rejected": "true",
+        "redacted_event_appended": "true",
+        "audit_replay_validated": "true",
+        "secret_material_recorded": "false",
+        "external_network_used": "false",
+        "service_manager_action_performed": "false",
+        "live_execution_performed": "false",
+        "production_ready": "false",
+    }
+    for key, expected in expected_config_redaction_values.items():
+        if deployment_config_redaction.get(key) != expected:
+            errors.append(
+                f"deployment config redaction expected {key}={expected!r} "
+                f"but saw {deployment_config_redaction.get(key)!r}"
+            )
+    if deployment_config_redaction.get("deployment_config_redaction_passed") is not True:
+        errors.append("deployment config redaction did not pass")
+
     return errors
 
 
@@ -811,6 +841,7 @@ def main() -> int:
         "runtime_smoke_production_preflight_enforced": True,
         "runtime_config_reload_enforced": True,
         "sqlite_schema_migration_enforced": True,
+        "deployment_config_redaction_enforced": True,
         "runtime_load_profile_review_enforced": True,
         "transcript_component_names": [
             component["name"] for component in TRANSCRIPT_COMPONENTS
@@ -835,6 +866,7 @@ def main() -> int:
         print("production-readiness-claimed: false")
         print("runtime-config-reload-enforced: true")
         print("sqlite-schema-migration-enforced: true")
+        print("deployment-config-redaction-enforced: true")
         print("runtime-load-profile-review-enforced: true")
     return 0
 
