@@ -555,6 +555,51 @@ def validate_observability_provider_boundary_cli(parsed: dict[str, str]) -> list
     return errors
 
 
+def validate_observability_provider_submission_preflight_cli(
+    parsed: dict[str, str],
+) -> list[str]:
+    errors: list[str] = []
+    for key in (
+        "observability-provider-submission-boundary-ready",
+        "observability-provider-submission-kill-switch-armed",
+        "observability-provider-submission-audit-state-preflight-required",
+        "observability-provider-submission-idempotency-required",
+        "observability-provider-submission-backpressure-required",
+        "observability-provider-submission-alert-authorization-required",
+        "observability-provider-submission-redaction-required",
+        "observability-provider-submission-checkpoint-recovered",
+    ):
+        if parsed.get(key) != "true":
+            errors.append(f"observability provider submission cli expected {key}=true")
+    for key in (
+        "observability-provider-submission-provider-validation-evidence-available",
+        "telemetry-export-requested",
+        "outbound-alert-delivery-requested",
+        "external-submission-requested",
+        "public-network-exposure-requested",
+        "service-manager-action-requested",
+        "sensitive-material-loaded",
+        "live-execution-requested",
+        "production-ready",
+    ):
+        if parsed.get(key) != "false":
+            errors.append(f"observability provider submission cli expected {key}=false")
+    if parsed.get("observability-provider-submission-preflight") != "validation passed":
+        errors.append("observability provider submission cli did not report validation passed")
+    if (
+        parsed.get("observability-provider-submission-preflight-status")
+        != "blocked-pending-provider-validation"
+    ):
+        errors.append(
+            "observability provider submission cli expected blocked pending provider validation"
+        )
+    if parse_positive_int(parsed.get("observability-provider-submission-blocker-count")) != 1:
+        errors.append("observability provider submission cli expected one blocker")
+    if parse_positive_int(parsed.get("observability-provider-submission-audit-records-replayed")) != 1:
+        errors.append("observability provider submission cli expected one replayed audit record")
+    return errors
+
+
 def validate_wrapper_common(report: dict[str, Any], key: str) -> tuple[list[str], dict[str, Any]]:
     errors: list[str] = []
     nested = report.get(key)
@@ -981,6 +1026,19 @@ def main() -> int:
                     str(workspace_root / "observability-provider-boundary"),
                 ],
             ),
+            run_text_command(
+                "observability_provider_submission_preflight_cli",
+                [
+                    "cargo",
+                    "run",
+                    "-p",
+                    "arb-agent",
+                    "--",
+                    "validate-observability-provider-submission-preflight",
+                    "--workspace",
+                    str(workspace_root / "observability-provider-submission-preflight"),
+                ],
+            ),
             run_json_command(
                 "communications_runtime_wrapper",
                 [
@@ -1044,6 +1102,7 @@ def main() -> int:
         "observability_runtime_cli": lambda component: validate_observability_cli(component["parsed"]),
         "observability_metrics_runtime_cli": lambda component: validate_observability_metrics_runtime_cli(component["parsed"]),
         "observability_provider_boundary_cli": lambda component: validate_observability_provider_boundary_cli(component["parsed"]),
+        "observability_provider_submission_preflight_cli": lambda component: validate_observability_provider_submission_preflight_cli(component["parsed"]),
         "communications_runtime_wrapper": lambda component: validate_communications_wrapper(component["json_report"] or {}),
         "dashboard_runtime_wrapper": lambda component: validate_dashboard_wrapper(component["json_report"] or {}),
         "observability_runtime_wrapper": lambda component: validate_observability_wrapper(component["json_report"] or {}),

@@ -934,6 +934,106 @@ pub struct ObservabilityProviderBoundaryReviewReport {
     pub reviewed_at_ms: u64,
 }
 
+/// Local provider submission preflight request for future observability integrations.
+///
+/// This composes the local provider-boundary review with submit-time controls
+/// that must exist before any future exporter session, log-shipping sink, alert
+/// delivery provider, or daemon-hosted observability runtime is allowed.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ObservabilityProviderSubmissionPreflightRequest {
+    /// Stable local preflight id.
+    pub preflight_id: String,
+    /// Local provider-boundary prerequisite.
+    pub provider_boundary: ObservabilityProviderBoundaryReviewReport,
+    /// Whether future telemetry/export submission kill switch is represented as armed.
+    pub telemetry_kill_switch_armed: bool,
+    /// Whether audit/state preflight is represented as required before submit.
+    pub audit_state_preflight_required: bool,
+    /// Whether exporter/log/alert submission idempotency is represented as required.
+    pub export_idempotency_required: bool,
+    /// Whether exporter/log sink backpressure controls are represented as required.
+    pub exporter_backpressure_required: bool,
+    /// Whether alert delivery authorization controls are represented as required.
+    pub alert_delivery_authorization_required: bool,
+    /// Whether telemetry/log/alert payload redaction is represented as required.
+    pub telemetry_redaction_required: bool,
+    /// Whether real provider validation evidence exists. Must remain false here.
+    pub provider_validation_evidence_available: bool,
+    /// Whether telemetry export was requested. Must remain false.
+    pub telemetry_export_requested: bool,
+    /// Whether outbound alert delivery was requested. Must remain false.
+    pub outbound_alert_delivery_requested: bool,
+    /// Whether external submission was requested. Must remain false.
+    pub external_submission_requested: bool,
+    /// Whether public network exposure was requested. Must remain false.
+    pub public_network_exposure_requested: bool,
+    /// Whether service-manager action was requested. Must remain false.
+    pub service_manager_action_requested: bool,
+    /// Whether sensitive material was loaded. Must remain false.
+    pub sensitive_material_loaded: bool,
+    /// Whether live execution was requested. Must remain false.
+    pub live_execution_requested: bool,
+    /// Whether production readiness was claimed. Must remain false.
+    pub production_ready_claim_requested: bool,
+}
+
+/// Local observability provider submission preflight status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ObservabilityProviderSubmissionPreflightStatus {
+    /// Local submit controls exist, but real provider validation is missing.
+    BlockedPendingProviderValidation,
+    /// The preflight is unsafe or internally incomplete.
+    Blocked,
+}
+
+/// Non-secret local observability provider submission preflight report.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ObservabilityProviderSubmissionPreflightReport {
+    /// Boundary version that produced this report.
+    pub observability_runbook_version: String,
+    /// Stable local preflight id.
+    pub preflight_id: String,
+    /// Preflight status.
+    pub status: ObservabilityProviderSubmissionPreflightStatus,
+    /// Whether the provider-boundary prerequisite is coherent.
+    pub provider_boundary_ready: bool,
+    /// Whether future telemetry/export submission kill switch is represented as armed.
+    pub telemetry_kill_switch_armed: bool,
+    /// Whether audit/state preflight is represented as required before submit.
+    pub audit_state_preflight_required: bool,
+    /// Whether exporter/log/alert submission idempotency is represented as required.
+    pub export_idempotency_required: bool,
+    /// Whether exporter/log sink backpressure controls are represented as required.
+    pub exporter_backpressure_required: bool,
+    /// Whether alert delivery authorization controls are represented as required.
+    pub alert_delivery_authorization_required: bool,
+    /// Whether telemetry/log/alert payload redaction is represented as required.
+    pub telemetry_redaction_required: bool,
+    /// Whether real provider validation evidence exists.
+    pub provider_validation_evidence_available: bool,
+    /// Whether telemetry export was requested. Always false here.
+    pub telemetry_export_requested: bool,
+    /// Whether outbound alert delivery was requested. Always false here.
+    pub outbound_alert_delivery_requested: bool,
+    /// Whether external submission was requested. Always false here.
+    pub external_submission_requested: bool,
+    /// Whether public network exposure was requested. Always false here.
+    pub public_network_exposure_requested: bool,
+    /// Whether service-manager action was requested. Always false here.
+    pub service_manager_action_requested: bool,
+    /// Whether sensitive material was loaded. Always false here.
+    pub sensitive_material_loaded: bool,
+    /// Whether live execution was requested. Always false here.
+    pub live_execution_requested: bool,
+    /// Whether this preflight approves production readiness. Always false here.
+    pub production_ready: bool,
+    /// Human-readable local blockers.
+    pub blockers: Vec<String>,
+}
+
 /// Local observability endpoint/exporter preflight input.
 ///
 /// This models future metrics/export/alert runtime controls without starting a
@@ -3165,6 +3265,96 @@ impl ObservabilityProviderBoundaryReviewReport {
     }
 }
 
+impl ObservabilityProviderSubmissionPreflightRequest {
+    /// Validate local observability provider submission preflight input.
+    pub fn validate(&self) -> Result<(), ObservabilityError> {
+        self.provider_boundary.validate()?;
+        let mut violations = Vec::new();
+        validate_id(
+            "observability provider submission preflight",
+            &self.preflight_id,
+            &mut violations,
+        );
+        if self.telemetry_export_requested
+            || self.outbound_alert_delivery_requested
+            || self.external_submission_requested
+            || self.public_network_exposure_requested
+            || self.service_manager_action_requested
+            || self.sensitive_material_loaded
+            || self.live_execution_requested
+            || self.production_ready_claim_requested
+        {
+            violations.push(ObservabilityViolation::new(
+                "OBSERVABILITY_PROVIDER_SUBMISSION_PREFLIGHT_SIDE_EFFECT",
+                "observability provider submission preflight must not request telemetry export, outbound alert delivery, external submission, public exposure, service-manager action, sensitive material loading, live execution, or readiness claims",
+            ));
+        }
+        finish_validation(violations)
+    }
+}
+
+impl ObservabilityProviderSubmissionPreflightReport {
+    /// Validate local observability provider submission preflight report invariants.
+    pub fn validate(&self) -> Result<(), ObservabilityError> {
+        let mut violations = Vec::new();
+        validate_id(
+            "observability provider submission preflight",
+            &self.preflight_id,
+            &mut violations,
+        );
+        if self.observability_runbook_version != OBSERVABILITY_RUNBOOK_VERSION {
+            violations.push(ObservabilityViolation::new_owned(
+                "OBSERVABILITY_VERSION_MISMATCH",
+                format!(
+                    "observability_runbook_version must be {OBSERVABILITY_RUNBOOK_VERSION}, got {}",
+                    self.observability_runbook_version
+                ),
+            ));
+        }
+        if self.telemetry_export_requested
+            || self.outbound_alert_delivery_requested
+            || self.external_submission_requested
+            || self.public_network_exposure_requested
+            || self.service_manager_action_requested
+            || self.sensitive_material_loaded
+            || self.live_execution_requested
+            || self.production_ready
+        {
+            violations.push(ObservabilityViolation::new(
+                "OBSERVABILITY_PROVIDER_SUBMISSION_PREFLIGHT_REPORT_SIDE_EFFECT",
+                "observability provider submission preflight report contains forbidden side effects or readiness claim",
+            ));
+        }
+        match self.status {
+            ObservabilityProviderSubmissionPreflightStatus::BlockedPendingProviderValidation => {
+                if !self.provider_boundary_ready
+                    || !self.telemetry_kill_switch_armed
+                    || !self.audit_state_preflight_required
+                    || !self.export_idempotency_required
+                    || !self.exporter_backpressure_required
+                    || !self.alert_delivery_authorization_required
+                    || !self.telemetry_redaction_required
+                    || self.provider_validation_evidence_available
+                {
+                    violations.push(ObservabilityViolation::new(
+                        "OBSERVABILITY_PROVIDER_SUBMISSION_PREFLIGHT_PENDING_MISMATCH",
+                        "pending observability provider submission preflight requires local controls, no provider validation evidence, and no side effects",
+                    ));
+                }
+            }
+            ObservabilityProviderSubmissionPreflightStatus::Blocked => {
+                if self.blockers.is_empty() {
+                    violations.push(ObservabilityViolation::new(
+                        "OBSERVABILITY_PROVIDER_SUBMISSION_PREFLIGHT_BLOCKERS_EMPTY",
+                        "blocked observability provider submission preflight must record blockers",
+                    ));
+                }
+            }
+        }
+        finish_validation(violations)
+    }
+}
+
 impl ObservabilityEndpointPreflight {
     /// Validate local endpoint/exporter preflight input invariants.
     pub fn validate(&self) -> Result<(), ObservabilityError> {
@@ -4100,6 +4290,104 @@ pub fn review_observability_provider_boundary(
         live_execution_performed: false,
         production_ready: false,
         reviewed_at_ms: request.reviewed_at_ms,
+    };
+    report.validate()?;
+    Ok(report)
+}
+
+/// Review local observability provider submission preflight without provider side effects.
+pub fn review_observability_provider_submission_preflight(
+    request: &ObservabilityProviderSubmissionPreflightRequest,
+) -> Result<ObservabilityProviderSubmissionPreflightReport, ObservabilityError> {
+    request.validate()?;
+    let provider_boundary_ready = request.provider_boundary.status
+        == ObservabilityProviderBoundaryReviewStatus::BlockedPendingProviderValidation
+        && request.provider_boundary.operations_review_ready
+        && request.provider_boundary.export_dry_run_ready
+        && request.provider_boundary.alert_route_dispatch_ready
+        && request.provider_boundary.endpoint_preflight_ready
+        && request.provider_boundary.metrics_runtime_probe_ready
+        && request.provider_boundary.missing_local_control_count == 0
+        && request.provider_boundary.remaining_provider_evidence_count > 0
+        && !request.provider_boundary.provider_validation_performed
+        && !request.provider_boundary.telemetry_exported
+        && !request.provider_boundary.outbound_alerts_sent
+        && !request.provider_boundary.external_submission_performed
+        && !request.provider_boundary.public_network_exposed
+        && !request.provider_boundary.service_manager_action_performed
+        && !request.provider_boundary.sensitive_material_loaded
+        && !request.provider_boundary.live_execution_performed
+        && !request.provider_boundary.production_ready;
+    let local_submit_controls_ready = request.telemetry_kill_switch_armed
+        && request.audit_state_preflight_required
+        && request.export_idempotency_required
+        && request.exporter_backpressure_required
+        && request.alert_delivery_authorization_required
+        && request.telemetry_redaction_required;
+
+    let mut blockers = Vec::new();
+    if !provider_boundary_ready {
+        blockers.push("observability provider boundary prerequisite not ready".to_owned());
+    }
+    if !request.telemetry_kill_switch_armed {
+        blockers.push("telemetry/export kill switch not armed".to_owned());
+    }
+    if !request.audit_state_preflight_required {
+        blockers.push("audit/state preflight not required".to_owned());
+    }
+    if !request.export_idempotency_required {
+        blockers.push("export idempotency not required".to_owned());
+    }
+    if !request.exporter_backpressure_required {
+        blockers.push("exporter backpressure controls not required".to_owned());
+    }
+    if !request.alert_delivery_authorization_required {
+        blockers.push("alert delivery authorization not required".to_owned());
+    }
+    if !request.telemetry_redaction_required {
+        blockers.push("telemetry redaction not required".to_owned());
+    }
+    if !request.provider_validation_evidence_available {
+        blockers.push("real observability provider validation evidence missing".to_owned());
+    }
+
+    let safe_pending_provider_validation = provider_boundary_ready
+        && local_submit_controls_ready
+        && !request.provider_validation_evidence_available
+        && !request.telemetry_export_requested
+        && !request.outbound_alert_delivery_requested
+        && !request.external_submission_requested
+        && !request.public_network_exposure_requested
+        && !request.service_manager_action_requested
+        && !request.sensitive_material_loaded
+        && !request.live_execution_requested
+        && !request.production_ready_claim_requested;
+
+    let report = ObservabilityProviderSubmissionPreflightReport {
+        observability_runbook_version: OBSERVABILITY_RUNBOOK_VERSION.to_owned(),
+        preflight_id: request.preflight_id.clone(),
+        status: if safe_pending_provider_validation {
+            ObservabilityProviderSubmissionPreflightStatus::BlockedPendingProviderValidation
+        } else {
+            ObservabilityProviderSubmissionPreflightStatus::Blocked
+        },
+        provider_boundary_ready,
+        telemetry_kill_switch_armed: request.telemetry_kill_switch_armed,
+        audit_state_preflight_required: request.audit_state_preflight_required,
+        export_idempotency_required: request.export_idempotency_required,
+        exporter_backpressure_required: request.exporter_backpressure_required,
+        alert_delivery_authorization_required: request.alert_delivery_authorization_required,
+        telemetry_redaction_required: request.telemetry_redaction_required,
+        provider_validation_evidence_available: request.provider_validation_evidence_available,
+        telemetry_export_requested: request.telemetry_export_requested,
+        outbound_alert_delivery_requested: request.outbound_alert_delivery_requested,
+        external_submission_requested: request.external_submission_requested,
+        public_network_exposure_requested: request.public_network_exposure_requested,
+        service_manager_action_requested: request.service_manager_action_requested,
+        sensitive_material_loaded: request.sensitive_material_loaded,
+        live_execution_requested: request.live_execution_requested,
+        production_ready: false,
+        blockers,
     };
     report.validate()?;
     Ok(report)
@@ -6829,19 +7117,20 @@ mod tests {
         preflight_observability_endpoint, preflight_observability_metrics_scrape,
         record_observability_alert_route_dispatch, render_observability_export_dry_run,
         review_observability_operations, review_observability_provider_boundary,
-        validate_local_tracing_subscriber, validate_observability_loopback_bind,
-        validate_observability_metrics_endpoint, validate_observability_metrics_runtime_probe,
-        ComponentHealthStatus, DeterministicObservabilityCollector, HealthStatus,
-        LocalTracingSubscriberValidationRequest, LocalTracingSubscriberValidationStatus,
-        MetricKind, MetricLabel, MetricSample, ObservabilityAccessAuthorizationStatus,
-        ObservabilityAccessContext, ObservabilityAccessSource,
-        ObservabilityAlertRouteDispatchRequest, ObservabilityAlertRouteDispatchStatus,
-        ObservabilityBoundaryConfig, ObservabilityCollectionRequest, ObservabilityCollector,
-        ObservabilityEndpointBinding, ObservabilityEndpointPreflight,
-        ObservabilityEndpointPreflightStatus, ObservabilityError, ObservabilityExportDryRunReport,
-        ObservabilityExportDryRunRequest, ObservabilityLogRetentionExecutionRequest,
-        ObservabilityLoopbackBindValidationReport, ObservabilityLoopbackBindValidationRequest,
-        ObservabilityLoopbackBindValidationStatus, ObservabilityMetricsEndpointValidationReport,
+        review_observability_provider_submission_preflight, validate_local_tracing_subscriber,
+        validate_observability_loopback_bind, validate_observability_metrics_endpoint,
+        validate_observability_metrics_runtime_probe, ComponentHealthStatus,
+        DeterministicObservabilityCollector, HealthStatus, LocalTracingSubscriberValidationRequest,
+        LocalTracingSubscriberValidationStatus, MetricKind, MetricLabel, MetricSample,
+        ObservabilityAccessAuthorizationStatus, ObservabilityAccessContext,
+        ObservabilityAccessSource, ObservabilityAlertRouteDispatchRequest,
+        ObservabilityAlertRouteDispatchStatus, ObservabilityBoundaryConfig,
+        ObservabilityCollectionRequest, ObservabilityCollector, ObservabilityEndpointBinding,
+        ObservabilityEndpointPreflight, ObservabilityEndpointPreflightStatus, ObservabilityError,
+        ObservabilityExportDryRunReport, ObservabilityExportDryRunRequest,
+        ObservabilityLogRetentionExecutionRequest, ObservabilityLoopbackBindValidationReport,
+        ObservabilityLoopbackBindValidationRequest, ObservabilityLoopbackBindValidationStatus,
+        ObservabilityMetricsEndpointValidationReport,
         ObservabilityMetricsEndpointValidationRequest,
         ObservabilityMetricsEndpointValidationStatus, ObservabilityMetricsRuntimeProbe,
         ObservabilityMetricsRuntimeProbeReport, ObservabilityMetricsRuntimeProbeStatus,
@@ -6849,10 +7138,11 @@ mod tests {
         ObservabilityMetricsScrapePreflightStatus, ObservabilityOperationsPolicy,
         ObservabilityOperationsReviewStatus, ObservabilityProviderBoundaryReviewReport,
         ObservabilityProviderBoundaryReviewRequest, ObservabilityProviderBoundaryReviewStatus,
-        ObservabilitySeverity, ObservabilitySnapshot, Runbook, RunbookStep,
-        RuntimeFailureCaptureRequest, RuntimeFailureKind, RuntimePanicHookInstallationRequest,
-        StructuredLogEvent, StructuredLogField,
-        OBSERVABILITY_LAST_ALERT_ROUTE_DISPATCH_CHECKPOINT_KEY,
+        ObservabilityProviderSubmissionPreflightRequest,
+        ObservabilityProviderSubmissionPreflightStatus, ObservabilitySeverity,
+        ObservabilitySnapshot, Runbook, RunbookStep, RuntimeFailureCaptureRequest,
+        RuntimeFailureKind, RuntimePanicHookInstallationRequest, StructuredLogEvent,
+        StructuredLogField, OBSERVABILITY_LAST_ALERT_ROUTE_DISPATCH_CHECKPOINT_KEY,
         OBSERVABILITY_LAST_ENDPOINT_PREFLIGHT_CHECKPOINT_KEY,
         OBSERVABILITY_LAST_EXPORT_DRY_RUN_CHECKPOINT_KEY,
         OBSERVABILITY_LAST_FAILURE_CHECKPOINT_KEY,
@@ -6979,6 +7269,97 @@ mod tests {
             rendered_at_ms: 1_700_000_000_530,
         })
         .expect("export dry-run should render local metrics")
+    }
+
+    fn ready_observability_provider_submission_preflight_request(
+    ) -> ObservabilityProviderSubmissionPreflightRequest {
+        let export_report = ready_export_dry_run_report("provider-submission");
+        let alert_route_dispatch =
+            record_observability_alert_route_dispatch(ObservabilityAlertRouteDispatchRequest {
+                dispatch_review_id: "provider-submission-alert-route".to_owned(),
+                export_report: export_report.clone(),
+                alert_route_reference: "alert-route-provider-submission".to_owned(),
+                notification_dispatch: local_notification_dispatch("provider-submission"),
+                local_dispatch_required: true,
+                outbound_alert_delivery_requested: false,
+                reviewed_at_ms: 1_700_000_000_671,
+            })
+            .expect("local alert route dispatch should pass");
+        let endpoint_preflight =
+            preflight_observability_endpoint(&ObservabilityEndpointPreflight {
+                preflight_id: "provider-submission-endpoint".to_owned(),
+                bind_host: "127.0.0.1".to_owned(),
+                bind_port: 9_090,
+                loopback_only_required: true,
+                authentication_required: true,
+                authorization_required: true,
+                transport_protection_required: true,
+                redaction_required: true,
+                alert_routes_configured: true,
+                alert_route_count: 1,
+                exporter_backpressure_required: true,
+                metrics_endpoint_start_requested: false,
+                public_network_exposure_requested: false,
+                telemetry_export_requested: false,
+                outbound_alert_delivery_requested: false,
+            })
+            .expect("endpoint preflight should pass");
+        let metrics_runtime_probe =
+            validate_observability_metrics_runtime_probe(ObservabilityMetricsRuntimeProbe {
+                probe_id: "provider-submission-metrics-runtime".to_owned(),
+                export_report: export_report.clone(),
+                bind_host: "127.0.0.1".to_owned(),
+                requested_port: 0,
+                scrape_count: 2,
+                public_network_exposure_requested: false,
+                telemetry_export_requested: false,
+                outbound_alert_delivery_requested: false,
+            })
+            .expect("metrics runtime probe should pass");
+        let provider_boundary =
+            review_observability_provider_boundary(ObservabilityProviderBoundaryReviewRequest {
+                boundary_review_id: "provider-submission-boundary".to_owned(),
+                operations_review: ready_operations_review(),
+                export_report,
+                alert_route_dispatch,
+                endpoint_preflight,
+                metrics_runtime_probe,
+                provider_validation_performed: false,
+                exporter_session_evidence_present: false,
+                log_shipping_evidence_present: false,
+                alert_delivery_evidence_present: false,
+                deployment_host_runtime_evidence_present: false,
+                production_metrics_auth_evidence_present: false,
+                telemetry_export_requested: false,
+                outbound_alert_delivery_requested: false,
+                external_submission_requested: false,
+                public_network_exposure_requested: false,
+                service_manager_action_requested: false,
+                sensitive_material_loaded: false,
+                live_execution_requested: false,
+                production_ready_claim_requested: false,
+                reviewed_at_ms: 1_700_000_000_672,
+            })
+            .expect("provider boundary should validate locally");
+        ObservabilityProviderSubmissionPreflightRequest {
+            preflight_id: "observability-provider-submission-preflight".to_owned(),
+            provider_boundary,
+            telemetry_kill_switch_armed: true,
+            audit_state_preflight_required: true,
+            export_idempotency_required: true,
+            exporter_backpressure_required: true,
+            alert_delivery_authorization_required: true,
+            telemetry_redaction_required: true,
+            provider_validation_evidence_available: false,
+            telemetry_export_requested: false,
+            outbound_alert_delivery_requested: false,
+            external_submission_requested: false,
+            public_network_exposure_requested: false,
+            service_manager_action_requested: false,
+            sensitive_material_loaded: false,
+            live_execution_requested: false,
+            production_ready_claim_requested: false,
+        }
     }
 
     fn local_notification_dispatch(label: &str) -> NotificationDispatchRecord {
@@ -8279,6 +8660,59 @@ mod tests {
 
         let _ = fs::remove_file(audit_path);
         cleanup_state_files(&state_path);
+    }
+
+    #[test]
+    fn observability_provider_submission_preflight_blocks_pending_provider_validation() {
+        let report = review_observability_provider_submission_preflight(
+            &ready_observability_provider_submission_preflight_request(),
+        )
+        .expect("provider submission preflight should produce a blocked report");
+
+        assert_eq!(
+            report.status,
+            ObservabilityProviderSubmissionPreflightStatus::BlockedPendingProviderValidation
+        );
+        assert!(report.provider_boundary_ready);
+        assert!(report.telemetry_kill_switch_armed);
+        assert!(report.audit_state_preflight_required);
+        assert!(report.export_idempotency_required);
+        assert!(report.exporter_backpressure_required);
+        assert!(report.alert_delivery_authorization_required);
+        assert!(report.telemetry_redaction_required);
+        assert!(!report.provider_validation_evidence_available);
+        assert_eq!(
+            report.blockers,
+            ["real observability provider validation evidence missing"]
+        );
+        assert!(!report.telemetry_export_requested);
+        assert!(!report.outbound_alert_delivery_requested);
+        assert!(!report.external_submission_requested);
+        assert!(!report.public_network_exposure_requested);
+        assert!(!report.service_manager_action_requested);
+        assert!(!report.sensitive_material_loaded);
+        assert!(!report.live_execution_requested);
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn observability_provider_submission_preflight_fails_closed_on_side_effects() {
+        let mut request = ready_observability_provider_submission_preflight_request();
+        request.preflight_id = "observability-provider-submission-side-effect".to_owned();
+        request.telemetry_export_requested = true;
+        request.outbound_alert_delivery_requested = true;
+        request.external_submission_requested = true;
+        request.public_network_exposure_requested = true;
+        request.service_manager_action_requested = true;
+        request.sensitive_material_loaded = true;
+        request.live_execution_requested = true;
+        request.production_ready_claim_requested = true;
+
+        let error = review_observability_provider_submission_preflight(&request)
+            .expect_err("side-effect preflight must fail before reporting");
+        assert!(error.violations().iter().any(|violation| {
+            violation.code() == "OBSERVABILITY_PROVIDER_SUBMISSION_PREFLIGHT_SIDE_EFFECT"
+        }));
     }
 
     #[test]
