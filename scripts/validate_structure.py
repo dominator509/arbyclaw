@@ -8,7 +8,7 @@ import re
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-LATEST_REQUIRED_PHASE = 100
+LATEST_REQUIRED_PHASE = 101
 
 REQUIRED_FILES = [
     "ARCHITECTURE.md",
