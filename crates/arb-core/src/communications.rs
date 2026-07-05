@@ -1235,6 +1235,129 @@ pub struct CommunicationProviderSubmissionPreflightReport {
     pub violation_codes: Vec<String>,
 }
 
+/// Local communications provider adapter readiness request.
+///
+/// This records the non-secret adapter plan shape that must exist before any
+/// future real provider integration can be reviewed. It never calls providers,
+/// loads tokens, delivers messages, enables outbound network, or approves
+/// production readiness.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct CommunicationProviderAdapterReadinessRequest {
+    /// Stable local readiness id.
+    pub readiness_id: String,
+    /// Local provider submission preflight prerequisite.
+    pub submission_preflight: CommunicationProviderSubmissionPreflightReport,
+    /// Whether a future provider request plan is represented.
+    pub provider_request_plan_present: bool,
+    /// Whether the future request plan is represented as sanitized.
+    pub provider_request_plan_sanitized: bool,
+    /// Whether a non-secret provider endpoint reference is represented.
+    pub provider_endpoint_reference_present: bool,
+    /// Whether a non-secret provider auth reference is represented.
+    pub provider_auth_reference_present: bool,
+    /// Whether a sanitized payload template is represented.
+    pub provider_payload_template_present: bool,
+    /// Whether a provider idempotency key plan is represented.
+    pub provider_idempotency_key_planned: bool,
+    /// Whether a provider rate-limit budget plan is represented.
+    pub provider_rate_limit_budget_planned: bool,
+    /// Whether a provider retry/backoff plan is represented.
+    pub provider_retry_backoff_planned: bool,
+    /// Whether a provider outage circuit breaker plan is represented.
+    pub provider_outage_circuit_breaker_planned: bool,
+    /// Whether a real provider response transcript is required later.
+    pub provider_response_transcript_required: bool,
+    /// Whether a real provider delivery receipt is required later.
+    pub provider_delivery_receipt_required: bool,
+    /// Whether real provider validation evidence exists. Must remain false here.
+    pub real_provider_validation_evidence_available: bool,
+    /// Whether outbound delivery was requested. Must remain false.
+    pub outbound_delivery_requested: bool,
+    /// Whether outbound network was used. Must remain false.
+    pub outbound_network_used: bool,
+    /// Whether a real message was delivered. Must remain false.
+    pub message_delivered: bool,
+    /// Whether a provider API call was performed. Must remain false.
+    pub provider_call_performed: bool,
+    /// Whether token or secret material was loaded. Must remain false.
+    pub token_secret_material_loaded: bool,
+    /// Whether live execution occurred. Must remain false.
+    pub live_execution_performed: bool,
+    /// Whether signing or broadcast occurred. Must remain false.
+    pub signing_or_broadcast_performed: bool,
+    /// Whether this readiness request claims production readiness. Must remain false.
+    pub production_ready_claimed: bool,
+}
+
+/// Local communications provider adapter readiness status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum CommunicationProviderAdapterReadinessStatus {
+    /// Local adapter shape exists, but real provider validation is missing.
+    BlockedPendingProviderAdapterValidation,
+    /// The adapter readiness boundary is unsafe or internally incomplete.
+    Blocked,
+}
+
+/// Non-secret local communications provider adapter readiness report.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct CommunicationProviderAdapterReadinessReport {
+    /// Communications/CLI boundary version.
+    pub communications_version: String,
+    /// Stable local readiness id.
+    pub readiness_id: String,
+    /// Readiness status.
+    pub status: CommunicationProviderAdapterReadinessStatus,
+    /// Whether the submission preflight prerequisite is coherent.
+    pub submission_preflight_ready: bool,
+    /// Whether a future provider request plan is represented.
+    pub provider_request_plan_present: bool,
+    /// Whether the future request plan is represented as sanitized.
+    pub provider_request_plan_sanitized: bool,
+    /// Whether a non-secret provider endpoint reference is represented.
+    pub provider_endpoint_reference_present: bool,
+    /// Whether a non-secret provider auth reference is represented.
+    pub provider_auth_reference_present: bool,
+    /// Whether a sanitized payload template is represented.
+    pub provider_payload_template_present: bool,
+    /// Whether a provider idempotency key plan is represented.
+    pub provider_idempotency_key_planned: bool,
+    /// Whether a provider rate-limit budget plan is represented.
+    pub provider_rate_limit_budget_planned: bool,
+    /// Whether a provider retry/backoff plan is represented.
+    pub provider_retry_backoff_planned: bool,
+    /// Whether a provider outage circuit breaker plan is represented.
+    pub provider_outage_circuit_breaker_planned: bool,
+    /// Whether a real provider response transcript is required later.
+    pub provider_response_transcript_required: bool,
+    /// Whether a real provider delivery receipt is required later.
+    pub provider_delivery_receipt_required: bool,
+    /// Whether real provider validation evidence exists.
+    pub real_provider_validation_evidence_available: bool,
+    /// Whether outbound delivery was requested. Always false here.
+    pub outbound_delivery_requested: bool,
+    /// Whether outbound network was used. Always false here.
+    pub outbound_network_used: bool,
+    /// Whether a real message was delivered. Always false here.
+    pub message_delivered: bool,
+    /// Whether a provider API call was performed. Always false here.
+    pub provider_call_performed: bool,
+    /// Whether token or secret material was loaded. Always false here.
+    pub token_secret_material_loaded: bool,
+    /// Whether live execution occurred. Always false here.
+    pub live_execution_performed: bool,
+    /// Whether signing or broadcast occurred. Always false here.
+    pub signing_or_broadcast_performed: bool,
+    /// Whether this report approves production readiness. Always false here.
+    pub production_ready: bool,
+    /// Sanitized blocker descriptions.
+    pub blockers: Vec<String>,
+    /// Sanitized validation codes.
+    pub violation_codes: Vec<String>,
+}
+
 impl RemoteCommandSecurityReviewRequest {
     /// Validate local remote command security review input.
     pub fn validate(&self) -> Result<(), CommunicationError> {
@@ -2193,6 +2316,101 @@ impl CommunicationProviderSubmissionPreflightReport {
     }
 }
 
+impl CommunicationProviderAdapterReadinessRequest {
+    /// Validate local provider adapter readiness input.
+    pub fn validate(&self) -> Result<(), CommunicationError> {
+        self.submission_preflight.validate()?;
+        let mut violations = Vec::new();
+        validate_id(
+            "communications provider adapter readiness",
+            &self.readiness_id,
+            &mut violations,
+        );
+        if self.outbound_delivery_requested
+            || self.outbound_network_used
+            || self.message_delivered
+            || self.provider_call_performed
+            || self.token_secret_material_loaded
+            || self.live_execution_performed
+            || self.signing_or_broadcast_performed
+            || self.production_ready_claimed
+        {
+            violations.push(CommunicationViolation::new(
+                "COMMUNICATION_PROVIDER_ADAPTER_READINESS_SIDE_EFFECT",
+                "provider adapter readiness must not request delivery, use network, call providers, load tokens, execute live actions, sign, broadcast, or claim readiness",
+            ));
+        }
+        finish_validation(violations)
+    }
+}
+
+impl CommunicationProviderAdapterReadinessReport {
+    /// Validate local provider adapter readiness report invariants.
+    pub fn validate(&self) -> Result<(), CommunicationError> {
+        let mut violations = Vec::new();
+        validate_id(
+            "communications provider adapter readiness",
+            &self.readiness_id,
+            &mut violations,
+        );
+        if self.communications_version != COMMUNICATIONS_CLI_VERSION {
+            violations.push(CommunicationViolation::new_owned(
+                "COMMUNICATION_VERSION_MISMATCH",
+                format!(
+                    "communications_version must be {COMMUNICATIONS_CLI_VERSION}, got {}",
+                    self.communications_version
+                ),
+            ));
+        }
+        if self.outbound_delivery_requested
+            || self.outbound_network_used
+            || self.message_delivered
+            || self.provider_call_performed
+            || self.token_secret_material_loaded
+            || self.live_execution_performed
+            || self.signing_or_broadcast_performed
+            || self.production_ready
+        {
+            violations.push(CommunicationViolation::new(
+                "COMMUNICATION_PROVIDER_ADAPTER_READINESS_REPORT_SIDE_EFFECT",
+                "provider adapter readiness report contains forbidden side effects or readiness claim",
+            ));
+        }
+        match self.status {
+            CommunicationProviderAdapterReadinessStatus::BlockedPendingProviderAdapterValidation => {
+                if !self.submission_preflight_ready
+                    || !self.provider_request_plan_present
+                    || !self.provider_request_plan_sanitized
+                    || !self.provider_endpoint_reference_present
+                    || !self.provider_auth_reference_present
+                    || !self.provider_payload_template_present
+                    || !self.provider_idempotency_key_planned
+                    || !self.provider_rate_limit_budget_planned
+                    || !self.provider_retry_backoff_planned
+                    || !self.provider_outage_circuit_breaker_planned
+                    || !self.provider_response_transcript_required
+                    || !self.provider_delivery_receipt_required
+                    || self.real_provider_validation_evidence_available
+                {
+                    violations.push(CommunicationViolation::new(
+                        "COMMUNICATION_PROVIDER_ADAPTER_READINESS_PENDING_MISMATCH",
+                        "pending provider adapter readiness requires local adapter plan controls, no real provider validation evidence, and no side effects",
+                    ));
+                }
+            }
+            CommunicationProviderAdapterReadinessStatus::Blocked => {
+                if self.violation_codes.is_empty() && self.blockers.is_empty() {
+                    violations.push(CommunicationViolation::new(
+                        "COMMUNICATION_PROVIDER_ADAPTER_READINESS_BLOCKERS_EMPTY",
+                        "blocked provider adapter readiness must record blockers or violations",
+                    ));
+                }
+            }
+        }
+        finish_validation(violations)
+    }
+}
+
 /// Review future remote operator command controls without enabling remote commands.
 pub fn review_remote_command_security(
     request: &RemoteCommandSecurityReviewRequest,
@@ -3003,6 +3221,199 @@ pub fn review_communication_provider_submission_preflight(
         outage_backoff_controls_required: request.outage_backoff_controls_required,
         payload_redaction_required: request.payload_redaction_required,
         provider_validation_evidence_available: request.provider_validation_evidence_available,
+        outbound_delivery_requested: request.outbound_delivery_requested,
+        outbound_network_used: request.outbound_network_used,
+        message_delivered: request.message_delivered,
+        provider_call_performed: request.provider_call_performed,
+        token_secret_material_loaded: request.token_secret_material_loaded,
+        live_execution_performed: request.live_execution_performed,
+        signing_or_broadcast_performed: request.signing_or_broadcast_performed,
+        production_ready: false,
+        blockers,
+        violation_codes,
+    };
+    report.validate()?;
+    Ok(report)
+}
+
+/// Review local provider adapter readiness without calling providers.
+pub fn review_communication_provider_adapter_readiness(
+    request: &CommunicationProviderAdapterReadinessRequest,
+) -> Result<CommunicationProviderAdapterReadinessReport, CommunicationError> {
+    request.validate()?;
+    let submission_preflight_ready = request.submission_preflight.status
+        == CommunicationProviderSubmissionPreflightStatus::BlockedPendingProviderValidation
+        && request
+            .submission_preflight
+            .delivery_provider_boundary_ready
+        && request.submission_preflight.delivery_kill_switch_armed
+        && request.submission_preflight.audit_state_preflight_required
+        && request.submission_preflight.delivery_idempotency_required
+        && request.submission_preflight.rate_limit_controls_required
+        && request
+            .submission_preflight
+            .outage_backoff_controls_required
+        && request.submission_preflight.payload_redaction_required
+        && !request
+            .submission_preflight
+            .provider_validation_evidence_available
+        && !request.submission_preflight.outbound_delivery_requested
+        && !request.submission_preflight.outbound_network_used
+        && !request.submission_preflight.message_delivered
+        && !request.submission_preflight.provider_call_performed
+        && !request.submission_preflight.token_secret_material_loaded
+        && !request.submission_preflight.live_execution_performed
+        && !request.submission_preflight.signing_or_broadcast_performed
+        && !request.submission_preflight.production_ready;
+    let local_adapter_plan_ready = request.provider_request_plan_present
+        && request.provider_request_plan_sanitized
+        && request.provider_endpoint_reference_present
+        && request.provider_auth_reference_present
+        && request.provider_payload_template_present
+        && request.provider_idempotency_key_planned
+        && request.provider_rate_limit_budget_planned
+        && request.provider_retry_backoff_planned
+        && request.provider_outage_circuit_breaker_planned
+        && request.provider_response_transcript_required
+        && request.provider_delivery_receipt_required;
+
+    let mut blockers = Vec::new();
+    if !submission_preflight_ready {
+        blockers.push("provider submission preflight prerequisite not ready".to_owned());
+    }
+    if !request.provider_request_plan_present {
+        blockers.push("provider request plan missing".to_owned());
+    }
+    if !request.provider_request_plan_sanitized {
+        blockers.push("provider request plan sanitization missing".to_owned());
+    }
+    if !request.provider_endpoint_reference_present {
+        blockers.push("provider endpoint reference missing".to_owned());
+    }
+    if !request.provider_auth_reference_present {
+        blockers.push("provider auth reference missing".to_owned());
+    }
+    if !request.provider_payload_template_present {
+        blockers.push("provider payload template missing".to_owned());
+    }
+    if !request.provider_idempotency_key_planned {
+        blockers.push("provider idempotency key plan missing".to_owned());
+    }
+    if !request.provider_rate_limit_budget_planned {
+        blockers.push("provider rate-limit budget plan missing".to_owned());
+    }
+    if !request.provider_retry_backoff_planned {
+        blockers.push("provider retry/backoff plan missing".to_owned());
+    }
+    if !request.provider_outage_circuit_breaker_planned {
+        blockers.push("provider outage circuit breaker plan missing".to_owned());
+    }
+    if !request.provider_response_transcript_required {
+        blockers.push("provider response transcript requirement missing".to_owned());
+    }
+    if !request.provider_delivery_receipt_required {
+        blockers.push("provider delivery receipt requirement missing".to_owned());
+    }
+    if !request.real_provider_validation_evidence_available {
+        blockers.push("real provider adapter validation evidence missing".to_owned());
+    }
+
+    let mut violation_codes = Vec::new();
+    push_code(
+        &mut violation_codes,
+        !submission_preflight_ready,
+        "COMMUNICATION_PROVIDER_ADAPTER_READINESS_PREFLIGHT_NOT_READY",
+    );
+    push_code(
+        &mut violation_codes,
+        !request.provider_request_plan_present,
+        "COMMUNICATION_PROVIDER_ADAPTER_READINESS_REQUEST_PLAN_MISSING",
+    );
+    push_code(
+        &mut violation_codes,
+        !request.provider_request_plan_sanitized,
+        "COMMUNICATION_PROVIDER_ADAPTER_READINESS_REQUEST_PLAN_UNSANITIZED",
+    );
+    push_code(
+        &mut violation_codes,
+        !request.provider_endpoint_reference_present,
+        "COMMUNICATION_PROVIDER_ADAPTER_READINESS_ENDPOINT_REFERENCE_MISSING",
+    );
+    push_code(
+        &mut violation_codes,
+        !request.provider_auth_reference_present,
+        "COMMUNICATION_PROVIDER_ADAPTER_READINESS_AUTH_REFERENCE_MISSING",
+    );
+    push_code(
+        &mut violation_codes,
+        !request.provider_payload_template_present,
+        "COMMUNICATION_PROVIDER_ADAPTER_READINESS_PAYLOAD_TEMPLATE_MISSING",
+    );
+    push_code(
+        &mut violation_codes,
+        !request.provider_idempotency_key_planned,
+        "COMMUNICATION_PROVIDER_ADAPTER_READINESS_IDEMPOTENCY_PLAN_MISSING",
+    );
+    push_code(
+        &mut violation_codes,
+        !request.provider_rate_limit_budget_planned,
+        "COMMUNICATION_PROVIDER_ADAPTER_READINESS_RATE_LIMIT_PLAN_MISSING",
+    );
+    push_code(
+        &mut violation_codes,
+        !request.provider_retry_backoff_planned,
+        "COMMUNICATION_PROVIDER_ADAPTER_READINESS_RETRY_BACKOFF_PLAN_MISSING",
+    );
+    push_code(
+        &mut violation_codes,
+        !request.provider_outage_circuit_breaker_planned,
+        "COMMUNICATION_PROVIDER_ADAPTER_READINESS_OUTAGE_CIRCUIT_BREAKER_MISSING",
+    );
+    push_code(
+        &mut violation_codes,
+        !request.provider_response_transcript_required,
+        "COMMUNICATION_PROVIDER_ADAPTER_READINESS_RESPONSE_TRANSCRIPT_MISSING",
+    );
+    push_code(
+        &mut violation_codes,
+        !request.provider_delivery_receipt_required,
+        "COMMUNICATION_PROVIDER_ADAPTER_READINESS_DELIVERY_RECEIPT_MISSING",
+    );
+
+    let safe_pending_provider_adapter_validation = submission_preflight_ready
+        && local_adapter_plan_ready
+        && !request.real_provider_validation_evidence_available
+        && !request.outbound_delivery_requested
+        && !request.outbound_network_used
+        && !request.message_delivered
+        && !request.provider_call_performed
+        && !request.token_secret_material_loaded
+        && !request.live_execution_performed
+        && !request.signing_or_broadcast_performed
+        && !request.production_ready_claimed;
+
+    let report = CommunicationProviderAdapterReadinessReport {
+        communications_version: COMMUNICATIONS_CLI_VERSION.to_owned(),
+        readiness_id: request.readiness_id.clone(),
+        status: if safe_pending_provider_adapter_validation {
+            CommunicationProviderAdapterReadinessStatus::BlockedPendingProviderAdapterValidation
+        } else {
+            CommunicationProviderAdapterReadinessStatus::Blocked
+        },
+        submission_preflight_ready,
+        provider_request_plan_present: request.provider_request_plan_present,
+        provider_request_plan_sanitized: request.provider_request_plan_sanitized,
+        provider_endpoint_reference_present: request.provider_endpoint_reference_present,
+        provider_auth_reference_present: request.provider_auth_reference_present,
+        provider_payload_template_present: request.provider_payload_template_present,
+        provider_idempotency_key_planned: request.provider_idempotency_key_planned,
+        provider_rate_limit_budget_planned: request.provider_rate_limit_budget_planned,
+        provider_retry_backoff_planned: request.provider_retry_backoff_planned,
+        provider_outage_circuit_breaker_planned: request.provider_outage_circuit_breaker_planned,
+        provider_response_transcript_required: request.provider_response_transcript_required,
+        provider_delivery_receipt_required: request.provider_delivery_receipt_required,
+        real_provider_validation_evidence_available: request
+            .real_provider_validation_evidence_available,
         outbound_delivery_requested: request.outbound_delivery_requested,
         outbound_network_used: request.outbound_network_used,
         message_delivered: request.message_delivered,
@@ -5080,13 +5491,15 @@ mod tests {
         persist_remote_command_security_review_checkpoint,
         persist_routed_operator_command_checkpoint,
         review_communication_delivery_provider_boundary,
+        review_communication_provider_adapter_readiness,
         review_communication_provider_submission_preflight, review_platform_adapter_controls,
         review_platform_command_ingress, review_remote_command_security, validate_channel_adapter,
         validate_channel_session, validate_remote_command_envelope, ChannelAdapterValidationReport,
         ChannelAdapterValidationRequest, ChannelAdapterValidationStatus,
         ChannelSessionValidationReport, ChannelSessionValidationStatus,
         CommunicationBoundaryConfig, CommunicationDeliveryProviderBoundaryRequest,
-        CommunicationDeliveryProviderBoundaryStatus,
+        CommunicationDeliveryProviderBoundaryStatus, CommunicationProviderAdapterReadinessRequest,
+        CommunicationProviderAdapterReadinessStatus,
         CommunicationProviderSubmissionPreflightRequest,
         CommunicationProviderSubmissionPreflightStatus, DeterministicNotificationBoundary,
         DeterministicOperatorCommandRouter, NotificationChannelDispatchStatus,
@@ -5350,6 +5763,38 @@ mod tests {
             outage_backoff_controls_required: true,
             payload_redaction_required: true,
             provider_validation_evidence_available: false,
+            outbound_delivery_requested: false,
+            outbound_network_used: false,
+            message_delivered: false,
+            provider_call_performed: false,
+            token_secret_material_loaded: false,
+            live_execution_performed: false,
+            signing_or_broadcast_performed: false,
+            production_ready_claimed: false,
+        }
+    }
+
+    fn ready_communication_provider_adapter_readiness_request(
+    ) -> CommunicationProviderAdapterReadinessRequest {
+        let submission_preflight = review_communication_provider_submission_preflight(
+            &ready_communication_provider_submission_preflight_request(),
+        )
+        .expect("provider submission preflight should validate locally");
+        CommunicationProviderAdapterReadinessRequest {
+            readiness_id: "communications-provider-adapter-readiness".to_owned(),
+            submission_preflight,
+            provider_request_plan_present: true,
+            provider_request_plan_sanitized: true,
+            provider_endpoint_reference_present: true,
+            provider_auth_reference_present: true,
+            provider_payload_template_present: true,
+            provider_idempotency_key_planned: true,
+            provider_rate_limit_budget_planned: true,
+            provider_retry_backoff_planned: true,
+            provider_outage_circuit_breaker_planned: true,
+            provider_response_transcript_required: true,
+            provider_delivery_receipt_required: true,
+            real_provider_validation_evidence_available: false,
             outbound_delivery_requested: false,
             outbound_network_used: false,
             message_delivered: false,
@@ -6329,6 +6774,65 @@ mod tests {
             .expect_err("side-effect preflight must fail before reporting");
         assert!(error.violations().iter().any(|violation| {
             violation.code() == "COMMUNICATION_PROVIDER_SUBMISSION_PREFLIGHT_SIDE_EFFECT"
+        }));
+    }
+
+    #[test]
+    fn communication_provider_adapter_readiness_blocks_pending_provider_adapter_validation() {
+        let report = review_communication_provider_adapter_readiness(
+            &ready_communication_provider_adapter_readiness_request(),
+        )
+        .expect("provider adapter readiness should produce a blocked report");
+
+        assert_eq!(
+            report.status,
+            CommunicationProviderAdapterReadinessStatus::BlockedPendingProviderAdapterValidation
+        );
+        assert!(report.submission_preflight_ready);
+        assert!(report.provider_request_plan_present);
+        assert!(report.provider_request_plan_sanitized);
+        assert!(report.provider_endpoint_reference_present);
+        assert!(report.provider_auth_reference_present);
+        assert!(report.provider_payload_template_present);
+        assert!(report.provider_idempotency_key_planned);
+        assert!(report.provider_rate_limit_budget_planned);
+        assert!(report.provider_retry_backoff_planned);
+        assert!(report.provider_outage_circuit_breaker_planned);
+        assert!(report.provider_response_transcript_required);
+        assert!(report.provider_delivery_receipt_required);
+        assert!(!report.real_provider_validation_evidence_available);
+        assert_eq!(
+            report.blockers,
+            ["real provider adapter validation evidence missing"]
+        );
+        assert!(report.violation_codes.is_empty());
+        assert!(!report.outbound_delivery_requested);
+        assert!(!report.outbound_network_used);
+        assert!(!report.message_delivered);
+        assert!(!report.provider_call_performed);
+        assert!(!report.token_secret_material_loaded);
+        assert!(!report.live_execution_performed);
+        assert!(!report.signing_or_broadcast_performed);
+        assert!(!report.production_ready);
+    }
+
+    #[test]
+    fn communication_provider_adapter_readiness_fails_closed_on_side_effects() {
+        let mut request = ready_communication_provider_adapter_readiness_request();
+        request.readiness_id = "communications-provider-adapter-side-effect".to_owned();
+        request.outbound_delivery_requested = true;
+        request.outbound_network_used = true;
+        request.message_delivered = true;
+        request.provider_call_performed = true;
+        request.token_secret_material_loaded = true;
+        request.live_execution_performed = true;
+        request.signing_or_broadcast_performed = true;
+        request.production_ready_claimed = true;
+
+        let error = review_communication_provider_adapter_readiness(&request)
+            .expect_err("side-effect adapter readiness must fail before reporting");
+        assert!(error.violations().iter().any(|violation| {
+            violation.code() == "COMMUNICATION_PROVIDER_ADAPTER_READINESS_SIDE_EFFECT"
         }));
     }
 

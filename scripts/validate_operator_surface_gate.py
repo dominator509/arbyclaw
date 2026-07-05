@@ -288,6 +288,59 @@ def validate_communications_provider_submission_preflight_cli(
     return errors
 
 
+def validate_communications_provider_adapter_readiness_cli(
+    parsed: dict[str, str],
+) -> list[str]:
+    errors: list[str] = []
+    for key in (
+        "communications-provider-adapter-submission-preflight-ready",
+        "communications-provider-adapter-request-plan-present",
+        "communications-provider-adapter-request-plan-sanitized",
+        "communications-provider-adapter-endpoint-reference-present",
+        "communications-provider-adapter-auth-reference-present",
+        "communications-provider-adapter-payload-template-present",
+        "communications-provider-adapter-idempotency-key-planned",
+        "communications-provider-adapter-rate-limit-budget-planned",
+        "communications-provider-adapter-retry-backoff-planned",
+        "communications-provider-adapter-outage-circuit-breaker-planned",
+        "communications-provider-adapter-response-transcript-required",
+        "communications-provider-adapter-delivery-receipt-required",
+    ):
+        if parsed.get(key) != "true":
+            errors.append(f"communications provider adapter cli expected {key}=true")
+    for key in (
+        "communications-provider-adapter-real-provider-validation-evidence-available",
+        "outbound-delivery-requested",
+        "outbound-network-used",
+        "message-delivered",
+        "provider-call-performed",
+        "token-secret-material-loaded",
+        "live-execution-performed",
+        "signing-or-broadcast-performed",
+        "production-ready",
+    ):
+        if parsed.get(key) != "false":
+            errors.append(f"communications provider adapter cli expected {key}=false")
+    if parsed.get("communications-provider-adapter-readiness") != "validation passed":
+        errors.append("communications provider adapter cli did not report validation passed")
+    if (
+        parsed.get("communications-provider-adapter-readiness-status")
+        != "blocked-pending-provider-adapter-validation"
+    ):
+        errors.append(
+            "communications provider adapter cli expected blocked pending provider adapter validation"
+        )
+    if parse_positive_int(parsed.get("communications-provider-adapter-blocker-count")) != 1:
+        errors.append("communications provider adapter cli expected one blocker")
+    if parse_positive_int(parsed.get("communications-provider-adapter-violation-count")) != 0:
+        errors.append("communications provider adapter cli expected zero violations")
+    if parse_positive_int(parsed.get("communications-provider-adapter-audit-records-replayed")) != 8:
+        errors.append("communications provider adapter cli expected eight replayed audit records")
+    if parse_positive_int(parsed.get("communications-provider-adapter-checkpoints-recovered")) != 8:
+        errors.append("communications provider adapter cli expected eight recovered checkpoints")
+    return errors
+
+
 def validate_dashboard_cli(parsed: dict[str, str]) -> list[str]:
     errors: list[str] = []
     for key in (
@@ -988,6 +1041,19 @@ def main() -> int:
                 ],
             ),
             run_text_command(
+                "communications_provider_adapter_readiness_cli",
+                [
+                    "cargo",
+                    "run",
+                    "-p",
+                    "arb-agent",
+                    "--",
+                    "validate-communications-provider-adapter-readiness",
+                    "--workspace",
+                    str(workspace_root / "communications-provider-adapter-readiness"),
+                ],
+            ),
+            run_text_command(
                 "dashboard_runtime_cli",
                 [
                     "cargo",
@@ -1148,6 +1214,7 @@ def main() -> int:
         "communications_outbox_cli": lambda component: validate_communications_outbox_cli(component["parsed"]),
         "communications_delivery_provider_boundary_cli": lambda component: validate_communications_delivery_provider_boundary_cli(component["parsed"]),
         "communications_provider_submission_preflight_cli": lambda component: validate_communications_provider_submission_preflight_cli(component["parsed"]),
+        "communications_provider_adapter_readiness_cli": lambda component: validate_communications_provider_adapter_readiness_cli(component["parsed"]),
         "dashboard_runtime_cli": lambda component: validate_dashboard_cli(component["parsed"]),
         "dashboard_session_lifecycle_cli": lambda component: validate_dashboard_session_lifecycle_cli(component["parsed"]),
         "dashboard_loopback_runtime_cli": lambda component: validate_dashboard_loopback_runtime_cli(component["parsed"]),

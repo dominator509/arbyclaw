@@ -91,6 +91,7 @@ use arb_core::{
     preflight_observability_metrics_scrape, record_observability_alert_route_dispatch,
     render_observability_export_dry_run, review_cex_live_adapter_boundary,
     review_communication_delivery_provider_boundary,
+    review_communication_provider_adapter_readiness,
     review_communication_provider_submission_preflight, review_dashboard_hosted_runtime_readiness,
     review_dashboard_hosted_security, review_dashboard_persistent_local_host_readiness,
     review_dex_live_adapter_boundary, review_fee_live_provider_boundary,
@@ -142,7 +143,9 @@ use arb_core::{
     ChannelAdapterValidationRequest, ChannelAdapterValidationStatus,
     ChannelSessionValidationReport, ChannelSessionValidationStatus, CommunicationBoundaryConfig,
     CommunicationDeliveryProviderBoundaryReport, CommunicationDeliveryProviderBoundaryRequest,
-    CommunicationDeliveryProviderBoundaryStatus, CommunicationProviderSubmissionPreflightReport,
+    CommunicationDeliveryProviderBoundaryStatus, CommunicationProviderAdapterReadinessReport,
+    CommunicationProviderAdapterReadinessRequest, CommunicationProviderAdapterReadinessStatus,
+    CommunicationProviderSubmissionPreflightReport,
     CommunicationProviderSubmissionPreflightRequest,
     CommunicationProviderSubmissionPreflightStatus, ComponentHealthStatus, ConfigError,
     ConfigMigrationStatus, DashboardAccessContext, DashboardAccessSource, DashboardBoundaryConfig,
@@ -611,6 +614,7 @@ fn is_local_workspace_validation_command(command: &str) -> bool {
             | "validate-communications-runtime"
             | "validate-communications-delivery-provider-boundary"
             | "validate-communications-provider-submission-preflight"
+            | "validate-communications-provider-adapter-readiness"
             | "validate-communications-outbox"
     )
 }
@@ -801,6 +805,9 @@ fn run_local_workspace_validation_command(
         }
         "validate-communications-provider-submission-preflight" => {
             run_communications_provider_submission_preflight_validation(&options)
+        }
+        "validate-communications-provider-adapter-readiness" => {
+            run_communications_provider_adapter_readiness_validation(&options)
         }
         "validate-communications-outbox" => run_communications_outbox_validation(&options),
         _ => Err(ConfigError::ReadFailed {
@@ -1046,6 +1053,12 @@ fn print_usage() {
     println!("       arb-agent validate-communications-runtime --workspace <fresh-dir>");
     println!(
         "       arb-agent validate-communications-delivery-provider-boundary --workspace <fresh-dir>"
+    );
+    println!(
+        "       arb-agent validate-communications-provider-submission-preflight --workspace <fresh-dir>"
+    );
+    println!(
+        "       arb-agent validate-communications-provider-adapter-readiness --workspace <fresh-dir>"
     );
     println!("       arb-agent validate-communications-outbox --workspace <fresh-dir>");
     println!("       arb-agent validate-dashboard-runtime --workspace <fresh-dir>");
@@ -12921,6 +12934,223 @@ fn validate_communications_provider_submission_preflight_report(
     Ok(())
 }
 
+fn run_communications_provider_adapter_readiness_validation(
+    options: &LocalValidationRunOptions,
+) -> Result<(), AgentCliError> {
+    prepare_fresh_workspace(&options.workspace_dir)?;
+    let audit_path = options
+        .workspace_dir
+        .join("communications-provider-adapter-readiness.audit.jsonl");
+    let state_path = options
+        .workspace_dir
+        .join("communications-provider-adapter-readiness.sqlite3");
+    let now_unix_ms = current_unix_ms()?;
+    let mut journal = AppendOnlyAuditJournal::open(&audit_path)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let mut store = SqliteWalStateStore::open(&state_path)
+        .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let records = write_communications_runtime_records(&mut journal, &mut store, now_unix_ms)?;
+    drop(store);
+    drop(journal);
+    let recovery = recover_communications_runtime_records(&audit_path, &state_path, &records)?;
+    if !communications_runtime_validation_passed(&records, &recovery) {
+        return Err(AgentCliError::Validation(
+            "communications provider adapter readiness prerequisite recovery failed".to_owned(),
+        ));
+    }
+
+    let delivery_provider_boundary = review_communication_delivery_provider_boundary(
+        &local_communications_delivery_provider_boundary_request(&records),
+    )
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let submission_preflight = review_communication_provider_submission_preflight(
+        &local_communications_provider_submission_preflight_request(delivery_provider_boundary),
+    )
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    let report = review_communication_provider_adapter_readiness(
+        &local_communications_provider_adapter_readiness_request(submission_preflight),
+    )
+    .map_err(|error| AgentCliError::Validation(error.to_string()))?;
+    print_communications_provider_adapter_readiness_report(options, &report, &recovery);
+    validate_communications_provider_adapter_readiness_report(&report, &recovery)
+}
+
+fn local_communications_provider_adapter_readiness_request(
+    submission_preflight: CommunicationProviderSubmissionPreflightReport,
+) -> CommunicationProviderAdapterReadinessRequest {
+    CommunicationProviderAdapterReadinessRequest {
+        readiness_id: "local-communications-provider-adapter-readiness".to_owned(),
+        submission_preflight,
+        provider_request_plan_present: true,
+        provider_request_plan_sanitized: true,
+        provider_endpoint_reference_present: true,
+        provider_auth_reference_present: true,
+        provider_payload_template_present: true,
+        provider_idempotency_key_planned: true,
+        provider_rate_limit_budget_planned: true,
+        provider_retry_backoff_planned: true,
+        provider_outage_circuit_breaker_planned: true,
+        provider_response_transcript_required: true,
+        provider_delivery_receipt_required: true,
+        real_provider_validation_evidence_available: false,
+        outbound_delivery_requested: false,
+        outbound_network_used: false,
+        message_delivered: false,
+        provider_call_performed: false,
+        token_secret_material_loaded: false,
+        live_execution_performed: false,
+        signing_or_broadcast_performed: false,
+        production_ready_claimed: false,
+    }
+}
+
+fn print_communications_provider_adapter_readiness_report(
+    options: &LocalValidationRunOptions,
+    report: &CommunicationProviderAdapterReadinessReport,
+    recovery: &CommunicationsRuntimeRecovery,
+) {
+    println!("communications-provider-adapter-readiness: validation passed");
+    println!(
+        "communications-provider-adapter-readiness-workspace: {}",
+        options.workspace_dir.display()
+    );
+    println!(
+        "communications-provider-adapter-readiness-status: {}",
+        communication_provider_adapter_readiness_status_label(report.status)
+    );
+    println!(
+        "communications-provider-adapter-submission-preflight-ready: {}",
+        report.submission_preflight_ready
+    );
+    println!(
+        "communications-provider-adapter-request-plan-present: {}",
+        report.provider_request_plan_present
+    );
+    println!(
+        "communications-provider-adapter-request-plan-sanitized: {}",
+        report.provider_request_plan_sanitized
+    );
+    println!(
+        "communications-provider-adapter-endpoint-reference-present: {}",
+        report.provider_endpoint_reference_present
+    );
+    println!(
+        "communications-provider-adapter-auth-reference-present: {}",
+        report.provider_auth_reference_present
+    );
+    println!(
+        "communications-provider-adapter-payload-template-present: {}",
+        report.provider_payload_template_present
+    );
+    println!(
+        "communications-provider-adapter-idempotency-key-planned: {}",
+        report.provider_idempotency_key_planned
+    );
+    println!(
+        "communications-provider-adapter-rate-limit-budget-planned: {}",
+        report.provider_rate_limit_budget_planned
+    );
+    println!(
+        "communications-provider-adapter-retry-backoff-planned: {}",
+        report.provider_retry_backoff_planned
+    );
+    println!(
+        "communications-provider-adapter-outage-circuit-breaker-planned: {}",
+        report.provider_outage_circuit_breaker_planned
+    );
+    println!(
+        "communications-provider-adapter-response-transcript-required: {}",
+        report.provider_response_transcript_required
+    );
+    println!(
+        "communications-provider-adapter-delivery-receipt-required: {}",
+        report.provider_delivery_receipt_required
+    );
+    println!(
+        "communications-provider-adapter-real-provider-validation-evidence-available: {}",
+        report.real_provider_validation_evidence_available
+    );
+    println!(
+        "communications-provider-adapter-blocker-count: {}",
+        report.blockers.len()
+    );
+    println!(
+        "communications-provider-adapter-violation-count: {}",
+        report.violation_codes.len()
+    );
+    println!(
+        "communications-provider-adapter-audit-records-replayed: {}",
+        recovery.replayed_records
+    );
+    println!(
+        "communications-provider-adapter-checkpoints-recovered: {}",
+        recovery.recovered_checkpoint_count
+    );
+    println!(
+        "outbound-delivery-requested: {}",
+        report.outbound_delivery_requested
+    );
+    println!("outbound-network-used: {}", report.outbound_network_used);
+    println!("message-delivered: {}", report.message_delivered);
+    println!(
+        "provider-call-performed: {}",
+        report.provider_call_performed
+    );
+    println!(
+        "token-secret-material-loaded: {}",
+        report.token_secret_material_loaded
+    );
+    println!(
+        "live-execution-performed: {}",
+        report.live_execution_performed
+    );
+    println!(
+        "signing-or-broadcast-performed: {}",
+        report.signing_or_broadcast_performed
+    );
+    println!("production-ready: {}", report.production_ready);
+}
+
+fn validate_communications_provider_adapter_readiness_report(
+    report: &CommunicationProviderAdapterReadinessReport,
+    recovery: &CommunicationsRuntimeRecovery,
+) -> Result<(), AgentCliError> {
+    let expected_status =
+        CommunicationProviderAdapterReadinessStatus::BlockedPendingProviderAdapterValidation;
+    if report.status != expected_status
+        || !report.submission_preflight_ready
+        || !report.provider_request_plan_present
+        || !report.provider_request_plan_sanitized
+        || !report.provider_endpoint_reference_present
+        || !report.provider_auth_reference_present
+        || !report.provider_payload_template_present
+        || !report.provider_idempotency_key_planned
+        || !report.provider_rate_limit_budget_planned
+        || !report.provider_retry_backoff_planned
+        || !report.provider_outage_circuit_breaker_planned
+        || !report.provider_response_transcript_required
+        || !report.provider_delivery_receipt_required
+        || report.real_provider_validation_evidence_available
+        || report.blockers.len() != 1
+        || !report.violation_codes.is_empty()
+        || recovery.replayed_records != 8
+        || recovery.recovered_checkpoint_count != 8
+        || report.outbound_delivery_requested
+        || report.outbound_network_used
+        || report.message_delivered
+        || report.provider_call_performed
+        || report.token_secret_material_loaded
+        || report.live_execution_performed
+        || report.signing_or_broadcast_performed
+        || report.production_ready
+    {
+        return Err(AgentCliError::Validation(
+            "communications provider adapter readiness failed local-only invariants".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
 #[allow(clippy::too_many_lines)]
 fn run_communications_outbox_validation(
     options: &LocalValidationRunOptions,
@@ -19740,6 +19970,17 @@ const fn communication_provider_submission_preflight_status_label(
             "blocked-pending-provider-validation"
         }
         CommunicationProviderSubmissionPreflightStatus::Blocked => "blocked",
+    }
+}
+
+const fn communication_provider_adapter_readiness_status_label(
+    status: CommunicationProviderAdapterReadinessStatus,
+) -> &'static str {
+    match status {
+        CommunicationProviderAdapterReadinessStatus::BlockedPendingProviderAdapterValidation => {
+            "blocked-pending-provider-adapter-validation"
+        }
+        CommunicationProviderAdapterReadinessStatus::Blocked => "blocked",
     }
 }
 
