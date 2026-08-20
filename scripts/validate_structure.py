@@ -1,30 +1,41 @@
 #!/usr/bin/env python3
-"""Repository structure and safety validation for local/CI use."""
+"""Validate ArbyClaw's current repository structure and anti-drift invariants.
+
+This validator intentionally checks the live Git tree instead of a generated hash
+manifest. Git already preserves history and content identity; duplicating every
+file hash in a committed Markdown manifest created a second, stale source of
+truth and forced historical phase paperwork to remain architectural input.
+"""
 
 from __future__ import annotations
 
 import pathlib
 import re
 import sys
-import hashlib
+
+from validate_repository_hygiene import tracked_files, violation_reason
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-LATEST_REQUIRED_PHASE = 129
 
 REQUIRED_FILES = [
+    "README.md",
     "ARCHITECTURE.md",
+    "CAPABILITIES.md",
     "ROADMAP.md",
-    "AGENTS.md",
-    *[f"PHASE_{phase}_SUBROADMAP.md" for phase in range(LATEST_REQUIRED_PHASE + 1)],
     "PRODUCTION_GAP_TRACKER.md",
     "HANDOFF_CONTEXT.md",
-    "STRUCTURE_MANIFEST.md",
-    "README.md",
+    "AGENTS.md",
+    "CLAUDE.md",
     "SECURITY.md",
     "Cargo.toml",
+    "Cargo.lock",
     "rust-toolchain.toml",
     "rustfmt.toml",
     ".github/workflows/ci.yml",
+    "docs/ai/ARCHITECTURE_MAP.md",
+    "docs/ai/API_CONTRACTS.md",
+    "docs/ai/REPO_BRIEF.md",
+    "docs/history/PHASE_HISTORY.md",
     "crates/arb-core/Cargo.toml",
     "crates/arb-core/src/lib.rs",
     "crates/arb-core/src/config.rs",
@@ -66,6 +77,8 @@ REQUIRED_FILES = [
     "handoff/AGENTIC_HANDOFF_PACKAGE.md",
     "handoff/FUTURE_AGENT_PROMPTS.md",
     "handoff/EXTERNAL_VALIDATION_CHECKLIST.md",
+    "scripts/validate_repository_hygiene.py",
+    "scripts/validate_test_collection.py",
     "scripts/validate_container_example.py",
     "scripts/validate_production_container.py",
     "scripts/validate_release_artifact.py",
@@ -93,10 +106,21 @@ REQUIRED_FILES = [
 FORBIDDEN_SECRET_ASSIGNMENT = re.compile(
     r"(?i)(api[_-]?key|secret|private[_-]?key|seed[_-]?phrase|mnemonic|token)\s*[:=]\s*['\"]?[A-Za-z0-9_/+=.-]{12,}"
 )
-MANIFEST_ROW = re.compile(r"^\| `(?P<path>[^`]+)` \| (?P<bytes>\d+) \| `(?P<sha>[0-9a-f]{64})` \|$")
-
+NUMERIC_READINESS = re.compile(r"(?i)\b\d{1,3}%\s+(?:current\s+)?production\s+readiness\b")
 SKIP_DIRS = {".git", "target"}
 SCAN_SUFFIXES = {".md", ".toml", ".rs", ".yml", ".yaml", ".env", ".example", ".production"}
+CANONICAL_STATUS_DOCS = (
+    "README.md",
+    "ARCHITECTURE.md",
+    "CAPABILITIES.md",
+    "ROADMAP.md",
+    "PRODUCTION_GAP_TRACKER.md",
+    "HANDOFF_CONTEXT.md",
+)
+AI_CONTEXT_DOCS = (
+    "docs/ai/ARCHITECTURE_MAP.md",
+    "docs/ai/API_CONTRACTS.md",
+)
 
 
 def fail(message: str) -> int:
@@ -104,38 +128,51 @@ def fail(message: str) -> int:
     return 1
 
 
-def parse_manifest() -> dict[str, tuple[int, str]]:
-    manifest_path = ROOT / "STRUCTURE_MANIFEST.md"
-    manifest: dict[str, tuple[int, str]] = {}
-    for line in manifest_path.read_text(encoding="utf-8").splitlines():
-        match = MANIFEST_ROW.match(line)
-        if match is None:
-            continue
-        manifest[match.group("path")] = (int(match.group("bytes")), match.group("sha"))
-    return manifest
-
-
 def main() -> int:
     for relative in REQUIRED_FILES:
-        if not (ROOT / relative).exists():
+        if not (ROOT / relative).is_file():
             return fail(f"missing required file: {relative}")
 
-    manifest = parse_manifest()
-    for relative in REQUIRED_FILES:
-        if relative == "STRUCTURE_MANIFEST.md":
-            continue
-        if relative not in manifest:
-            return fail(f"required file missing from structure manifest: {relative}")
-        data = (ROOT / relative).read_bytes()
-        expected_bytes, expected_sha = manifest[relative]
-        actual_sha = hashlib.sha256(data).hexdigest()
-        if len(data) != expected_bytes or actual_sha != expected_sha:
-            return fail(f"stale structure manifest entry: {relative}")
+    legacy_phase_files = sorted(ROOT.glob("PHASE_*_SUBROADMAP.md"))
+    if legacy_phase_files:
+        return fail(
+            "legacy numbered phase files reintroduced: "
+            + ", ".join(path.name for path in legacy_phase_files[:5])
+        )
+
+    if (ROOT / "STRUCTURE_MANIFEST.md").exists():
+        return fail("legacy STRUCTURE_MANIFEST.md reintroduced")
 
     cargo_toml = (ROOT / "Cargo.toml").read_text(encoding="utf-8")
-    for member in ["crates/arb-core", "crates/arb-agent"]:
+    for member in ("crates/arb-core", "crates/arb-agent"):
         if member not in cargo_toml:
             return fail(f"workspace member not registered: {member}")
+
+    try:
+        files = tracked_files()
+    except RuntimeError as exc:
+        return fail(f"unable to enumerate tracked files: {exc}")
+    hygiene_violations = [
+        (path, reason)
+        for path in files
+        if (reason := violation_reason(path)) is not None
+    ]
+    if hygiene_violations:
+        path, reason = hygiene_violations[0]
+        return fail(f"repository hygiene violation: {path}: {reason}")
+
+    for relative in AI_CONTEXT_DOCS:
+        text = (ROOT / relative).read_text(encoding="utf-8")
+        normalized = text.strip()
+        if len(normalized) < 500:
+            return fail(f"AI context document is suspiciously empty: {relative}")
+        if re.search(r"(?i)\bTODO\b", normalized):
+            return fail(f"AI context document contains TODO placeholder: {relative}")
+
+    for relative in CANONICAL_STATUS_DOCS:
+        text = (ROOT / relative).read_text(encoding="utf-8")
+        if NUMERIC_READINESS.search(text):
+            return fail(f"numeric production-readiness score reintroduced in {relative}")
 
     for path in ROOT.rglob("*"):
         if any(part in SKIP_DIRS for part in path.parts):
@@ -148,7 +185,10 @@ def main() -> int:
         if FORBIDDEN_SECRET_ASSIGNMENT.search(text):
             return fail(f"potential secret assignment found in {path.relative_to(ROOT)}")
 
-    print("repository structure validation passed")
+    print(
+        "repository structure validation passed "
+        f"({len(REQUIRED_FILES)} required files; {len(files)} tracked files checked)"
+    )
     return 0
 
 

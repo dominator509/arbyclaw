@@ -1,209 +1,135 @@
-﻿# AGENTS.md
+# AGENTS.md
 
-## Project
+This file defines repository-wide coding-agent rules for ArbyClaw.
 
-Repository: arbyclaw
-Path: C:\dev\arbyclaw
-Durable repo context: docs/ai/REPO_BRIEF.md
+## 1. Repository scope
 
-## Role Split
+ArbyClaw is a Rust CLI/library workspace for local arbitrage research, simulation, policy, audit, persistence, validation, packaging, and hardening. Do not assume a frontend, REST API, SaaS tenancy layer, cloud database, or production web service unless those components actually exist in source.
 
-Codex/GPT-5.5 is the principal architect, frontend/UI/aesthetics lead, security reviewer, code reviewer, and final merge judge.
+Workspace members:
+- `crates/arb-core`
+- `crates/arb-agent`
 
-DeepSeek-Claude is the backend implementation worker launched locally through:
+## 2. Source-of-truth order
 
-C:\Scripts\Start-DeepSeekClaude.ps1
+When sources disagree, use this order:
 
-Do not treat DeepSeek-Claude output as trusted until Codex reviews it.
+1. executable source code and tests;
+2. `CAPABILITIES.md`;
+3. `ARCHITECTURE.md` and `docs/ai/ARCHITECTURE_MAP.md`;
+4. `docs/ai/API_CONTRACTS.md`;
+5. `PRODUCTION_GAP_TRACKER.md` and `ROADMAP.md`;
+6. handoff/tool memories as navigation aids only.
 
-## Operating Model
+Do not use historical phase files, stale generated snapshots, mocks, or prior narrative claims as proof of current behavior.
 
-For substantial backend work:
+## 3. Anti-hallucination invariant
 
-1. Codex reads the task, repo context, and current diff.
-2. Codex writes a precise backend-only task brief.
-3. Codex may delegate implementation to DeepSeek-Claude using a background command.
-4. DeepSeek-Claude implements on a safe branch/worktree where possible.
-5. DeepSeek-Claude returns summary, files changed, tests run, remaining gaps, risks, and a Codex review checklist.
-6. Codex reviews the resulting diff adversarially.
-7. Codex either approves, fixes, or sends a narrow correction task back to DeepSeek-Claude.
-8. Codex owns frontend, UI, aesthetics, design polish, and final full-stack review.
+Before adding an import, dependency, method, endpoint, service, provider, configuration key, or external capability, verify it exists in the current repository or explicitly add it as part of the change.
 
-## DeepSeek-Claude Delegation Pattern
+Never fabricate compatibility shims around a nonexistent API merely to make a prompt appear satisfied. If a requested capability is absent, say so and implement the real boundary or record the gap.
 
-When asked to delegate backend work, prefer this pattern:
+A mock, fixture, transcript, preflight, plan, dry run, or local review must be named and reported as such. It may not be described as a completed external audit, live provider validation, production deployment, or real execution.
 
-powershell -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'C:\dev\arbyclaw'; & 'C:\Scripts\Start-DeepSeekClaude.ps1' --bg --name '<task-name>' '<task prompt>'"
+## 4. Safety boundaries
 
-The task prompt must include:
+Unless an accountable human explicitly authorizes a separately reviewed change, do not enable:
 
-- Backend only unless explicitly told otherwise.
-- Read CLAUDE.md, AGENTS.md, and relevant docs/ai/*.md files first.
-- Use RTK for noisy command output.
-- Use Serena for semantic code navigation.
-- Keep stable context first and dynamic logs/diffs/errors last.
-- Do not touch secrets, .env files, credentials, production infrastructure, or unrelated frontend/aesthetic files.
-- Make minimal changes.
-- Add or update tests for every code change.
-- Run relevant tests/builds.
-- Stop if real credentials, irreversible operations, or production access are required.
-- Return summary, files changed, tests run, remaining gaps, risks, and review checklist.
+- live order placement or live DEX swaps;
+- real exchange/RPC submission;
+- wallet custody or production signing;
+- transaction broadcasts;
+- withdrawals or bridges;
+- public dashboard/metrics exposure;
+- outbound provider delivery;
+- production service installation/deployment;
+- live-funds approval.
 
-## Codex Review Priorities
+No LLM path may directly sign transactions, access production signing material, or bypass policy/destination controls.
 
-When reviewing DeepSeek-Claude output, check:
+## 5. Required opening checks
 
-- correctness
-- security
-- authentication
-- authorization
-- user/tenant isolation
-- data integrity
-- transaction boundaries
-- race conditions
-- database migration safety
-- error handling
-- sensitive-data logging
-- API compatibility
-- frontend contract compatibility
-- missing tests
-- scope creep
-- secret leakage
-- production-readiness regressions
+Run what the environment supports before changing code:
 
-Blocking issues come before style suggestions.
+```bash
+python3 scripts/validate_repository_hygiene.py
+python3 scripts/validate_structure.py
+cargo fmt --check
+cargo check --workspace --locked
+python3 scripts/validate_test_collection.py
+cargo test --workspace --locked
+cargo clippy --workspace --all-targets --locked -- -D warnings
+```
 
-## Frontend Ownership
+If a check cannot run, record it as `UNVERIFIED`; do not convert an environmental limitation into a pass or failure.
 
-Codex owns:
+## 6. Definition of Done
 
-- frontend architecture
-- visual hierarchy
-- responsive layout
-- accessibility
-- loading states
-- empty states
-- error states
-- design-system consistency
-- copy polish
-- animations/interactions
-- final UX pass
+A task, feature, milestone, or project is not complete because code looks correct, compiles once, mocks pass, screenshots look right, or documentation says complete.
 
-DeepSeek-Claude should not modify frontend styling, branding, graphics, assets, or aesthetics unless explicitly instructed.
+For every applicable change:
 
-## Serena Usage
+1. Promised behavior has a stable requirement/work-item ID and an acceptance test, **because** requirements without executable anchors drift; **or else** the claim is not complete.
+2. The workspace builds from a clean checkout with locked dependencies, **because** dirty local state can hide missing inputs; **or else** build evidence is invalid.
+3. The production-intent artifact is created successfully when the change affects releasable behavior, **because** source compilation is not proof the artifact can be produced; **or else** release readiness is unverified.
+4. Final smoke/E2E validation runs against the built artifact when applicable, **because** source-only execution can bypass packaging defects; **or else** the packaged path is unverified.
+5. Required tests run in a clean/ephemeral environment where practical, **because** cached state can mask defects; **or else** state the limitation explicitly.
+6. No required test is silently skipped, disabled, ignored, pending, or xfailed, **because** skipped coverage is not passing coverage; **or else** the requirement remains open.
+7. Test collection is non-vacuous, **because** zero tests can return success; **or else** CI must fail.
+8. Tests assert semantic results, boundaries, errors, and unsafe-path denial—not merely that functions return—**because** superficial tests permit simulated functionality; **or else** coverage is insufficient.
+9. External/production capability claims require evidence from the real external system/environment, **because** local models cannot validate provider behavior; **or else** the capability remains `MODELED`, `LOCAL`, or `UNVERIFIED`.
+10. No completion claim may rely on generated narrative evidence produced by the same code path being assessed without an independent assertion, **because** self-attestation is circular; **or else** the evidence is advisory only.
 
-Use Serena before broad file reads when possible.
+## 7. Validation ownership
 
-Prefer Serena for:
+Each leaf validation should execute once per top-level run. Aggregate gates consume distinct child results; they should not rerun sibling suites already owned by another aggregate.
 
-- activating the current project
-- symbol lookup
-- reference search
-- call-site tracing
-- API route tracing
-- targeted review
-- refactor impact analysis
+A new validation layer must add at least one of:
+- a new semantic assertion;
+- a new failure mode;
+- a new environment;
+- a new artifact boundary;
+- an independent side-effect tripwire.
 
-Avoid dumping whole files when Serena can answer symbolically.
+Do not add a wrapper whose only purpose is to increase a phase number or repeat existing evidence.
 
-## Obsidian Usage
+## 8. Repository hygiene
 
-Use Obsidian only as targeted project memory.
+Do not commit:
+- `__pycache__`, `.pyc`, temp or backup files;
+- local Obsidian/editor workspace state;
+- generated whole-repo snapshots such as Repomix output;
+- generated CycloneDX files from ordinary CI runs;
+- mock/simulated audit evidence presented as real evidence;
+- secrets or credentials.
 
-Allowed:
+`python3 scripts/validate_repository_hygiene.py` is the enforcement boundary.
 
-- read specific project notes
-- search by project name
-- append concise Codex review summaries
-- append DeepSeek handoff summaries
-- record architecture decisions
-- retrieve prior decisions
+## 9. Governance
 
-Forbidden unless explicitly approved:
+Do not create new `PHASE_*_SUBROADMAP.md` files. Use stable IDs in `ROADMAP.md` and `PRODUCTION_GAP_TRACKER.md`. Git history preserves chronology.
 
-- reading the entire vault
-- reading unrelated personal notes
-- storing secrets, tokens, API keys, passwords, or credentials
-- deleting notes
-- moving notes
-- overwriting notes
-- treating Obsidian notes as more authoritative than repo code
+Do not use numeric production-readiness percentages. Use the state vocabulary in `CAPABILITIES.md`.
 
-Preferred Obsidian paths:
+Update canonical docs only when architecture, capability state, gap closure criteria, or agent contracts materially change.
 
-- Projects/arbyclaw/Repo-Brief.md
-- Projects/arbyclaw/Architecture.md
-- Projects/arbyclaw/API-Contracts.md
-- Projects/arbyclaw/Codex-Reviews.md
-- Projects/arbyclaw/DeepSeek-Handoffs.md
-- Projects/arbyclaw/Decisions.md
+## 10. Refactoring rules
 
-## RTK Usage
+Prefer mechanical, behavior-preserving decomposition before introducing new crates or frameworks. Keep changes small enough that a failing regression can be attributed to a narrow patch.
 
-RTK (Rust Token Killer) is enabled globally for this repository. Always prefix shell commands for this repo with `rtk`.
+For the current structural debt:
+- make `arb-agent/src/main.rs` a thin entrypoint over focused CLI modules;
+- split giant domain modules internally;
+- reduce broad crate-root re-exports in favor of domain-qualified imports;
+- preserve existing command names and structured output contracts unless explicitly reviewed.
 
-For PowerShell built-ins, invoke PowerShell through RTK:
+## 11. Evidence language
 
-- `rtk powershell -NoProfile -Command "Get-Content AGENTS.md"`
+Use exact labels:
+- `PASSED` — executed successfully for the exact code/environment identified;
+- `FAILED` — executed and failed;
+- `BLOCKED` — execution was attempted but a prerequisite/capability prevented it;
+- `UNVERIFIED` — not executed or evidence not available;
+- `MODELED` / `LOCAL` / `INTEGRATED_LOCAL` / `EXTERNALLY_VALIDATED` / `PRODUCTION_APPROVED` — capability states defined in `CAPABILITIES.md`.
 
-Prefer these RTK-prefixed command shapes:
-
-- rtk git status
-- rtk git diff
-- rtk git diff --stat
-- rtk git diff --name-only
-- rtk git log
-- rtk npm test
-- rtk npm run build
-- rtk cargo test
-- rtk cargo clippy
-
-Do not dump huge raw logs unless necessary.
-
-## Stable First / Dynamic Last
-
-For cost and cache efficiency, process context in this order:
-
-1. Stable instructions: AGENTS.md, CLAUDE.md
-2. Stable repo docs: docs/ai/REPO_BRIEF.md, ARCHITECTURE_MAP.md, API_CONTRACTS.md
-3. Current task brief
-4. Current changed files
-5. Current diff
-6. Current test output
-7. Current errors/logs
-
-Do not put timestamps, random IDs, branch noise, temp paths, or verbose logs before stable context.
-
-## MCP Safety
-
-Use MCPs only when relevant.
-
-Default to read-only inspection first.
-
-Never modify these without explicit approval:
-
-- production databases
-- Render production services
-- Neon production data
-- Linear issues
-- Obsidian notes outside the project area
-- Docker infrastructure
-- secrets
-- .env files
-- deployment credentials
-
-## Completion Standard
-
-Before calling work complete, Codex must know:
-
-- what changed
-- why it changed
-- what tests ran
-- what remains
-- what risks exist
-- whether DeepSeek-Claude stayed inside allowed scope
-- whether frontend/API contracts still match
-- whether secrets or production resources were untouched
-
-@RTK.md
+Never use “verified,” “validated,” “production-ready,” or “audit complete” without evidence matching the scope of the statement.
