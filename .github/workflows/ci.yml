@@ -66,8 +66,17 @@ jobs:
           test -s crates/arb-agent/arbyclaw.cdx.json
           rm crates/arb-core/arbyclaw.cdx.json crates/arb-agent/arbyclaw.cdx.json
 
+      - name: Prepare ARM cross-check toolchain
+        run: |
+          rustup target add aarch64-unknown-linux-gnu --toolchain 1.95.0
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu
+
+      - name: Prepare production container scanner
+        run: docker pull aquasec/trivy:latest
+
       - name: Top local handoff/hardening gate
-        run: python3 scripts/validate_agentic_handoff_candidate_gate.py --json
+        run: python3 scripts/validate_agentic_handoff_candidate_gate.py --json --require-systemd-analyze
 
   codeql-sast:
     runs-on: ubuntu-24.04
