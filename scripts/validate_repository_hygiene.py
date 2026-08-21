@@ -3,7 +3,9 @@
 
 This validator is intentionally independent of generated manifests. It inspects the
 actual Git index so ignored-but-still-tracked files cannot hide behind .gitignore or
-manifest exclusions.
+manifest exclusions. Serena memories are allowed only for durable, generalizable
+project knowledge; date-stamped or numbered-phase task snapshots belong in Git
+history rather than the active agent-memory graph.
 """
 
 from __future__ import annotations
@@ -11,6 +13,7 @@ from __future__ import annotations
 import argparse
 import fnmatch
 import json
+import re
 from pathlib import PurePosixPath
 import subprocess
 import sys
@@ -32,6 +35,10 @@ FORBIDDEN_GLOBS = (
     "**/*.pyo",
     "**/*.pyd",
 )
+
+SERENA_MEMORY_PREFIX = ".serena/memories/"
+DATE_STAMP = re.compile(r"(?:^|[^0-9])\d{4}-\d{2}-\d{2}(?:[^0-9]|$)")
+SERENA_PHASE_MEMORY = re.compile(r"^\.serena/memories/phase\d+(?:/|$)")
 
 
 def tracked_files() -> list[str]:
@@ -59,6 +66,11 @@ def violation_reason(path: str) -> str | None:
         if posix.startswith("security-audit/"):
             return "legacy simulated/mock audit evidence must not be tracked"
         return "local workspace/editor state must not be tracked"
+    if posix.startswith(SERENA_MEMORY_PREFIX):
+        if SERENA_PHASE_MEMORY.match(posix):
+            return "numbered-phase Serena memory is historical task state, not durable project memory"
+        if DATE_STAMP.search(name):
+            return "date-stamped Serena memory is episodic task state; preserve chronology in Git history instead"
     if name.startswith("__tmp_"):
         return "temporary scratch file must not be tracked"
     if ".bak-" in name:

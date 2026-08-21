@@ -1,7 +1,0 @@
-# Connector aggregate gate expansion (2026-06-13)
-
-- Extended `scripts/validate_connector_scenario_gate.py` to include three newer Phase 5 market-data validations: `validate-market-data-quality-assessment`, `validate-paid-market-data-provider-evaluation`, and `validate-market-data-history-persistence --workspace <fresh-dir>`.
-- Added aggregate assertions for acceptable/degraded/blocked quality scoring, ready/blocked paid-provider evaluation dossiers, deterministic historical quote/order-book truncation, audit replay, and SQLite checkpoint recovery.
-- The aggregate gate now passes with `component_count = 16`, `audit_records_replayed = 10`, and all unsafe side-effect flags false.
-- Updated `ROADMAP.md`, `PHASE_30_SUBROADMAP.md`, and `PRODUCTION_GAP_TRACKER.md` to reflect the stronger connector aggregate gate and renamed GAP-0026 from a missing-provider-evaluation title to a boundary-implemented/external-selection title.
-- Validation after the change passed: `rtk python3 scripts/validate_connector_scenario_gate.py --json`, `rtk python3 -m py_compile scripts/validate_connector_scenario_gate.py`, `rtk python3 scripts/validate_structure.py`, `rtk cargo fmt --check`, `rtk cargo check --workspace`, `rtk cargo test --workspace` (495 passed), and `rtk cargo clippy --workspace --all-targets -- -D warnings`.
