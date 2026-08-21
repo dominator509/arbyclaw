@@ -3,9 +3,9 @@
 
 This gate does not pretend that static contract inspection is runtime evidence.
 It guarantees that safety-critical requirement IDs remain unique, their CLI
-entrypoints still exist in the binary source, and the human-readable refactor
-contract remains synchronized. Runtime equivalence is established separately by
-real tests/CLI execution in CI.
+entrypoints still exist somewhere in the arb-agent source tree, and the
+human-readable refactor contract remains synchronized. Runtime equivalence is
+established separately by real tests/CLI execution in CI.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ from typing import Any
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 CONTRACT_PATH = ROOT / "validation/behavior_contract.json"
 DOC_PATH = ROOT / "docs/refactoring/BEHAVIOR_COMPATIBILITY_CONTRACT.md"
-MAIN_PATH = ROOT / "crates/arb-agent/src/main.rs"
+AGENT_SOURCE_ROOT = ROOT / "crates/arb-agent/src"
 REQ_ID = re.compile(r"^BC-\d{3}$")
 
 
@@ -34,6 +34,13 @@ def load_contract() -> dict[str, Any]:
     return loaded
 
 
+def load_agent_source() -> str:
+    files = sorted(path for path in AGENT_SOURCE_ROOT.rglob("*.rs") if path.is_file())
+    if not files:
+        raise RuntimeError("arb-agent source tree contains no Rust files")
+    return "\n".join(path.read_text(encoding="utf-8") for path in files)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--json", action="store_true", dest="as_json")
@@ -41,7 +48,7 @@ def main() -> int:
 
     try:
         contract = load_contract()
-        main_source = MAIN_PATH.read_text(encoding="utf-8")
+        agent_source = load_agent_source()
         doc = DOC_PATH.read_text(encoding="utf-8")
     except (RuntimeError, OSError) as exc:
         print(f"behavior contract validation failed: {exc}", file=sys.stderr)
@@ -96,8 +103,10 @@ def main() -> int:
             if not isinstance(command, str) or not command.startswith("validate-"):
                 errors.append(f"{requirement_id} contains invalid command {command}")
                 continue
-            if command not in main_source:
-                errors.append(f"{requirement_id} references CLI command not found in arb-agent source: {command}")
+            if command not in agent_source:
+                errors.append(
+                    f"{requirement_id} references CLI command not found in arb-agent source tree: {command}"
+                )
             seen_commands.add(command)
 
         must_report = requirement.get("must_report")
