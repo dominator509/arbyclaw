@@ -1,0 +1,85 @@
+{
+  "schema": "arbyclaw.behavior_contract.v1",
+  "baseline_commit": "40f438efe756198f69e823b1c0e3fa4d95dfbf7f",
+  "compatibility_rules": {
+    "preserve_command_names_during_structural_refactors": true,
+    "preserve_exit_code_semantics": true,
+    "preserve_json_schema_names": true,
+    "preserve_fail_closed_safety_defaults": true,
+    "structural_and_behavioral_changes_must_be_separate_commits": true
+  },
+  "requirements": [
+    {
+      "id": "BC-001",
+      "description": "Policy decisions remain fail-closed and cannot perform external submission.",
+      "commands": ["validate-policy-decision-audit"],
+      "must_report": {"external-submission-performed": "false", "production-ready": "false"}
+    },
+    {
+      "id": "BC-002",
+      "description": "Destination validation remains evidence-reference based and does not load signer material or sign ownership challenges.",
+      "commands": ["validate-destination-boundary-audit"],
+      "must_report": {"signer-material-loaded": "false", "challenge-signed": "false", "production-ready": "false"}
+    },
+    {
+      "id": "BC-003",
+      "description": "Signer boundary rejects unavailable signing and performs no signing, broadcast, RPC, or plaintext-key exposure.",
+      "commands": ["validate-signer-boundary-audit"],
+      "must_report": {"signer-material-loaded": "false", "plaintext-decrypted": "false", "signing-performed": "false", "broadcast-performed": "false", "rpc-called": "false"}
+    },
+    {
+      "id": "BC-004",
+      "description": "Secret-boundary validation performs no secret material load, plaintext decrypt, keystore write, or external revoke.",
+      "commands": ["validate-secret-boundary-audit"],
+      "must_report": {"secret-material-loaded": "false", "plaintext-decrypted": "false", "keystore-entry-written": "false", "external-secret-revoked": "false"}
+    },
+    {
+      "id": "BC-005",
+      "description": "Secret backup/restore review uses references only and performs no external secret restore or signing/broadcast.",
+      "commands": ["validate-secret-backup-restore"],
+      "must_report": {"secret-material-loaded": "false", "plaintext-decrypted": "false", "external-secret-restored": "false", "signing-or-broadcast-performed": "false"}
+    },
+    {
+      "id": "BC-006",
+      "description": "Withdrawal policy remains blocked and performs no external submission.",
+      "commands": ["validate-withdrawal-policy-boundary"],
+      "must_report": {"external-submission-performed": "false", "production-ready": "false"}
+    },
+    {
+      "id": "BC-007",
+      "description": "Execution adapter validation remains local and performs no external or live execution.",
+      "commands": ["validate-execution-adapter-audit"],
+      "must_report": {"external-submission-performed": "false", "live-execution-performed": "false", "production-ready": "false"}
+    },
+    {
+      "id": "BC-008",
+      "description": "Runtime smoke preserves recovery and operator integration while keeping external submission and live execution disabled.",
+      "commands": ["validate-runtime-smoke"],
+      "must_report": {"external-submission-performed": "false", "live-execution-performed": "false", "production-ready": "false"}
+    },
+    {
+      "id": "BC-009",
+      "description": "Communications runtime remains local and performs no outbound provider delivery.",
+      "commands": ["validate-communications-runtime"],
+      "must_report": {"outbound-network-used": "false", "external-submission-performed": "false", "live-execution-performed": "false"}
+    },
+    {
+      "id": "BC-010",
+      "description": "Dashboard runtime stays loopback/local and does not expose a public or persistent production server.",
+      "commands": ["validate-dashboard-runtime"],
+      "must_report": {"public-network-exposed": "false", "persistent-dashboard-server-started": "false", "live-controls-enabled": "false"}
+    },
+    {
+      "id": "BC-011",
+      "description": "Observability runtime does not export telemetry or send outbound alerts.",
+      "commands": ["validate-observability-runtime"],
+      "must_report": {"public-network-exposed": "false", "telemetry-exported": "false", "outbound-alerts-sent": "false"}
+    },
+    {
+      "id": "BC-012",
+      "description": "Agentic handoff cannot self-claim external validation, production readiness, or live-funds approval.",
+      "commands": ["validate-agentic-handoff-audit"],
+      "must_report": {"external-validation-claimed": "false", "production-ready": "false", "live-funds-approved": "false"}
+    }
+  ]
+}

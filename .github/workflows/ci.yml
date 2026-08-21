@@ -28,6 +28,18 @@ jobs:
       - name: Repository structure and anti-drift
         run: python3 scripts/validate_structure.py
 
+      - name: Validation ownership DAG
+        run: python3 scripts/validate_validation_graph.py
+
+      - name: Architecture size ratchets
+        run: python3 scripts/validate_architecture_ratchets.py
+
+      - name: Behavior compatibility contract
+        run: python3 scripts/validate_behavior_contract.py
+
+      - name: Assurance integrity
+        run: python3 scripts/validate_assurance_integrity.py
+
       - name: Format check
         run: cargo fmt --check
 

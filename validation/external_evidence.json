@@ -1,0 +1,24 @@
+{
+  "schema": "arbyclaw.external_evidence_registry.v1",
+  "records": [],
+  "rules": {
+    "accepted_external_evidence_types": [
+      "provider-sandbox-execution",
+      "deployment-host-execution",
+      "security-tool-execution",
+      "penetration-test",
+      "load-test",
+      "operator-drill",
+      "human-production-approval"
+    ],
+    "forbidden_as_external_proof": [
+      "mock",
+      "simulation",
+      "fixture",
+      "plan",
+      "preflight",
+      "readiness-review",
+      "local-transcript"
+    ]
+  }
+}
