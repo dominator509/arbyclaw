@@ -3,9 +3,11 @@
 
 Capability promotion to EXTERNALLY_VALIDATED or PRODUCTION_APPROVED requires a
 matching evidence-registry record. Mock/simulation/fixture/plan/preflight/local
-transcript records can never satisfy that requirement. This validator protects
-claim integrity; it does not itself prove that a referenced external artifact is
-genuine, so human/external review remains required.
+transcript records can never satisfy that requirement. Human production approval
+is a separate decision and cannot substitute for technical external validation.
+This validator protects claim integrity; it does not itself prove that a
+referenced external artifact is genuine, so human/external review remains
+required.
 """
 
 from __future__ import annotations
@@ -40,26 +42,37 @@ REQUIRED_NONCAPABILITIES = (
     "production telemetry exporters/log shipping/alert delivery",
     "installed production service lifecycle",
 )
-SECRET_LIKE = re.compile(r"(?i)(api[_-]?key|private[_-]?key|seed[_-]?phrase|mnemonic|password|bearer\s+[A-Za-z0-9])")
+SECRET_LIKE = re.compile(
+    r"(?i)(api[_-]?key|private[_-]?key|seed[_-]?phrase|mnemonic|password|bearer\s+[A-Za-z0-9])"
+)
 
 
 def parse_capabilities(text: str) -> dict[str, str]:
     capabilities: dict[str, str] = {}
+    in_current_table = False
     for raw_line in text.splitlines():
         line = raw_line.strip()
-        if not line.startswith("|"):
+        if line == "## Current capabilities":
+            in_current_table = True
+            continue
+        if in_current_table and line.startswith("## "):
+            break
+        if not in_current_table or not line.startswith("|"):
             continue
         cells = [cell.strip() for cell in line.strip("|").split("|")]
         if len(cells) < 4:
             continue
         name = cells[0].strip("`")
         state = cells[1].strip("`")
-        if name in {"Capability", "---"} or state in {"Current state", "---"}:
+        if name == "Capability" or set(name) == {"-"}:
             continue
-        if state in ALLOWED_STATES:
-            if name in capabilities:
-                raise RuntimeError(f"duplicate capability row: {name}")
-            capabilities[name] = state
+        if state == "Current state" or (state and set(state) == {"-"}):
+            continue
+        if state not in ALLOWED_STATES:
+            raise RuntimeError(f"capability '{name}' uses unsupported state '{state}'")
+        if name in capabilities:
+            raise RuntimeError(f"duplicate capability row: {name}")
+        capabilities[name] = state
     return capabilities
 
 
@@ -103,6 +116,8 @@ def main() -> int:
     forbidden_types = set(rules.get("forbidden_as_external_proof", []))
     if not accepted_types or not forbidden_types:
         errors.append("external evidence registry must define accepted and forbidden evidence types")
+    if "human-production-approval" not in accepted_types:
+        errors.append("external evidence registry must explicitly support accountable human approval")
 
     evidence_by_capability: dict[str, list[dict[str, Any]]] = {}
     seen_ids: set[str] = set()
@@ -126,7 +141,9 @@ def main() -> int:
             errors.append(f"{record_id} references unknown capability {capability}")
             continue
         if evidence_type in forbidden_types:
-            errors.append(f"{record_id} uses forbidden simulated/local evidence type as external proof: {evidence_type}")
+            errors.append(
+                f"{record_id} uses forbidden simulated/local evidence type as external proof: {evidence_type}"
+            )
         if evidence_type not in accepted_types:
             errors.append(f"{record_id} uses unapproved external evidence type: {evidence_type}")
         if not isinstance(commit, str) or not COMMIT_RE.fullmatch(commit):
@@ -142,17 +159,24 @@ def main() -> int:
         evidence_by_capability.setdefault(capability, []).append(record)
 
     for capability, state in capabilities.items():
-        records_for_capability = [
+        passed_records = [
             record
             for record in evidence_by_capability.get(capability, [])
             if record.get("result") == "passed"
         ]
-        if state in {"EXTERNALLY_VALIDATED", "PRODUCTION_APPROVED"} and not records_for_capability:
-            errors.append(f"{capability} claims {state} without passed external evidence")
+        technical_records = [
+            record
+            for record in passed_records
+            if record.get("evidence_type") != "human-production-approval"
+        ]
+        if state in {"EXTERNALLY_VALIDATED", "PRODUCTION_APPROVED"} and not technical_records:
+            errors.append(
+                f"{capability} claims {state} without passed technical external validation evidence"
+            )
         if state == "PRODUCTION_APPROVED":
             approvals = [
                 record
-                for record in records_for_capability
+                for record in passed_records
                 if record.get("evidence_type") == "human-production-approval"
                 and isinstance(record.get("approved_by"), str)
                 and record.get("approved_by", "").strip()
@@ -160,7 +184,9 @@ def main() -> int:
                 and record.get("approval_reference", "").strip()
             ]
             if not approvals:
-                errors.append(f"{capability} claims PRODUCTION_APPROVED without accountable human approval evidence")
+                errors.append(
+                    f"{capability} claims PRODUCTION_APPROVED without accountable human approval evidence"
+                )
 
     for phrase in REQUIRED_NONCAPABILITIES:
         if phrase not in architecture_map:
