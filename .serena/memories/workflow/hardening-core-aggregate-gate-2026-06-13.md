@@ -1,9 +1,0 @@
-# Hardening core aggregate gate wiring (2026-06-13)
-
-- Confirmed `scripts/validate_dependency_license_policy.py` allowlist refresh landed; current local run passes with `allowed_license_count: 13`, `denied_package_count: 0`, and `passed: true`.
-- `scripts/validate_hardening_core_gate.py --json` now passes locally and reports schema `arbyclaw.hardening_core_aggregate_gate.v1` with 4 passing components: nested packaging/deployment aggregate gate, dependency-license policy, secret-boundary audit, and policy-decision audit.
-- Wired CI to run `python3 scripts/validate_hardening_core_gate.py --json --require-systemd-analyze` in place of the previous standalone packaging/deployment aggregate step.
-- Removed the now-redundant standalone CI `validate_dependency_license_policy.py --json` step because the hardening-core aggregate already enforces it.
-- Updated `ROADMAP.md`, `PHASE_17_SUBROADMAP.md`, and `PRODUCTION_GAP_TRACKER.md` so Phase 17 wording references the local hardening-core aggregate gate without changing any no-readiness language.
-- Validation after wiring passed: `rtk python3 scripts/validate_hardening_core_gate.py --json`, `rtk python3 scripts/validate_structure.py`, `rtk cargo fmt --check`, `rtk cargo check --workspace`, `rtk cargo test --workspace` (495 passed), and `rtk cargo clippy --workspace --all-targets -- -D warnings`.
-- Obsidian optimization status: verified the expected local vault/project paths are still absent (`C:\Users\domin\Documents\Obsidian Vault\Projects\arbyclaw`, `C:\Users\domin\Documents\Obsidian\Projects\arbyclaw`, `C:\Users\domin\Obsidian\Projects\arbyclaw`, `C:\Users\domin\Documents\Obsidian`, `C:\Users\domin\Obsidian` all missing), so Serena memory remains the active durable project-memory surface until an Obsidian project path exists.

@@ -1,7 +1,0 @@
-# Opportunity candidate dedup before planner handoff (2026-06-13)
-
-- `crates/arb-core/src/opportunity.rs::rank_candidates` now sorts candidates by the existing deterministic ranking and then collapses duplicates by stable candidate id before truncation, keeping the highest-ranked instance of each id.
-- Added direct engine regression `deduplicates_cross_venue_candidates_by_stable_candidate_id` proving duplicate same-route candidates collapse to one retained candidate with the better quote path.
-- Added planner regression `traced_planner_handoff_deduplicates_duplicate_candidate_ids_before_persistence` proving traced planner handoff persists only one audit/state trace for duplicate candidate ids, with coherent report counts and checkpoint recovery.
-- Docs updated: `ROADMAP.md`, `ARCHITECTURE.md`, `PHASE_27_SUBROADMAP.md`, and `PRODUCTION_GAP_TRACKER.md` now describe duplicate-candidate collapse as implemented local behavior instead of future validation.
-- Full validation after the doc/code updates passed on 2026-06-13: `python3 scripts/generate_structure_manifest.py`, `python3 scripts/validate_structure.py`, `python3 -m py_compile scripts/validate_structure.py scripts/generate_structure_manifest.py scripts/validate_deployment_host_runtime.py scripts/validate_arm_cross_check.py`, `cargo fmt --check`, `cargo check --workspace`, `cargo test -p arb-core` (404 passed), `cargo test --workspace` (461 passed), and `cargo clippy --workspace --all-targets -- -D warnings`.

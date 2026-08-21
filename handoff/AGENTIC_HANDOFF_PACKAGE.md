@@ -2,101 +2,54 @@
 
 ## Purpose
 
-This package gives future coding agents and human maintainers a deterministic continuation path for the ArbyClaw repository.
+This package gives future coding agents and human maintainers a deterministic continuation path for ArbyClaw without treating historical phase paperwork or generated snapshots as architecture.
 
-It is not a production-readiness approval, deployment record, live-funds approval, security certification, or external validation result.
+It is not a production-readiness approval, live-funds approval, deployment record, security certification, or external validation result.
 
-## Authoritative Files
+## Authoritative files
 
-Future agents must read these files before making changes:
+Read in this order:
 
-1. `HANDOFF_CONTEXT.md`
-2. `STRUCTURE_MANIFEST.md`
+1. `AGENTS.md`
+2. `CAPABILITIES.md`
 3. `ARCHITECTURE.md`
-4. `ROADMAP.md`
-5. active `PHASE_X_SUBROADMAP.md`
-6. `AGENTS.md`
-7. `PRODUCTION_GAP_TRACKER.md`
-8. available source files and tests
+4. `docs/ai/ARCHITECTURE_MAP.md`
+5. `docs/ai/API_CONTRACTS.md`
+6. `PRODUCTION_GAP_TRACKER.md`
+7. `ROADMAP.md`
+8. relevant source code and tests
 
-## Required Opening Procedure
+Git history preserves chronology. Tool memories are navigation aids only.
 
-1. Use the latest repository checkout or approved archive.
-2. Prefer the newest complete ZIP over older partial files.
-3. Run `python3 scripts/validate_structure.py` before modifying files.
-4. Reconcile current phase, completed phases, unresolved gaps, and subsystem boundaries.
-5. Stop on governance conflicts and record assumptions, risks, blockers, and safest next step.
-6. Create the next `PHASE_X_SUBROADMAP.md` before implementation if a new phase begins.
-7. Keep patches small, reversible, and subsystem-isolated.
+## Required opening procedure
 
-## Non-Negotiable Safety Boundaries
+1. Start from the exact current checkout/ref.
+2. Run `python3 scripts/validate_repository_hygiene.py`.
+3. Run `python3 scripts/validate_structure.py`.
+4. Run the available Rust/test checks from `AGENTS.md`.
+5. Mark unavailable checks `UNVERIFIED`; do not guess.
+6. Reconcile the task against `CAPABILITIES.md` and open gap IDs.
+7. Make the smallest behavior-preserving patch that satisfies the requirement.
+8. Add regression evidence before claiming completion.
 
-Do not add or enable:
+## Non-negotiable safety boundaries
 
-- live trading
-- live order placement
-- live DEX swaps
-- wallet signing
-- transaction broadcasts
-- withdrawals
-- bridges
-- real exchange calls
-- real RPC calls
-- public dashboard exposure
-- public metrics exposure
-- outbound messaging delivery
-- external agent execution from the application
-- production deployment claims
-- production-readiness claims
-- live-funds approval
+Do not add or enable live trading, live order placement, live DEX swaps, wallet custody/signing, transaction broadcast, withdrawals, bridges, real exchange/RPC submission, public service exposure, outbound provider delivery, or production deployment without explicit human authorization and applicable external evidence.
 
-Do not place credentials or secret material in Markdown, TOML, source code, logs, service units, containers, prompts, generated artifacts, screenshots, or chat.
+Do not place credentials or secret material in Markdown, TOML, source, logs, audit records, prompts, generated evidence, screenshots, containers, or chat.
 
-## Current Checkpoint
+## Validation reality
 
-The current checkpoint after Phase 18 includes deterministic model and documentation boundaries through:
+A local validator may prove local behavior only. External/production claims require real external execution. Simulated/mock audit material is not acceptable evidence.
 
-- governance
-- Rust workspace scaffold
-- config and secret references
-- policy engine
-- audit and state boundaries
-- market data and fee models
-- paper connectors
-- CEX connector framework
-- DEX/Web3 connector framework
-- opportunity engine
-- execution planner
-- execution adapter boundary
-- communications/CLI boundary
-- embedded dashboard boundary
-- observability/runbook boundary
-- testing/fuzzing/backtesting boundary
-- packaging/deployment boundary
-- external hardening evidence boundary
-- agentic handoff package boundary
-
-## Validation Reality
-
-Validated in ChatGPT Project Mode:
+The top local handoff gate is:
 
 ```bash
-python3 scripts/validate_structure.py
-python3 -m py_compile scripts/validate_structure.py
+python3 scripts/validate_agentic_handoff_candidate_gate.py --json
 ```
 
-Still required externally before production claims:
+It executes the handoff-specific audit plus the single hardening-core aggregate. Hardening-core owns the lower execution/operator/opportunity/connector/deployment suites, preventing the handoff gate from rerunning them a second time.
 
-```bash
-cargo fmt --check
-cargo check --workspace
-cargo test --workspace
-cargo clippy --workspace --all-targets -- -D warnings
-cargo build --release --locked
-```
+## Handoff rule
 
-Additional external evidence is required for dependency audit, SBOM review, image scanning, service hardening, ARM validation, staging deployment, load testing, penetration testing, rollback drills, incident drills, exchange sandbox validation, DEX/RPC sandbox validation without broadcasts, custody review, compliance review, and production readiness review.
-
-## Handoff Rule
-
-A future agent may continue implementation only after preserving the latest gap tracker and proving that its change does not weaken policy gates, redaction, auditability, rollback readiness, or live-funds blockers.
+Future work may continue only if the change preserves fail-closed policy, redaction, audit/state durability, destination/signer controls, and visible production blockers. The exact commit/environment being claimed validated must have matching execution evidence.

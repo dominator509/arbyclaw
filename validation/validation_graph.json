@@ -1,0 +1,76 @@
+{
+  "schema": "arbyclaw.validation_graph.v1",
+  "root": "agentic_handoff",
+  "nodes": [
+    {
+      "id": "agentic_handoff",
+      "script": "scripts/validate_agentic_handoff_candidate_gate.py",
+      "children": ["hardening_core"]
+    },
+    {
+      "id": "hardening_core",
+      "script": "scripts/validate_hardening_core_gate.py",
+      "children": [
+        "packaging_deployment",
+        "execution_path",
+        "operator_surface",
+        "opportunity_scenario",
+        "connector_scenario",
+        "deployment_evidence_checklist"
+      ]
+    },
+    {
+      "id": "packaging_deployment",
+      "script": "scripts/validate_packaging_deployment_gate.py",
+      "children": []
+    },
+    {
+      "id": "execution_path",
+      "script": "scripts/validate_execution_path_gate.py",
+      "children": []
+    },
+    {
+      "id": "operator_surface",
+      "script": "scripts/validate_operator_surface_gate.py",
+      "children": []
+    },
+    {
+      "id": "opportunity_scenario",
+      "script": "scripts/validate_opportunity_scenario_gate.py",
+      "children": []
+    },
+    {
+      "id": "connector_scenario",
+      "script": "scripts/validate_connector_scenario_gate.py",
+      "children": []
+    },
+    {
+      "id": "deployment_evidence_checklist",
+      "script": "scripts/validate_deployment_evidence_checklist.py",
+      "children": ["deployment_evidence_bundle"]
+    },
+    {
+      "id": "deployment_evidence_bundle",
+      "script": "scripts/validate_deployment_evidence_bundle.py",
+      "children": []
+    }
+  ],
+  "single_owner_leaf_commands": {
+    "validate-policy-decision-audit": "execution_path",
+    "validate-destination-boundary-audit": "execution_path",
+    "validate-signer-boundary-audit": "execution_path",
+    "validate-secret-boundary-audit": "hardening_core",
+    "validate-secret-backup-restore": "hardening_core",
+    "validate-withdrawal-policy-boundary": "hardening_core"
+  },
+  "forbidden_substrings": {
+    "deployment_evidence_bundle": [
+      "scripts/validate_structure.py",
+      "scripts/validate_systemd_example.py",
+      "scripts/validate_deployment_runtime_gate.py",
+      "scripts/validate_opportunity_scenario_gate.py",
+      "scripts/validate_connector_scenario_gate.py"
+    ]
+  },
+  "ci_root_script": "scripts/validate_agentic_handoff_candidate_gate.py"
+}

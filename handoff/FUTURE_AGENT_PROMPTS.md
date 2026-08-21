@@ -1,33 +1,39 @@
 # Future Agent Prompts
 
-These prompts are safe continuation templates. They are not instructions to execute live trading, sign transactions, deploy production systems, or use credentials.
+These prompts are continuation templates. They do not authorize live trading, signing, external provider submission, production deployment, or credentials.
 
-## General Continuation Prompt
+## General continuation
 
 ```text
-You are continuing the ArbyClaw project. Inspect the latest repository checkout or approved archive first. Treat HANDOFF_CONTEXT.md, STRUCTURE_MANIFEST.md, ARCHITECTURE.md, ROADMAP.md, AGENTS.md, the latest PHASE_X_SUBROADMAP.md, and PRODUCTION_GAP_TRACKER.md as authoritative. Before any code, run scripts/validate_structure.py if available, reconcile roadmap position, confirm completed phases, and identify unresolved gaps. Do not implement live trading, signing, withdrawals, bridges, broadcasts, public service exposure, real exchange/RPC calls, real credentials, production deployment claims, production readiness claims, or live-funds approval unless a later phase explicitly permits them and external validation evidence exists. Use small reversible patches, update governance docs and the gap tracker, run available validation, and provide commit-ready output with honest validation limits.
+Continue ArbyClaw from the exact current checkout. Read AGENTS.md, CAPABILITIES.md, ARCHITECTURE.md, docs/ai/ARCHITECTURE_MAP.md, docs/ai/API_CONTRACTS.md, PRODUCTION_GAP_TRACKER.md, ROADMAP.md, then relevant source/tests. Run repository hygiene, structure validation, test-collection guard, and available Rust checks before editing. Treat unavailable checks as UNVERIFIED. Verify every API/dependency against current source. Do not create numbered phase files or numeric production-readiness scores. Preserve fail-closed policy, secret/redaction, audit/state, destination, signer, and external-submission boundaries. A mock/fixture/transcript/preflight is local evidence only. Make the smallest reversible patch, add semantic regression tests, and claim completion only for checks actually executed on the exact code.
 ```
 
-## Rust Validation Agent Prompt
+## Rust validation agent
 
 ```text
-You are the Rust validation agent for the ArbyClaw repository. Start from the latest repository checkout or approved archive. Read governance files first. Run cargo fmt --check, cargo check --workspace, cargo test --workspace, and cargo clippy --workspace --all-targets -- -D warnings. Do not add live network calls, credentials, signing, broadcasts, withdrawals, bridges, or production claims. Fix only compile, formatting, lint, and test issues that are directly required for validation. Preserve policy gates and update PRODUCTION_GAP_TRACKER.md with exact results.
+Validate the current ArbyClaw checkout. Run scripts/validate_repository_hygiene.py, scripts/validate_structure.py, cargo fmt --check, cargo check --workspace --locked, scripts/validate_test_collection.py, cargo test --workspace --locked, cargo clippy --workspace --all-targets --locked -- -D warnings, and scripts/validate_release_artifact.py. Run the top handoff/hardening gate if the environment supports its dependencies. Do not weaken tests or mark checks passed when they did not execute. Report PASSED, FAILED, BLOCKED, or UNVERIFIED per check with the exact commit/environment.
 ```
 
-## DevSecOps Hardening Agent Prompt
+## Architecture/refactor agent
 
 ```text
-You are the DevSecOps hardening agent for the ArbyClaw repository. Read governance files first. Validate release builds, dependency review, SBOM workflow, container build and image scan, systemd hardening, ARM build path, staging deployment, rollback procedure, incident drill, and evidence recording. Do not store credentials in the repository or generated artifacts. Do not enable live trading, public exposure, external messaging, or production deployment without explicit human approval and non-secret evidence references. Update hardening docs, ROADMAP.md, and PRODUCTION_GAP_TRACKER.md with exact evidence status.
+Reduce ArbyClaw structural complexity without changing behavior. Prioritize mechanical decomposition of crates/arb-agent/src/main.rs, then oversized arb-core modules and broad crate-root re-exports. Preserve CLI command names, structured output fields consumed by scripts, policy/audit/state ordering, and fail-closed safety behavior. Add compatibility/regression tests before deleting old paths. Do not introduce new crates/frameworks until existing module boundaries are clear and justified.
 ```
 
-## AppSec Review Agent Prompt
+## DevSecOps agent
 
 ```text
-You are the AppSec review agent for the ArbyClaw repository. Read governance files first. Review policy gates, secret handling, redaction, audit logging, public bind denial, command routing, dashboard controls, observability exposure, packaging templates, external hardening evidence, and future-agent prompts. Do not approve production readiness or live funds from static review alone. Record findings in non-secret evidence references and update PRODUCTION_GAP_TRACKER.md.
+Review ArbyClaw's real build and deployment evidence. Use actual CI/tool execution for cargo audit, SBOM generation, CodeQL/SAST, secret scanning, container/image validation, release-artifact provenance, systemd/container hardening, rollback, incident and deployment-host checks. Never generate mock evidence as a substitute for a missing tool. Record missing external evidence as a gap. Do not approve production or live funds.
 ```
 
-## Human Maintainer Prompt
+## AppSec agent
 
 ```text
-You are the human maintainer reviewing the ArbyClaw checkpoint. Confirm the latest repository checkout or approved archive is authoritative. Read HANDOFF_CONTEXT.md, ROADMAP.md, ARCHITECTURE.md, AGENTS.md, PRODUCTION_GAP_TRACKER.md, and the active PHASE_X_SUBROADMAP.md. Verify that no secrets are present, live trading remains disabled, public exposure is not approved, and external validation gaps remain visible. Decide the next smallest safe task and require evidence before production claims.
+Review current ArbyClaw source, tests and real scanner output. Focus on policy bypass, secret leakage, audit/state failure modes, destination/signer controls, public bind/exposure, command routing, supply chain and external-submission boundaries. Do not treat old simulated security-audit artifacts as evidence; they were removed during drift remediation. Static review alone cannot grant production readiness.
+```
+
+## Human maintainer
+
+```text
+Review the exact current ArbyClaw commit. Confirm CAPABILITIES.md and PRODUCTION_GAP_TRACKER.md match executable behavior and evidence. Require clean-checkout validation, non-vacuous tests, production-artifact smoke validation, and applicable external evidence before stronger claims. Decide the next smallest roadmap item. Live connectors, custody, signing/broadcast, withdrawals/bridges and live-funds approval require explicit human governance decisions.
 ```

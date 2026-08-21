@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Build a local non-secret deployment evidence index.
+"""Build the local deployment-evidence index without unrelated aggregate reruns.
 
-This runner executes only non-mutating validation helpers and emits a compact
-operator-review index. It does not install units, start services, stop services,
-restart services, change deployment state, send alerts, call networks, load
-secrets, or claim production readiness.
+This bundle owns deployment-evidence components only. Repository structure,
+packaging/systemd-example, opportunity, connector, and broad deployment-runtime
+aggregate suites have separate owners in the validation graph and must not be
+re-executed here. The bundle does not install/control services, call external
+providers, load secrets, or claim production readiness.
 """
 
 from __future__ import annotations
@@ -18,379 +19,264 @@ import subprocess
 import sys
 from typing import Any
 
-
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 COMPONENT_TIMEOUT_SECONDS = 300
 BUNDLE_WORKSPACE_ROOT = ROOT / "target/deployment-evidence-bundle"
 BUNDLE_WORKSPACE = BUNDLE_WORKSPACE_ROOT / f"run-{os.getpid()}"
+
 
 def component_commands(bundle_workspace: pathlib.Path) -> list[tuple[str, list[str], bool]]:
     dashboard_runtime_workspace = bundle_workspace / "dashboard-runtime"
     dashboard_session_lifecycle_workspace = bundle_workspace / "dashboard-session-lifecycle"
     dashboard_loopback_runtime_workspace = bundle_workspace / "dashboard-loopback-runtime"
     observability_metrics_workspace = bundle_workspace / "observability-metrics-runtime"
-    observability_provider_boundary_workspace = (
-        bundle_workspace / "observability-provider-boundary"
-    )
-    observability_provider_submission_workspace = (
-        bundle_workspace / "observability-provider-submission"
-    )
-    communications_delivery_provider_workspace = (
-        bundle_workspace / "communications-delivery-provider"
-    )
+    observability_provider_boundary_workspace = bundle_workspace / "observability-provider-boundary"
+    observability_provider_submission_workspace = bundle_workspace / "observability-provider-submission"
+    communications_delivery_provider_workspace = bundle_workspace / "communications-delivery-provider"
     communications_outbox_workspace = bundle_workspace / "communications-outbox"
-    communications_provider_submission_workspace = (
-        bundle_workspace / "communications-provider-submission"
-    )
+    communications_provider_submission_workspace = bundle_workspace / "communications-provider-submission"
     deployment_config_redaction_workspace = bundle_workspace / "deployment-config-redaction"
     deployment_log_redaction_workspace = bundle_workspace / "deployment-log-redaction"
-    deployment_runtime_workspace = bundle_workspace / "deployment-runtime-gate"
+
     return [
         (
-        "structure",
-        [sys.executable, "scripts/validate_structure.py"],
-        False,
-    ),
-    (
-        "systemd-example",
-        [sys.executable, "scripts/validate_systemd_example.py"],
-        False,
-    ),
-    (
-        "systemd-lifecycle-plan",
-        [sys.executable, "scripts/validate_systemd_lifecycle.py", "--json"],
-        True,
-    ),
-    (
-        "deployment-host-runtime-plan",
-        [sys.executable, "scripts/validate_deployment_host_runtime.py", "--json"],
-        True,
-    ),
-    (
-        "deployment-host-dashboard-runtime",
-        [
-            sys.executable,
-            "scripts/validate_deployment_host_runtime.py",
-            "--run-dashboard-runtime",
-            "--dashboard-workspace",
-            str(dashboard_runtime_workspace),
-            "--json",
-        ],
-        True,
-    ),
-    (
-        "deployment-host-dashboard-session-lifecycle",
-        [
-            sys.executable,
-            "scripts/validate_deployment_host_runtime.py",
-            "--run-dashboard-session-lifecycle",
-            "--dashboard-session-workspace",
-            str(dashboard_session_lifecycle_workspace),
-            "--json",
-        ],
-        True,
-    ),
-    (
-        "deployment-host-dashboard-loopback-runtime",
-        [
-            sys.executable,
-            "scripts/validate_deployment_host_runtime.py",
-            "--run-dashboard-loopback-runtime",
-            "--dashboard-loopback-workspace",
-            str(dashboard_loopback_runtime_workspace),
-            "--json",
-        ],
-        True,
-    ),
-    (
-        "deployment-host-observability-metrics-runtime",
-        [
-            sys.executable,
-            "scripts/validate_deployment_host_runtime.py",
-            "--run-observability-metrics-runtime",
-            "--observability-metrics-workspace",
-            str(observability_metrics_workspace),
-            "--json",
-        ],
-        True,
-    ),
-    (
-        "deployment-host-observability-provider-boundary",
-        [
-            sys.executable,
-            "scripts/validate_deployment_host_runtime.py",
-            "--run-observability-provider-boundary",
-            "--observability-provider-boundary-workspace",
-            str(observability_provider_boundary_workspace),
-            "--json",
-        ],
-        True,
-    ),
-    (
-        "deployment-host-observability-provider-submission",
-        [
-            sys.executable,
-            "scripts/validate_deployment_host_runtime.py",
-            "--run-observability-provider-submission-preflight",
-            "--observability-provider-submission-workspace",
-            str(observability_provider_submission_workspace),
-            "--json",
-        ],
-        True,
-    ),
-    (
-        "deployment-host-communications-delivery-provider",
-        [
-            sys.executable,
-            "scripts/validate_deployment_host_runtime.py",
-            "--run-communications-delivery-provider-boundary",
-            "--communications-delivery-provider-workspace",
-            str(communications_delivery_provider_workspace),
-            "--json",
-        ],
-        True,
-    ),
-    (
-        "deployment-host-communications-outbox",
-        [
-            sys.executable,
-            "scripts/validate_deployment_host_runtime.py",
-            "--run-communications-outbox",
-            "--communications-outbox-workspace",
-            str(communications_outbox_workspace),
-            "--json",
-        ],
-        True,
-    ),
-    (
-        "deployment-host-communications-provider-submission",
-        [
-            sys.executable,
-            "scripts/validate_deployment_host_runtime.py",
-            "--run-communications-provider-submission-preflight",
-            "--communications-provider-submission-workspace",
-            str(communications_provider_submission_workspace),
-            "--json",
-        ],
-        True,
-    ),
-    (
-        "deployment-host-static-hardening-config-smoke",
-        [
-            sys.executable,
-            "scripts/validate_deployment_host_runtime.py",
-            "--run-deployment-static-hardening",
-            "--json",
-        ],
-        True,
-    ),
-    (
-        "deployment-host-config-redaction",
-        [
-            sys.executable,
-            "scripts/validate_deployment_host_runtime.py",
-            "--run-deployment-config-redaction",
-            "--deployment-config-redaction-workspace",
-            str(deployment_config_redaction_workspace),
-            "--json",
-        ],
-        True,
-    ),
-    (
-        "deployment-host-log-redaction",
-        [
-            sys.executable,
-            "scripts/validate_deployment_host_runtime.py",
-            "--run-deployment-log-redaction",
-            "--deployment-log-redaction-workspace",
-            str(deployment_log_redaction_workspace),
-            "--json",
-        ],
-        True,
-    ),
-    (
-        "deployment-host-retention-preflight",
-        [
-            sys.executable,
-            "scripts/validate_deployment_host_runtime.py",
-            "--run-retention-preflight",
-            "--retention-active-path",
-            "deployment/audit.jsonl",
-            "--retention-archive-dir",
-            "deployment",
-            "--json",
-        ],
-        True,
-    ),
-    (
-        "deployment-runtime-gate",
-        [
-            sys.executable,
-            "scripts/validate_deployment_runtime_gate.py",
-            "--workspace-base",
-            str(deployment_runtime_workspace),
-            "--json",
-        ],
-        True,
-    ),
-    (
-        "opportunity-scenario-gate",
-        [sys.executable, "scripts/validate_opportunity_scenario_gate.py", "--json"],
-        True,
-    ),
-    (
-        "connector-scenario-gate",
-        [sys.executable, "scripts/validate_connector_scenario_gate.py", "--json"],
-        True,
-    ),
-    (
-        "rollback-drill-plan",
-        [sys.executable, "scripts/validate_rollback_drill.py", "--json"],
-        True,
-    ),
-    (
-        "rollback-execution-transcript",
-        ["cargo", "run", "-p", "arb-agent", "--", "validate-rollback-execution-transcript"],
-        False,
-    ),
-    (
-        "incident-response-drill-plan",
-        [sys.executable, "scripts/validate_incident_response_drill.py", "--json"],
-        True,
-    ),
-    (
-        "incident-response-execution-transcript",
-        [
-            "cargo",
-            "run",
-            "-p",
-            "arb-agent",
-            "--",
-            "validate-incident-response-execution-transcript",
-        ],
-        False,
-    ),
-    (
-        "deployment-disk-full-transcript",
-        [
-            "cargo",
-            "run",
-            "-p",
-            "arb-agent",
-            "--",
-            "validate-deployment-disk-full-transcript",
-        ],
-        False,
-    ),
-    (
-        "deployment-retention-transcript",
-        [
-            "cargo",
-            "run",
-            "-p",
-            "arb-agent",
-            "--",
-            "validate-deployment-retention-transcript",
-        ],
-        False,
-    ),
-    (
-        "deployment-permission-transcript",
-        [
-            "cargo",
-            "run",
-            "-p",
-            "arb-agent",
-            "--",
-            "validate-deployment-permission-transcript",
-        ],
-        False,
-    ),
-    (
-        "deployment-audit-sqlite-transcript",
-        [
-            "cargo",
-            "run",
-            "-p",
-            "arb-agent",
-            "--",
-            "validate-deployment-audit-sqlite-transcript",
-        ],
-        False,
-    ),
-    (
-        "deployment-backup-restore-transcript",
-        [
-            "cargo",
-            "run",
-            "-p",
-            "arb-agent",
-            "--",
-            "validate-deployment-backup-restore-transcript",
-        ],
-        False,
-    ),
-    (
-        "deployment-graceful-shutdown-transcript",
-        [
-            "cargo",
-            "run",
-            "-p",
-            "arb-agent",
-            "--",
-            "validate-deployment-graceful-shutdown-transcript",
-        ],
-        False,
-    ),
-    (
-        "service-manager-lifecycle-rehearsal",
-        [
-            "cargo",
-            "run",
-            "-p",
-            "arb-agent",
-            "--",
-            "validate-service-manager-lifecycle-rehearsal",
-        ],
-        False,
-    ),
-    (
-        "deployment-sqlite-schema-migration-transcript",
-        [
-            "cargo",
-            "run",
-            "-p",
-            "arb-agent",
-            "--",
-            "validate-deployment-sqlite-schema-migration-transcript",
-        ],
-        False,
-    ),
-    (
-        "deployment-failure-capture-transcript",
-        [
-            "cargo",
-            "run",
-            "-p",
-            "arb-agent",
-            "--",
-            "validate-deployment-failure-capture-transcript",
-        ],
-        False,
-    ),
-    (
-        "deployment-response-drill-rehearsal",
-        [
-            "cargo",
-            "run",
-            "-p",
-            "arb-agent",
-            "--",
-            "validate-deployment-response-drill-rehearsal",
-        ],
-        False,
-    ),
+            "systemd-lifecycle-plan",
+            [sys.executable, "scripts/validate_systemd_lifecycle.py", "--json"],
+            True,
+        ),
+        (
+            "deployment-host-runtime-plan",
+            [sys.executable, "scripts/validate_deployment_host_runtime.py", "--json"],
+            True,
+        ),
+        (
+            "deployment-host-dashboard-runtime",
+            [
+                sys.executable,
+                "scripts/validate_deployment_host_runtime.py",
+                "--run-dashboard-runtime",
+                "--dashboard-workspace",
+                str(dashboard_runtime_workspace),
+                "--json",
+            ],
+            True,
+        ),
+        (
+            "deployment-host-dashboard-session-lifecycle",
+            [
+                sys.executable,
+                "scripts/validate_deployment_host_runtime.py",
+                "--run-dashboard-session-lifecycle",
+                "--dashboard-session-workspace",
+                str(dashboard_session_lifecycle_workspace),
+                "--json",
+            ],
+            True,
+        ),
+        (
+            "deployment-host-dashboard-loopback-runtime",
+            [
+                sys.executable,
+                "scripts/validate_deployment_host_runtime.py",
+                "--run-dashboard-loopback-runtime",
+                "--dashboard-loopback-workspace",
+                str(dashboard_loopback_runtime_workspace),
+                "--json",
+            ],
+            True,
+        ),
+        (
+            "deployment-host-observability-metrics-runtime",
+            [
+                sys.executable,
+                "scripts/validate_deployment_host_runtime.py",
+                "--run-observability-metrics-runtime",
+                "--observability-metrics-workspace",
+                str(observability_metrics_workspace),
+                "--json",
+            ],
+            True,
+        ),
+        (
+            "deployment-host-observability-provider-boundary",
+            [
+                sys.executable,
+                "scripts/validate_deployment_host_runtime.py",
+                "--run-observability-provider-boundary",
+                "--observability-provider-boundary-workspace",
+                str(observability_provider_boundary_workspace),
+                "--json",
+            ],
+            True,
+        ),
+        (
+            "deployment-host-observability-provider-submission",
+            [
+                sys.executable,
+                "scripts/validate_deployment_host_runtime.py",
+                "--run-observability-provider-submission-preflight",
+                "--observability-provider-submission-workspace",
+                str(observability_provider_submission_workspace),
+                "--json",
+            ],
+            True,
+        ),
+        (
+            "deployment-host-communications-outbox",
+            [
+                sys.executable,
+                "scripts/validate_deployment_host_runtime.py",
+                "--run-communications-outbox",
+                "--communications-outbox-workspace",
+                str(communications_outbox_workspace),
+                "--json",
+            ],
+            True,
+        ),
+        (
+            "deployment-host-communications-delivery-provider",
+            [
+                sys.executable,
+                "scripts/validate_deployment_host_runtime.py",
+                "--run-communications-delivery-provider-boundary",
+                "--communications-delivery-provider-workspace",
+                str(communications_delivery_provider_workspace),
+                "--json",
+            ],
+            True,
+        ),
+        (
+            "deployment-host-communications-provider-submission",
+            [
+                sys.executable,
+                "scripts/validate_deployment_host_runtime.py",
+                "--run-communications-provider-submission-preflight",
+                "--communications-provider-submission-workspace",
+                str(communications_provider_submission_workspace),
+                "--json",
+            ],
+            True,
+        ),
+        (
+            "deployment-host-static-hardening-config-smoke",
+            [
+                sys.executable,
+                "scripts/validate_deployment_host_runtime.py",
+                "--run-deployment-static-hardening",
+                "--json",
+            ],
+            True,
+        ),
+        (
+            "deployment-host-config-redaction",
+            [
+                sys.executable,
+                "scripts/validate_deployment_host_runtime.py",
+                "--run-deployment-config-redaction",
+                "--deployment-config-redaction-workspace",
+                str(deployment_config_redaction_workspace),
+                "--json",
+            ],
+            True,
+        ),
+        (
+            "deployment-host-log-redaction",
+            [
+                sys.executable,
+                "scripts/validate_deployment_host_runtime.py",
+                "--run-deployment-log-redaction",
+                "--deployment-log-redaction-workspace",
+                str(deployment_log_redaction_workspace),
+                "--json",
+            ],
+            True,
+        ),
+        (
+            "deployment-host-retention-preflight",
+            [
+                sys.executable,
+                "scripts/validate_deployment_host_runtime.py",
+                "--run-retention-preflight",
+                "--retention-active-path",
+                "deployment/audit.jsonl",
+                "--retention-archive-dir",
+                "deployment",
+                "--json",
+            ],
+            True,
+        ),
+        (
+            "rollback-drill-plan",
+            [sys.executable, "scripts/validate_rollback_drill.py", "--json"],
+            True,
+        ),
+        (
+            "incident-response-drill-plan",
+            [sys.executable, "scripts/validate_incident_response_drill.py", "--json"],
+            True,
+        ),
+        (
+            "deployment-disk-full-transcript",
+            ["cargo", "run", "-p", "arb-agent", "--", "validate-deployment-disk-full-transcript"],
+            False,
+        ),
+        (
+            "deployment-retention-transcript",
+            ["cargo", "run", "-p", "arb-agent", "--", "validate-deployment-retention-transcript"],
+            False,
+        ),
+        (
+            "deployment-permission-transcript",
+            ["cargo", "run", "-p", "arb-agent", "--", "validate-deployment-permission-transcript"],
+            False,
+        ),
+        (
+            "deployment-audit-sqlite-transcript",
+            ["cargo", "run", "-p", "arb-agent", "--", "validate-deployment-audit-sqlite-transcript"],
+            False,
+        ),
+        (
+            "deployment-backup-restore-transcript",
+            ["cargo", "run", "-p", "arb-agent", "--", "validate-deployment-backup-restore-transcript"],
+            False,
+        ),
+        (
+            "deployment-graceful-shutdown-transcript",
+            ["cargo", "run", "-p", "arb-agent", "--", "validate-deployment-graceful-shutdown-transcript"],
+            False,
+        ),
+        (
+            "service-manager-lifecycle-rehearsal",
+            ["cargo", "run", "-p", "arb-agent", "--", "validate-service-manager-lifecycle-rehearsal"],
+            False,
+        ),
+        (
+            "deployment-sqlite-schema-migration-transcript",
+            ["cargo", "run", "-p", "arb-agent", "--", "validate-deployment-sqlite-schema-migration-transcript"],
+            False,
+        ),
+        (
+            "rollback-execution-transcript",
+            ["cargo", "run", "-p", "arb-agent", "--", "validate-rollback-execution-transcript"],
+            False,
+        ),
+        (
+            "incident-response-execution-transcript",
+            ["cargo", "run", "-p", "arb-agent", "--", "validate-incident-response-execution-transcript"],
+            False,
+        ),
+        (
+            "deployment-failure-capture-transcript",
+            ["cargo", "run", "-p", "arb-agent", "--", "validate-deployment-failure-capture-transcript"],
+            False,
+        ),
+        (
+            "deployment-response-drill-rehearsal",
+            ["cargo", "run", "-p", "arb-agent", "--", "validate-deployment-response-drill-rehearsal"],
+            False,
+        ),
     ]
+
 
 BOOLEAN_SAFETY_FIELDS = (
     "service_actions_performed",
@@ -483,17 +369,19 @@ def build_report() -> dict[str, Any]:
     for component in components:
         flags = component.get("safety_flags", {})
         for key, value in flags.items():
-            if key.endswith("_claimed") or key.endswith("_performed") or key.endswith("_enabled") or key == "secrets_loaded":
-                if value is not False:
-                    unsafe_flags.append(f"{component['name']}:{key}")
+            if (
+                key.endswith("_claimed")
+                or key.endswith("_performed")
+                or key.endswith("_enabled")
+                or key == "secrets_loaded"
+            ) and value is not False:
+                unsafe_flags.append(f"{component['name']}:{key}")
 
     return {
         "schema": "arbyclaw.deployment_evidence_bundle.v1",
         "components": components,
         "component_count": len(components),
-        "bounded_timeouts": {
-            "component_seconds": COMPONENT_TIMEOUT_SECONDS,
-        },
+        "bounded_timeouts": {"component_seconds": COMPONENT_TIMEOUT_SECONDS},
         "failed_components": failed,
         "all_components_passed": not failed,
         "unsafe_flags": unsafe_flags,
@@ -553,8 +441,11 @@ def main() -> int:
     except (OSError, RuntimeError) as error:
         return fail(str(error))
 
+    if report["component_count"] != 29:
+        return fail(f"deployment evidence ownership drifted: expected 29 components, got {report['component_count']}")
     if report["failed_components"] or report["unsafe_flags"]:
-        print(json.dumps(report, indent=2, sort_keys=True) if args.json else "", end="")
+        if args.json:
+            print(json.dumps(report, indent=2, sort_keys=True))
         return fail("one or more bundle components failed or reported unsafe flags")
 
     if args.json:
