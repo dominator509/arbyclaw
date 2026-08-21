@@ -15,11 +15,13 @@ Workspace members:
 When sources disagree, use this order:
 
 1. executable source code and tests;
-2. `CAPABILITIES.md`;
-3. `ARCHITECTURE.md` and `docs/ai/ARCHITECTURE_MAP.md`;
-4. `docs/ai/API_CONTRACTS.md`;
-5. `PRODUCTION_GAP_TRACKER.md` and `ROADMAP.md`;
-6. handoff/tool memories as navigation aids only.
+2. `validation/behavior_contract.json` for behavior-preserving refactor invariants;
+3. `CAPABILITIES.md` plus `validation/external_evidence.json` for capability/evidence claims;
+4. `ARCHITECTURE.md` and `docs/ai/ARCHITECTURE_MAP.md`;
+5. `docs/ai/API_CONTRACTS.md`;
+6. `validation/validation_graph.json` for aggregate validation ownership;
+7. `PRODUCTION_GAP_TRACKER.md` and `ROADMAP.md`;
+8. handoff/tool memories as navigation aids only.
 
 Do not use historical phase files, stale generated snapshots, mocks, or prior narrative claims as proof of current behavior.
 
@@ -30,6 +32,8 @@ Before adding an import, dependency, method, endpoint, service, provider, config
 Never fabricate compatibility shims around a nonexistent API merely to make a prompt appear satisfied. If a requested capability is absent, say so and implement the real boundary or record the gap.
 
 A mock, fixture, transcript, preflight, plan, dry run, or local review must be named and reported as such. It may not be described as a completed external audit, live provider validation, production deployment, or real execution.
+
+An `EXTERNALLY_VALIDATED` or `PRODUCTION_APPROVED` capability must satisfy `scripts/validate_assurance_integrity.py`. Human approval is a separate decision and does not substitute for technical external validation.
 
 ## 4. Safety boundaries
 
@@ -54,6 +58,10 @@ Run what the environment supports before changing code:
 ```bash
 python3 scripts/validate_repository_hygiene.py
 python3 scripts/validate_structure.py
+python3 scripts/validate_validation_graph.py
+python3 scripts/validate_architecture_ratchets.py
+python3 scripts/validate_behavior_contract.py
+python3 scripts/validate_assurance_integrity.py
 cargo fmt --check
 cargo check --workspace --locked
 python3 scripts/validate_test_collection.py
@@ -79,10 +87,12 @@ For every applicable change:
 8. Tests assert semantic results, boundaries, errors, and unsafe-path denial—not merely that functions return—**because** superficial tests permit simulated functionality; **or else** coverage is insufficient.
 9. External/production capability claims require evidence from the real external system/environment, **because** local models cannot validate provider behavior; **or else** the capability remains `MODELED`, `LOCAL`, or `UNVERIFIED`.
 10. No completion claim may rely on generated narrative evidence produced by the same code path being assessed without an independent assertion, **because** self-attestation is circular; **or else** the evidence is advisory only.
+11. A structural refactor must preserve the applicable `BC-*` requirements in `validation/behavior_contract.json`, **because** moving code is not permission to silently change behavior; **or else** the structural change is incomplete.
+12. Architecture ratchets may only stay equal or decrease, **because** a refactor that merely regrows or relocates a monolith has not reduced structural debt; **or else** `validate_architecture_ratchets.py` must fail.
 
 ## 7. Validation ownership
 
-Each leaf validation should execute once per top-level run. Aggregate gates consume distinct child results; they should not rerun sibling suites already owned by another aggregate.
+`validation/validation_graph.json` is the aggregate-ownership contract. Each aggregate node must have one path from the top handoff gate, and each safety-critical leaf command named in `single_owner_leaf_commands` must have exactly one aggregate owner.
 
 A new validation layer must add at least one of:
 - a new semantic assertion;
@@ -91,7 +101,7 @@ A new validation layer must add at least one of:
 - a new artifact boundary;
 - an independent side-effect tripwire.
 
-Do not add a wrapper whose only purpose is to increase a phase number or repeat existing evidence.
+Do not add a wrapper whose only purpose is to repeat an existing check, increase a phase number, or create the appearance of additional evidence. `scripts/validate_validation_graph.py` must remain green after any validation-graph edit.
 
 ## 8. Repository hygiene
 
@@ -111,11 +121,21 @@ Do not create new `PHASE_*_SUBROADMAP.md` files. Use stable IDs in `ROADMAP.md` 
 
 Do not use numeric production-readiness percentages. Use the state vocabulary in `CAPABILITIES.md`.
 
+Do not promote a capability to `EXTERNALLY_VALIDATED` without a passed technical record in `validation/external_evidence.json` for the exact commit/environment. Do not promote to `PRODUCTION_APPROVED` without both technical external validation and a separate accountable human approval record.
+
 Update canonical docs only when architecture, capability state, gap closure criteria, or agent contracts materially change.
 
 ## 10. Refactoring rules
 
 Prefer mechanical, behavior-preserving decomposition before introducing new crates or frameworks. Keep changes small enough that a failing regression can be attributed to a narrow patch.
+
+For structural refactors:
+- follow `docs/refactoring/BEHAVIOR_COMPATIBILITY_CONTRACT.md`;
+- preserve every applicable `BC-*` requirement;
+- do not intentionally change behavior in the same commit as code movement;
+- never raise a size baseline in `validation/architecture_ratchets.json` merely to get CI green;
+- when a monolith shrinks, lower its ratchet in the same or immediately following structural commit;
+- keep new Rust/Python source under the configured new-file ceiling rather than moving a monolith intact.
 
 For the current structural debt:
 - make `arb-agent/src/main.rs` a thin entrypoint over focused CLI modules;
